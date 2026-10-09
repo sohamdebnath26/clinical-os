@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 
 interface DashboardViewProps {
-  onOpenBookAppointment: () => void;
   onOpenWalkIn: () => void;
   onOpenAIAssistant: () => void;
   onSelectPatient: (patientId: string) => void;
@@ -27,7 +26,6 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
-  onOpenBookAppointment,
   onOpenWalkIn,
   onOpenAIAssistant,
   onSelectPatient,
@@ -110,15 +108,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           >
             <Users className="w-3.5 h-3.5 text-teal-700" />
             <span>{t('walkIn')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onOpenBookAppointment}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 shadow-2xs transition-colors"
-          >
-            <Calendar className="w-3.5 h-3.5 text-teal-700" />
-            <span>{t('bookAppointment')}</span>
           </button>
 
           <button
@@ -324,7 +313,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {recentPatients.length === 0 ? (
             <div className="py-12 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">
-              No patients registered yet. Patients will appear here once registered via Walk-in or Book Appointment.
+              No patients registered yet. Patients will appear here once registered via Walk-in.
             </div>
           ) : (
             <div className="divide-y divide-slate-100">

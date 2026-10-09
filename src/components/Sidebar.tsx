@@ -19,7 +19,6 @@ interface SidebarProps {
   currentRoute: NavRoute;
   onNavigate: (route: NavRoute) => void;
   onOpenWalkIn: () => void;
-  onOpenBookAppointment: () => void;
   onOpenAIAssistant: () => void;
 }
 
@@ -27,7 +26,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentRoute,
   onNavigate,
   onOpenWalkIn,
-  onOpenBookAppointment,
   onOpenAIAssistant
 }) => {
   const { doctor, logout } = useAuth();
@@ -70,18 +68,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span>{t('walkIn')}</span>
                 </div>
                 <span className="text-[10px] bg-white text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 font-medium">Queue</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onOpenBookAppointment}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-teal-50 hover:text-teal-900 border border-slate-200/80 transition-all"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Calendar className="w-4 h-4 text-teal-700" />
-                  <span>{t('bookAppointment')}</span>
-                </div>
-                <span className="text-[10px] bg-white text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 font-medium">Book</span>
               </button>
             </div>
           </div>

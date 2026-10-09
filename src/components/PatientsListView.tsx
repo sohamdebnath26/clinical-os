@@ -6,7 +6,6 @@ import { api } from '../lib/api';
 import {
   Search,
   Users,
-  Calendar,
   Filter,
   Stethoscope,
   ChevronRight,
@@ -18,14 +17,12 @@ import {
 interface PatientsListViewProps {
   onSelectPatient: (patientId: string) => void;
   onOpenWalkIn: () => void;
-  onOpenBookAppointment: () => void;
   onStartConsultationForPatient: (patient: Patient) => void;
 }
 
 export const PatientsListView: React.FC<PatientsListViewProps> = ({
   onSelectPatient,
   onOpenWalkIn,
-  onOpenBookAppointment,
   onStartConsultationForPatient
 }) => {
   const { t } = useLanguage();
@@ -83,19 +80,10 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
           <button
             type="button"
             onClick={onOpenWalkIn}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 shadow-2xs transition-colors"
-          >
-            <Users className="w-3.5 h-3.5 text-teal-700" />
-            <span>{t('walkIn')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onOpenBookAppointment}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
           >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>{t('bookAppointment')}</span>
+            <Users className="w-3.5 h-3.5" />
+            <span>{t('walkIn')}</span>
           </button>
         </div>
       </div>

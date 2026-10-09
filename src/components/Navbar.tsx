@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Calendar, Users, Sparkles, X, ArrowRight, Menu } from 'lucide-react';
+import { Search, Users, Sparkles, X, ArrowRight, Menu } from 'lucide-react';
 import { Patient } from '../types';
 import { api } from '../lib/api';
 import { PREDEFINED_DIAGNOSES } from '../data/clinicalCatalogues';
@@ -7,7 +7,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { LanguageSelector } from './LanguageSelector';
 
 interface NavbarProps {
-  onOpenBookAppointment: () => void;
   onOpenWalkIn: () => void;
   onOpenAIAssistant: () => void;
   onSelectPatient: (patientId: string) => void;
@@ -15,7 +14,6 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  onOpenBookAppointment,
   onOpenWalkIn,
   onOpenAIAssistant,
   onSelectPatient,
@@ -179,15 +177,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <Users className="w-3.5 h-3.5 text-slate-500" />
           <span>{t('walkIn')}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenBookAppointment}
-          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 shadow-2xs transition-colors"
-        >
-          <Calendar className="w-3.5 h-3.5 text-slate-500" />
-          <span>{t('bookAppointment')}</span>
         </button>
 
         <button

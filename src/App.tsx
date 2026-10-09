@@ -11,7 +11,6 @@ import { PrescriptionsView } from './components/PrescriptionsView';
 import { AppointmentsView } from './components/AppointmentsView';
 import { SettingsView } from './components/SettingsView';
 import { WalkInModal } from './components/WalkInModal';
-import { ScheduleAppointmentModal } from './components/ScheduleAppointmentModal';
 import { ConsultationModal } from './components/ConsultationModal';
 import { AIModal } from './components/AIModal';
 import { Patient, Consultation } from './types';
@@ -27,7 +26,6 @@ function MainApp() {
 
   // Modals state
   const [showWalkInModal, setShowWalkInModal] = useState(false);
-  const [showBookAppointmentModal, setShowBookAppointmentModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState<string | undefined>(undefined);
   const [activePatientForAI, setActivePatientForAI] = useState<Patient | null>(null);
@@ -137,7 +135,6 @@ function MainApp() {
           currentRoute={activePatientId ? 'patients' : currentRoute}
           onNavigate={handleNavigate}
           onOpenWalkIn={() => setShowWalkInModal(true)}
-          onOpenBookAppointment={() => setShowBookAppointmentModal(true)}
           onOpenAIAssistant={() => handleOpenAIAssistant()}
         />
       </div>
@@ -159,10 +156,6 @@ function MainApp() {
                 setMobileMenuOpen(false);
                 setShowWalkInModal(true);
               }}
-              onOpenBookAppointment={() => {
-                setMobileMenuOpen(false);
-                setShowBookAppointmentModal(true);
-              }}
               onOpenAIAssistant={() => {
                 setMobileMenuOpen(false);
                 handleOpenAIAssistant();
@@ -176,7 +169,6 @@ function MainApp() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Navbar */}
         <Navbar
-          onOpenBookAppointment={() => setShowBookAppointmentModal(true)}
           onOpenWalkIn={() => setShowWalkInModal(true)}
           onOpenAIAssistant={() => handleOpenAIAssistant()}
           onSelectPatient={handleSelectPatient}
@@ -201,7 +193,6 @@ function MainApp() {
               />
             ) : currentRoute === 'dashboard' ? (
               <DashboardView
-                onOpenBookAppointment={() => setShowBookAppointmentModal(true)}
                 onOpenWalkIn={() => setShowWalkInModal(true)}
                 onOpenAIAssistant={() => handleOpenAIAssistant()}
                 onSelectPatient={handleSelectPatient}
@@ -211,13 +202,11 @@ function MainApp() {
             ) : currentRoute === 'appointments' ? (
               <AppointmentsView
                 onSelectPatient={handleSelectPatient}
-                onStartConsultationForPatient={handleStartConsultationForPatient}
               />
             ) : currentRoute === 'patients' ? (
               <PatientsListView
                 onSelectPatient={handleSelectPatient}
                 onOpenWalkIn={() => setShowWalkInModal(true)}
-                onOpenBookAppointment={() => setShowBookAppointmentModal(true)}
                 onStartConsultationForPatient={handleStartConsultationForPatient}
               />
             ) : currentRoute === 'prescriptions' ? (
@@ -242,21 +231,7 @@ function MainApp() {
         />
       )}
 
-      {/* 2. Book Appointment Modal */}
-      {showBookAppointmentModal && (
-        <ScheduleAppointmentModal
-          onClose={() => setShowBookAppointmentModal(false)}
-          onSuccess={(appointment) => {
-            setShowBookAppointmentModal(false);
-            showToast(`Appointment scheduled for ${appointment.patientName} on ${appointment.date}`);
-            if (currentRoute !== 'appointments') {
-              handleNavigate('appointments');
-            }
-          }}
-        />
-      )}
-
-      {/* 3. Consultation Workspace Modal */}
+      {/* 2. Consultation Workspace Modal */}
       {activeConsultation && (
         <ConsultationModal
           consultation={activeConsultation.consultation}

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Appointment, AppointmentStatus, Patient } from '../types';
 import { api } from '../lib/api';
 import { useLanguage } from '../context/LanguageContext';
-import { ScheduleAppointmentModal } from './ScheduleAppointmentModal';
 import {
   Calendar,
   Clock,
@@ -11,26 +10,24 @@ import {
   Filter,
   CheckCircle2,
   AlertCircle,
-  Stethoscope,
-  ChevronRight,
-  MoreVertical,
-  Plus,
-  ArrowRight,
-  RotateCcw,
   XCircle,
-  FileText
+  FileText,
+  Eye,
+  Trash2,
+  X,
+  ArrowRight,
+  Phone
 } from 'lucide-react';
 
 interface AppointmentsViewProps {
   onSelectPatient: (patientId: string) => void;
-  onStartConsultationForPatient: (patient: Patient) => void;
+  onStartConsultationForPatient?: (patient: Patient) => void;
 }
 
 type FilterTab = 'all' | 'today' | 'upcoming' | 'follow_ups' | 'completed';
 
 export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
-  onSelectPatient,
-  onStartConsultationForPatient
+  onSelectPatient
 }) => {
   const { t } = useLanguage();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -40,8 +37,9 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>('');
 
   // Modals
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [viewingAppointment, setViewingAppointment] = useState<Appointment | null>(null);
+  const [deleteConfirmAppt, setDeleteConfirmAppt] = useState<Appointment | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadAppointments = () => {
     setIsLoading(true);
@@ -57,36 +55,19 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  const handleUpdateStatus = async (apptId: string, status: AppointmentStatus) => {
-    try {
-      await api.appointments.update(apptId, { status });
-      setAppointments(prev =>
-        prev.map(a => (a.id === apptId ? { ...a, status, updatedAt: new Date().toISOString() } : a))
-      );
-    } catch (err) {
-      console.error('Failed to update appointment status:', err);
-    }
-  };
-
   const handleDelete = async (apptId: string) => {
-    if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
+    setIsDeleting(true);
     try {
       await api.appointments.delete(apptId);
       setAppointments(prev => prev.filter(a => a.id !== apptId));
+      if (viewingAppointment?.id === apptId) {
+        setViewingAppointment(null);
+      }
+      setDeleteConfirmAppt(null);
     } catch (err) {
-      console.error('Failed to cancel appointment:', err);
-    }
-  };
-
-  const handleStartConsultationFromAppt = async (appt: Appointment) => {
-    try {
-      // First update status to in_progress or checked_in
-      await api.appointments.update(appt.id, { status: 'in_progress' });
-      // Fetch full patient object
-      const res = await api.patients.get(appt.patientId);
-      onStartConsultationForPatient(res.patient);
-    } catch (err) {
-      console.error('Failed to start consultation for appointment:', err);
+      console.error('Failed to delete appointment:', err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -143,8 +124,8 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
         );
       case 'in_progress':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-teal-50 text-teal-800 border border-teal-300 px-2 py-0.5 rounded-full animate-pulse">
-            <Stethoscope className="w-3 h-3" /> In Consultation
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-teal-50 text-teal-800 border border-teal-300 px-2 py-0.5 rounded-full">
+            In Consultation
           </span>
         );
       case 'completed':
@@ -188,30 +169,16 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>{t('appointments')}</span>
-            <span className="text-xs font-semibold bg-teal-50 text-teal-900 border border-teal-200 px-2.5 py-0.5 rounded-full">
-              Follow-up Engine
-            </span>
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Scheduled appointments and follow-up dates synchronized from clinical consultations
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            setEditingAppointment(null);
-            setShowScheduleModal(true);
-          }}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{t('scheduleAppointment')}</span>
-        </button>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+          <span>{t('appointments')}</span>
+          <span className="text-xs font-semibold bg-teal-50 text-teal-900 border border-teal-200 px-2.5 py-0.5 rounded-full">
+            Follow-up & Visits
+          </span>
+        </h1>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Appointments and follow-up dates synchronized from clinical consultations
+        </p>
       </div>
 
       {/* Metrics Row */}
@@ -315,7 +282,7 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
         </div>
       </div>
 
-      {/* Appointments List / Table */}
+      {/* Appointments List */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
         {isLoading ? (
           <div className="p-12 text-center text-slate-400 text-xs">
@@ -329,19 +296,8 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
             </div>
             <p className="text-sm font-bold text-slate-700">{t('noAppointments')}</p>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              Follow-ups scheduled during clinical consultations automatically appear here, or you can book appointments directly.
+              Appointments and follow-ups scheduled during clinical consultations automatically appear here.
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingAppointment(null);
-                setShowScheduleModal(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-800 text-white rounded-xl text-xs font-semibold hover:bg-teal-900 transition-colors shadow-xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{t('scheduleAppointment')}</span>
-            </button>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -350,24 +306,38 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
                 key={appt.id}
                 className="p-4 sm:p-5 hover:bg-slate-50/70 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4"
               >
-                {/* Left Patient & Date Details */}
+                {/* Left Patient & Date Details - Clicking on patient redirects to patient's details page */}
                 <div className="flex items-start gap-3.5 flex-1 min-w-0">
-                  <div className="w-11 h-11 rounded-2xl bg-teal-100/70 text-teal-900 font-bold text-sm flex items-center justify-center shrink-0 border border-teal-200">
-                    {appt.patientName.charAt(0).toUpperCase()}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onSelectPatient(appt.patientId)}
+                    title="Click to view patient details"
+                    className="w-11 h-11 rounded-2xl bg-teal-100/70 text-teal-900 font-bold text-sm flex items-center justify-center shrink-0 border border-teal-200 hover:bg-teal-200 hover:scale-105 transition-all cursor-pointer group shadow-2xs"
+                  >
+                    <span>{appt.patientName.charAt(0).toUpperCase()}</span>
+                  </button>
 
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"
                         onClick={() => onSelectPatient(appt.patientId)}
-                        className="text-sm font-bold text-slate-900 hover:text-teal-800 transition-colors tracking-tight text-left"
+                        title="Click to view patient details"
+                        className="text-sm font-bold text-slate-900 hover:text-teal-800 hover:underline transition-colors tracking-tight text-left cursor-pointer flex items-center gap-1 group"
                       >
-                        {appt.patientName}
+                        <span>{appt.patientName}</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </button>
-                      <span className="font-mono text-[10px] text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded font-semibold border border-teal-200/80">
+
+                      <button
+                        type="button"
+                        onClick={() => onSelectPatient(appt.patientId)}
+                        title="Click to view patient details"
+                        className="font-mono text-[10px] text-teal-800 bg-teal-50 hover:bg-teal-100 px-1.5 py-0.5 rounded font-semibold border border-teal-200/80 transition-colors cursor-pointer"
+                      >
                         {appt.patientCode}
-                      </span>
+                      </button>
+
                       {getStatusBadge(appt.status)}
                       <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full capitalize">
                         {appt.type.replace('_', ' ')}
@@ -389,7 +359,10 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
                       {appt.patientMobile && (
                         <>
                           <span>•</span>
-                          <span>📞 {appt.patientMobile}</span>
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-slate-400" />
+                            {appt.patientMobile}
+                          </span>
                         </>
                       )}
                     </div>
@@ -406,68 +379,28 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Right Actions Bar */}
-                <div className="flex items-center gap-2 self-end md:self-center shrink-0 flex-wrap">
-                  {appt.status !== 'completed' && appt.status !== 'cancelled' && (
-                    <button
-                      type="button"
-                      onClick={() => handleStartConsultationFromAppt(appt)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
-                      title="Open consultation workspace for this patient"
-                    >
-                      <Stethoscope className="w-3.5 h-3.5 text-teal-200" />
-                      <span>Start Consultation</span>
-                    </button>
-                  )}
-
-                  {appt.status === 'scheduled' && (
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateStatus(appt.id, 'checked_in')}
-                      className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors"
-                    >
-                      Check In
-                    </button>
-                  )}
-
-                  {appt.status === 'checked_in' && (
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateStatus(appt.id, 'completed')}
-                      className="px-2.5 py-1.5 bg-white hover:bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl transition-colors"
-                    >
-                      Mark Done
-                    </button>
-                  )}
-
+                {/* Right Actions Bar - Strictly View and Delete options */}
+                <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+                  {/* View Appointment Button */}
                   <button
                     type="button"
-                    onClick={() => onSelectPatient(appt.patientId)}
-                    className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1"
+                    onClick={() => setViewingAppointment(appt)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                    title="View appointment details"
                   >
-                    <span>View Record</span>
-                    <ChevronRight className="w-3 h-3 text-slate-400" />
+                    <Eye className="w-3.5 h-3.5 text-teal-700" />
+                    <span>View</span>
                   </button>
 
+                  {/* Delete Appointment Button */}
                   <button
                     type="button"
-                    onClick={() => {
-                      setEditingAppointment(appt);
-                      setShowScheduleModal(true);
-                    }}
-                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
-                    title="Reschedule / Edit"
+                    onClick={() => setDeleteConfirmAppt(appt)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-rose-50 border border-rose-200 hover:border-rose-300 text-rose-700 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                    title="Delete appointment"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(appt.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
-                    title="Cancel Appointment"
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Delete</span>
                   </button>
                 </div>
               </div>
@@ -476,20 +409,195 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
         )}
       </div>
 
-      {/* Schedule / Edit Modal */}
-      {showScheduleModal && (
-        <ScheduleAppointmentModal
-          onClose={() => {
-            setShowScheduleModal(false);
-            setEditingAppointment(null);
-          }}
-          initialAppointment={editingAppointment}
-          onSuccess={() => {
-            setShowScheduleModal(false);
-            setEditingAppointment(null);
-            loadAppointments();
-          }}
-        />
+      {/* 1. View Appointment Modal */}
+      {viewingAppointment && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-100/70 text-teal-800 flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-teal-700" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Appointment Details</h3>
+                  <p className="text-xs text-slate-500">ID: {viewingAppointment.id}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingAppointment(null)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 text-xs">
+              {/* Patient Banner with Redirect Button */}
+              <div className="p-4 bg-teal-50/70 border border-teal-200/80 rounded-2xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-teal-800 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-xs">
+                    {viewingAppointment.patientName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-bold text-slate-900 text-sm truncate">
+                      {viewingAppointment.patientName}
+                    </h4>
+                    <div className="flex items-center gap-2 text-slate-600 font-mono text-[11px]">
+                      <span>{viewingAppointment.patientCode}</span>
+                      {viewingAppointment.patientMobile && (
+                        <span>• {viewingAppointment.patientMobile}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pid = viewingAppointment.patientId;
+                    setViewingAppointment(null);
+                    onSelectPatient(pid);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors shrink-0 cursor-pointer"
+                >
+                  <span>Patient Profile</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Appointment Schedule Details */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Date</span>
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800 text-sm">
+                    <Calendar className="w-4 h-4 text-teal-700" />
+                    <span>{viewingAppointment.date}</span>
+                  </div>
+                  <div className="pt-0.5">
+                    {getRelativeDateBadge(viewingAppointment.date)}
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Time</span>
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800 text-sm">
+                    <Clock className="w-4 h-4 text-teal-700" />
+                    <span>{viewingAppointment.time || '10:00 AM'}</span>
+                  </div>
+                  <div className="pt-0.5">
+                    <span className="text-[10px] font-semibold text-slate-500 capitalize">
+                      Type: {viewingAppointment.type.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider mb-1">Status</span>
+                  {getStatusBadge(viewingAppointment.status)}
+                </div>
+                {viewingAppointment.createdAt && (
+                  <div className="text-right text-[11px] text-slate-400">
+                    <span className="block font-medium">Created</span>
+                    <span>{new Date(viewingAppointment.createdAt).toLocaleDateString()}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Clinical Instructions / Notes */}
+              {viewingAppointment.instructions && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                    Doctor&apos;s Instructions
+                  </span>
+                  <p className="text-slate-700 text-xs leading-relaxed whitespace-pre-wrap">
+                    {viewingAppointment.instructions}
+                  </p>
+                </div>
+              )}
+
+              {viewingAppointment.notes && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                    Additional Notes
+                  </span>
+                  <p className="text-slate-600 text-xs italic">
+                    {viewingAppointment.notes}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = viewingAppointment;
+                  setViewingAppointment(null);
+                  setDeleteConfirmAppt(target);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-rose-700 hover:bg-rose-50 rounded-xl font-semibold border border-rose-200 hover:border-rose-300 transition-colors"
+              >
+                <Trash2 className="w-4 h-4 text-rose-600" />
+                <span>Delete Appointment</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewingAppointment(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-semibold transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Delete Confirmation Modal */}
+      {deleteConfirmAppt && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="font-bold text-slate-900 text-base">Delete Appointment?</h3>
+              <p className="text-xs text-slate-500">
+                Are you sure you want to delete the appointment for{' '}
+                <strong className="text-slate-800">{deleteConfirmAppt.patientName}</strong> on{' '}
+                <strong className="text-slate-800">{deleteConfirmAppt.date}</strong>? This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteConfirmAppt(null)}
+                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => handleDelete(deleteConfirmAppt.id)}
+                className="py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
