@@ -1,0 +1,539 @@
+{
+  "doctors": [
+    {
+      "id": "doc-demo-001",
+      "name": "Dr. Demo",
+      "email": "demo@clinicalos.med",
+      "speciality": "Dermatologist & Cosmetologist",
+      "registrationNumber": "MED-REG-847291",
+      "clinicName": "Cliniq Dermatology Center",
+      "phone": "+91 98765 43210",
+      "defaultConsultationFee": 500,
+      "avatarUrl": "",
+      "createdAt": "2026-09-29T12:21:25.847Z"
+    }
+  ],
+  "doctorPasswords": {
+    "doc-demo-001": "$2b$10$BO4oZo5SMzCYPIAcTu.FzeqxBgPuOS3h7g.GcYcQM/j8vMdIKPf9i"
+  },
+  "patients": [
+    {
+      "fullName": "Harman",
+      "age": 25,
+      "gender": "Male",
+      "mobile": "8844181414",
+      "dateOfBirth": "",
+      "bloodGroup": "",
+      "address": "",
+      "emergencyContact": "",
+      "allergies": "",
+      "medicalHistory": "",
+      "createdById": "doc-demo-001",
+      "id": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "createdAt": "2026-09-29T12:24:30.102Z",
+      "updatedAt": "2026-10-09T03:22:27.503Z",
+      "lastVisitAt": "2026-10-09T03:22:27.503Z",
+      "primaryDiagnosis": "Post-treatment follow-up"
+    },
+    {
+      "fullName": "Kabir Kashyap",
+      "age": 34,
+      "gender": "Male",
+      "mobile": "1212121212",
+      "dateOfBirth": "1991-11-11",
+      "bloodGroup": "O+",
+      "address": "Vasant Kunj , New DElhi",
+      "emergencyContact": "8181818181",
+      "allergies": "Fluoroquinolones (Ciprofloxacin, Levofloxacin)",
+      "currentMedications": "Levocetirizine 5 mg + Montelukast 10 mg, Mometasone Furoate 0.1% Cream",
+      "medicalHistory": "Ashtma",
+      "createdById": "doc-demo-001",
+      "id": "pat-mv0er2l2-uln3",
+      "patientCode": "P-24619",
+      "createdAt": "2026-10-09T03:30:40.215Z",
+      "updatedAt": "2026-10-09T03:30:40.215Z"
+    }
+  ],
+  "consultations": [
+    {
+      "id": "con-mumnfac9-ol53",
+      "patientId": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "patientName": "Harman",
+      "patientAge": 25,
+      "patientGender": "Male",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "consultationDate": "2026-09-29T12:24:40.473Z",
+      "status": "signed",
+      "fee": 500,
+      "symptoms": [
+        "Skin tags / Moles"
+      ],
+      "diagnoses": [
+        "Skin tags / Moles"
+      ],
+      "tests": [],
+      "procedures": [],
+      "clinicalNotes": {
+        "examination": "",
+        "investigationsAdvised": "",
+        "plan": ""
+      },
+      "bodyMarkers": [],
+      "images": [],
+      "followUp": {},
+      "prescriptions": [],
+      "aiSummary": "CONSULTATION — 2026-09-29\n\nDIAGNOSIS\n• Skin tags / Moles\n\nCHARGES\n• Procedures: ₹0\n• Consultation fee: ₹500\n• Total: ₹500",
+      "createdAt": "2026-09-29T12:24:40.473Z",
+      "updatedAt": "2026-09-29T12:24:47.360Z",
+      "signedAt": "2026-09-29T12:24:47.360Z"
+    },
+    {
+      "id": "con-muy1aite-6kt4",
+      "patientId": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "patientName": "Harman",
+      "patientAge": 25,
+      "patientGender": "Male",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "consultationDate": "2026-10-07T11:38:20.738Z",
+      "status": "signed",
+      "fee": 500,
+      "symptoms": [
+        "Follow-up consultation test"
+      ],
+      "diagnoses": [
+        "Post-treatment follow-up"
+      ],
+      "tests": [],
+      "procedures": [],
+      "clinicalNotes": {
+        "examination": "",
+        "investigationsAdvised": "",
+        "plan": ""
+      },
+      "bodyMarkers": [],
+      "images": [],
+      "followUp": {
+        "date": "2026-10-21",
+        "instructions": "Repeat dermoscopy evaluation in OPD"
+      },
+      "prescriptions": [],
+      "aiSummary": "",
+      "createdAt": "2026-10-07T11:38:20.738Z",
+      "updatedAt": "2026-10-07T11:38:20.746Z",
+      "signedAt": "2026-10-07T11:38:20.746Z"
+    },
+    {
+      "id": "con-mv0efn8e-hgh8",
+      "patientId": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "patientName": "Harman",
+      "patientAge": 25,
+      "patientGender": "Male",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "consultationDate": "2026-10-09T03:21:47.102Z",
+      "status": "draft",
+      "fee": 500,
+      "symptoms": [],
+      "diagnoses": [],
+      "tests": [],
+      "procedures": [],
+      "clinicalNotes": {
+        "examination": "",
+        "investigationsAdvised": "",
+        "plan": ""
+      },
+      "bodyMarkers": [],
+      "images": [],
+      "followUp": {},
+      "prescriptions": [],
+      "aiSummary": "",
+      "createdAt": "2026-10-09T03:21:47.102Z",
+      "updatedAt": "2026-10-09T03:21:47.102Z"
+    },
+    {
+      "id": "con-mv0egdyf-wz88",
+      "patientId": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "patientName": "Harman",
+      "patientAge": 25,
+      "patientGender": "Male",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "consultationDate": "2026-10-09T03:22:21.735Z",
+      "status": "signed",
+      "fee": 500,
+      "symptoms": [],
+      "diagnoses": [],
+      "tests": [],
+      "procedures": [],
+      "clinicalNotes": {
+        "examination": "",
+        "investigationsAdvised": "",
+        "plan": ""
+      },
+      "bodyMarkers": [],
+      "images": [],
+      "followUp": {
+        "date": "",
+        "instructions": "",
+        "notes": ""
+      },
+      "prescriptions": [],
+      "aiSummary": "CONSULTATION — 2026-10-09\n\nCHARGES\n• Procedures: ₹0\n• Consultation fee: ₹500\n• Total: ₹500",
+      "createdAt": "2026-10-09T03:22:21.735Z",
+      "updatedAt": "2026-10-09T03:22:23.106Z",
+      "signedAt": "2026-10-09T03:22:23.106Z"
+    },
+    {
+      "id": "con-mv0egguz-mqb3",
+      "patientId": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "patientName": "Harman",
+      "patientAge": 25,
+      "patientGender": "Male",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "consultationDate": "2026-10-09T03:22:25.499Z",
+      "status": "signed",
+      "fee": 500,
+      "symptoms": [],
+      "diagnoses": [],
+      "tests": [],
+      "procedures": [],
+      "clinicalNotes": {
+        "examination": "",
+        "investigationsAdvised": "",
+        "plan": ""
+      },
+      "bodyMarkers": [],
+      "images": [],
+      "followUp": {
+        "date": "",
+        "instructions": "",
+        "notes": ""
+      },
+      "prescriptions": [],
+      "aiSummary": "CONSULTATION — 2026-10-09\n\nCHARGES\n• Procedures: ₹0\n• Consultation fee: ₹500\n• Total: ₹500",
+      "createdAt": "2026-10-09T03:22:25.499Z",
+      "updatedAt": "2026-10-09T03:22:27.503Z",
+      "signedAt": "2026-10-09T03:22:27.503Z"
+    }
+  ],
+  "prescriptions": [],
+  "bodyMarkers": [],
+  "clinicalImages": [],
+  "auditLogs": [
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv0fgf7z-zfkq",
+      "timestamp": "2026-10-09T03:50:22.991Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "patient_created",
+      "resourceType": "patient",
+      "resourceId": "pat-mv0er2l2-uln3",
+      "metadata": {
+        "patientCode": "P-24619",
+        "name": "Kabir Kashyap",
+        "mobile": "1212121212"
+      },
+      "id": "aud-mv0er2l3-2xsd",
+      "timestamp": "2026-10-09T03:30:40.215Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_signed",
+      "resourceType": "consultation",
+      "resourceId": "con-mv0egguz-mqb3",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618",
+        "diagnosesCount": 0,
+        "fee": 500
+      },
+      "id": "aud-mv0egieo-a830",
+      "timestamp": "2026-10-09T03:22:27.504Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_started",
+      "resourceType": "consultation",
+      "resourceId": "con-mv0egguz-mqb3",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618"
+      },
+      "id": "aud-mv0eggv0-mop6",
+      "timestamp": "2026-10-09T03:22:25.500Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_signed",
+      "resourceType": "consultation",
+      "resourceId": "con-mv0egdyf-wz88",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618",
+        "diagnosesCount": 0,
+        "fee": 500
+      },
+      "id": "aud-mv0egf0j-x4vu",
+      "timestamp": "2026-10-09T03:22:23.107Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_started",
+      "resourceType": "consultation",
+      "resourceId": "con-mv0egdyf-wz88",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618"
+      },
+      "id": "aud-mv0egdyf-5k49",
+      "timestamp": "2026-10-09T03:22:21.735Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_started",
+      "resourceType": "consultation",
+      "resourceId": "con-mv0efn8e-hgh8",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618"
+      },
+      "id": "aud-mv0efn8f-6ao6",
+      "timestamp": "2026-10-09T03:21:47.103Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv0ef3jx-534m",
+      "timestamp": "2026-10-09T03:21:21.597Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_signed",
+      "resourceType": "consultation",
+      "resourceId": "con-muy1aite-6kt4",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618",
+        "diagnosesCount": 1,
+        "fee": 500
+      },
+      "id": "aud-muy1aitm-dzdb",
+      "timestamp": "2026-10-07T11:38:20.746Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_started",
+      "resourceType": "consultation",
+      "resourceId": "con-muy1aite-6kt4",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618"
+      },
+      "id": "aud-muy1aitf-9xmg",
+      "timestamp": "2026-10-07T11:38:20.739Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-muy1aisw-5mgc",
+      "timestamp": "2026-10-07T11:38:20.720Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "appointment_created",
+      "resourceType": "appointment",
+      "resourceId": "apt-muy19wkk-gqaf",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "date": "2026-10-14",
+        "type": "follow_up"
+      },
+      "id": "aud-muy19wkl-azdo",
+      "timestamp": "2026-10-07T11:37:51.909Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-muy19wjm-t7r3",
+      "timestamp": "2026-10-07T11:37:51.874Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-muxzj1kk-suih",
+      "timestamp": "2026-10-07T10:48:59.060Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-muwxcuf8-ns5g",
+      "timestamp": "2026-10-06T17:00:24.452Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-muww74x6-k8c3",
+      "timestamp": "2026-10-06T16:27:58.506Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-muwun24u-t4ts",
+      "timestamp": "2026-10-06T15:44:22.158Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_signed",
+      "resourceType": "consultation",
+      "resourceId": "con-mumnfac9-ol53",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618",
+        "diagnosesCount": 1,
+        "fee": 500
+      },
+      "id": "aud-mumnffnl-cyvh",
+      "timestamp": "2026-09-29T12:24:47.361Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_started",
+      "resourceType": "consultation",
+      "resourceId": "con-mumnfac9-ol53",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618"
+      },
+      "id": "aud-mumnfac9-0wyt",
+      "timestamp": "2026-09-29T12:24:40.473Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "patient_created",
+      "resourceType": "patient",
+      "resourceId": "pat-mumnf2c6-8awj",
+      "metadata": {
+        "patientCode": "P-24618",
+        "name": "Harman",
+        "mobile": "8844181414"
+      },
+      "id": "aud-mumnf2c7-ud3h",
+      "timestamp": "2026-09-29T12:24:30.103Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mumnepqf-7sq1",
+      "timestamp": "2026-09-29T12:24:13.767Z"
+    },
+    {
+      "actorId": "system",
+      "actorName": "System",
+      "action": "system_init",
+      "resourceType": "doctor",
+      "resourceId": "doc-demo-001",
+      "metadata": {
+        "info": "Default doctor initialized"
+      },
+      "id": "aud-mumnb49c-xnf4",
+      "timestamp": "2026-09-29T12:21:25.968Z"
+    }
+  ],
+  "meta": {
+    "lastPatientNumber": 24619,
+    "version": 1,
+    "updatedAt": "2026-10-09T03:50:22.991Z"
+  },
+  "appointments": [
+    {
+      "patientId": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "patientName": "Harman",
+      "patientAge": 25,
+      "patientGender": "Male",
+      "patientMobile": "8844181414",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "date": "2026-10-14",
+      "time": "11:00 AM",
+      "type": "follow_up",
+      "status": "scheduled",
+      "instructions": "Review post-treatment skin healing and scar inspection",
+      "notes": "",
+      "id": "apt-muy19wkk-gqaf",
+      "createdAt": "2026-10-07T11:37:51.908Z",
+      "updatedAt": "2026-10-07T11:37:51.908Z"
+    },
+    {
+      "id": "apt-muy1aitm-5619",
+      "patientId": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "patientName": "Harman",
+      "patientAge": 25,
+      "patientGender": "Male",
+      "patientMobile": "8844181414",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "date": "2026-10-21",
+      "time": "10:00 AM",
+      "type": "follow_up",
+      "status": "scheduled",
+      "consultationId": "con-muy1aite-6kt4",
+      "instructions": "Repeat dermoscopy evaluation in OPD",
+      "notes": "",
+      "createdAt": "2026-10-07T11:38:20.746Z",
+      "updatedAt": "2026-10-07T11:38:20.746Z"
+    }
+  ]
+}
