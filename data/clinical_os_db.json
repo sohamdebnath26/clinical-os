@@ -232,6 +232,47 @@
     {
       "actorId": "doc-demo-001",
       "actorName": "Dr. Demo",
+      "action": "appointment_created",
+      "resourceType": "appointment",
+      "resourceId": "apt-mv0g5ws5-erf4",
+      "metadata": {
+        "patientId": "pat-mv0er2l2-uln3",
+        "date": "2026-10-16",
+        "type": "follow_up"
+      },
+      "id": "aud-mv0g5ws5-e4yw",
+      "timestamp": "2026-10-09T04:10:12.149Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "appointment_deleted",
+      "resourceType": "appointment",
+      "resourceId": "apt-muy1aitm-5619",
+      "id": "aud-mv0g4al8-5zn5",
+      "timestamp": "2026-10-09T04:08:56.732Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "appointment_deleted",
+      "resourceType": "appointment",
+      "resourceId": "apt-muy19wkk-gqaf",
+      "id": "aud-mv0g48k4-qmbi",
+      "timestamp": "2026-10-09T04:08:54.100Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv0g3sb6-ko4t",
+      "timestamp": "2026-10-09T04:08:33.042Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
       "action": "doctor_login",
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
@@ -493,47 +534,27 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-09T03:52:44.240Z"
+    "updatedAt": "2026-10-09T04:10:12.149Z"
   },
   "appointments": [
     {
-      "patientId": "pat-mumnf2c6-8awj",
-      "patientCode": "P-24618",
-      "patientName": "Harman",
-      "patientAge": 25,
+      "patientId": "pat-mv0er2l2-uln3",
+      "patientCode": "P-24619",
+      "patientName": "Kabir Kashyap",
+      "patientAge": 34,
       "patientGender": "Male",
-      "patientMobile": "8844181414",
+      "patientMobile": "1212121212",
       "doctorId": "doc-demo-001",
       "doctorName": "Dr. Demo",
-      "date": "2026-10-14",
-      "time": "11:00 AM",
-      "type": "follow_up",
-      "status": "scheduled",
-      "instructions": "Review post-treatment skin healing and scar inspection",
-      "notes": "",
-      "id": "apt-muy19wkk-gqaf",
-      "createdAt": "2026-10-07T11:37:51.908Z",
-      "updatedAt": "2026-10-07T11:37:51.908Z"
-    },
-    {
-      "id": "apt-muy1aitm-5619",
-      "patientId": "pat-mumnf2c6-8awj",
-      "patientCode": "P-24618",
-      "patientName": "Harman",
-      "patientAge": 25,
-      "patientGender": "Male",
-      "patientMobile": "8844181414",
-      "doctorId": "doc-demo-001",
-      "doctorName": "Dr. Demo",
-      "date": "2026-10-21",
+      "date": "2026-10-16",
       "time": "10:00 AM",
       "type": "follow_up",
       "status": "scheduled",
-      "consultationId": "con-muy1aite-6kt4",
-      "instructions": "Repeat dermoscopy evaluation in OPD",
-      "notes": "",
-      "createdAt": "2026-10-07T11:38:20.746Z",
-      "updatedAt": "2026-10-07T11:38:20.746Z"
+      "instructions": "Bring Biopsy report",
+      "notes": "N/A",
+      "id": "apt-mv0g5ws5-erf4",
+      "createdAt": "2026-10-09T04:10:12.149Z",
+      "updatedAt": "2026-10-09T04:10:12.149Z"
     }
   ]
 }
