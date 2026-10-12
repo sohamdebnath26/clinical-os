@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Consultation, Patient, ProcedureItem, BodyMarker, ClinicalImage, PrescriptionItem } from '../types';
+import { Consultation, Patient, ProcedureItem, BodyMarker, ClinicalImage, PrescriptionItem, AIImageAnalysisResult } from '../types';
 import { PREDEFINED_DIAGNOSES, PREDEFINED_TESTS, PREDEFINED_PROCEDURES, COMMON_MEDICATIONS } from '../data/clinicalCatalogues';
 import { BodyMap } from './BodyMap';
 import { ClinicalImageUploader } from './ClinicalImageUploader';
@@ -20,7 +20,10 @@ import {
   Trash2,
   RefreshCw,
   Pill,
-  ChevronDown
+  ChevronDown,
+  ShieldAlert,
+  Clock,
+  CheckCircle2
 } from 'lucide-react';
 
 interface ConsultationModalProps {
@@ -95,6 +98,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [isSigning, setIsSigning] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // AI Image Analysis state inside consultation
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  const [activeImageAnalysis, setActiveImageAnalysis] = useState<AIImageAnalysisResult | null>(null);
+  const [activeAnalyzedImage, setActiveAnalyzedImage] = useState<ClinicalImage | null>(null);
+  const [analysisFeedbackToast, setAnalysisFeedbackToast] = useState<string | null>(null);
 
   // Fetch prior markers
   useEffect(() => {
@@ -223,6 +232,59 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     await api.images.delete(imageId);
     setImages(images.filter(i => i.id !== imageId));
   };
+
+  const handleAnalyzeConsultationImage = async (image: ClinicalImage) => {
+    setIsAnalyzingImage(true);
+    setActiveAnalyzedImage(image);
+    setError(null);
+    try {
+      const res = await api.ai.analyzeImage({
+        imageBase64: image.url,
+        mimeType: image.mimeType,
+        patientId: patient.id,
+        clinicalNotes: [
+          clinicalNotes.examination ? `Examination: ${clinicalNotes.examination}` : '',
+          symptoms.length > 0 ? `Symptoms: ${symptoms.join(', ')}` : '',
+          image.caption ? `Image caption: ${image.caption}` : ''
+        ].filter(Boolean).join('. ')
+      });
+      setActiveImageAnalysis(res.analysis);
+    } catch (err: unknown) {
+      console.warn('Consultation image analysis failed:', err);
+      setError('AI clinical image analysis failed. Please try again.');
+    } finally {
+      setIsAnalyzingImage(false);
+    }
+  };
+
+  const handleApplyDiagnosesFromAI = () => {
+    if (!activeImageAnalysis) return;
+    const newDiags = activeImageAnalysis.differentials.map(d => d.condition);
+    const updated = Array.from(new Set([...diagnoses, ...newDiags]));
+    setDiagnoses(updated);
+    setAnalysisFeedbackToast('Diagnoses applied to consultation!');
+    setTimeout(() => setAnalysisFeedbackToast(null), 2500);
+  };
+
+  const handleApplyPlanFromAI = () => {
+    if (!activeImageAnalysis) return;
+    const currentNotes = { ...clinicalNotes };
+    if (activeImageAnalysis.recommendedInvestigations.length > 0) {
+      const testsStr = activeImageAnalysis.recommendedInvestigations.join(', ');
+      currentNotes.investigationsAdvised = currentNotes.investigationsAdvised
+        ? `${currentNotes.investigationsAdvised}; ${testsStr}`
+        : testsStr;
+    }
+    if (activeImageAnalysis.suggestedManagementPlan) {
+      currentNotes.plan = currentNotes.plan
+        ? `${currentNotes.plan}\n\n[AI Plan]: ${activeImageAnalysis.suggestedManagementPlan}`
+        : activeImageAnalysis.suggestedManagementPlan;
+    }
+    setClinicalNotes(currentNotes);
+    setAnalysisFeedbackToast('Workup & Plan applied to clinical notes!');
+    setTimeout(() => setAnalysisFeedbackToast(null), 2500);
+  };
+
 
   // Body Marker handlers
   const handleAddMarker = (newMarker: Omit<BodyMarker, 'id' | 'createdAt'>) => {
@@ -872,6 +934,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 images={images}
                 onUpload={handleImageUpload}
                 onDelete={handleImageDelete}
+                onAnalyzeWithAI={handleAnalyzeConsultationImage}
               />
             </div>
           )}
@@ -1143,6 +1206,162 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* AI Image Diagnostic Suggestion Overlay */}
+      {(isAnalyzingImage || activeImageAnalysis) && (
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-teal-500/20 text-teal-300 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold tracking-tight">AI Clinical Diagnostic Assistant</h3>
+                  <p className="text-[11px] text-teal-300/80">Multimodal vision analysis correlated with patient timeline</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveImageAnalysis(null);
+                  setIsAnalyzingImage(false);
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 overflow-y-auto flex-1 space-y-4">
+              {isAnalyzingImage ? (
+                <div className="py-16 text-center space-y-3">
+                  <RefreshCw className="w-8 h-8 animate-spin text-teal-600 mx-auto" />
+                  <p className="text-xs font-semibold text-slate-700">Analyzing clinical image with patient timeline...</p>
+                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto">Evaluating morphological markers against prior consultations, active medications, and allergies.</p>
+                </div>
+              ) : activeImageAnalysis ? (
+                <>
+                  {/* Feedback toast */}
+                  {analysisFeedbackToast && (
+                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 flex items-center gap-2 animate-in fade-in">
+                      <Check className="w-4 h-4 text-emerald-600" />
+                      <span>{analysisFeedbackToast}</span>
+                    </div>
+                  )}
+
+                  {/* Primary Impression */}
+                  <div className="p-4 rounded-xl bg-teal-900 text-white flex items-start justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-teal-300">
+                        Primary Suggestion
+                      </span>
+                      <h4 className="text-base font-bold text-white mt-0.5">
+                        {activeImageAnalysis.primaryImpression}
+                      </h4>
+                    </div>
+                    {activeAnalyzedImage && (
+                      <img
+                        src={activeAnalyzedImage.url}
+                        alt="Analyzed specimen"
+                        className="w-14 h-14 rounded-lg object-cover border border-white/20 shrink-0"
+                      />
+                    )}
+                  </div>
+
+                  {/* Differential Diagnoses */}
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">
+                      Differential Diagnoses
+                    </span>
+                    <div className="space-y-2">
+                      {activeImageAnalysis.differentials.map((diff, idx) => (
+                        <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-slate-900">{diff.condition}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              diff.confidence === 'High' ? 'bg-emerald-100 text-emerald-800' :
+                              diff.confidence === 'Moderate' ? 'bg-amber-100 text-amber-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {diff.confidence}
+                            </span>
+                          </div>
+                          <p className="text-slate-600 leading-relaxed text-[11px]">{diff.rationale}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Timeline Correlation */}
+                  <div className="p-3.5 rounded-xl bg-teal-50/70 border border-teal-200 text-xs">
+                    <span className="font-bold text-teal-900 block mb-1">Timeline Correlation</span>
+                    <p className="text-teal-950 text-[11px] leading-relaxed">{activeImageAnalysis.timelineCorrelation}</p>
+                  </div>
+
+                  {/* Red flags */}
+                  {activeImageAnalysis.redFlags.length > 0 && (
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                      <span className="font-bold text-rose-900 block mb-1">Alerts / Rule Out:</span>
+                      <ul className="list-disc list-inside space-y-0.5 text-[11px]">
+                        {activeImageAnalysis.redFlags.map((rf, idx) => (
+                          <li key={idx}>{rf}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Recommended Workup & Plan */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
+                    <span className="font-bold text-slate-800 block">Suggested First-Line Plan</span>
+                    <p className="text-slate-600 text-[11px] whitespace-pre-line">{activeImageAnalysis.suggestedManagementPlan}</p>
+                    {activeImageAnalysis.recommendedInvestigations.length > 0 && (
+                      <p className="text-slate-500 text-[10px] pt-1">
+                        <strong>Recommended tests:</strong> {activeImageAnalysis.recommendedInvestigations.join(', ')}
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            {/* Actions */}
+            {activeImageAnalysis && (
+              <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveImageAnalysis(null);
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200/60"
+                >
+                  Close
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleApplyPlanFromAI}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-teal-700" />
+                    Apply Plan to Notes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyDiagnosesFromAI}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white flex items-center gap-1.5 shadow-sm"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Apply Diagnoses
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -22,7 +22,9 @@ import {
   ShieldAlert,
   HelpCircle,
   X,
-  Plus
+  Plus,
+  BookmarkPlus,
+  BookmarkCheck
 } from 'lucide-react';
 
 interface ImageAnalyzerViewProps {
@@ -58,6 +60,8 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
   const [analysisResult, setAnalysisResult] = useState<AIImageAnalysisResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isSavingToGallery, setIsSavingToGallery] = useState(false);
+  const [savedToGallery, setSavedToGallery] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -328,6 +332,27 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
       setTimeout(() => setCopied(false), 2500);
     });
   };
+
+  const handleSaveToGallery = async () => {
+    if (!selectedPatient || !imageSrc) return;
+    setIsSavingToGallery(true);
+    try {
+      await api.images.upload({
+        patientId: selectedPatient.id,
+        dataUrl: imageSrc,
+        filename: `ai_eval_${Date.now()}.jpg`,
+        caption: analysisResult ? `${analysisResult.primaryImpression} (AI Evaluated)` : 'Clinical Image',
+        tags: analysisResult?.differentials.map(d => d.condition) || ['AI Analyzed']
+      });
+      setSavedToGallery(true);
+      setTimeout(() => setSavedToGallery(false), 3000);
+    } catch (err) {
+      console.warn('Failed to save to gallery:', err);
+    } finally {
+      setIsSavingToGallery(false);
+    }
+  };
+
 
   const filteredPatients = patients.filter(p =>
     p.fullName.toLowerCase().includes(patientSearch.toLowerCase()) ||
@@ -765,6 +790,27 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {selectedPatient && (
+                      <button
+                        type="button"
+                        onClick={handleSaveToGallery}
+                        disabled={isSavingToGallery || savedToGallery}
+                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 transition disabled:opacity-60"
+                      >
+                        {savedToGallery ? (
+                          <>
+                            <BookmarkCheck className="w-3.5 h-3.5 text-emerald-400" />
+                            <span className="text-emerald-300">Saved to Record</span>
+                          </>
+                        ) : (
+                          <>
+                            <BookmarkPlus className="w-3.5 h-3.5 text-teal-300" />
+                            <span>{isSavingToGallery ? 'Saving...' : 'Save to Record'}</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={handleCopyReport}

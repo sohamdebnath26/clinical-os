@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { ClinicalImage } from '../types';
-import { Camera, Upload, Trash2, Eye, X, Image as ImageIcon } from 'lucide-react';
+import { Camera, Upload, Trash2, Eye, X, Image as ImageIcon, Sparkles } from 'lucide-react';
 
 interface ClinicalImageUploaderProps {
   images: ClinicalImage[];
   onUpload: (dataUrl: string, filename: string, caption?: string) => Promise<void>;
   onDelete?: (imageId: string) => Promise<void>;
+  onAnalyzeWithAI?: (image: ClinicalImage) => void;
   readOnly?: boolean;
 }
 
@@ -13,6 +14,7 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
   images,
   onUpload,
   onDelete,
+  onAnalyzeWithAI,
   readOnly = false
 }) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -242,6 +244,16 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
 
               {/* Hover actions */}
               <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 rounded-md p-1 backdrop-blur-xs">
+                {onAnalyzeWithAI && (
+                  <button
+                    type="button"
+                    onClick={() => onAnalyzeWithAI(img)}
+                    title="Analyze with AI"
+                    className="text-amber-300 hover:text-amber-200 p-0.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setPreviewImage(img)}
@@ -283,13 +295,29 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
                   {new Date(previewImage.createdAt).toLocaleString()} · {(previewImage.sizeBytes / 1024).toFixed(0)} KB
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setPreviewImage(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {onAnalyzeWithAI && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = previewImage;
+                      setPreviewImage(null);
+                      onAnalyzeWithAI(target);
+                    }}
+                    className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Analyze with AI</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPreviewImage(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
             <div className="bg-slate-900 p-2 flex items-center justify-center overflow-auto max-h-[70vh]">
               <img
