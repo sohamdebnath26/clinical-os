@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { db } from './server/db.js';
-import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage } from './server/ai.js';
+import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages } from './server/ai.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -240,6 +240,7 @@ app.get('/api/patients/:id/timeline', authMiddleware, (req, res) => {
       clinicalNotes: c.clinicalNotes,
       bodyMarkersCount: c.bodyMarkers?.length || 0,
       imagesCount: c.images?.length || 0,
+      images: c.images || [],
       prescriptions: c.prescriptions,
       followUp: c.followUp,
       fee: c.fee,
@@ -614,6 +615,49 @@ app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedReque
     res.status(500).json({ error: message });
   }
 });
+
+app.post('/api/ai/compare-progression', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const { imageA, imageB, patientId, clinicalContext } = req.body;
+
+  if (!imageA?.base64 || !imageB?.base64) {
+    return res.status(400).json({ error: 'Both imageA and imageB base64 data are required for progression analysis' });
+  }
+
+  let patient = undefined;
+  if (patientId) {
+    patient = db.findPatientById(patientId);
+  }
+
+  try {
+    const progression = await compareClinicalImages({
+      imageA,
+      imageB,
+      patient,
+      clinicalContext
+    });
+
+    const doctor = req.doctor!;
+    db.logAudit({
+      actorId: doctor.id,
+      actorName: doctor.name,
+      action: 'ai_lesion_progression_compared',
+      resourceType: 'clinical_progression',
+      resourceId: progression.id,
+      metadata: {
+        patientId: patient?.id,
+        overallProgression: progression.overallProgression,
+        progressionScore: progression.progressionScore
+      }
+    });
+
+    res.json({ progression, patient });
+  } catch (err: unknown) {
+    console.error('Progression comparison error:', err);
+    const message = err instanceof Error ? err.message : 'Failed to analyze progression';
+    res.status(500).json({ error: message });
+  }
+});
+
 
 
 // ==========================================

@@ -923,6 +923,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 patientId={patient.id}
                 consultationId={consultation.id}
                 priorMarkers={priorMarkers}
+                onAnalyzeMarkerWithAI={(marker) => {
+                  const linkedImage = images.find(img => img.bodyMarkerId === marker.id) || images[0];
+                  if (linkedImage) {
+                    handleAnalyzeConsultationImage(linkedImage);
+                  } else {
+                    setActiveTab('images');
+                  }
+                }}
               />
             </div>
           )}

@@ -8,7 +8,8 @@ import {
   AuditLog,
   ClinicStats,
   Appointment,
-  AIImageAnalysisResult
+  AIImageAnalysisResult,
+  ProgressionAnalysisResult
 } from '../types/index';
 
 const TOKEN_KEY = 'clinical_os_token';
@@ -122,6 +123,7 @@ export const api = {
           clinicalNotes: { examination: string; investigationsAdvised: string; plan: string };
           bodyMarkersCount: number;
           imagesCount: number;
+          images?: ClinicalImage[];
           prescriptions: PrescriptionItem[];
           followUp: { date?: string; instructions?: string };
           fee: number;
@@ -251,7 +253,18 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    compareProgression: (data: {
+      imageA: { base64: string; mimeType?: string; label?: string; date?: string };
+      imageB: { base64: string; mimeType?: string; label?: string; date?: string };
+      patientId?: string;
+      clinicalContext?: string;
+    }) =>
+      fetchWithAuth<{ progression: ProgressionAnalysisResult; patient?: Patient }>('/api/ai/compare-progression', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
+
 
 
   dashboard: {

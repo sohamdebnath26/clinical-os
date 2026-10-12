@@ -182,6 +182,19 @@ export interface AIImageAnalysisResult {
   imageUrl?: string;
 }
 
+export interface ProgressionAnalysisResult {
+  id: string;
+  overallProgression: 'Marked Improvement' | 'Moderate Improvement' | 'Stable / Unchanged' | 'Mild Progression / Worsening' | 'Significant Flare / Deterioration';
+  progressionScore: number;
+  visualComparisonObservations: string[];
+  treatmentResponseSummary: string;
+  recommendedAdjustments: string[];
+  disclaimer: string;
+  isAiPowered: boolean;
+  analyzedAt: string;
+}
+
+
 export interface ClinicStats {
   totalPatients: number;
   visitsToday: number;

@@ -6,6 +6,7 @@ import { PrintRxModal } from './PrintRxModal';
 import { EditPatientModal } from './EditPatientModal';
 import { ScheduleAppointmentModal } from './ScheduleAppointmentModal';
 import { MarkdownView } from './MarkdownView';
+import { LesionProgressionModal } from './LesionProgressionModal';
 import { useAuth } from '../context/AuthContext';
 import {
   ArrowLeft,
@@ -24,7 +25,8 @@ import {
   ChevronUp,
   Image as ImageIcon,
   Pencil,
-  ScanEye
+  ScanEye,
+  Activity
 } from 'lucide-react';
 
 interface PatientProfileViewProps {
@@ -69,6 +71,9 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
   // Expandable timeline events
   const [expandedEvents, setExpandedEvents] = useState<Record<string, boolean>>({});
+
+  // Lesion Progression Modal
+  const [showProgressionModal, setShowProgressionModal] = useState(false);
 
   const loadPatientData = async () => {
     setIsLoading(true);
@@ -198,6 +203,16 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             >
               <ScanEye className="w-3.5 h-3.5 text-teal-600" />
               <span>Analyze Image</span>
+            </button>
+          )}
+          {images.length >= 2 && (
+            <button
+              type="button"
+              onClick={() => setShowProgressionModal(true)}
+              className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-semibold text-indigo-900 shadow-2xs transition-colors"
+            >
+              <Activity className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Compare Progression</span>
             </button>
           )}
           <button
@@ -613,6 +628,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             markers={markers}
             readOnly={true}
             patientId={patient.id}
+            onAnalyzeMarkerWithAI={(marker) => onNavigateToImageAnalyzer && onNavigateToImageAnalyzer(patient.id)}
           />
         </div>
       )}
@@ -813,6 +829,30 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                                 </ul>
                               </div>
                             )}
+
+                            {evt.images && evt.images.length > 0 && (
+                              <div>
+                                <span className="font-bold text-slate-700 block mb-1.5 flex items-center gap-1.5">
+                                  <ImageIcon className="w-3.5 h-3.5 text-teal-700" />
+                                  Clinical Photos Documented ({evt.images.length}):
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                  {evt.images.map((img: ClinicalImage) => (
+                                    <div
+                                      key={img.id}
+                                      onClick={() => onNavigateToImageAnalyzer && onNavigateToImageAnalyzer(patient.id)}
+                                      className="group relative w-16 h-16 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 cursor-pointer hover:border-teal-500 shadow-2xs transition"
+                                      title={img.caption || 'Clinical photo'}
+                                    >
+                                      <img src={img.url} alt={img.caption || 'Encounter photo'} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold transition-opacity">
+                                        Analyze
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -860,6 +900,15 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             setEditingAppointment(null);
             loadPatientData();
           }}
+        />
+      )}
+
+      {/* Lesion Progression Modal */}
+      {showProgressionModal && (
+        <LesionProgressionModal
+          patient={patient}
+          images={images}
+          onClose={() => setShowProgressionModal(false)}
         />
       )}
     </div>

@@ -232,6 +232,15 @@
     {
       "actorId": "doc-demo-001",
       "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv5msg1z-nzfp",
+      "timestamp": "2026-10-12T19:14:32.135Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
       "action": "appointment_deleted",
       "resourceType": "appointment",
       "resourceId": "apt-mv0g5ws5-erf4",
@@ -543,7 +552,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-12T19:05:07.374Z"
+    "updatedAt": "2026-10-12T19:14:32.135Z"
   },
   "appointments": [
     {

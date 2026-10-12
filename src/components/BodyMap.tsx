@@ -1,12 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { BodyMarker } from '../types';
-import { Trash2, X, Plus, Filter, Info } from 'lucide-react';
+import { Trash2, X, Plus, Filter, Info, Sparkles } from 'lucide-react';
 
 interface BodyMapProps {
   markers: BodyMarker[];
   onAddMarker?: (marker: Omit<BodyMarker, 'id' | 'createdAt'>) => void;
   onRemoveMarker?: (markerId: string) => void;
   onUpdateMarker?: (markerId: string, updates: Partial<BodyMarker>) => void;
+  onAnalyzeMarkerWithAI?: (marker: BodyMarker) => void;
   readOnly?: boolean;
   patientId: string;
   consultationId?: string;
@@ -29,6 +30,7 @@ export const BodyMap: React.FC<BodyMapProps> = ({
   onAddMarker,
   onRemoveMarker,
   onUpdateMarker,
+  onAnalyzeMarkerWithAI,
   readOnly = false,
   patientId,
   consultationId,
@@ -392,6 +394,17 @@ export const BodyMap: React.FC<BodyMapProps> = ({
                   <p className="text-[11px] text-slate-400">Linked to consultation</p>
                 )}
               </div>
+
+              {onAnalyzeMarkerWithAI && (
+                <button
+                  type="button"
+                  onClick={() => onAnalyzeMarkerWithAI(selectedMarker)}
+                  className="w-full mb-2 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-semibold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-lg shadow-2xs transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                  Analyze Marker with AI
+                </button>
+              )}
 
               {!readOnly && onRemoveMarker && (
                 <button
