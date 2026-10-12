@@ -10,10 +10,12 @@ import {
   Sparkles,
   Settings,
   LogOut,
-  Stethoscope
+  Stethoscope,
+  Eye,
+  ScanEye
 } from 'lucide-react';
 
-export type NavRoute = 'dashboard' | 'patients' | 'appointments' | 'prescriptions' | 'ai-assistant' | 'settings';
+export type NavRoute = 'dashboard' | 'patients' | 'appointments' | 'prescriptions' | 'image-analyzer' | 'ai-assistant' | 'settings';
 
 interface SidebarProps {
   currentRoute: NavRoute;
@@ -138,6 +140,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {t('intelligence')}
             </span>
             <div className="space-y-1">
+              <button
+                type="button"
+                onClick={() => onNavigate('image-analyzer')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  currentRoute === 'image-analyzer'
+                    ? 'bg-teal-50 text-teal-900 font-bold'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <ScanEye className={`w-4 h-4 ${currentRoute === 'image-analyzer' ? 'text-teal-700' : 'text-slate-400'}`} />
+                  <span>{t('aiImageAnalyzer')}</span>
+                </div>
+                <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-extrabold bg-teal-100/80 text-teal-800">
+                  Vision
+                </span>
+              </button>
+
               <button
                 type="button"
                 onClick={onOpenAIAssistant}

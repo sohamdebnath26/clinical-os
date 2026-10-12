@@ -9,6 +9,7 @@ import { PatientsListView } from './components/PatientsListView';
 import { PatientProfileView } from './components/PatientProfileView';
 import { PrescriptionsView } from './components/PrescriptionsView';
 import { AppointmentsView } from './components/AppointmentsView';
+import { ImageAnalyzerView } from './components/ImageAnalyzerView';
 import { SettingsView } from './components/SettingsView';
 import { WalkInModal } from './components/WalkInModal';
 import { ConsultationModal } from './components/ConsultationModal';
@@ -190,6 +191,9 @@ function MainApp() {
                     handleOpenAIAssistant(null, prompt);
                   });
                 }}
+                onNavigateToImageAnalyzer={() => {
+                  setCurrentRoute('image-analyzer');
+                }}
               />
             ) : currentRoute === 'dashboard' ? (
               <DashboardView
@@ -211,6 +215,12 @@ function MainApp() {
               />
             ) : currentRoute === 'prescriptions' ? (
               <PrescriptionsView onSelectPatient={handleSelectPatient} />
+            ) : currentRoute === 'image-analyzer' ? (
+              <ImageAnalyzerView
+                initialPatientId={activePatientId}
+                onSelectPatient={handleSelectPatient}
+                onStartConsultationForPatient={handleStartConsultationForPatient}
+              />
             ) : currentRoute === 'settings' ? (
               <SettingsView />
             ) : null}

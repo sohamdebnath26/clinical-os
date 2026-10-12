@@ -7,7 +7,8 @@ import {
   ClinicalImage,
   AuditLog,
   ClinicStats,
-  Appointment
+  Appointment,
+  AIImageAnalysisResult
 } from '../types/index';
 
 const TOKEN_KEY = 'clinical_os_token';
@@ -239,7 +240,19 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    analyzeImage: (data: {
+      imageBase64: string;
+      mimeType?: string;
+      patientId?: string;
+      clinicalNotes?: string;
+      imageUrl?: string;
+    }) =>
+      fetchWithAuth<{ analysis: AIImageAnalysisResult; patient?: Patient }>('/api/ai/analyze-image', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
+
 
   dashboard: {
     getStats: () =>

@@ -159,6 +159,29 @@ export interface AuditLog {
   metadata?: Record<string, unknown>;
 }
 
+export interface DifferentialDiagnosis {
+  condition: string;
+  confidence: 'High' | 'Moderate' | 'Low';
+  icdCode?: string;
+  rationale: string;
+}
+
+export interface AIImageAnalysisResult {
+  id: string;
+  primaryImpression: string;
+  differentials: DifferentialDiagnosis[];
+  visualFindings: string[];
+  timelineCorrelation: string;
+  redFlags: string[];
+  recommendedInvestigations: string[];
+  suggestedManagementPlan: string;
+  disclaimer: string;
+  analyzedAt: string;
+  isAiPowered: boolean;
+  patientId?: string;
+  imageUrl?: string;
+}
+
 export interface ClinicStats {
   totalPatients: number;
   visitsToday: number;
@@ -166,3 +189,4 @@ export interface ClinicStats {
   followUpsDue: number;
   activePrescriptions: number;
 }
+

@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { db } from './server/db.js';
-import { summarizeConsultationWithAI, askAIAssistant } from './server/ai.js';
+import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage } from './server/ai.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -564,6 +564,57 @@ app.post('/api/ai/chat', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Error generating AI response' });
   }
 });
+
+app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const { imageBase64, mimeType, patientId, clinicalNotes, imageUrl } = req.body;
+
+  if (!imageBase64) {
+    return res.status(400).json({ error: 'Clinical image data (imageBase64) is required for analysis' });
+  }
+
+  let patient = undefined;
+  let history = undefined;
+
+  if (patientId) {
+    patient = db.findPatientById(patientId);
+    if (patient) {
+      history = db.getConsultationsByPatient(patient.id);
+    }
+  }
+
+  try {
+    const analysis = await analyzeClinicalImage({
+      imageBase64,
+      mimeType,
+      patient,
+      history,
+      clinicalNotes,
+      imageUrl
+    });
+
+    const doctor = req.doctor!;
+    db.logAudit({
+      actorId: doctor.id,
+      actorName: doctor.name,
+      action: 'ai_clinical_image_analyzed',
+      resourceType: 'clinical_image',
+      resourceId: analysis.id,
+      metadata: {
+        patientId: patient?.id,
+        patientName: patient?.fullName,
+        primaryImpression: analysis.primaryImpression,
+        isAiPowered: analysis.isAiPowered
+      }
+    });
+
+    res.json({ analysis, patient });
+  } catch (err: unknown) {
+    console.error('AI image analysis endpoint error:', err);
+    const message = err instanceof Error ? err.message : 'Failed to analyze clinical image';
+    res.status(500).json({ error: message });
+  }
+});
+
 
 // ==========================================
 // DASHBOARD & AUDIT
