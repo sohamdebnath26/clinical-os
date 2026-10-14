@@ -40,14 +40,44 @@ export function cleanPhoneNumber(rawPhone: string, defaultCountryCode: string = 
 }
 
 /**
+ * Direct native application URI scheme (for WhatsApp Desktop on Windows/Mac, or mobile app)
+ */
+export function getWhatsAppNativeUri(cleanPhone: string, messageText: string): string {
+  const encoded = encodeURIComponent(messageText);
+  return `whatsapp://send?phone=${cleanPhone}&text=${encoded}`;
+}
+
+/**
+ * Direct WhatsApp Web URL (opens in browser tab)
+ */
+export function getWhatsAppWebUrl(cleanPhone: string, messageText: string): string {
+  const encoded = encodeURIComponent(messageText);
+  return `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encoded}`;
+}
+
+/**
+ * Universal web-dispatch URL (wa.me / api.whatsapp.com)
+ */
+export function getWhatsAppUniversalUrl(cleanPhone: string, messageText: string): string {
+  const encoded = encodeURIComponent(messageText);
+  return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encoded}`;
+}
+
+/**
  * Generate direct WhatsApp Web / App universal link
  */
-export function generateWhatsAppLink(cleanPhone: string, messageText: string, preferWeb: boolean = false): string {
-  const encoded = encodeURIComponent(messageText);
-  if (preferWeb) {
-    return `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encoded}`;
+export function generateWhatsAppLink(
+  cleanPhone: string,
+  messageText: string,
+  target: 'app' | 'web' | 'universal' | boolean = 'app'
+): string {
+  if (target === true || target === 'web') {
+    return getWhatsAppWebUrl(cleanPhone, messageText);
   }
-  return `https://wa.me/${cleanPhone}?text=${encoded}`;
+  if (target === 'app') {
+    return getWhatsAppNativeUri(cleanPhone, messageText);
+  }
+  return getWhatsAppUniversalUrl(cleanPhone, messageText);
 }
 
 /**

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Patient,
   Doctor,
@@ -10,13 +10,15 @@ import {
 import { api } from '../lib/api';
 import {
   cleanPhoneNumber,
-  generateWhatsAppLink,
+  getWhatsAppNativeUri,
+  getWhatsAppWebUrl,
   formatWhatsAppClinicalReport,
   formatWhatsAppPrescription,
   formatWhatsAppConsultationSummary,
   formatWhatsAppProgressionReport,
   formatWhatsAppPatientSummary
 } from '../lib/whatsappUtils';
+import { WhatsAppMessageRenderer } from './WhatsAppMessageRenderer';
 import {
   X,
   Send,
@@ -28,7 +30,10 @@ import {
   Sparkles,
   ExternalLink,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  Monitor,
+  Eye,
+  FileText
 } from 'lucide-react';
 
 export type WhatsAppReportType =
@@ -99,13 +104,42 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   // Formatting options
   const [includeClinicHeader, setIncludeClinicHeader] = useState(true);
   const [includeDoctorContact, setIncludeDoctorContact] = useState(true);
-  const [preferWeb, setPreferWeb] = useState(false);
+  const [preferWeb, setPreferWeb] = useState(() => {
+    try {
+      return localStorage.getItem('prefer_whatsapp_web') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
-  // State
+  // Preview display toggle: formatted chat vs raw text
+  const [previewMode, setPreviewMode] = useState<'rendered' | 'raw'>('rendered');
+
+  // Launch state
+  const [showAppLaunchPrompt, setShowAppLaunchPrompt] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Synchronize preference to localStorage
+  const handleTogglePreferWeb = (val: boolean) => {
+    setPreferWeb(val);
+    try {
+      localStorage.setItem('prefer_whatsapp_web', String(val));
+    } catch {
+      // non-critical
+    }
+  };
+
+  // Reset launch prompt when modal opens/closes
+  useEffect(() => {
+    if (!isOpen) {
+      setShowAppLaunchPrompt(false);
+      setStatusMessage(null);
+      setErrorMessage(null);
+    }
+  }, [isOpen]);
 
   // Compute clean normalized phone number
   const fullRawPhone = `${countryCode}${phoneNumber}`;
@@ -193,16 +227,22 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
       await navigator.clipboard.writeText(messageText);
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2500);
-    } catch {
-      setErrorMessage('Unable to copy directly. Please select and copy manually.');
+    } catch (err) {
+      console.warn('Copy failed:', err);
     }
   };
 
+  /**
+   * Dispatches WhatsApp report.
+   * If openAsWeb is true or preferWeb is checked: opens WhatsApp Web directly.
+   * If false: launches the native WhatsApp Desktop protocol (whatsapp://),
+   * and displays a prompt offering to launch WhatsApp Web if the app is not installed.
+   */
   const handleSendWhatsApp = async (openAsWeb = false) => {
     setErrorMessage(null);
 
-    if (phoneNumber.replace(/\D/g, '').length !== 10) {
-      setErrorMessage('Please enter a valid 10-digit mobile number.');
+    if (phoneNumber.replace(/\D/g, '').length < 7) {
+      setErrorMessage('Please enter a valid patient mobile number.');
       return;
     }
 
@@ -235,18 +275,40 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
         console.warn('Audit logging error:', err);
       }
 
-      // 3. Open WhatsApp link
-      const waUrl = generateWhatsAppLink(cleanedRecipient, messageText, openAsWeb || preferWeb);
-      window.open(waUrl, '_blank', 'noopener,noreferrer');
+      if (openAsWeb || preferWeb) {
+        // Direct WhatsApp Web in browser tab
+        const webUrl = getWhatsAppWebUrl(cleanedRecipient, messageText);
+        window.open(webUrl, '_blank', 'noopener,noreferrer');
+        setShowAppLaunchPrompt(false);
+        setStatusMessage('Medical report opened in WhatsApp Web! Audit log updated.');
+      } else {
+        // Direct Native Application protocol (Windows/Mac/Mobile WhatsApp app)
+        const nativeUri = getWhatsAppNativeUri(cleanedRecipient, messageText);
 
-      setStatusMessage('Medical report dispatched to WhatsApp! Audit log updated.');
+        // Trigger native protocol via hidden anchor click
+        const a = document.createElement('a');
+        a.href = nativeUri;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          if (document.body.contains(a)) {
+            document.body.removeChild(a);
+          }
+        }, 500);
+
+        // Display interactive prompt in UI: if WhatsApp didn't open or isn't installed, prompt to open WhatsApp Web
+        setShowAppLaunchPrompt(true);
+        setStatusMessage('Launching WhatsApp Desktop... If not installed, click "Open in WhatsApp Web".');
+      }
+
       if (onSentSuccess) {
         onSentSuccess();
       }
 
       setTimeout(() => {
         setStatusMessage(null);
-      }, 4000);
+      }, 5000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to launch WhatsApp';
       setErrorMessage(msg);
@@ -258,130 +320,88 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200"
-      onClick={onClose}
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      <div
-        onClick={e => e.stopPropagation()}
-        className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[92vh] border border-slate-200 overflow-hidden"
-      >
+      <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-auto max-h-[92vh]">
         {/* Header */}
-        <div className="px-6 py-4 bg-[#128C7E] text-white flex items-center justify-between shrink-0">
+        <div className="bg-[#128C7E] px-6 py-4 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white shadow-xs">
+            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
               <WhatsAppIcon className="w-6 h-6 fill-current" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-base tracking-tight text-white">
+                <h3 className="font-bold text-base tracking-tight">
                   Send Medical Report to WhatsApp
                 </h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-100 border border-emerald-400/30 uppercase">
-                  Direct Dispatch
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">
+                  Instant Dispatch
                 </span>
               </div>
-              <p className="text-xs text-emerald-100/90 mt-0.5">
-                {getReportTitle()} • {patient ? `${patient.fullName} (${patient.patientCode})` : 'Unassigned Patient'}
+              <p className="text-xs text-emerald-100 mt-0.5">
+                {getReportTitle()} · Patient: <strong>{patient?.fullName || 'Walk-in Presentation'}</strong>
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-white/80 hover:text-white rounded-lg hover:bg-white/10 transition"
-            aria-label="Close"
+            className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
+        {/* Status / Alerts */}
+        {statusMessage && (
+          <div className="bg-emerald-50 px-6 py-2.5 border-b border-emerald-200 flex items-center gap-2 text-xs text-emerald-800 animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{statusMessage}</span>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="bg-rose-50 px-6 py-2.5 border-b border-rose-200 flex items-center gap-2 text-xs text-rose-800 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-800">
-          {/* Status Alert if successfully sent */}
-          {statusMessage && (
-            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center gap-2.5 animate-in slide-in-from-top-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="font-semibold">{statusMessage}</span>
-            </div>
-          )}
+        <div className="p-6 space-y-4 overflow-y-auto flex-1 text-slate-700">
+          {/* Recipient Phone Configuration */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-600 block">
+              Patient WhatsApp Mobile Number
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={countryCode}
+                onChange={e => setCountryCode(e.target.value)}
+                className="w-40 px-2.5 py-2 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#128C7E]"
+              >
+                {COUNTRY_CODES.map(cc => (
+                  <option key={cc.code} value={cc.code}>
+                    {cc.label}
+                  </option>
+                ))}
+              </select>
 
-          {/* Error Alert */}
-          {errorMessage && (
-            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 flex items-center gap-2.5">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {/* Recipient Phone Settings */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-teal-700" />
-                Patient WhatsApp Number
-              </label>
-              {patient?.mobile && (
-                <span className="text-[11px] text-slate-500 font-mono">
-                  Saved: {patient.mobile}
-                </span>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <div className="sm:col-span-1">
-                <label className="block text-[11px] font-semibold text-slate-500 mb-1">
-                  Country Code
-                </label>
-                <select
-                  value={countryCode}
-                  onChange={e => setCountryCode(e.target.value)}
-                  className="w-full text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-2 font-medium focus:ring-2 focus:ring-[#128C7E] focus:outline-hidden"
-                >
-                  {COUNTRY_CODES.map(c => (
-                    <option key={c.code} value={c.code}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] font-semibold text-slate-500 mb-1">
-                  Mobile Number (digits only)
-                </label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-bold text-slate-400">
-                    +{countryCode}
-                  </span>
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    pattern="[0-9]{10}"
-                    maxLength={10}
-                    value={phoneNumber}
-                    onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    onKeyDown={e => {
-                      if (
-                        !/[0-9]/.test(e.key) &&
-                        !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(e.key) &&
-                        !e.ctrlKey &&
-                        !e.metaKey
-                      ) {
-                        e.preventDefault();
-                      }
-                    }}
-                    placeholder="10-digit mobile number"
-                    className="w-full text-xs bg-white border border-slate-300 rounded-lg pl-14 pr-12 py-2 font-mono font-medium focus:ring-2 focus:ring-[#128C7E] focus:outline-hidden"
-                  />
-                  {phoneNumber.length > 0 && (
-                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400">
-                      {phoneNumber.length}/10
-                    </span>
-                  )}
-                </div>
+              <div className="relative flex-1">
+                <Phone className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+                <input
+                  type="tel"
+                  placeholder="e.g. 9876543210 (10 digits)"
+                  value={phoneNumber}
+                  onChange={e => setPhoneNumber(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#128C7E] font-mono font-medium"
+                />
               </div>
             </div>
 
-            {patient && phoneNumber !== initialNumber && (
+            {patient && (
               <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer pt-1">
                 <input
                   type="checkbox"
@@ -389,28 +409,62 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                   onChange={e => setUpdatePatientMobile(e.target.checked)}
                   className="rounded text-[#128C7E] focus:ring-[#128C7E]"
                 />
-                <span>Update patient profile with this new contact number</span>
+                <span>Save and update this WhatsApp number in patient's EHR profile</span>
               </label>
             )}
           </div>
 
-          {/* Optional Doctor Note to Patient */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-              <MessageSquare className="w-3.5 h-3.5 text-teal-700" />
-              Personal Note / Doctor&apos;s Advice (Optional)
+          {/* Prompt banner: Directly opens WhatsApp Desktop or Prompts WhatsApp Web */}
+          {showAppLaunchPrompt && (
+            <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 space-y-2.5 animate-in slide-in-from-top-2">
+              <div className="flex items-start gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <WhatsAppIcon className="w-4 h-4 fill-white" />
+                </div>
+                <div className="space-y-0.5 flex-1 min-w-0">
+                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <span>Launching WhatsApp Desktop Application...</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-600 leading-normal">
+                    The native WhatsApp app URI was triggered. If installed on this device, it will launch automatically with the patient's report loaded.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white/80 p-3 rounded-lg border border-emerald-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="text-[11px] text-slate-700">
+                  <span className="font-semibold block">WhatsApp didn't open or not installed on this PC?</span>
+                  <span className="text-slate-500">Launch in browser without installing any desktop software:</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSendWhatsApp(true)}
+                  className="px-3.5 py-1.5 rounded-lg bg-[#128C7E] hover:bg-[#075E54] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs shrink-0"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open WhatsApp Web</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Doctor Custom Note / Instructions */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+              <MessageSquare className="w-3.5 h-3.5 text-[#128C7E]" />
+              <span>Personalized Doctor's Note to Patient (Optional)</span>
             </label>
             <textarea
+              rows={2}
+              placeholder="e.g. Please apply the ointment twice daily after gentle bathing. Report back if redness increases."
               value={customNote}
               onChange={e => setCustomNote(e.target.value)}
-              placeholder="e.g. Please take all tablets strictly after meals. If itching flares or redness increases, send an update or visit the clinic immediately."
-              rows={2}
-              className="w-full text-xs bg-white border border-slate-300 rounded-xl p-3 focus:ring-2 focus:ring-[#128C7E] focus:outline-hidden text-slate-800 placeholder:text-slate-400"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-[#128C7E] resize-none"
             />
           </div>
 
-          {/* Quick Toggles */}
-          <div className="flex items-center gap-4 text-xs text-slate-600 flex-wrap pt-1">
+          {/* Header & Options */}
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 pt-1">
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input
                 type="checkbox"
@@ -433,39 +487,81 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               <input
                 type="checkbox"
                 checked={preferWeb}
-                onChange={e => setPreferWeb(e.target.checked)}
+                onChange={e => handleTogglePreferWeb(e.target.checked)}
                 className="rounded text-[#128C7E] focus:ring-[#128C7E]"
               />
-              <span>Prefer WhatsApp Web (browser tab)</span>
+              <span className="font-medium text-slate-700">Always use WhatsApp Web by default</span>
             </label>
           </div>
 
-          {/* Live Preview of WhatsApp Message */}
+          {/* WhatsApp Message Preview Section */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-[#128C7E]" />
                 WhatsApp Message Preview
               </span>
-              <button
-                type="button"
-                onClick={handleCopyText}
-                className="text-xs font-semibold text-teal-800 hover:text-teal-950 flex items-center gap-1 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition"
-              >
-                {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{isCopied ? 'Copied to Clipboard' : 'Copy Text'}</span>
-              </button>
+
+              {/* View Switcher: Formatted Chat vs Raw Text */}
+              <div className="flex items-center gap-2">
+                <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewMode('rendered')}
+                    className={`px-2.5 py-1 rounded-md font-semibold text-[11px] flex items-center gap-1 transition ${
+                      previewMode === 'rendered'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Eye className="w-3 h-3 text-[#128C7E]" />
+                    <span>Formatted Chat</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewMode('raw')}
+                    className={`px-2.5 py-1 rounded-md font-semibold text-[11px] flex items-center gap-1 transition ${
+                      previewMode === 'raw'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <FileText className="w-3 h-3 text-slate-500" />
+                    <span>Raw Markdown</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopyText}
+                  className="text-xs font-semibold text-teal-800 hover:text-teal-950 flex items-center gap-1 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition"
+                >
+                  {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{isCopied ? 'Copied' : 'Copy Text'}</span>
+                </button>
+              </div>
             </div>
 
-            {/* WhatsApp Chat bubble mock */}
-            <div className="bg-[#efeae2] p-4 rounded-2xl border border-slate-300/80 shadow-inner">
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 max-w-xl mx-auto space-y-2 text-xs font-mono whitespace-pre-wrap text-slate-800 leading-relaxed max-h-60 overflow-y-auto">
-                {messageText}
+            {/* Authentic WhatsApp Chat Bubble Container */}
+            <div className="bg-[#efeae2] p-4 sm:p-5 rounded-2xl border border-slate-300/80 shadow-inner">
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 max-w-xl mx-auto space-y-2 max-h-72 overflow-y-auto relative">
+                {previewMode === 'rendered' ? (
+                  <WhatsAppMessageRenderer text={messageText} />
+                ) : (
+                  <div className="text-xs font-mono whitespace-pre-wrap text-slate-800 leading-relaxed">
+                    {messageText}
+                  </div>
+                )}
               </div>
-              <div className="text-center mt-2">
+
+              <div className="text-center mt-2.5 flex items-center justify-center gap-3">
                 <span className="text-[10px] text-slate-500 font-sans inline-flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                  Direct encrypted WhatsApp patient link
+                  End-to-end encrypted medical dispatch
+                </span>
+                <span className="text-[10px] text-slate-400">·</span>
+                <span className="text-[10px] text-slate-500">
+                  Bold <strong className="font-bold text-slate-700">*text*</strong>, Italics <em className="italic text-slate-700">_text_</em> & Emojis fully rendered
                 </span>
               </div>
             </div>
@@ -491,25 +587,28 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               <span>{isCopied ? 'Copied' : 'Copy'}</span>
             </button>
 
+            {/* Direct WhatsApp Web Button */}
             <button
               type="button"
               onClick={() => handleSendWhatsApp(true)}
               disabled={isLogging || !cleanedRecipient}
               className="flex-1 sm:flex-none px-3.5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50"
-              title="Open via WhatsApp Web in browser"
+              title="Open via WhatsApp Web directly in a browser tab"
             >
               <ExternalLink className="w-4 h-4" />
               <span>WhatsApp Web</span>
             </button>
 
+            {/* Primary Action Button: Directly opens WhatsApp Desktop if installed, or prompts to open WhatsApp Web */}
             <button
               type="button"
               onClick={() => handleSendWhatsApp(false)}
               disabled={isLogging || !cleanedRecipient}
-              className="flex-1 sm:flex-none px-5 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50"
+              className="flex-1 sm:flex-none px-5 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.99]"
+              title={preferWeb ? "Open in WhatsApp Web" : "Launch WhatsApp App directly on your device"}
             >
               <WhatsAppIcon className="w-4 h-4 fill-white" />
-              <span>{isLogging ? 'Logging & Opening...' : 'Send on WhatsApp'}</span>
+              <span>{isLogging ? 'Logging & Dispatching...' : preferWeb ? 'Send via WhatsApp Web' : 'Send on WhatsApp'}</span>
               <Send className="w-3.5 h-3.5" />
             </button>
           </div>

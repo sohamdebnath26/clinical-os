@@ -406,19 +406,26 @@ export function extractBufferVisualMetrics(base64Data: string, mimeType?: string
     const colorVariationScore = Math.min(90, Math.max(20, ((seed2 + seed3) % 60) + 25));
 
     let morphologyCategory: VisualMorphologyMetrics['morphologyCategory'] = 'eczematous_dermatitis';
-    const catSelector = (seed1 + seed2 + seed3) % 9;
-    const categories: VisualMorphologyMetrics['morphologyCategory'][] = [
-      'pigmented_melanocytic',
-      'annular_scaling',
-      'inflammatory_plaque',
-      'papulopustular_follicular',
-      'vesicular_bullous',
-      'ulcerative_eroded',
-      'urticarial_wheal',
-      'keratotic_verrucous',
-      'eczematous_dermatitis'
-    ];
-    morphologyCategory = categories[catSelector];
+
+    if (pigmentationIndex > 45 || darkRatio > 0.22) {
+      morphologyCategory = 'pigmented_melanocytic';
+    } else if (brightRatio > 0.30 && erythemaIndex < 38) {
+      morphologyCategory = 'hypopigmented_macular';
+    } else if (erythemaIndex > 68 && borderIrregularity < 42) {
+      morphologyCategory = 'urticarial_wheal';
+    } else if (erythemaIndex > 60 && borderIrregularity > 55 && asymmetryScore > 50) {
+      morphologyCategory = 'vesicular_bullous';
+    } else if (borderIrregularity > 60 && colorVariationScore > 55) {
+      morphologyCategory = 'annular_scaling';
+    } else if (darkRatio > 0.12 && erythemaIndex > 45) {
+      morphologyCategory = 'papulopustular_follicular';
+    } else if (borderIrregularity > 55 && asymmetryScore > 45) {
+      morphologyCategory = 'ulcerative_eroded';
+    } else if (erythemaIndex > 52 && (borderIrregularity > 50 || colorVariationScore > 50)) {
+      morphologyCategory = 'inflammatory_plaque';
+    } else {
+      morphologyCategory = 'eczematous_dermatitis';
+    }
 
     const dominantColors = [
       { hex: darkRatio > 0.25 ? '#2b1810' : '#c0392b', name: darkRatio > 0.25 ? 'Hyperpigmented Melanin' : 'Erythematous Flare', percentage: 48 },
@@ -471,13 +478,13 @@ export function generateAdaptiveClinicalImageAnalysis(
   const notes = (params.clinicalNotes || '').toLowerCase();
   const pastDiagnoses = history.flatMap(c => c.diagnoses).map(d => d.toLowerCase());
 
-  // Allow doctor notes to influence priority if explicit keywords match
+  // Allow doctor notes to refine category if specific clinical keywords match
   let category = metrics.morphologyCategory;
   if (notes.includes('mole') || notes.includes('nevus') || notes.includes('melanoma') || notes.includes('pigment')) {
     category = 'pigmented_melanocytic';
   } else if (notes.includes('fungal') || notes.includes('ringworm') || notes.includes('tinea') || notes.includes('annular')) {
     category = 'annular_scaling';
-  } else if (notes.includes('psoriasis') || pastDiagnoses.some(d => d.includes('psoriasis'))) {
+  } else if (notes.includes('psoriasis')) {
     category = 'inflammatory_plaque';
   } else if (notes.includes('acne') || notes.includes('pimple') || notes.includes('comedo') || notes.includes('rosacea')) {
     category = 'papulopustular_follicular';
@@ -489,6 +496,10 @@ export function generateAdaptiveClinicalImageAnalysis(
     category = 'urticarial_wheal';
   } else if (notes.includes('wart') || notes.includes('verruca') || notes.includes('hyperkeratot')) {
     category = 'keratotic_verrucous';
+  } else if (notes.includes('purpura') || notes.includes('vasculitis') || notes.includes('petechia')) {
+    category = 'vascular_purpuric';
+  } else if (notes.includes('vitiligo') || notes.includes('white patch') || notes.includes('hypopigment')) {
+    category = 'hypopigmented_macular';
   }
 
   let primaryImpression = '';
@@ -880,21 +891,131 @@ export function generateAdaptiveClinicalImageAnalysis(
       break;
     }
 
-    case 'eczematous_dermatitis':
-    default: {
-      primaryImpression = 'Subacute Eczematous Dermatitis (Atopic Eczema flare vs Allergic Contact Dermatitis)';
+    case 'vascular_purpuric': {
+      const isSeverePurpura = metrics.erythemaIndex > 60 || metrics.borderIrregularity > 50;
+      primaryImpression = isSeverePurpura
+        ? 'Cutaneous Leukocytoclastic Vasculitis (Palpable Purpura presentation)'
+        : 'Benign Cutaneous Vascular Eruption (Cherry Angioma vs Pigmented Purpuric Dermatosis)';
       differentials = [
         {
-          condition: 'Atopic Dermatitis (Subacute Exacerbation)',
-          confidence: 'High',
-          icdCode: 'L20.9',
-          rationale: `Erythematous excoriated papulovesicular dermatitis (Erythema: ${metrics.erythemaIndex}/100) with epidermal barrier disruption, severe pruritus, and flexural or extensor distribution.`
+          condition: 'Leukocytoclastic Vasculitis (Hypersensitivity Angiitis)',
+          confidence: isSeverePurpura ? 'High' : 'Moderate',
+          icdCode: 'L95.9',
+          rationale: `Non-blanching violaceous petechiae and palpable purpuric papules (Redness: ${metrics.erythemaIndex}/100) reflecting immune complex-mediated small vessel vasculitis.`
         },
         {
-          condition: 'Allergic Contact Dermatitis',
+          condition: 'Pigmented Purpuric Dermatosis (Schamberg Disease)',
           confidence: 'Moderate',
-          icdCode: 'L23.9',
-          rationale: 'Erythematous vesicular or eczematous plaques with distinct geometrical margins reflecting exogenous contact with an allergen.'
+          icdCode: 'L81.7',
+          rationale: 'Cayenne pepper-like petechial macules with hemosiderin deposition resolving with rust-brown discoloration.'
+        },
+        {
+          condition: 'Cherry Hemangioma (Campbell de Morgan spot)',
+          confidence: isSeverePurpura ? 'Low' : 'High',
+          icdCode: 'D18.01',
+          rationale: 'Discrete, dome-shaped benign capillary proliferation exhibiting characteristic violaceous or ruby-red lacunae on dermoscopy.'
+        }
+      ];
+      visualFindings = [
+        `Non-blanching violaceous and purpuric vascular macules/papules (Erythema: ${metrics.erythemaIndex}/100)`,
+        `Focal hemosiderin staining and micro-extravasation: ${colorsDesc}`,
+        `Bilateral or dependent gravity-influenced anatomical distribution`,
+        `Absence of central necrotic eschar or deep ulceration (Border: ${metrics.borderIrregularity}/100)`
+      ];
+      redFlags = [
+        'Systemic vasculitis signs: Hematuria, proteinuria, abdominal angina, or peripheral neuropathy (mononeuritis multiplex)',
+        'Reticiform purpura with central skin necrosis (suggesting thrombotic microangiopathy or calciphylaxis)',
+        'High pyrexia, hemodynamic instability, or petechiae progressing into purpura fulminans'
+      ];
+      recommendedInvestigations = [
+        'Urinalysis (dipstick and microscopic examination for RBC casts and proteinuria) to rule out renal vasculitis',
+        '3-4mm punch biopsy of fresh (<24-48h old) purpuric papule for H&E and Direct Immunofluorescence (DIF for IgA/IgG/IgM/C3)',
+        'Complete Blood Count (platelet count), Coagulation profile (PT/INR, aPTT), ANA, ANCA, and complement levels (C3, C4)'
+      ];
+      suggestedManagementPlan =
+        '1. Diagnostic confirmation: Immediate urinalysis and baseline BP check; arrange diagnostic punch biopsy.\n' +
+        '2. Symptomatic: Rest, lower limb elevation, and avoidance of prolonged standing.\n' +
+        '3. Pharmacotherapy: Oral Colchicine 0.5mg BID or Dapsone 50-100mg daily if chronic cutaneous disease; short Prednisone course if acute painful flare without systemic involvement.\n' +
+        '4. Remove suspect triggering medications (antibiotics, NSAIDs) introduced within prior 4 weeks.';
+      break;
+    }
+
+    case 'hypopigmented_macular': {
+      const isDepigmented = metrics.pigmentationIndex < 20;
+      primaryImpression = isDepigmented
+        ? 'Vitiligo (Progressive Depigmentation / Melanocyte Loss)'
+        : 'Pityriasis Versicolor (Tinea Versicolor - Hypopigmented Phase)';
+      differentials = [
+        {
+          condition: 'Vitiligo Vulgaris',
+          confidence: isDepigmented ? 'High' : 'Moderate',
+          icdCode: 'L80',
+          rationale: `Completely amelanotic, chalk-white depigmented macules (Pigment Index: ${metrics.pigmentationIndex}/100) with sharply scalloped borders and absent follicular pigment.`
+        },
+        {
+          condition: 'Pityriasis Versicolor (Malassezia globosa / furfur)',
+          confidence: isDepigmented ? 'Moderate' : 'High',
+          icdCode: 'B36.0',
+          rationale: 'Superficial hypopigmented macules with fine subtle furfuraceous scale elicited upon gentle stretching.'
+        },
+        {
+          condition: 'Post-Inflammatory Hypopigmentation',
+          confidence: 'Moderate',
+          icdCode: 'L81.5',
+          rationale: 'Partial melanocyte suppression occurring at sites of resolved prior dermatitis, burn, or eczema.'
+        },
+        {
+          condition: 'Pityriasis Alba',
+          confidence: 'Low',
+          icdCode: 'L30.5',
+          rationale: 'Ill-defined faintly hypopigmented patches with delicate scale, frequent in pediatric atopic diathesis.'
+        }
+      ];
+      visualFindings = [
+        `Sharply marginated amelanotic or hypopigmented macules (Pigment Index: ${metrics.pigmentationIndex}/100)`,
+        `Absence of active inflammatory erythema (Erythema: ${metrics.erythemaIndex}/100)`,
+        `Color spectrum: ${colorsDesc}`,
+        `Smooth surface texture with minimal scaling (Entropy: ${metrics.textureEntropy || 25}/100)`
+      ];
+      redFlags = [
+        'Rapidly expanding generalized vitiligo signaling underlying autoimmune polyendocrine syndrome',
+        'Loss of cutaneous sensation within hypopigmented macule (hallmark of Tuberculoid Leprosy in endemic zones)',
+        'Associated uveitis, visual changes, or auditory disturbance (Vogt-Koyanagi-Harada syndrome)'
+      ];
+      recommendedInvestigations = [
+        'Wood\'s Lamp examination (chalky white fluorescence confirms complete melanocyte loss in vitiligo; yellowish-golden glow in tinea versicolor)',
+        'KOH examination of delicate scrapings (spaghetti and meatballs hyphae / spores in Malassezia)',
+        'Autoimmune thyroid profile (TSH, anti-TPO) and serum fasting glucose / HbA1c'
+      ];
+      suggestedManagementPlan =
+        '1. If Vitiligo: First-line Topical Tacrolimus 0.1% ointment BID or potent topical corticosteroid (Mometasone 0.1%) applied once daily for 4-6 weeks.\n' +
+        '2. Narrowband UVB (NB-UVB) phototherapy referral if BSA >5% or rapidly progressive.\n' +
+        '3. If Tinea Versicolor: Topical Ketoconazole 2% shampoo applied to damp skin for 10 minutes daily for 14 days.\n' +
+        '4. Strict photoprotection on depigmented areas (SPF 50+ broad-spectrum sunscreen) to avoid sunburn.';
+      break;
+    }
+
+    case 'eczematous_dermatitis':
+    default: {
+      const isAcute = metrics.erythemaIndex > 68;
+      const isLichenified = (metrics.textureEntropy || 30) > 48;
+      primaryImpression = isAcute
+        ? 'Acute Exudative Eczematous Flare (Allergic Contact Dermatitis vs Atopic Exacerbation)'
+        : isLichenified
+        ? 'Chronic Lichenified Eczematous Dermatitis (Neurodermatitis / Prurigo Nodularis)'
+        : 'Subacute Eczematous Dermatitis (Atopic Eczema flare vs Irritant Dermatitis)';
+      differentials = [
+        {
+          condition: isAcute ? 'Allergic Contact Dermatitis' : 'Atopic Dermatitis (Subacute Exacerbation)',
+          confidence: 'High',
+          icdCode: isAcute ? 'L23.9' : 'L20.9',
+          rationale: `Erythematous papulovesicular dermatitis (Erythema: ${metrics.erythemaIndex}/100) with epidermal barrier disruption, severe pruritus, and ${isAcute ? 'distinct geometric or localized margins' : 'typical flexural distribution'}.`
+        },
+        {
+          condition: isAcute ? 'Atopic Dermatitis (Acute Flare)' : 'Allergic Contact Dermatitis',
+          confidence: 'Moderate',
+          icdCode: isAcute ? 'L20.9' : 'L23.9',
+          rationale: 'Pruritic erythematous plaques reflecting exogenous contact sensitization or endogenous atopic barrier defect.'
         },
         {
           condition: 'Irritant Contact Dermatitis',
@@ -913,7 +1034,7 @@ export function generateAdaptiveClinicalImageAnalysis(
         `Ill-defined erythematous macules and edematous papules (Erythema Index: ${metrics.erythemaIndex}/100)`,
         `Superficial epidermal microvesiculation and excoriations secondary to pruritus`,
         `Fine desquamation and epidermal xerosis: ${colorsDesc}`,
-        `Absence of deep dermal ulceration or purulent satellite nodules`
+        `Absence of deep dermal ulceration or purulent satellite nodules (Texture: ${metrics.textureEntropy || 40}/100)`
       ];
       redFlags = [
         'Eczema Herpeticum (Kaposi varicelliform eruption): Monomorphic punched-out umbilicated blisters with fever — emergency antiviral indication',
