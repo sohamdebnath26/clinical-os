@@ -232,6 +232,103 @@
     {
       "actorId": "doc-demo-001",
       "actorName": "Dr. Demo",
+      "action": "ai_clinical_image_analyzed",
+      "resourceType": "clinical_image",
+      "resourceId": "ai_img_1791955588808_wnts9",
+      "metadata": {
+        "primaryImpression": "Tinea Corporis (Superficial Dermatophytosis / Ringworm)",
+        "isAiPowered": false
+      },
+      "id": "aud-mv7o39hk-fd9m",
+      "timestamp": "2026-10-14T05:26:28.808Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7o39g1-o7pl",
+      "timestamp": "2026-10-14T05:26:28.753Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "ai_clinical_image_analyzed",
+      "resourceType": "clinical_image",
+      "resourceId": "ai_img_1791955582635_yfx7j",
+      "metadata": {
+        "primaryImpression": "Atypical Melanocytic Lesion (Dysplastic Nevus vs Early Cutaneous Melanoma)",
+        "isAiPowered": false
+      },
+      "id": "aud-mv7o34q3-fwvx",
+      "timestamp": "2026-10-14T05:26:22.635Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7o34oo-1z5v",
+      "timestamp": "2026-10-14T05:26:22.584Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "ai_clinical_image_analyzed",
+      "resourceType": "clinical_image",
+      "resourceId": "ai_img_1791955576441_wci96",
+      "metadata": {
+        "primaryImpression": "Acute Urticaria (Wheal & Flare Presentation) vs Cutaneous Drug Eruption",
+        "isAiPowered": false
+      },
+      "id": "aud-mv7o2zy1-xb2j",
+      "timestamp": "2026-10-14T05:26:16.441Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7o2zvf-x8rk",
+      "timestamp": "2026-10-14T05:26:16.347Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "ai_clinical_image_analyzed",
+      "resourceType": "clinical_image",
+      "resourceId": "ai_img_1791955566603",
+      "metadata": {
+        "primaryImpression": "Erythematous Papular Eruption / Contact Dermatitis",
+        "isAiPowered": false
+      },
+      "id": "aud-mv7o2scr-i5nl",
+      "timestamp": "2026-10-14T05:26:06.603Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7o2s49-x9hl",
+      "timestamp": "2026-10-14T05:26:06.297Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7o2n9q-gkr5",
+      "timestamp": "2026-10-14T05:26:00.014Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
       "action": "doctor_login",
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
@@ -600,7 +697,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-14T05:24:54.782Z"
+    "updatedAt": "2026-10-14T05:26:28.808Z"
   },
   "appointments": [
     {
