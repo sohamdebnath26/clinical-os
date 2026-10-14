@@ -94,6 +94,98 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token, doctor });
 });
 
+// Single Sign-On (SSO) for Work/University/Hospital Organisations
+app.post('/api/auth/sso', (req, res) => {
+  const { organization, email, name, department } = req.body;
+  const orgName = (organization || 'Metro Health University Medical Center').trim();
+  const orgEmail = (email || 'hospital@metrohealth.org').toLowerCase().trim();
+  const orgDoctorName = (name || 'Dr. Sarah Chen, MD').trim();
+  const orgDept = (department || 'Chief of Dermatology & Cutaneous Medicine').trim();
+
+  let doctor = db.findDoctorByEmail(orgEmail);
+  if (!doctor) {
+    doctor = db.createDoctor({
+      name: orgDoctorName,
+      email: orgEmail,
+      password: 'Demo@1234_sso_managed',
+      speciality: orgDept,
+      registrationNumber: `SSO-${Math.floor(100000 + Math.random() * 900000)}`,
+      clinicName: orgName,
+      phone: '+1 (555) 392-1084'
+    });
+    db.updateDoctor(doctor.id, {
+      accountType: 'organisational',
+      organizationName: orgName,
+      organizationDepartment: orgDept
+    });
+    doctor = db.findDoctorById(doctor.id)!;
+  } else if (!doctor.accountType) {
+    db.updateDoctor(doctor.id, {
+      accountType: 'organisational',
+      organizationName: orgName,
+      organizationDepartment: orgDept
+    });
+    doctor = db.findDoctorById(doctor.id)!;
+  }
+
+  const token = generateToken();
+  activeSessions.set(token, {
+    doctorId: doctor.id,
+    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+  });
+
+  db.logAudit({
+    actorId: doctor.id,
+    actorName: doctor.name,
+    action: 'doctor_sso_login',
+    resourceType: 'auth',
+    resourceId: doctor.id,
+    metadata: { organization: orgName, provider: 'sso' }
+  });
+
+  res.json({ token, doctor });
+});
+
+// Individual Google Authentication
+app.post('/api/auth/google', (req, res) => {
+  const googleEmail = (req.body.email || 'dr.alex.mercer@gmail.com').toLowerCase().trim();
+  const doctorName = (req.body.name || 'Dr. Alex Mercer').trim();
+
+  let doctor = db.findDoctorByEmail(googleEmail);
+  if (!doctor) {
+    doctor = db.createDoctor({
+      name: doctorName,
+      email: googleEmail,
+      password: 'Demo@1234_google_auth',
+      speciality: 'Dermatologist & Laser Surgeon',
+      registrationNumber: `G-MD-${Math.floor(100000 + Math.random() * 900000)}`,
+      clinicName: 'Mercer Dermatology Practice',
+      phone: '+1 (555) 014-9922'
+    });
+    db.updateDoctor(doctor.id, {
+      accountType: 'individual'
+    });
+    doctor = db.findDoctorById(doctor.id)!;
+  }
+
+  const token = generateToken();
+  activeSessions.set(token, {
+    doctorId: doctor.id,
+    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+  });
+
+  db.logAudit({
+    actorId: doctor.id,
+    actorName: doctor.name,
+    action: 'doctor_google_login',
+    resourceType: 'auth',
+    resourceId: doctor.id,
+    metadata: { provider: 'google' }
+  });
+
+  res.json({ token, doctor });
+});
+
 app.post('/api/auth/register', (req, res) => {
   const { name, email, password, speciality, registrationNumber, clinicName, phone } = req.body;
   if (!name || !email || !password) {

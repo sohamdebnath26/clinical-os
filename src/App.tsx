@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { AuthView } from './components/AuthView';
@@ -24,6 +24,42 @@ function MainApp() {
   // Navigation & Active views
   const [currentRoute, setCurrentRoute] = useState<NavRoute>('dashboard');
   const [activePatientId, setActivePatientId] = useState<string | null>(null);
+
+  // Collapsible sidebar state (persisted in localStorage)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('clinical_os_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('clinical_os_sidebar_collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  // Global keyboard shortcut: Ctrl+B or Cmd+B to toggle sidebar collapse
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        const activeTag = document.activeElement?.tagName.toLowerCase();
+        if (activeTag !== 'input' && activeTag !== 'textarea') {
+          e.preventDefault();
+          toggleSidebar();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Modals state
   const [showWalkInModal, setShowWalkInModal] = useState(false);
@@ -131,12 +167,14 @@ function MainApp() {
   return (
     <div className="min-h-screen flex bg-[#f8fafc] text-slate-800 antialiased selection:bg-teal-500 selection:text-white">
       {/* Desktop Persistent Left Sidebar */}
-      <div className="hidden md:block">
+      <div className="hidden md:block shrink-0">
         <Sidebar
           currentRoute={activePatientId ? 'patients' : currentRoute}
           onNavigate={handleNavigate}
           onOpenWalkIn={() => setShowWalkInModal(true)}
           onOpenAIAssistant={() => handleOpenAIAssistant()}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={toggleSidebar}
         />
       </div>
 
@@ -174,6 +212,8 @@ function MainApp() {
           onOpenAIAssistant={() => handleOpenAIAssistant()}
           onSelectPatient={handleSelectPatient}
           onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
+          onToggleSidebar={toggleSidebar}
+          isSidebarCollapsed={isSidebarCollapsed}
         />
 
         {/* Dynamic Route Viewport */}

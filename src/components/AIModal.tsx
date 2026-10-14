@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Patient } from '../types';
 import { api } from '../lib/api';
 import { MarkdownView } from './MarkdownView';
@@ -13,15 +13,24 @@ import {
   CheckCircle2,
   Bot,
   User,
-  ChevronDown,
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  Clock,
+  CornerDownLeft,
+  Loader2,
+  Check
 } from 'lucide-react';
 
 interface AIModalProps {
   onClose: () => void;
   activePatient?: Patient | null;
   initialPrompt?: string;
+}
+
+interface PendingPrompt {
+  text: string;
+  contextType?: 'soap' | 'summary' | 'medications' | 'followup' | 'general';
+  startedAt: number;
 }
 
 export const AIModal: React.FC<AIModalProps> = ({
@@ -39,18 +48,27 @@ export const AIModal: React.FC<AIModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [history, setHistory] = useState<{ query: string; reply: string; isAi: boolean; patientName?: string }[]>([]);
 
+  // 2-Second delay and single response deduplication state
+  const [pendingPrompt, setPendingPrompt] = useState<PendingPrompt | null>(null);
+  const [countdownMs, setCountdownMs] = useState<number>(0);
+  const [duplicateClickNotice, setDuplicateClickNotice] = useState<boolean>(false);
+
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const duplicateNoticeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const conversationEndRef = useRef<HTMLDivElement>(null);
+
   // Load all patients so doctor can select any patient context
   useEffect(() => {
     setIsLoadingPatients(true);
     api.patients.list()
       .then(res => {
         setAllPatients(res.patients);
-        // If an activePatientId was passed or activePatient is present, sync it
         if (activePatient) {
           const match = res.patients.find(p => p.id === activePatient.id);
           if (match) setSelectedPatient(match);
         } else if (res.patients.length === 1 && !selectedPatient) {
-          // If only 1 patient exists in the clinic, auto-bind them for convenience
           setSelectedPatient(res.patients[0]);
         }
       })
@@ -58,18 +76,34 @@ export const AIModal: React.FC<AIModalProps> = ({
       .finally(() => setIsLoadingPatients(false));
   }, [activePatient]);
 
+  // Clean up all timers on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (duplicateNoticeTimerRef.current) clearTimeout(duplicateNoticeTimerRef.current);
+    };
+  }, []);
+
+  // When initialPrompt prop is provided or changes, display in typebar with 2-second delay
   useEffect(() => {
     if (initialPrompt) {
-      handleAsk(initialPrompt);
+      handlePromptClick(initialPrompt);
     }
   }, [initialPrompt]);
 
+  // Scroll to bottom of conversation whenever history or loading changes
+  useEffect(() => {
+    conversationEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [history, isLoading, response]);
+
+  // Core execution function that queries the AI Assistant
   const handleAsk = async (
     queryText?: string,
     contextType?: 'soap' | 'summary' | 'medications' | 'followup' | 'general'
   ) => {
-    const q = queryText || question;
-    if (!q.trim()) return;
+    const q = (queryText !== undefined ? queryText : question).trim();
+    if (!q) return;
 
     setIsLoading(true);
     try {
@@ -79,7 +113,6 @@ export const AIModal: React.FC<AIModalProps> = ({
         contextType
       });
 
-      // If backend auto-matched a patient from text, update selectedPatient
       if (!selectedPatient && res.patient) {
         setSelectedPatient(res.patient);
       }
@@ -104,6 +137,96 @@ export const AIModal: React.FC<AIModalProps> = ({
     }
   };
 
+  /**
+   * Handles clicking on any prompt option:
+   * 1. Immediately shows the prompt in the typebar (input field) and focuses it.
+   * 2. If the user clicks the SAME option again within 2 seconds:
+   *    Response is taken ONCE (deduplicated, no duplicate requests).
+   * 3. Adds a 2-second delay before executing the AI response, giving doctor time to review/edit.
+   */
+  const handlePromptClick = (
+    promptText: string,
+    contextType?: 'soap' | 'summary' | 'medications' | 'followup' | 'general'
+  ) => {
+    if (isLoading) return;
+
+    const now = Date.now();
+
+    // 1. Immediately populate and show in typebar!
+    setQuestion(promptText);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+
+    // 2. Check if the SAME option is clicked within 2 seconds:
+    if (
+      pendingPrompt &&
+      pendingPrompt.text === promptText &&
+      now - pendingPrompt.startedAt < 2000
+    ) {
+      // Within 2 seconds, same option clicked again!
+      // Requirement: "within two seconds if the same option is clicked then response should be taken once, so add some delay"
+      setDuplicateClickNotice(true);
+      if (duplicateNoticeTimerRef.current) clearTimeout(duplicateNoticeTimerRef.current);
+      duplicateNoticeTimerRef.current = setTimeout(() => {
+        setDuplicateClickNotice(false);
+      }, 1800);
+      return;
+    }
+
+    // 3. Reset existing countdown and schedule new 2-second delay
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+
+    setDuplicateClickNotice(false);
+    setPendingPrompt({
+      text: promptText,
+      contextType,
+      startedAt: now
+    });
+    setCountdownMs(2000);
+
+    const startTime = Date.now();
+    intervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, 2000 - elapsed);
+      setCountdownMs(remaining);
+      if (remaining <= 0) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+      }
+    }, 50);
+
+    timerRef.current = setTimeout(() => {
+      setPendingPrompt(null);
+      setCountdownMs(0);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      // Trigger response once
+      handleAsk(promptText, contextType);
+    }, 2000);
+  };
+
+  // Immediate send (e.g. if doctor clicks "Send Now" or hits Enter during the 2s countdown)
+  const handleImmediateSend = (customText?: string) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    const textToSend = customText !== undefined ? customText : (pendingPrompt?.text || question);
+    const contextType = pendingPrompt?.contextType;
+    setPendingPrompt(null);
+    setCountdownMs(0);
+    setDuplicateClickNotice(false);
+    handleAsk(textToSend, contextType);
+  };
+
+  // Cancel pending 2s timer to allow manual editing of typebar
+  const handleCancelPending = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setPendingPrompt(null);
+    setCountdownMs(0);
+    setDuplicateClickNotice(false);
+    inputRef.current?.focus();
+  };
+
   const handlePatientSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const pId = e.target.value;
     if (!pId) {
@@ -113,6 +236,9 @@ export const AIModal: React.FC<AIModalProps> = ({
       setSelectedPatient(p);
     }
   };
+
+  // Helper to determine if a prompt is the actively pending one
+  const isPendingOption = (text: string) => pendingPrompt?.text === text;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -131,7 +257,7 @@ export const AIModal: React.FC<AIModalProps> = ({
                 </span>
                 <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/80 px-2 py-0.5 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Gemini Active (No Key Needed)
+                  Gemini Active (Fast Mode)
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -208,52 +334,120 @@ export const AIModal: React.FC<AIModalProps> = ({
           </div>
         )}
 
-        {/* Quick Patient Inquiry Action Prompts */}
-        {selectedPatient && (
+        {/* Quick Inquiry Action Prompts (Patient-grounded) */}
+        {selectedPatient ? (
           <div className="px-5 py-2.5 bg-teal-50/40 border-b border-teal-100 flex flex-wrap items-center gap-2 text-xs">
             <span className="text-[10px] font-bold text-teal-900 uppercase tracking-wider flex items-center gap-1 mr-1">
               <Sparkles className="w-3 h-3 text-teal-600" />
               QUICK PROMPTS:
             </span>
-            <button
-              type="button"
-              onClick={() => handleAsk("Summarize this patient's clinical history", "summary")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-teal-50 border border-teal-200 rounded-lg text-teal-900 font-semibold text-xs shadow-2xs transition-colors"
-            >
-              <FileText className="w-3 h-3 text-teal-700" />
-              Summarize history
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAsk("Generate a structured SOAP note for this patient", "soap")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-teal-50 border border-teal-200 rounded-lg text-teal-900 font-semibold text-xs shadow-2xs transition-colors"
-            >
-              <ClipboardList className="w-3 h-3 text-teal-700" />
-              Generate SOAP note
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAsk("List all current and documented medications", "medications")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-teal-50 border border-teal-200 rounded-lg text-teal-900 font-semibold text-xs shadow-2xs transition-colors"
-            >
-              <Pill className="w-3 h-3 text-teal-700" />
-              Documented medications
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAsk("Draft a follow-up plan based on documented records", "followup")}
-              className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-teal-50 border border-teal-200 rounded-lg text-teal-900 font-semibold text-xs shadow-2xs transition-colors"
-            >
-              <Calendar className="w-3 h-3 text-teal-700" />
-              Draft follow-up plan
-            </button>
+            {[
+              {
+                label: 'Summarize history',
+                prompt: "Summarize this patient's clinical history",
+                context: 'summary' as const,
+                icon: FileText
+              },
+              {
+                label: 'Generate SOAP note',
+                prompt: 'Generate a structured SOAP note for this patient',
+                context: 'soap' as const,
+                icon: ClipboardList
+              },
+              {
+                label: 'Documented medications',
+                prompt: 'List all current and documented medications',
+                context: 'medications' as const,
+                icon: Pill
+              },
+              {
+                label: 'Draft follow-up plan',
+                prompt: 'Draft a follow-up plan based on documented records',
+                context: 'followup' as const,
+                icon: Calendar
+              }
+            ].map(item => {
+              const Icon = item.icon;
+              const isPending = isPendingOption(item.prompt);
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => handlePromptClick(item.prompt, item.context)}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs transition-all relative ${
+                    isPending
+                      ? 'bg-teal-100 text-teal-950 border-2 border-teal-600 ring-2 ring-teal-400/40'
+                      : 'bg-white hover:bg-teal-50 border border-teal-200 text-teal-900'
+                  }`}
+                >
+                  <Icon className="w-3 h-3 text-teal-700" />
+                  <span>{item.label}</span>
+                  {isPending && (
+                    <span className="ml-1 px-1.5 py-0.2 bg-teal-700 text-white text-[10px] rounded-full font-bold animate-pulse">
+                      {(countdownMs / 1000).toFixed(1)}s
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          /* General Clinic Prompts when no patient is selected */
+          <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
+              <Sparkles className="w-3 h-3 text-teal-600" />
+              GENERAL PROMPTS:
+            </span>
+            {[
+              {
+                label: 'Summarize clinic patient register',
+                prompt: 'Summarize the clinic patient directory and high priority cases',
+                context: 'summary' as const,
+                icon: FileText
+              },
+              {
+                label: 'Differential diagnosis protocols',
+                prompt: 'What are recommended differential diagnoses protocols for common dermatological presentations?',
+                context: 'general' as const,
+                icon: ClipboardList
+              },
+              {
+                label: 'Lesion red flags guide',
+                prompt: 'Provide a structured summary of high-risk ABCDE lesion red flags and urgent referral criteria',
+                context: 'general' as const,
+                icon: ShieldAlert
+              }
+            ].map(item => {
+              const Icon = item.icon;
+              const isPending = isPendingOption(item.prompt);
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => handlePromptClick(item.prompt, item.context)}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs transition-all relative ${
+                    isPending
+                      ? 'bg-teal-100 text-teal-950 border-2 border-teal-600 ring-2 ring-teal-400/40'
+                      : 'bg-white hover:bg-teal-50 border border-slate-300 text-slate-700 hover:border-teal-400'
+                  }`}
+                >
+                  <Icon className="w-3 h-3 text-teal-700" />
+                  <span>{item.label}</span>
+                  {isPending && (
+                    <span className="ml-1 px-1.5 py-0.2 bg-teal-700 text-white text-[10px] rounded-full font-bold animate-pulse">
+                      {(countdownMs / 1000).toFixed(1)}s
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
 
         {/* Conversation Viewport */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {history.length === 0 && !response && (
-            <div className="text-center py-12 px-4 max-w-lg mx-auto">
+            <div className="text-center py-10 px-4 max-w-lg mx-auto">
               <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center mx-auto mb-3 shadow-xs">
                 <Bot className="w-7 h-7" />
               </div>
@@ -333,46 +527,140 @@ export const AIModal: React.FC<AIModalProps> = ({
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl rounded-tl-xs p-4 text-xs text-slate-600 flex items-center gap-2 shadow-2xs">
-                <Sparkles className="w-4 h-4 text-teal-600 animate-spin" />
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl rounded-tl-xs p-4 text-xs text-slate-600 flex items-center gap-2 shadow-2xs animate-pulse">
+                <Loader2 className="w-4 h-4 text-teal-600 animate-spin shrink-0" />
                 <span>Reviewing documented records & synthesizing clinical insights...</span>
               </div>
             </div>
           )}
+
+          <div ref={conversationEndRef} />
         </div>
 
-        {/* Input Form */}
+        {/* Input & Typebar Area */}
         <div className="p-4 border-t border-slate-200 bg-white rounded-b-3xl">
+          {/* Active 2-Second Prompt Countdown / Single Response Banner */}
+          {pendingPrompt && (
+            <div className="mb-3">
+              <div className="p-3 bg-teal-50/90 border border-teal-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs shadow-xs animate-in fade-in slide-in-from-bottom-1 duration-150">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-7 h-7 rounded-xl bg-teal-700 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <Clock className="w-4 h-4 animate-spin text-teal-100" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-teal-950">
+                        Prompt loaded into typebar • Submitting in {(countdownMs / 1000).toFixed(1)}s
+                      </span>
+                      {duplicateClickNotice ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300 animate-bounce">
+                          <Check className="w-3 h-3 text-amber-700" />
+                          Same option clicked: Response taken once!
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-teal-700 font-medium">
+                          (Click again within 2s handled once)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-teal-800/80 truncate mt-0.5">
+                      Selected: &ldquo;{pendingPrompt.text}&rdquo;
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => handleImmediateSend()}
+                    className="px-3 py-1.5 bg-teal-700 hover:bg-teal-800 active:scale-95 text-white text-xs font-semibold rounded-xl shadow-2xs transition-all flex items-center gap-1.5"
+                  >
+                    <span>Send Now</span>
+                    <CornerDownLeft className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelPending}
+                    className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-600 text-xs font-medium rounded-xl border border-slate-200 transition-colors"
+                  >
+                    Cancel / Edit
+                  </button>
+                </div>
+              </div>
+
+              {/* 2-second visual countdown progress bar */}
+              <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1.5 shadow-inner">
+                <div
+                  className="bg-teal-600 h-full transition-all ease-linear duration-100"
+                  style={{ width: `${Math.min(100, Math.max(0, (countdownMs / 2000) * 100))}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Typebar Form */}
           <form
             onSubmit={e => {
               e.preventDefault();
-              handleAsk();
+              handleImmediateSend();
             }}
             className="flex items-center gap-2"
           >
-            <input
-              type="text"
-              placeholder={
-                selectedPatient
-                  ? `Ask anything about ${selectedPatient.fullName}'s history, medications, or plan...`
-                  : 'Ask about any patient by name or general medical question...'
-              }
-              value={question}
-              onChange={e => setQuestion(e.target.value)}
-              className="flex-1 text-xs px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:bg-white shadow-2xs transition-all"
-            />
+            <div className="relative flex-1">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder={
+                  selectedPatient
+                    ? `Ask anything about ${selectedPatient.fullName}'s history, medications, or plan...`
+                    : 'Ask about any patient by name or general medical question...'
+                }
+                value={question}
+                onChange={e => {
+                  setQuestion(e.target.value);
+                  // If user starts typing manually, pause/cancel the automatic prompt countdown
+                  if (pendingPrompt) {
+                    if (timerRef.current) clearTimeout(timerRef.current);
+                    if (intervalRef.current) clearInterval(intervalRef.current);
+                    setPendingPrompt(null);
+                    setCountdownMs(0);
+                  }
+                }}
+                className={`w-full text-xs px-4 py-2.5 rounded-xl shadow-2xs transition-all ${
+                  pendingPrompt
+                    ? 'bg-teal-50/40 border-2 border-teal-500 ring-2 ring-teal-400/30 text-slate-900 font-medium'
+                    : 'bg-slate-50 border border-slate-300 focus:ring-2 focus:ring-teal-500 focus:bg-white text-slate-800'
+                }`}
+              />
+              {pendingPrompt && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-teal-700 bg-teal-100/90 px-2 py-0.5 rounded-full pointer-events-none">
+                  {(countdownMs / 1000).toFixed(1)}s
+                </span>
+              )}
+            </div>
+
             <button
               type="submit"
               disabled={isLoading || !question.trim()}
-              className="px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              className="px-5 py-2.5 bg-teal-800 hover:bg-teal-900 active:scale-95 text-white rounded-xl text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50 shrink-0"
             >
-              <Send className="w-3.5 h-3.5" />
-              Ask
+              {isLoading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Send className="w-3.5 h-3.5" />
+              )}
+              <span>{pendingPrompt ? 'Send Now' : 'Ask'}</span>
             </button>
           </form>
-          <p className="text-[10px] text-slate-400 mt-2 text-center">
-            Physicians maintain sole clinical responsibility for patient diagnoses, prescriptions, and care plans.
-          </p>
+
+          <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 px-1 flex-wrap gap-1">
+            <span>
+              💡 Clicking any prompt fills the typebar with a 2s review delay • Repeated clicks taken once
+            </span>
+            <span>
+              Physicians maintain sole clinical responsibility
+            </span>
+          </div>
         </div>
       </div>
     </div>

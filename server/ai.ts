@@ -26,7 +26,7 @@ function getAIClient(): GoogleGenAI | null {
 }
 
 async function generateWithGemini(ai: GoogleGenAI, prompt: string): Promise<string | null> {
-  const models = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
+  const models = ['gemini-3.8-flash', 'gemini-flash-latest'];
   for (const model of models) {
     try {
       const response = await ai.models.generateContent({

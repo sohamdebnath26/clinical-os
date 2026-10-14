@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Users, Sparkles, X, ArrowRight, Menu } from 'lucide-react';
+import { Search, Users, Sparkles, X, ArrowRight, Menu, PanelLeft } from 'lucide-react';
 import { Patient } from '../types';
 import { api } from '../lib/api';
 import { PREDEFINED_DIAGNOSES } from '../data/clinicalCatalogues';
@@ -11,13 +11,17 @@ interface NavbarProps {
   onOpenAIAssistant: () => void;
   onSelectPatient: (patientId: string) => void;
   onToggleMobileMenu?: () => void;
+  onToggleSidebar?: () => void;
+  isSidebarCollapsed?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenWalkIn,
   onOpenAIAssistant,
   onSelectPatient,
-  onToggleMobileMenu
+  onToggleMobileMenu,
+  onToggleSidebar,
+  isSidebarCollapsed
 }) => {
   const { t } = useLanguage();
   const [query, setQuery] = useState('');
@@ -94,9 +98,23 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             type="button"
             onClick={onToggleMobileMenu}
-            className="md:hidden text-slate-500 hover:text-slate-800 p-1.5"
+            className="md:hidden text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            title="Open navigation menu"
+            aria-label="Open navigation menu"
           >
             <Menu className="w-5 h-5" />
+          </button>
+        )}
+
+        {onToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="hidden md:flex text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100 transition-colors items-center justify-center"
+            title={isSidebarCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
+            aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <PanelLeft className="w-5 h-5" />
           </button>
         )}
 

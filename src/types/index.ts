@@ -8,6 +8,9 @@ export interface Doctor {
   phone?: string;
   defaultConsultationFee: number;
   avatarUrl?: string;
+  accountType?: 'individual' | 'organisational';
+  organizationName?: string;
+  organizationDepartment?: string;
   createdAt: string;
 }
 

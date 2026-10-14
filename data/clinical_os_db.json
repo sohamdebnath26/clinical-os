@@ -10,11 +10,56 @@
       "phone": "+91 98765 43210",
       "defaultConsultationFee": 500,
       "avatarUrl": "",
-      "createdAt": "2026-09-29T12:21:25.847Z"
+      "createdAt": "2026-09-29T12:21:25.847Z",
+      "accountType": "individual"
+    },
+    {
+      "id": "doc-org-001",
+      "name": "Dr. Sarah Chen, MD",
+      "email": "hospital@metrohealth.org",
+      "speciality": "Chief of Dermatology & Cutaneous Medicine",
+      "registrationNumber": "HOSP-ATT-49021",
+      "clinicName": "Metro Health University Medical Center",
+      "phone": "+1 (555) 392-1084",
+      "defaultConsultationFee": 650,
+      "avatarUrl": "",
+      "accountType": "organisational",
+      "organizationName": "Metro Health University Medical Center",
+      "organizationDepartment": "Department of Dermatology",
+      "createdAt": "2026-10-14T07:36:52.679Z"
+    },
+    {
+      "id": "doc-mv7sr3d5-2nsr",
+      "name": "Dr. Alex Mercer",
+      "email": "dr.alex.mercer@gmail.com",
+      "speciality": "Dermatologist & Laser Surgeon",
+      "registrationNumber": "G-MD-741589",
+      "clinicName": "Mercer Dermatology Practice",
+      "phone": "+1 (555) 014-9922",
+      "defaultConsultationFee": 500,
+      "createdAt": "2026-10-14T07:36:59.081Z",
+      "accountType": "individual"
+    },
+    {
+      "id": "doc-mv7sssl7-ww9t",
+      "name": "Dr. Michael Torres, MD",
+      "email": "m.torres@stjude-health.edu",
+      "speciality": "Pediatric & General Dermatology Division",
+      "registrationNumber": "SSO-108991",
+      "clinicName": "St. Jude Academic Medical Network",
+      "phone": "+1 (555) 392-1084",
+      "defaultConsultationFee": 500,
+      "createdAt": "2026-10-14T07:38:18.427Z",
+      "accountType": "organisational",
+      "organizationName": "St. Jude Academic Medical Network",
+      "organizationDepartment": "Pediatric & General Dermatology Division"
     }
   ],
   "doctorPasswords": {
-    "doc-demo-001": "$2b$10$BO4oZo5SMzCYPIAcTu.FzeqxBgPuOS3h7g.GcYcQM/j8vMdIKPf9i"
+    "doc-demo-001": "$2b$10$BO4oZo5SMzCYPIAcTu.FzeqxBgPuOS3h7g.GcYcQM/j8vMdIKPf9i",
+    "doc-org-001": "$2b$10$Vwl04zn3744i.6Qf4uNNF.bvjeyfIbOh25u5N1LIzSaWXNqRy.ld.",
+    "doc-mv7sr3d5-2nsr": "$2b$10$Uo.01bkHr5ZC6dTQb9mfWO19x1WkhYuTkJEUOKP2L1QMYbxVnGOkC",
+    "doc-mv7sssl7-ww9t": "$2b$10$CYGFHweDjLA/RRlDYWBYLeYPjifzlgyLOPqToIGw8Y1ylcNQUq1TW"
   },
   "patients": [
     {
@@ -232,11 +277,139 @@
     {
       "actorId": "doc-demo-001",
       "actorName": "Dr. Demo",
+      "action": "appointment_deleted",
+      "resourceType": "appointment",
+      "resourceId": "apt-fup-con-muy1aite-6kt4",
+      "id": "aud-mv7uju79-ayu7",
+      "timestamp": "2026-10-14T08:27:19.845Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
       "action": "doctor_login",
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
-      "id": "aud-mv7rk72l-la5d",
-      "timestamp": "2026-10-14T07:03:37.677Z"
+      "id": "aud-mv7uglsb-mo9t",
+      "timestamp": "2026-10-14T08:24:48.971Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7ufaao-t5ra",
+      "timestamp": "2026-10-14T08:23:47.424Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7uf59o-odcm",
+      "timestamp": "2026-10-14T08:23:40.908Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7u81xv-vyto",
+      "timestamp": "2026-10-14T08:18:10.003Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "appointment_deleted",
+      "resourceType": "appointment",
+      "resourceId": "apt-fup-con-muy1aite-6kt4",
+      "id": "aud-mv7u2vr9-c8ak",
+      "timestamp": "2026-10-14T08:14:08.710Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7ti6s4-numt",
+      "timestamp": "2026-10-14T07:58:03.220Z"
+    },
+    {
+      "actorId": "doc-mv7sssl7-ww9t",
+      "actorName": "Dr. Michael Torres, MD",
+      "action": "doctor_sso_login",
+      "resourceType": "auth",
+      "resourceId": "doc-mv7sssl7-ww9t",
+      "metadata": {
+        "organization": "St. Jude Academic Medical Network",
+        "provider": "sso"
+      },
+      "id": "aud-mv7sssoq-j3pl",
+      "timestamp": "2026-10-14T07:38:18.554Z"
+    },
+    {
+      "actorId": "doc-mv7sssl7-ww9t",
+      "actorName": "Dr. Michael Torres, MD",
+      "action": "doctor_registered",
+      "resourceType": "doctor",
+      "resourceId": "doc-mv7sssl7-ww9t",
+      "id": "aud-mv7sssop-3fq6",
+      "timestamp": "2026-10-14T07:38:18.553Z"
+    },
+    {
+      "actorId": "doc-mv7sr3d5-2nsr",
+      "actorName": "Dr. Alex Mercer",
+      "action": "doctor_google_login",
+      "resourceType": "auth",
+      "resourceId": "doc-mv7sr3d5-2nsr",
+      "metadata": {
+        "provider": "google"
+      },
+      "id": "aud-mv7sr3ge-6jad",
+      "timestamp": "2026-10-14T07:36:59.198Z"
+    },
+    {
+      "actorId": "doc-mv7sr3d5-2nsr",
+      "actorName": "Dr. Alex Mercer",
+      "action": "doctor_registered",
+      "resourceType": "doctor",
+      "resourceId": "doc-mv7sr3d5-2nsr",
+      "id": "aud-mv7sr3gd-j0g9",
+      "timestamp": "2026-10-14T07:36:59.197Z"
+    },
+    {
+      "actorId": "doc-org-001",
+      "actorName": "Dr. Sarah Chen, MD",
+      "action": "doctor_sso_login",
+      "resourceType": "auth",
+      "resourceId": "doc-org-001",
+      "metadata": {
+        "organization": "Metro Health University Medical Center",
+        "provider": "sso"
+      },
+      "id": "aud-mv7sr3cy-7otg",
+      "timestamp": "2026-10-14T07:36:59.074Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7sr3ch-r9q2",
+      "timestamp": "2026-10-14T07:36:59.057Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7sqtaz-r9xi",
+      "timestamp": "2026-10-14T07:36:46.043Z"
     },
     {
       "actorId": "doc-demo-001",
@@ -706,28 +879,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-14T07:03:37.677Z"
+    "updatedAt": "2026-10-14T08:27:19.845Z"
   },
-  "appointments": [
-    {
-      "id": "apt-fup-con-muy1aite-6kt4",
-      "patientId": "pat-mumnf2c6-8awj",
-      "patientCode": "P-24618",
-      "patientName": "Harman",
-      "patientAge": 25,
-      "patientGender": "Male",
-      "patientMobile": "8844181414",
-      "doctorId": "doc-demo-001",
-      "doctorName": "Dr. Demo",
-      "date": "2026-10-21",
-      "time": "10:00 AM",
-      "type": "follow_up",
-      "status": "scheduled",
-      "consultationId": "con-muy1aite-6kt4",
-      "instructions": "Repeat dermoscopy evaluation in OPD",
-      "notes": "",
-      "createdAt": "2026-10-07T11:38:20.746Z",
-      "updatedAt": "2026-10-07T11:38:20.746Z"
-    }
-  ]
+  "appointments": []
 }

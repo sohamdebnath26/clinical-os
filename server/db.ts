@@ -145,9 +145,11 @@ class DatabaseService {
   }
 
   private ensureDefaultDoctor() {
-    if (this.data.doctors.length === 0) {
+    // 1. Ensure Individual Demo Doctor
+    let demoDoc = this.data.doctors.find(d => d.email.toLowerCase() === 'demo@clinicalos.med');
+    if (!demoDoc) {
       const demoDoctorId = 'doc-demo-001';
-      const demoDoctor: Doctor = {
+      demoDoc = {
         id: demoDoctorId,
         name: 'Dr. Demo',
         email: 'demo@clinicalos.med',
@@ -157,21 +159,42 @@ class DatabaseService {
         phone: '+91 98765 43210',
         defaultConsultationFee: 500,
         avatarUrl: '',
+        accountType: 'individual',
         createdAt: new Date().toISOString()
       };
       const salt = bcrypt.genSaltSync(10);
       const hash = bcrypt.hashSync('Demo@1234', salt);
-
-      this.data.doctors.push(demoDoctor);
+      this.data.doctors.push(demoDoc);
       this.data.doctorPasswords[demoDoctorId] = hash;
-      this.logAudit({
-        actorId: 'system',
-        actorName: 'System',
-        action: 'system_init',
-        resourceType: 'doctor',
-        resourceId: demoDoctorId,
-        metadata: { info: 'Default doctor initialized' }
-      });
+      this.persist();
+    } else if (!demoDoc.accountType) {
+      demoDoc.accountType = 'individual';
+      this.persist();
+    }
+
+    // 2. Ensure Organisational / Hospital Demo Doctor
+    let orgDoc = this.data.doctors.find(d => d.email.toLowerCase() === 'hospital@metrohealth.org');
+    if (!orgDoc) {
+      const orgDoctorId = 'doc-org-001';
+      orgDoc = {
+        id: orgDoctorId,
+        name: 'Dr. Sarah Chen, MD',
+        email: 'hospital@metrohealth.org',
+        speciality: 'Chief of Dermatology & Cutaneous Medicine',
+        registrationNumber: 'HOSP-ATT-49021',
+        clinicName: 'Metro Health University Medical Center',
+        phone: '+1 (555) 392-1084',
+        defaultConsultationFee: 650,
+        avatarUrl: '',
+        accountType: 'organisational',
+        organizationName: 'Metro Health University Medical Center',
+        organizationDepartment: 'Department of Dermatology',
+        createdAt: new Date().toISOString()
+      };
+      const salt = bcrypt.genSaltSync(10);
+      const hash = bcrypt.hashSync('Demo@1234', salt);
+      this.data.doctors.push(orgDoc);
+      this.data.doctorPasswords[orgDoctorId] = hash;
       this.persist();
     }
   }

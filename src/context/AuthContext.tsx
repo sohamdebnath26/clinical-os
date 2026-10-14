@@ -6,6 +6,8 @@ interface AuthContextType {
   doctor: Doctor | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithSSO: (params?: { organization?: string; email?: string; name?: string; department?: string }) => Promise<void>;
+  loginWithGoogle: (params?: { email?: string; name?: string }) => Promise<void>;
   register: (data: {
     name: string;
     email: string;
@@ -63,6 +65,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setDoctor(res.doctor);
   };
 
+  const loginWithSSO = async (params?: { organization?: string; email?: string; name?: string; department?: string }) => {
+    const res = await api.auth.sso(params);
+    authStorage.setToken(res.token);
+    setDoctor(res.doctor);
+  };
+
+  const loginWithGoogle = async (params?: { email?: string; name?: string }) => {
+    const res = await api.auth.google(params);
+    authStorage.setToken(res.token);
+    setDoctor(res.doctor);
+  };
+
   const register = async (data: {
     name: string;
     email: string;
@@ -99,6 +113,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         doctor,
         isLoading,
         login,
+        loginWithSSO,
+        loginWithGoogle,
         register,
         logout,
         updateDoctor,

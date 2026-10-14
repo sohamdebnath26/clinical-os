@@ -62,6 +62,16 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(credentials),
       }),
+    sso: (params?: { organization?: string; email?: string; name?: string; department?: string }) =>
+      fetchWithAuth<{ token: string; doctor: Doctor }>('/api/auth/sso', {
+        method: 'POST',
+        body: JSON.stringify(params || {}),
+      }),
+    google: (params?: { email?: string; name?: string }) =>
+      fetchWithAuth<{ token: string; doctor: Doctor }>('/api/auth/google', {
+        method: 'POST',
+        body: JSON.stringify(params || {}),
+      }),
     register: (data: {
       name: string;
       email: string;
