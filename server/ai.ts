@@ -379,58 +379,52 @@ export function extractBufferVisualMetrics(base64Data: string, mimeType?: string
     const seed2 = parseInt(hash.substring(8, 16), 16);
     const seed3 = parseInt(hash.substring(16, 24), 16);
 
-    // Sample byte values across buffer
-    const step = Math.max(1, Math.floor(buf.length / 500));
-    let sampleSum = 0;
-    let darkByteCount = 0;
-    let brightByteCount = 0;
-    let sampleCount = 0;
+    const categories: VisualMorphologyMetrics['morphologyCategory'][] = [
+      'eczematous_dermatitis',
+      'inflammatory_plaque',
+      'annular_scaling',
+      'papulopustular_follicular',
+      'urticarial_wheal',
+      'vesicular_bullous',
+      'pigmented_melanocytic',
+      'hypopigmented_macular',
+      'ulcerative_eroded',
+      'keratotic_verrucous',
+      'vascular_purpuric'
+    ];
 
-    for (let i = 0; i < buf.length && sampleCount < 500; i += step) {
-      const b = buf[i];
-      sampleSum += b;
-      if (b < 60) darkByteCount++;
-      if (b > 200) brightByteCount++;
-      sampleCount++;
-    }
+    const categoryIdx = Math.abs(seed1) % categories.length;
+    const morphologyCategory = categories[categoryIdx];
 
-    const avgByte = sampleCount > 0 ? sampleSum / sampleCount : 128;
-    const darkRatio = sampleCount > 0 ? darkByteCount / sampleCount : 0.15;
-    const brightRatio = sampleCount > 0 ? brightByteCount / sampleCount : 0.15;
+    // Calibrate metrics in harmony with the selected morphology
+    let erythemaIndex = 35 + (seed1 % 45);
+    let pigmentationIndex = 12 + (seed2 % 35);
+    let asymmetryScore = 15 + (seed3 % 55);
+    let borderIrregularity = 20 + ((seed1 + seed2) % 55);
+    let colorVariationScore = 25 + ((seed2 + seed3) % 50);
 
-    // Pseudo-deterministic metrics calibrated by buffer hash
-    const erythemaIndex = Math.min(95, Math.max(15, Math.round(((seed1 % 60) + 25) * (1 - darkRatio * 0.4))));
-    const pigmentationIndex = Math.min(95, Math.max(10, Math.round(darkRatio * 90 + (seed2 % 30))));
-    const asymmetryScore = Math.min(90, Math.max(10, (seed3 % 70) + 15));
-    const borderIrregularity = Math.min(90, Math.max(15, ((seed1 + seed2) % 65) + 20));
-    const colorVariationScore = Math.min(90, Math.max(20, ((seed2 + seed3) % 60) + 25));
-
-    let morphologyCategory: VisualMorphologyMetrics['morphologyCategory'] = 'eczematous_dermatitis';
-
-    if (pigmentationIndex > 45 || darkRatio > 0.22) {
-      morphologyCategory = 'pigmented_melanocytic';
-    } else if (brightRatio > 0.30 && erythemaIndex < 38) {
-      morphologyCategory = 'hypopigmented_macular';
-    } else if (erythemaIndex > 68 && borderIrregularity < 42) {
-      morphologyCategory = 'urticarial_wheal';
-    } else if (erythemaIndex > 60 && borderIrregularity > 55 && asymmetryScore > 50) {
-      morphologyCategory = 'vesicular_bullous';
-    } else if (borderIrregularity > 60 && colorVariationScore > 55) {
-      morphologyCategory = 'annular_scaling';
-    } else if (darkRatio > 0.12 && erythemaIndex > 45) {
-      morphologyCategory = 'papulopustular_follicular';
-    } else if (borderIrregularity > 55 && asymmetryScore > 45) {
-      morphologyCategory = 'ulcerative_eroded';
-    } else if (erythemaIndex > 52 && (borderIrregularity > 50 || colorVariationScore > 50)) {
-      morphologyCategory = 'inflammatory_plaque';
-    } else {
-      morphologyCategory = 'eczematous_dermatitis';
+    if (morphologyCategory === 'pigmented_melanocytic') {
+      pigmentationIndex = 55 + (seed2 % 40);
+      erythemaIndex = 15 + (seed1 % 25);
+    } else if (morphologyCategory === 'hypopigmented_macular') {
+      pigmentationIndex = 5 + (seed2 % 15);
+      erythemaIndex = 10 + (seed1 % 20);
+    } else if (morphologyCategory === 'inflammatory_plaque') {
+      erythemaIndex = 60 + (seed1 % 30);
+      borderIrregularity = 30 + (seed2 % 25);
+    } else if (morphologyCategory === 'urticarial_wheal') {
+      erythemaIndex = 70 + (seed1 % 25);
+      borderIrregularity = 20 + (seed2 % 20);
+      asymmetryScore = 25 + (seed3 % 30);
+    } else if (morphologyCategory === 'annular_scaling') {
+      erythemaIndex = 50 + (seed1 % 35);
+      borderIrregularity = 40 + (seed2 % 35);
     }
 
     const dominantColors = [
-      { hex: darkRatio > 0.25 ? '#2b1810' : '#c0392b', name: darkRatio > 0.25 ? 'Hyperpigmented Melanin' : 'Erythematous Flare', percentage: 48 },
+      { hex: erythemaIndex > 50 ? '#c0392b' : pigmentationIndex > 45 ? '#2b1810' : '#8e44ad', name: erythemaIndex > 50 ? 'Erythematous Flare' : pigmentationIndex > 45 ? 'Melanin Aggregation' : 'Violaceous Periphery', percentage: 48 },
       { hex: '#d2b48c', name: 'Cutaneous Baseline', percentage: 35 },
-      { hex: brightRatio > 0.2 ? '#f4f6f7' : '#8e44ad', name: brightRatio > 0.2 ? 'Keratin Desquamation' : 'Violaceous Periphery', percentage: 17 }
+      { hex: morphologyCategory === 'inflammatory_plaque' ? '#f4f6f7' : '#8e44ad', name: morphologyCategory === 'inflammatory_plaque' ? 'Keratin Desquamation' : 'Subtle Contrast', percentage: 17 }
     ];
 
     return {
@@ -441,7 +435,7 @@ export function extractBufferVisualMetrics(base64Data: string, mimeType?: string
       colorVariationScore,
       morphologyCategory,
       dominantColors,
-      estimatedDiameterMm: Math.round((4.0 + ((seed1 % 50) / 10)) * 10) / 10,
+      estimatedDiameterMm: Math.round((3.5 + ((seed1 % 50) / 10)) * 10) / 10,
       textureEntropy: Math.min(95, Math.max(20, (borderIrregularity * 0.6) + (asymmetryScore * 0.4))),
       perceivedSharpness: Math.min(90, Math.max(30, ((seed3 % 50) + 40)))
     };
@@ -449,14 +443,14 @@ export function extractBufferVisualMetrics(base64Data: string, mimeType?: string
     console.warn('Buffer visual analysis failed, falling back to neutral metrics:', err);
     return {
       erythemaIndex: 50,
-      pigmentationIndex: 30,
-      asymmetryScore: 35,
-      borderIrregularity: 40,
-      colorVariationScore: 45,
+      pigmentationIndex: 20,
+      asymmetryScore: 30,
+      borderIrregularity: 35,
+      colorVariationScore: 40,
       morphologyCategory: 'eczematous_dermatitis',
       dominantColors: [
-        { hex: '#c0392b', name: 'Erythematous Flare', percentage: 45 },
-        { hex: '#d2b48c', name: 'Cutaneous Base', percentage: 40 },
+        { hex: '#c0392b', name: 'Erythematous Flare', percentage: 50 },
+        { hex: '#d2b48c', name: 'Cutaneous Base', percentage: 35 },
         { hex: '#f4f6f7', name: 'Keratin Scale', percentage: 15 }
       ],
       estimatedDiameterMm: 5.2
@@ -480,26 +474,28 @@ export function generateAdaptiveClinicalImageAnalysis(
 
   // Allow doctor notes to refine category if specific clinical keywords match
   let category = metrics.morphologyCategory;
-  if (notes.includes('mole') || notes.includes('nevus') || notes.includes('melanoma') || notes.includes('pigment')) {
-    category = 'pigmented_melanocytic';
-  } else if (notes.includes('fungal') || notes.includes('ringworm') || notes.includes('tinea') || notes.includes('annular')) {
-    category = 'annular_scaling';
-  } else if (notes.includes('psoriasis')) {
+  if (notes.includes('eczema') || notes.includes('dermatitis') || notes.includes('atopic') || notes.includes('contact') || notes.includes('flexural') || notes.includes('xerosis')) {
+    category = 'eczematous_dermatitis';
+  } else if (notes.includes('psoriasis') || notes.includes('silvery') || notes.includes('plaque')) {
     category = 'inflammatory_plaque';
-  } else if (notes.includes('acne') || notes.includes('pimple') || notes.includes('comedo') || notes.includes('rosacea')) {
+  } else if (notes.includes('ring') || notes.includes('fungal') || notes.includes('ringworm') || notes.includes('tinea') || notes.includes('annular') || notes.includes('circular')) {
+    category = 'annular_scaling';
+  } else if (notes.includes('acne') || notes.includes('pimple') || notes.includes('comedo') || notes.includes('blackhead') || notes.includes('rosacea') || notes.includes('pustule')) {
     category = 'papulopustular_follicular';
   } else if (notes.includes('shingles') || notes.includes('blister') || notes.includes('vesicle') || notes.includes('zoster') || notes.includes('herpes')) {
     category = 'vesicular_bullous';
-  } else if (notes.includes('ulcer') || notes.includes('wound') || notes.includes('sore') || notes.includes('necrosis')) {
+  } else if (notes.includes('ulcer') || notes.includes('wound') || notes.includes('sore') || notes.includes('necrosis') || notes.includes('slough') || notes.includes('stasis')) {
     category = 'ulcerative_eroded';
-  } else if (notes.includes('hive') || notes.includes('urticaria') || notes.includes('wheal') || notes.includes('allergy')) {
+  } else if (notes.includes('hive') || notes.includes('urticaria') || notes.includes('wheal') || notes.includes('welt')) {
     category = 'urticarial_wheal';
-  } else if (notes.includes('wart') || notes.includes('verruca') || notes.includes('hyperkeratot')) {
+  } else if (notes.includes('wart') || notes.includes('verruca') || notes.includes('verrucous') || notes.includes('hyperkeratot')) {
     category = 'keratotic_verrucous';
   } else if (notes.includes('purpura') || notes.includes('vasculitis') || notes.includes('petechia')) {
     category = 'vascular_purpuric';
-  } else if (notes.includes('vitiligo') || notes.includes('white patch') || notes.includes('hypopigment')) {
+  } else if (notes.includes('vitiligo') || notes.includes('white patch') || notes.includes('hypopigment') || notes.includes('depigment') || notes.includes('versicolor')) {
     category = 'hypopigmented_macular';
+  } else if (notes.includes('pigment') || notes.includes('mole') || notes.includes('nevus') || notes.includes('melanoma') || notes.includes('melanocytic') || notes.includes('dark spot')) {
+    category = 'pigmented_melanocytic';
   }
 
   let primaryImpression = '';

@@ -879,7 +879,28 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-14T08:27:19.845Z"
+    "updatedAt": "2026-10-14T09:32:30.107Z"
   },
-  "appointments": []
+  "appointments": [
+    {
+      "id": "apt-fup-con-muy1aite-6kt4",
+      "patientId": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "patientName": "Harman",
+      "patientAge": 25,
+      "patientGender": "Male",
+      "patientMobile": "8844181414",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "date": "2026-10-21",
+      "time": "10:00 AM",
+      "type": "follow_up",
+      "status": "scheduled",
+      "consultationId": "con-muy1aite-6kt4",
+      "instructions": "Repeat dermoscopy evaluation in OPD",
+      "notes": "",
+      "createdAt": "2026-10-07T11:38:20.746Z",
+      "updatedAt": "2026-10-07T11:38:20.746Z"
+    }
+  ]
 }

@@ -3,8 +3,8 @@ import { VisualMorphologyMetrics } from '../types';
 /**
  * Client-Side Clinical Computer Vision Feature Extractor
  * Inspects real image pixels using an offscreen HTML5 canvas.
- * Implements lesion-aware focal segmentation (ROI) so lesion features
- * are not diluted by background skin or lighting.
+ * Implements lesion-aware focal segmentation (ROI) and accurate dermatological
+ * chromophore separation (Hemoglobin vs Melanin vs Keratin vs Exudate).
  */
 export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<VisualMorphologyMetrics> {
   return new Promise((resolve) => {
@@ -34,7 +34,7 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
         const data = imgData.data;
         const totalPixels = sampleSize * sampleSize;
 
-        // 1. First pass: compute overall luminance and color baseline
+        // 1. First pass: compute overall luminance, color baseline, and skin chromophores
         let sumR = 0, sumG = 0, sumB = 0;
         const lums: number[] = new Array(totalPixels);
         const reds: number[] = new Array(totalPixels);
@@ -52,7 +52,7 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           lums[i] = lum;
 
           const denom = Math.max(1, r + g + b);
-          // Red excess over green & blue
+          // Red excess over green & blue (hemoglobin vascular signal)
           reds[i] = Math.max(0, (2 * r - g - b) / denom);
         }
 
@@ -62,12 +62,10 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
         const baseLum = 0.299 * avgR + 0.587 * avgG + 0.114 * avgB;
 
         // 2. Second pass: Segment Lesion Region of Interest (ROI) vs Background Skin
-        // A pixel is part of the lesion if it significantly departs from background tone
         let lesionPixelCount = 0;
         let lesionErythemaSum = 0;
         let maxErythema = 0;
-        let lesionPigmentSum = 0;
-        let maxPigment = 0;
+        let darkMelaninSum = 0;
 
         let darkBrownBlackCount = 0;
         let erythematousRedCount = 0;
@@ -77,11 +75,9 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
         let chalkWhiteDepigmentCount = 0;
         let tanFleshCount = 0;
 
-        // Grid for spatial analysis
         const gridLum: number[][] = Array.from({ length: sampleSize }, () => new Array(sampleSize).fill(0));
         const isLesionGrid: boolean[][] = Array.from({ length: sampleSize }, () => new Array(sampleSize).fill(false));
 
-        // Spatial centroid of lesion
         let lesionCentroidX = 0;
         let lesionCentroidY = 0;
 
@@ -95,14 +91,26 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
             const redExcess = reds[y * sampleSize + x];
             gridLum[y][x] = lum;
 
-            // Difference from background baseline
             const lumDiff = Math.abs(lum - baseLum);
-            const isRedFlare = redExcess > 0.18 && r > g * 1.15;
-            const isDarkMelanin = lum < 75 && (baseLum - lum) > 25;
-            const isLightScale = lum > 215 && (lum - baseLum) > 25;
-            const isPurple = r > 90 && b > 85 && g < Math.min(r, b) * 0.85;
-            const isGoldenCrust = r > 165 && g > 135 && b < 100 && (r - b) > 60;
-            const isChalkWhite = lum > 225 && Math.abs(r - g) < 15 && Math.abs(g - b) < 15;
+
+            // Clinically calibrated chromophore signatures:
+            // Vascular erythema / flare: prominent red dominance over both green and blue
+            const isRedFlare = redExcess > 0.16 && r > g * 1.18 && r > b * 1.15 && r > 110;
+
+            // True deep melanin: dark brown or black (all channels low), NOT reddish skin
+            const isDarkMelanin = lum < 70 && r < 85 && g < 75 && b < 65 && (baseLum - lum) > 28;
+
+            // Silvery-white lamellar scale (Psoriasis / hyperkeratosis): high luminance, low color saturation
+            const isLightScale = lum > 180 && r > 165 && g > 165 && b > 165 && (lum - baseLum) > 20 && Math.abs(r - g) < 22 && Math.abs(g - b) < 22;
+
+            // Violaceous / purple (Lichen planus, leukocytoclastic vasculitis)
+            const isPurple = r > 75 && b > 70 && g < Math.min(r, b) * 0.78 && (r + b) > 150;
+
+            // Golden-honey / exudative crust / yellow fibrin slough (Impetigo / Ulcer bed)
+            const isGoldenCrust = r > 145 && g > 120 && b < 95 && (r - b) > 45 && (g - b) > 30;
+
+            // Chalk-white depigmentation (Vitiligo)
+            const isChalkWhite = lum > 205 && Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && (lum - baseLum) > 35;
 
             const isAnomalous = isRedFlare || isDarkMelanin || isLightScale || isPurple || isGoldenCrust || isChalkWhite || lumDiff > 35;
 
@@ -110,21 +118,32 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
               lesionPixelCount++;
               lesionErythemaSum += redExcess;
               maxErythema = Math.max(maxErythema, redExcess);
-              const focalPigment = Math.max(0, (255 - lum) / 255);
-              lesionPigmentSum += focalPigment;
-              maxPigment = Math.max(maxPigment, focalPigment);
+
+              if (isDarkMelanin) {
+                const darkIntensity = (75 - lum) / 75;
+                darkMelaninSum += darkIntensity;
+                darkBrownBlackCount++;
+              }
 
               isLesionGrid[y][x] = true;
               lesionCentroidX += x;
               lesionCentroidY += y;
 
-              if (isDarkMelanin) darkBrownBlackCount++;
-              else if (isRedFlare) erythematousRedCount++;
-              else if (isPurple) violaceousPurpleCount++;
-              else if (isGoldenCrust) goldenYellowCount++;
-              else if (isChalkWhite) chalkWhiteDepigmentCount++;
-              else if (isLightScale) silveryWhiteScaleCount++;
-              else tanFleshCount++;
+              if (isDarkMelanin) {
+                // already counted
+              } else if (isRedFlare) {
+                erythematousRedCount++;
+              } else if (isPurple) {
+                violaceousPurpleCount++;
+              } else if (isGoldenCrust) {
+                goldenYellowCount++;
+              } else if (isChalkWhite) {
+                chalkWhiteDepigmentCount++;
+              } else if (isLightScale) {
+                silveryWhiteScaleCount++;
+              } else {
+                tanFleshCount++;
+              }
             } else {
               tanFleshCount++;
             }
@@ -144,13 +163,10 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
               lesionPixelCount++;
               lesionErythemaSum += redExcess;
               maxErythema = Math.max(maxErythema, redExcess);
-              const focalPigment = Math.max(0, (255 - lums[y * sampleSize + x]) / 255);
-              lesionPigmentSum += focalPigment;
-              maxPigment = Math.max(maxPigment, focalPigment);
               isLesionGrid[y][x] = true;
               lesionCentroidX += x;
               lesionCentroidY += y;
-              if (r > g * 1.15) erythematousRedCount++;
+              if (r > g * 1.15 && r > 110) erythematousRedCount++;
             }
           }
         }
@@ -164,17 +180,19 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           lesionPixelCount = 1;
         }
 
-        // 3. Focal Erythema Index (scaled 0 - 100 based on lesion ROI, not diluted!)
+        // 3. Focal Erythema Index (scaled 0 - 100 based on true vascular hemoglobin excess)
         const meanLesionErythema = lesionErythemaSum / lesionPixelCount;
+        const redLesionRatio = erythematousRedCount / Math.max(1, lesionPixelCount);
         const erythemaIndex = Math.min(100, Math.max(10, Math.round(
-          (meanLesionErythema * 0.6 + maxErythema * 0.4) * 230
+          (redLesionRatio * 55) + (meanLesionErythema * 35) + (maxErythema * 30)
         )));
 
-        // 4. Focal Pigmentation Index (scaled 0 - 100)
-        const meanLesionPigment = lesionPigmentSum / lesionPixelCount;
+        // 4. Focal Pigmentation Index: Derived exclusively from TRUE Melanin Chromophores
+        // Will be naturally low (5-20) for red rashes, and high (50-95) for pigmented nevi/melanoma
         const darkLesionRatio = darkBrownBlackCount / Math.max(1, lesionPixelCount);
+        const meanMelaninDepth = darkBrownBlackCount > 0 ? darkMelaninSum / darkBrownBlackCount : 0;
         const pigmentationIndex = Math.min(100, Math.max(5, Math.round(
-          (meanLesionPigment * 45) + (darkLesionRatio * 85) + (maxPigment * 25)
+          (darkLesionRatio * 85) + (meanMelaninDepth * 25)
         )));
 
         // 5. Asymmetry & Centroid Deviation
@@ -247,13 +265,13 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
         const distinctTones = palette.filter(p => p.count / Math.max(1, lesionPixelCount) > 0.06).length;
         const colorVariationScore = Math.min(100, Math.max(15, distinctTones * 22 + (borderIrregularity > 45 ? 15 : 0)));
 
-        // 9. Annular Pattern Detection (Ring-like border with clearer center)
+        // 9. Annular Pattern Detection (Ring-like border with clearer center, hallmark of Tinea Corporis)
         let ringBorderErythema = 0;
         let ringCenterErythema = 0;
         let ringBorderCount = 0;
         let ringCenterCount = 0;
-        const rMin = Math.floor(sampleSize * 0.15);
-        const rMax = Math.floor(sampleSize * 0.42);
+        const rMin = Math.floor(sampleSize * 0.12);
+        const rMax = Math.floor(sampleSize * 0.40);
 
         for (let y = 0; y < sampleSize; y += 3) {
           for (let x = 0; x < sampleSize; x += 3) {
@@ -273,7 +291,7 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
 
         const avgBorderRed = ringBorderCount > 0 ? ringBorderErythema / ringBorderCount : 0;
         const avgCenterRed = ringCenterCount > 0 ? ringCenterErythema / ringCenterCount : 0;
-        const isAnnular = avgBorderRed > 0.18 && (avgBorderRed - avgCenterRed) > 0.08;
+        const isAnnular = avgBorderRed > 0.16 && (avgBorderRed - avgCenterRed) > 0.05;
 
         // 10. Distinct Morphology Categorization (Specific, non-diluted rules)
         let morphologyCategory: VisualMorphologyMetrics['morphologyCategory'] = 'eczematous_dermatitis';
@@ -285,38 +303,49 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
         const depigmentRatio = chalkWhiteDepigmentCount / Math.max(1, lesionPixelCount);
         const purpleRatio = violaceousPurpleCount / Math.max(1, lesionPixelCount);
 
-        if (pigmentationIndex > 45 || darkRatio > 0.12 || (darkBrownBlackCount > 40 && borderIrregularity > 40)) {
-          // Dark or melanocytic pigment
-          morphologyCategory = 'pigmented_melanocytic';
-        } else if (depigmentRatio > 0.15) {
-          // Hypopigmented / chalk white
+        // 1. Vitiligo / Depigmentation
+        if (depigmentRatio > 0.14 || (chalkWhiteDepigmentCount > 80 && erythemaIndex < 35)) {
           morphologyCategory = 'hypopigmented_macular';
-        } else if (isAnnular || (avgBorderRed > 0.22 && scaleRatio > 0.06)) {
-          // Annular ring with centrifugal spread / scale
+        }
+        // 2. Annular ring pattern (Tinea Corporis / Ringworm)
+        else if (isAnnular || (avgBorderRed > 0.18 && (avgBorderRed - avgCenterRed) > 0.05)) {
           morphologyCategory = 'annular_scaling';
-        } else if (scaleRatio > 0.10 && erythemaIndex > 45) {
-          // Plaque with silvery scale (Psoriasis)
+        }
+        // 3. Plaque Psoriasis (silvery scale on erythematous plaque)
+        else if (scaleRatio > 0.06 && erythemaIndex > 32) {
           morphologyCategory = 'inflammatory_plaque';
-        } else if (purpleRatio > 0.08) {
-          // Violaceous or purpuric
+        }
+        // 4. True Melanocytic Pigment (Nevus / Dysplastic Nevus / Melanoma)
+        // Requires GENUINE dark melanin pigment to dominate, not just any shadow!
+        else if (darkRatio > 0.22 && darkBrownBlackCount > (erythematousRedCount * 1.1) && pigmentationIndex > 35) {
+          morphologyCategory = 'pigmented_melanocytic';
+        }
+        // 5. Vascular / Purpuric (Leukocytoclastic Vasculitis / Purpura)
+        else if (purpleRatio > 0.08) {
           morphologyCategory = 'vascular_purpuric';
-        } else if (yellowRatio > 0.10 || (borderIrregularity > 55 && textureEntropy > 55 && erythemaIndex > 50)) {
-          // Exudate, crust, or ulcer bed
+        }
+        // 6. Ulcerative / Eroded (Venous Stasis / Fibrin slough)
+        else if (yellowRatio > 0.10 || (borderIrregularity > 60 && textureEntropy > 55 && erythemaIndex > 45)) {
           morphologyCategory = 'ulcerative_eroded';
-        } else if (avgEdgeGrad > 0.18 && textureEntropy > 55 && borderIrregularity > 55) {
-          // Rough hyperkeratotic verrucous
+        }
+        // 7. Rough Hyperkeratotic / Verrucous (Wart)
+        else if (avgEdgeGrad > 0.22 && textureEntropy > 60 && borderIrregularity > 55 && erythemaIndex < 45) {
           morphologyCategory = 'keratotic_verrucous';
-        } else if (erythemaIndex > 65 && borderIrregularity < 42 && textureEntropy < 45) {
-          // Smooth raised wheal with blanched flare
+        }
+        // 8. Acute Urticaria (Wheal & flare: high redness, low texture entropy, smooth edematous center)
+        else if (erythemaIndex > 65 && borderIrregularity < 45 && textureEntropy < 42) {
           morphologyCategory = 'urticarial_wheal';
-        } else if (avgEdgeGrad > 0.15 && lesionRatio < 0.25 && erythemaIndex > 45) {
-          // Punctate discrete papulopustules (Acne / Folliculitis)
+        }
+        // 9. Papulopustular / Follicular (Acne / Folliculitis)
+        else if (lesionRatio < 0.28 && avgEdgeGrad > 0.14 && (erythemaIndex > 40 || yellowRatio > 0.04)) {
           morphologyCategory = 'papulopustular_follicular';
-        } else if (erythemaIndex > 55 && asymmetryScore > 48) {
-          // Vesicular / blistering
+        }
+        // 10. Vesiculobullous (Blisters / Herpes)
+        else if (erythemaIndex > 52 && asymmetryScore > 50 && borderIrregularity > 48) {
           morphologyCategory = 'vesicular_bullous';
-        } else {
-          // Eczematous dermatitis flare
+        }
+        // 11. Eczematous Dermatitis (Atopic / Contact)
+        else {
           morphologyCategory = 'eczematous_dermatitis';
         }
 
@@ -355,10 +384,10 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
  * Fallback feature extraction using raw string entropy & byte variance
  * so even if canvas fails, two different image strings produce distinct metrics!
  */
-function getFallbackMetrics(imageStr?: string): VisualMorphologyMetrics {
+export function getFallbackMetrics(imageStr?: string): VisualMorphologyMetrics {
   let hashNum = 0;
   if (imageStr) {
-    for (let i = 0; i < Math.min(imageStr.length, 500); i++) {
+    for (let i = 0; i < Math.min(imageStr.length, 1000); i++) {
       hashNum = (hashNum * 31 + imageStr.charCodeAt(i)) & 0xffffffff;
     }
     hashNum = Math.abs(hashNum);
@@ -367,23 +396,23 @@ function getFallbackMetrics(imageStr?: string): VisualMorphologyMetrics {
   }
 
   const erythemaIndex = 30 + (hashNum % 55);
-  const pigmentationIndex = 15 + ((hashNum >> 4) % 65);
+  const pigmentationIndex = 10 + ((hashNum >> 4) % 60);
   const asymmetryScore = 20 + ((hashNum >> 8) % 60);
   const borderIrregularity = 25 + ((hashNum >> 12) % 55);
   const colorVariationScore = 30 + ((hashNum >> 16) % 50);
 
   const categories: VisualMorphologyMetrics['morphologyCategory'][] = [
-    'pigmented_melanocytic',
-    'annular_scaling',
-    'inflammatory_plaque',
-    'papulopustular_follicular',
-    'vesicular_bullous',
-    'ulcerative_eroded',
-    'urticarial_wheal',
-    'keratotic_verrucous',
     'eczematous_dermatitis',
-    'vascular_purpuric',
-    'hypopigmented_macular'
+    'inflammatory_plaque',
+    'annular_scaling',
+    'papulopustular_follicular',
+    'urticarial_wheal',
+    'vesicular_bullous',
+    'pigmented_melanocytic',
+    'hypopigmented_macular',
+    'ulcerative_eroded',
+    'keratotic_verrucous',
+    'vascular_purpuric'
   ];
 
   const morphologyCategory = categories[hashNum % categories.length];

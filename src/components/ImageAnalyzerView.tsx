@@ -3,6 +3,7 @@ import { Patient, Consultation, AIImageAnalysisResult, ABCDEScoreResult, BodyMar
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { analyzeImageVisualFeatures } from '../utils/visualImageAnalyzer';
+import { CLINICAL_SAMPLE_CASES, ClinicalPresetCase } from '../utils/clinicalSampleCases';
 import { ClinicalImageReportModal } from './ClinicalImageReportModal';
 import { DermoscopicToolModal } from './DermoscopicToolModal';
 import { PinToBodyMapModal } from './PinToBodyMapModal';
@@ -62,6 +63,8 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
   const [anatomicalSite, setAnatomicalSite] = useState<string>('');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
 
   // Analysis state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -147,31 +150,23 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
     }
   };
 
-  const capturePhoto = () => {
-    if (!videoRef.current) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth || 1280;
-    canvas.height = videoRef.current.videoHeight || 720;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      setImageSrc(dataUrl);
-      setMimeType('image/jpeg');
-      setAnalysisResult(null); // Clear previous result
-      setVisualMetrics(null);
-      setIsExtractingFeatures(true);
-      analyzeImageVisualFeatures(dataUrl)
-        .then(metrics => setVisualMetrics(metrics))
-        .finally(() => setIsExtractingFeatures(false));
+  const resetImageState = () => {
+    setImageSrc(null);
+    setAnalysisResult(null);
+    setVisualMetrics(null);
+    setErrorMsg(null);
+    setCopied(false);
+    setSavedToGallery(false);
+    setAbcdeResult(null);
+    setPinnedSuccess(null);
+    setAnalysisStep('');
+    setActivePresetId(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
-    stopCamera();
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processImageFile = (file: File) => {
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       setErrorMsg('Please select a JPG, PNG, or WebP image.');
       return;
@@ -182,9 +177,15 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
       return;
     }
 
+    // Immediately clear ALL previous analysis, ABCDE scores, metrics, feedback
     setErrorMsg(null);
-    setAnalysisResult(null); // Clear previous analysis result immediately
+    setAnalysisResult(null);
     setVisualMetrics(null);
+    setAbcdeResult(null);
+    setPinnedSuccess(null);
+    setSavedToGallery(false);
+    setCopied(false);
+    setActivePresetId(null);
     setMimeType(file.type);
 
     const reader = new FileReader();
@@ -201,6 +202,81 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processImageFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processImageFile(file);
+    }
+  };
+
+  const handleSelectPreset = (preset: ClinicalPresetCase) => {
+    setErrorMsg(null);
+    setAnalysisResult(null);
+    setVisualMetrics(null);
+    setAbcdeResult(null);
+    setPinnedSuccess(null);
+    setSavedToGallery(false);
+    setCopied(false);
+    setActivePresetId(preset.id);
+    setImageSrc(preset.dataUrl);
+    setMimeType('image/svg+xml');
+    setAnatomicalSite(preset.anatomicalSite);
+    setClinicalNotes(preset.clinicalNote);
+    setIsExtractingFeatures(true);
+    analyzeImageVisualFeatures(preset.dataUrl)
+      .then(metrics => setVisualMetrics(metrics))
+      .finally(() => setIsExtractingFeatures(false));
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth || 1280;
+    canvas.height = videoRef.current.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      setErrorMsg(null);
+      setAnalysisResult(null); // Clear previous result
+      setVisualMetrics(null);
+      setAbcdeResult(null);
+      setPinnedSuccess(null);
+      setSavedToGallery(false);
+      setCopied(false);
+      setActivePresetId(null);
+      setImageSrc(dataUrl);
+      setMimeType('image/jpeg');
+      setIsExtractingFeatures(true);
+      analyzeImageVisualFeatures(dataUrl)
+        .then(metrics => setVisualMetrics(metrics))
+        .finally(() => setIsExtractingFeatures(false));
+    }
+    stopCamera();
   };
 
   const handleAnalyze = async () => {
@@ -536,6 +612,48 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
               )}
             </div>
 
+            {/* Quick Clinical Presets for instant testing of diverse dermatological conditions */}
+            <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-200/80">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-teal-600" />
+                  Quick Specimen Presets
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium">Click any to test diagnosis</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {CLINICAL_SAMPLE_CASES.map((preset) => {
+                  const isActive = activePresetId === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => handleSelectPreset(preset)}
+                      className={`text-left p-1.5 rounded-lg border transition flex items-center gap-2 ${
+                        isActive
+                          ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-500/20 shadow-2xs'
+                          : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300'
+                      }`}
+                    >
+                      <img
+                        src={preset.dataUrl}
+                        alt={preset.name}
+                        className="w-6 h-6 rounded object-cover border border-slate-200 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-bold text-slate-800 truncate">
+                          {preset.shortName}
+                        </div>
+                        <div className="text-[9px] text-slate-500 truncate">
+                          {preset.anatomicalSite}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Camera Viewport or Upload Dropzone */}
             {isCameraActive ? (
               <div className="relative rounded-xl overflow-hidden bg-black aspect-4/3 flex flex-col items-center justify-center">
@@ -559,11 +677,18 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                 </div>
               </div>
             ) : imageSrc ? (
-              <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-100 group">
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`relative rounded-xl overflow-hidden border transition bg-slate-100 ${
+                  isDragging ? 'border-teal-500 ring-2 ring-teal-400 bg-teal-50/30' : 'border-slate-200'
+                }`}
+              >
                 <img
                   src={imageSrc}
                   alt="Clinical specimen"
-                  className="w-full max-h-72 object-contain mx-auto bg-slate-900/5"
+                  className="w-full max-h-72 object-contain mx-auto bg-slate-900/5 p-2"
                 />
                 <div className="absolute top-2 right-2 flex items-center gap-1.5">
                   <button
@@ -575,15 +700,53 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                     <Ruler className="w-3 h-3 text-teal-400" />
                     <span>Dermoscopy & Caliper</span>
                   </button>
-                  <span className="px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-mono">
-                    Ready
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                    analysisResult ? 'bg-teal-700 text-white' : 'bg-black/60 text-white'
+                  }`}>
+                    {analysisResult ? 'Analyzed' : 'Ready to Analyze'}
                   </span>
+                </div>
+
+                {/* Convenient quick action bar beneath loaded image */}
+                <div className="p-2.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-medium text-[11px] flex items-center gap-1 shadow-2xs"
+                    >
+                      <Upload className="w-3 h-3 text-teal-600" />
+                      Upload Different Image
+                    </button>
+                    <button
+                      type="button"
+                      onClick={startCamera}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-medium text-[11px] flex items-center gap-1 shadow-2xs"
+                    >
+                      <Camera className="w-3 h-3 text-teal-600" />
+                      Take Photo
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resetImageState}
+                    className="text-[11px] text-rose-600 hover:text-rose-800 font-medium px-2 py-1"
+                  >
+                    Clear Specimen
+                  </button>
                 </div>
               </div>
             ) : (
               <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-200 hover:border-teal-500 hover:bg-teal-50/20 rounded-xl p-8 text-center cursor-pointer transition flex flex-col items-center justify-center"
+                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition flex flex-col items-center justify-center ${
+                  isDragging
+                    ? 'border-teal-500 bg-teal-50/50 ring-2 ring-teal-400'
+                    : 'border-slate-200 hover:border-teal-500 hover:bg-teal-50/20'
+                }`}
               >
                 <div className="w-12 h-12 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center mb-3">
                   <Upload className="w-6 h-6" />
