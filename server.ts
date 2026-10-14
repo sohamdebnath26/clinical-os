@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { db } from './server/db.js';
-import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages } from './server/ai.js';
+import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis } from './server/ai.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -255,6 +255,40 @@ app.get('/api/patients/:id/timeline', authMiddleware, (req, res) => {
 app.get('/api/patients/:id/markers', authMiddleware, (req, res) => {
   const markers = db.getPatientBodyMarkers(req.params.id);
   res.json({ markers });
+});
+
+app.post('/api/patients/:id/markers', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const { view, x, y, type, notes, anatomicalPart, bodyPart, color, consultationId } = req.body;
+  if (!view || x === undefined || y === undefined) {
+    return res.status(400).json({ error: 'view, x, and y coordinates are required' });
+  }
+  const marker = db.addBodyMarker({
+    id: `bm-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+    patientId: req.params.id,
+    consultationId,
+    view: view || 'front',
+    x: Number(x),
+    y: Number(y),
+    type: type || 'lesion',
+    color: color || '#f43f5e',
+    bodyPart: anatomicalPart || bodyPart || 'Skin',
+    notes: notes || '',
+    createdAt: new Date().toISOString()
+  });
+
+  const doctor = req.doctor;
+  if (doctor) {
+    db.logAudit({
+      actorId: doctor.id,
+      actorName: doctor.name,
+      action: 'body_marker_pinned',
+      resourceType: 'body_marker',
+      resourceId: marker.id,
+      metadata: { patientId: req.params.id, type: marker.type, part: marker.bodyPart }
+    });
+  }
+
+  res.json({ marker });
 });
 
 // Patient clinical images
@@ -658,7 +692,91 @@ app.post('/api/ai/compare-progression', authMiddleware, async (req: Authenticate
   }
 });
 
+// ==========================================
+// AI DERMOSCOPIC ABCDE ASSESSMENT
+// ==========================================
+app.post('/api/ai/assess-abcde', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const { imageBase64, mimeType, patientId, clinicalNotes, estimatedDiameterMm } = req.body;
 
+  if (!imageBase64) {
+    return res.status(400).json({ error: 'imageBase64 is required for ABCDE assessment' });
+  }
+
+  let patient = undefined;
+  if (patientId) {
+    patient = db.findPatientById(patientId);
+  }
+
+  try {
+    const abcde = await assessABCDEAnalysis({
+      imageBase64,
+      mimeType,
+      patient,
+      clinicalNotes,
+      estimatedDiameterMm: estimatedDiameterMm ? Number(estimatedDiameterMm) : undefined
+    });
+
+    const doctor = req.doctor!;
+    db.logAudit({
+      actorId: doctor.id,
+      actorName: doctor.name,
+      action: 'ai_dermoscopic_abcde_assessed',
+      resourceType: 'dermoscopic_assessment',
+      resourceId: abcde.id,
+      metadata: {
+        patientId: patient?.id,
+        totalScore: abcde.totalScore,
+        riskLevel: abcde.riskLevel
+      }
+    });
+
+    res.json({ abcde, patient });
+  } catch (err: unknown) {
+    console.error('ABCDE assessment error:', err);
+    const message = err instanceof Error ? err.message : 'Failed to assess dermoscopic ABCDE';
+    res.status(500).json({ error: message });
+  }
+});
+
+
+
+// ==========================================
+// WHATSAPP MEDICAL REPORT DISPATCH & LOGGING
+// ==========================================
+app.post('/api/reports/log-whatsapp', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const { patientId, reportType, recipientMobile, note } = req.body;
+  if (!recipientMobile) {
+    return res.status(400).json({ error: 'recipientMobile is required' });
+  }
+
+  let patient = undefined;
+  if (patientId) {
+    patient = db.findPatientById(patientId);
+  }
+
+  const doctor = req.doctor!;
+  db.logAudit({
+    actorId: doctor.id,
+    actorName: doctor.name,
+    action: 'report_sent_whatsapp',
+    resourceType: 'medical_report',
+    resourceId: patientId || 'unlinked',
+    metadata: {
+      reportType: reportType || 'clinical_report',
+      recipientMobile,
+      patientName: patient?.fullName || 'Patient',
+      patientCode: patient?.patientCode,
+      note,
+      clinicName: doctor.clinicName
+    }
+  });
+
+  res.json({
+    success: true,
+    message: 'WhatsApp report dispatch logged successfully',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // ==========================================
 // DASHBOARD & AUDIT

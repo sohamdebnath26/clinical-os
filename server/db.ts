@@ -534,6 +534,13 @@ class DatabaseService {
     return this.data.bodyMarkers.filter(m => m.patientId === patientId);
   }
 
+  public addBodyMarker(marker: BodyMarker): BodyMarker {
+    if (!this.data.bodyMarkers) this.data.bodyMarkers = [];
+    this.data.bodyMarkers.push(marker);
+    this.persist();
+    return marker;
+  }
+
   // --- Clinical Images methods ---
   public getPatientImages(patientId: string): ClinicalImage[] {
     return this.data.clinicalImages.filter(i => i.patientId === patientId);

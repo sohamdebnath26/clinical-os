@@ -123,9 +123,20 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
     setCustomSymptom('');
   };
 
+  // Restrict phone number searches to 10 digits
+  const handleSearchChange = (val: string) => {
+    const digitsOnly = val.replace(/\D/g, '');
+    const isPhoneNumberOrDigits = /^[\d\s+\-()]+$/.test(val) && digitsOnly.length > 0;
+    if (isPhoneNumberOrDigits) {
+      setSearchQuery(digitsOnly.slice(0, 10));
+    } else {
+      setSearchQuery(val);
+    }
+  };
+
   // Check duplicate mobile
   const handleMobileChange = async (val: string) => {
-    // Only numbers, up to 10
+    // Only numbers, strictly restricted to 10 digits
     const cleaned = val.replace(/\D/g, '').slice(0, 10);
     setMobile(cleaned);
     setExistingDuplicatePatient(null);
@@ -239,11 +250,17 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                   <input
                     type="text"
                     autoFocus
-                    placeholder="Name, code, or phone..."
+                    placeholder="Name, code, or 10-digit phone..."
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="w-full text-sm pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs"
+                    onChange={e => handleSearchChange(e.target.value)}
+                    maxLength={/^[\d\s+\-()]*$/.test(searchQuery) && /\d/.test(searchQuery) ? 10 : undefined}
+                    className="w-full text-sm pl-10 pr-16 py-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs"
                   />
+                  {/^\d+$/.test(searchQuery) && (
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] font-mono font-medium text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
+                      {searchQuery.length}/10
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1.5">
                   A name or a full mobile number — either finds them.
@@ -330,10 +347,22 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                 </div>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
                   maxLength={10}
                   placeholder="10-digit mobile number"
                   value={mobile}
                   onChange={e => handleMobileChange(e.target.value)}
+                  onKeyDown={e => {
+                    if (
+                      !/[0-9]/.test(e.key) &&
+                      !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(e.key) &&
+                      !e.ctrlKey &&
+                      !e.metaKey
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
                   className="w-full text-xs px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 font-mono tracking-wider"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">

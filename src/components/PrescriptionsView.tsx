@@ -3,6 +3,7 @@ import { PrescriptionItem, Patient } from '../types';
 import { api } from '../lib/api';
 import { Pill, Search, Printer, FileText, ArrowRight } from 'lucide-react';
 import { PrintRxModal } from './PrintRxModal';
+import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import { useAuth } from '../context/AuthContext';
 
 interface PrescriptionsViewProps {
@@ -19,6 +20,10 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
   const [selectedPatientForPrint, setSelectedPatientForPrint] = useState<Patient | null>(null);
   const [patientPrescriptionsForPrint, setPatientPrescriptionsForPrint] = useState<PrescriptionItem[]>([]);
 
+  // WhatsApp modal state
+  const [selectedPatientForWhatsApp, setSelectedPatientForWhatsApp] = useState<Patient | null>(null);
+  const [patientPrescriptionsForWhatsApp, setPatientPrescriptionsForWhatsApp] = useState<PrescriptionItem[]>([]);
+
   useEffect(() => {
     api.prescriptions.list()
       .then(res => setPrescriptions(res.prescriptions))
@@ -32,6 +37,17 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
       const patRxs = prescriptions.filter(p => p.patientId === patientId);
       setSelectedPatientForPrint(patRes.patient);
       setPatientPrescriptionsForPrint(patRxs);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleWhatsAppPatientRx = async (patientId: string) => {
+    try {
+      const patRes = await api.patients.get(patientId);
+      const patRxs = prescriptions.filter(p => p.patientId === patientId);
+      setSelectedPatientForWhatsApp(patRes.patient);
+      setPatientPrescriptionsForWhatsApp(patRxs);
     } catch {
       // ignore
     }
@@ -114,6 +130,15 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
+                          onClick={() => handleWhatsAppPatientRx(rx.patientId)}
+                          className="px-2.5 py-1 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                          title="Send Prescription to patient's WhatsApp"
+                        >
+                          <WhatsAppIcon className="w-3 h-3 fill-white" />
+                          <span>WhatsApp</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handlePrintPatientRx(rx.patientId)}
                           className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
                         >
@@ -143,6 +168,19 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
           prescriptions={patientPrescriptionsForPrint}
           doctor={doctor}
           onClose={() => setSelectedPatientForPrint(null)}
+        />
+      )}
+
+      {selectedPatientForWhatsApp && doctor && (
+        <WhatsAppShareModal
+          isOpen={!!selectedPatientForWhatsApp}
+          onClose={() => setSelectedPatientForWhatsApp(null)}
+          patient={selectedPatientForWhatsApp}
+          doctor={doctor}
+          reportType="prescription"
+          data={{
+            prescriptions: patientPrescriptionsForWhatsApp
+          }}
         />
       )}
     </div>

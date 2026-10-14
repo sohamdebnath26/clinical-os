@@ -235,8 +235,56 @@
       "action": "doctor_login",
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
-      "id": "aud-mv5msg1z-nzfp",
-      "timestamp": "2026-10-12T19:14:32.135Z"
+      "id": "aud-mv7mevnw-6092",
+      "timestamp": "2026-10-14T04:39:31.532Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "ai_clinical_image_analyzed",
+      "resourceType": "clinical_image",
+      "resourceId": "ai_img_1791952029554",
+      "metadata": {
+        "primaryImpression": "Erythematous Papular Eruption / Contact Dermatitis",
+        "isAiPowered": false
+      },
+      "id": "aud-mv7lyz5e-yfmw",
+      "timestamp": "2026-10-14T04:27:09.554Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "ai_clinical_image_analyzed",
+      "resourceType": "clinical_image",
+      "resourceId": "ai_img_1791952026517",
+      "metadata": {
+        "primaryImpression": "Erythematous Papular Eruption / Contact Dermatitis",
+        "isAiPowered": false
+      },
+      "id": "aud-mv7lywt1-ujpv",
+      "timestamp": "2026-10-14T04:27:06.517Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "ai_clinical_image_analyzed",
+      "resourceType": "clinical_image",
+      "resourceId": "ai_img_1791952017148",
+      "metadata": {
+        "primaryImpression": "Erythematous Papular Eruption / Contact Dermatitis",
+        "isAiPowered": false
+      },
+      "id": "aud-mv7lypks-py4o",
+      "timestamp": "2026-10-14T04:26:57.148Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mv7lyf1r-3id1",
+      "timestamp": "2026-10-14T04:26:43.503Z"
     },
     {
       "actorId": "doc-demo-001",
@@ -552,7 +600,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-12T19:14:32.135Z"
+    "updatedAt": "2026-10-14T04:39:31.532Z"
   },
   "appointments": [
     {

@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Patient, Consultation, AIImageAnalysisResult } from '../types';
+import { Patient, Consultation, AIImageAnalysisResult, ABCDEScoreResult, BodyMarker } from '../types';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { ClinicalImageReportModal } from './ClinicalImageReportModal';
+import { DermoscopicToolModal } from './DermoscopicToolModal';
+import { PinToBodyMapModal } from './PinToBodyMapModal';
+import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import {
   Camera,
   Upload,
@@ -24,7 +28,11 @@ import {
   X,
   Plus,
   BookmarkPlus,
-  BookmarkCheck
+  BookmarkCheck,
+  Printer,
+  Ruler,
+  MapPin,
+  Pill
 } from 'lucide-react';
 
 interface ImageAnalyzerViewProps {
@@ -62,6 +70,14 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
   const [copied, setCopied] = useState(false);
   const [isSavingToGallery, setIsSavingToGallery] = useState(false);
   const [savedToGallery, setSavedToGallery] = useState(false);
+
+  // Step 4: Modals & Tool state
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [showDermoscopicModal, setShowDermoscopicModal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [abcdeResult, setAbcdeResult] = useState<ABCDEScoreResult | null>(null);
+  const [pinnedSuccess, setPinnedSuccess] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -167,92 +183,6 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
     reader.readAsDataURL(file);
   };
 
-  // Preset sample images for instant doctor demonstration
-  const loadSampleCase = (type: 'eczema' | 'tinea' | 'acne') => {
-    setErrorMsg(null);
-    // Draw a clinical illustration canvas for instant testing
-    const canvas = document.createElement('canvas');
-    canvas.width = 600;
-    canvas.height = 450;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    if (type === 'eczema') {
-      // Skin tone background with erythematous patch
-      ctx.fillStyle = '#e8beac';
-      ctx.fillRect(0, 0, 600, 450);
-      // Erythema
-      const grad = ctx.createRadialGradient(300, 225, 40, 300, 225, 180);
-      grad.addColorStop(0, '#d15353');
-      grad.addColorStop(0.5, '#dd7777');
-      grad.addColorStop(1, '#e8beac');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(300, 225, 180, 0, Math.PI * 2);
-      ctx.fill();
-      // Excoriations / scaling
-      ctx.strokeStyle = '#8b2e2e';
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 25; i++) {
-        ctx.beginPath();
-        const rx = 200 + Math.random() * 200;
-        const ry = 150 + Math.random() * 150;
-        ctx.moveTo(rx, ry);
-        ctx.lineTo(rx + Math.random() * 20 - 10, ry + Math.random() * 20 - 10);
-        ctx.stroke();
-      }
-      setClinicalNotes('Pruritic erythematous plaques on antecubital fossa for 2 weeks, exacerbated after soap exposure.');
-      setAnatomicalSite('Right antecubital fossa');
-    } else if (type === 'tinea') {
-      ctx.fillStyle = '#f0c7b2';
-      ctx.fillRect(0, 0, 600, 450);
-      // Ringworm annular ring
-      ctx.strokeStyle = '#c94444';
-      ctx.lineWidth = 14;
-      ctx.beginPath();
-      ctx.arc(300, 225, 110, 0, Math.PI * 2);
-      ctx.stroke();
-      // Clearing center
-      ctx.fillStyle = '#f2cebb';
-      ctx.beginPath();
-      ctx.arc(300, 225, 95, 0, Math.PI * 2);
-      ctx.fill();
-      // Leading scale dots
-      ctx.fillStyle = '#8f2525';
-      for (let i = 0; i < 40; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const r = 105 + Math.random() * 15;
-        ctx.beginPath();
-        ctx.arc(300 + Math.cos(angle) * r, 225 + Math.sin(angle) * r, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      setClinicalNotes('Annular expanding lesion with raised active border and central clearing on trunk. Mild pruritus.');
-      setAnatomicalSite('Left lateral flank');
-    } else {
-      ctx.fillStyle = '#e5b8a3';
-      ctx.fillRect(0, 0, 600, 450);
-      // Facial acneiform papules and pustules
-      for (let i = 0; i < 35; i++) {
-        const px = 180 + Math.random() * 240;
-        const py = 120 + Math.random() * 200;
-        ctx.fillStyle = '#c73e3e';
-        ctx.beginPath();
-        ctx.arc(px, py, 6 + Math.random() * 6, 0, Math.PI * 2);
-        ctx.fill();
-        if (i % 3 === 0) {
-          ctx.fillStyle = '#fff4cc';
-          ctx.beginPath();
-          ctx.arc(px, py, 2.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      setClinicalNotes('Facial inflammatory papules and comedones persisting for 1 month, tender to palpation.');
-      setAnatomicalSite('Malar cheeks and chin');
-    }
-
-    setImageSrc(canvas.toDataURL('image/jpeg', 0.85));
-    setMimeType('image/jpeg');
-  };
 
   const handleAnalyze = async () => {
     if (!imageSrc) {
@@ -380,34 +310,6 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
           <p className="text-sm text-slate-600 mt-0.5 max-w-2xl">
             Upload lesion, rash, dermoscopic, or clinical photographs. The model cross-references visual morphology with the patient's longitudinal history, medications, and previous visits to suggest targeted differential diagnoses.
           </p>
-        </div>
-
-        {/* Quick Sample Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block w-full md:w-auto">
-            Try Sample:
-          </span>
-          <button
-            type="button"
-            onClick={() => loadSampleCase('eczema')}
-            className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-50 hover:bg-teal-50 hover:text-teal-900 border border-slate-200 text-slate-700 transition"
-          >
-            Eczema Flare
-          </button>
-          <button
-            type="button"
-            onClick={() => loadSampleCase('tinea')}
-            className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-50 hover:bg-teal-50 hover:text-teal-900 border border-slate-200 text-slate-700 transition"
-          >
-            Annular Lesion
-          </button>
-          <button
-            type="button"
-            onClick={() => loadSampleCase('acne')}
-            className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-50 hover:bg-teal-50 hover:text-teal-900 border border-slate-200 text-slate-700 transition"
-          >
-            Acneiform
-          </button>
         </div>
       </div>
 
@@ -630,6 +532,15 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   className="w-full max-h-72 object-contain mx-auto bg-slate-900/5"
                 />
                 <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowDermoscopicModal(true)}
+                    className="px-2 py-1 rounded-lg bg-slate-900/80 hover:bg-slate-900 text-teal-300 text-[10px] font-bold flex items-center gap-1 backdrop-blur-xs transition shadow-xs"
+                    title="Open Dermoscopy Magnifier & Caliper"
+                  >
+                    <Ruler className="w-3 h-3 text-teal-400" />
+                    <span>Dermoscopy & Caliper</span>
+                  </button>
                   <span className="px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-mono">
                     Ready
                   </span>
@@ -789,7 +700,53 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Step 4: Print Diagnostic Report */}
+                    <button
+                      type="button"
+                      onClick={() => setShowReportModal(true)}
+                      className="px-2.5 py-1 rounded-lg bg-teal-800/90 hover:bg-teal-700 text-white text-xs font-semibold flex items-center gap-1.5 transition border border-teal-600/50 shadow-2xs"
+                      title="Print or Export Clinical Diagnostic Slip"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-teal-200" />
+                      <span>Print Report</span>
+                    </button>
+
+                    {/* WhatsApp Report Dispatch */}
+                    <button
+                      type="button"
+                      onClick={() => setShowWhatsAppModal(true)}
+                      className="px-2.5 py-1 rounded-lg bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-bold flex items-center gap-1.5 transition shadow-2xs"
+                      title="Send Diagnostic Report directly to patient's WhatsApp"
+                    >
+                      <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                      <span>WhatsApp Report</span>
+                    </button>
+
+                    {/* Step 4: Dermoscopy & Caliper Tool */}
+                    <button
+                      type="button"
+                      onClick={() => setShowDermoscopicModal(true)}
+                      className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-teal-200 text-xs font-medium flex items-center gap-1.5 transition"
+                      title="Open Dermoscopic ABCDE Caliper"
+                    >
+                      <Ruler className="w-3.5 h-3.5 text-teal-300" />
+                      <span>Dermoscopy & ABCDE</span>
+                    </button>
+
+                    {/* Step 4: Pin to Patient Body Map */}
+                    {selectedPatient && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPinModal(true)}
+                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 transition"
+                        title="Pin this lesion to patient anatomical body map"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-teal-300" />
+                        <span>Pin to Body Map</span>
+                      </button>
+                    )}
+
                     {selectedPatient && (
                       <button
                         type="button"
@@ -841,6 +798,40 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                 <h2 className="text-xl md:text-2xl font-black tracking-tight text-white mt-1">
                   {analysisResult.primaryImpression}
                 </h2>
+
+                {/* Step 4: ABCDE Score Banner if evaluated */}
+                {abcdeResult && (
+                  <div className="mt-2.5 p-2.5 rounded-xl bg-teal-950/80 border border-teal-500/40 text-xs flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1 rounded bg-teal-500/20 text-teal-300">
+                        <Ruler className="w-3.5 h-3.5" />
+                      </span>
+                      <div>
+                        <span className="font-bold text-teal-100">
+                          Dermoscopic ABCDE Score: {abcdeResult.totalScore}/9
+                        </span>
+                        <span className="text-[11px] text-teal-300/80 block">
+                          {abcdeResult.riskLevel} · Caliper Diameter: {abcdeResult.diameterMm.toFixed(1)} mm
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowDermoscopicModal(true)}
+                      className="text-[11px] text-teal-300 underline hover:text-white"
+                    >
+                      Inspect
+                    </button>
+                  </div>
+                )}
+
+                {/* Step 4: Pinned to Body Map Feedback */}
+                {pinnedSuccess && (
+                  <div className="mt-2 p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{pinnedSuccess}</span>
+                  </div>
+                )}
 
                 {selectedPatient && (
                   <p className="text-xs text-teal-200/80 mt-1">
@@ -980,6 +971,60 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Step 4: Modals */}
+      {showReportModal && analysisResult && (
+        <ClinicalImageReportModal
+          patient={selectedPatient}
+          analysis={analysisResult}
+          imageSrc={imageSrc}
+          anatomicalSite={anatomicalSite}
+          doctor={doctor}
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
+
+      {showWhatsAppModal && analysisResult && (
+        <WhatsAppShareModal
+          isOpen={showWhatsAppModal}
+          onClose={() => setShowWhatsAppModal(false)}
+          patient={selectedPatient}
+          doctor={doctor}
+          reportType="clinical_image_report"
+          data={{
+            analysis: analysisResult,
+            anatomicalSite
+          }}
+        />
+      )}
+
+      {showDermoscopicModal && imageSrc && (
+        <DermoscopicToolModal
+          imageSrc={imageSrc}
+          patient={selectedPatient}
+          onClose={() => setShowDermoscopicModal(false)}
+          onApplyScore={(score: ABCDEScoreResult) => {
+            setAbcdeResult(score);
+            setShowDermoscopicModal(false);
+          }}
+        />
+      )}
+
+      {showPinModal && selectedPatient && (
+        <PinToBodyMapModal
+          patient={selectedPatient}
+          analysis={analysisResult}
+          anatomicalSite={anatomicalSite}
+          onClose={() => setShowPinModal(false)}
+          onSuccess={(marker: BodyMarker) => {
+            setShowPinModal(false);
+            setPinnedSuccess(
+              `Successfully pinned ${marker.type.toUpperCase()} lesion at (${marker.x}%, ${marker.y}%) to ${marker.view.toUpperCase()} body map`
+            );
+            setTimeout(() => setPinnedSuccess(null), 5000);
+          }}
+        />
+      )}
     </div>
   );
 };

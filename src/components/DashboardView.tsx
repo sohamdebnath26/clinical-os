@@ -124,22 +124,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* 4 Metrics Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Patients */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-            {t('totalPatients')}
-          </span>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
+        <div className="clinical-card p-5 space-y-1">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider block">
+              {t('totalPatients')}
+            </span>
+            <Users className="w-4 h-4 text-teal-700" />
+          </div>
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums">
             {stats ? stats.totalPatients : 0}
           </div>
-          <span className="text-xs text-slate-500 block">active in your clinic</span>
+          <span className="text-xs text-slate-500 block">active registered in clinic</span>
         </div>
 
         {/* Visits Today */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-            {t('todayVisits')}
-          </span>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
+        <div className="clinical-card p-5 space-y-1">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider block">
+              {t('todayVisits')}
+            </span>
+            <Activity className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums">
             {stats ? stats.visitsToday : 0}
           </div>
           <span className="text-xs text-slate-500 block">
@@ -148,25 +154,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Follow Ups Due */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-            {t('waitingQueue')}
-          </span>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
+        <div className="clinical-card p-5 space-y-1">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider block">
+              {t('waitingQueue')}
+            </span>
+            <Clock className="w-4 h-4 text-amber-600" />
+          </div>
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums">
             {stats ? stats.followUpsDue : 0}
           </div>
-          <span className="text-xs text-slate-500 block">require attention</span>
+          <span className="text-xs text-slate-500 block">require clinical attention</span>
         </div>
 
         {/* Active Prescriptions */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-            {t('activePrescriptions')}
-          </span>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
+        <div className="clinical-card p-5 space-y-1">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider block">
+              {t('activePrescriptions')}
+            </span>
+            <Pill className="w-4 h-4 text-indigo-600" />
+          </div>
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight tabular-nums">
             {stats ? stats.activePrescriptions : 0}
           </div>
-          <span className="text-xs text-slate-500 block">scheduled</span>
+          <span className="text-xs text-slate-500 block">prescribed regimens</span>
         </div>
       </div>
 

@@ -98,3 +98,15 @@ npm start
 - **Doctor Email:** `demo@clinicalos.med`
 - **Password:** `Demo@1234`
 *(Or click "Sign in as Dr. Demo (One-Click)" on the login screen, or click "Create Doctor Account" to register yourself)*
+
+---
+
+## 🔬 Further Improvements & Technical Roadmap
+
+Explore the dedicated [`improvements/`](./improvements/README.md) directory for technical specifications, code blueprints, and architecture plans:
+
+- **[01. AI Image Analyzer & Model Upgrades](./improvements/01_ai_image_analyzer_models.md)**: Pro models (`gemini-3.1-pro-preview`), extended thinking (`thinkingConfig`), multi-modal dermoscopy (macro + polarized), dermatoscopic pattern taxonomy, Fitzpatrick phototypes, and ICD-11 mapping.
+- **[02. Advanced Clinical Decision Support](./improvements/02_clinical_decision_support.md)**: Automated drug-drug interaction alerts, allergy contraindications, and clinical calculators (PASI, SCORAD, DLQI).
+- **[03. Telehealth & Automated Messaging](./improvements/03_telehealth_and_messaging.md)**: Meta WhatsApp Cloud API & Twilio webhooks, automated appointment reminders, prescription QR code digital verification, and WebRTC video consultations.
+- **[04. Enterprise Data Layer & HIPAA Compliance](./improvements/04_data_architecture_and_security.md)**: Cloud SQL / PostgreSQL migration schemas, field-level encryption, multi-device WebSockets, and audit compliance.
+

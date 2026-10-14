@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Patient, ClinicalImage, ProgressionAnalysisResult } from '../types';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import {
   X,
   Sparkles,
@@ -27,6 +29,9 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
   images,
   onClose
 }) => {
+  const { doctor } = useAuth();
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
+
   // Select baseline & follow-up images
   const [imageAId, setImageAId] = useState<string>(images.length > 1 ? images[images.length - 1].id : images[0]?.id || '');
   const [imageBId, setImageBId] = useState<string>(images[0]?.id || '');
@@ -291,14 +296,25 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
                       </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleCopy}
-                      className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium rounded-lg flex items-center gap-1.5 shadow-2xs"
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copied ? 'Copied' : 'Copy'}</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowWhatsApp(true)}
+                        className="px-2.5 py-1 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-2xs transition"
+                        title="Send Progression Report to Patient's WhatsApp"
+                      >
+                        <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                        <span>WhatsApp</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCopy}
+                        className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium rounded-lg flex items-center gap-1.5 shadow-2xs"
+                      >
+                        {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copied ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Observations */}
@@ -343,6 +359,19 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
           )}
         </div>
       </div>
+
+      {showWhatsApp && result && (
+        <WhatsAppShareModal
+          isOpen={showWhatsApp}
+          onClose={() => setShowWhatsApp(false)}
+          patient={patient}
+          doctor={doctor}
+          reportType="progression_report"
+          data={{
+            progression: result
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -9,7 +9,8 @@ import {
   ClinicStats,
   Appointment,
   AIImageAnalysisResult,
-  ProgressionAnalysisResult
+  ProgressionAnalysisResult,
+  ABCDEScoreResult
 } from '../types/index';
 
 const TOKEN_KEY = 'clinical_os_token';
@@ -133,6 +134,22 @@ export const api = {
       }>(`/api/patients/${id}/timeline`),
     getMarkers: (id: string) =>
       fetchWithAuth<{ markers: BodyMarker[] }>(`/api/patients/${id}/markers`),
+    addMarker: (
+      id: string,
+      data: {
+        view: 'front' | 'back';
+        x: number;
+        y: number;
+        type: string;
+        notes?: string;
+        anatomicalPart?: string;
+        consultationId?: string;
+      }
+    ) =>
+      fetchWithAuth<{ marker: BodyMarker }>(`/api/patients/${id}/markers`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
     getImages: (id: string) =>
       fetchWithAuth<{ images: ClinicalImage[] }>(`/api/patients/${id}/images`),
     getPrescriptions: (id: string) =>
@@ -263,6 +280,17 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    assessABCDE: (data: {
+      imageBase64: string;
+      mimeType?: string;
+      patientId?: string;
+      clinicalNotes?: string;
+      estimatedDiameterMm?: number;
+    }) =>
+      fetchWithAuth<{ abcde: ABCDEScoreResult; patient?: Patient }>('/api/ai/assess-abcde', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
 
 
@@ -274,6 +302,22 @@ export const api = {
         recentVisits: Consultation[];
         recentPatients: Patient[];
       }>('/api/dashboard/stats'),
+  },
+
+  reports: {
+    logWhatsApp: (data: {
+      patientId?: string;
+      reportType: string;
+      recipientMobile: string;
+      note?: string;
+    }) =>
+      fetchWithAuth<{ success: boolean; message: string; timestamp: string }>(
+        '/api/reports/log-whatsapp',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }
+      ),
   },
 
   audit: {

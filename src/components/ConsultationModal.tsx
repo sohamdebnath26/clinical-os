@@ -4,6 +4,8 @@ import { PREDEFINED_DIAGNOSES, PREDEFINED_TESTS, PREDEFINED_PROCEDURES, COMMON_M
 import { BodyMap } from './BodyMap';
 import { ClinicalImageUploader } from './ClinicalImageUploader';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import confetti from 'canvas-confetti';
 import {
   X,
@@ -49,6 +51,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   onClose,
   onSuccess
 }) => {
+  const { doctor } = useAuth();
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('diagnosis');
   const [fee, setFee] = useState<number>(consultation.fee || 500);
 
@@ -1194,13 +1198,22 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <button
               type="button"
               onClick={onClose}
               className="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition-colors"
             >
               Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowWhatsApp(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+              title="Share consultation summary and prescription to patient's WhatsApp"
+            >
+              <WhatsAppIcon className="w-4 h-4 fill-white" />
+              <span>WhatsApp Report</span>
             </button>
             <button
               type="button"
@@ -1369,6 +1382,30 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {/* WhatsApp Medical Report Modal */}
+      {showWhatsApp && (
+        <WhatsAppShareModal
+          isOpen={showWhatsApp}
+          onClose={() => setShowWhatsApp(false)}
+          patient={patient}
+          doctor={doctor}
+          reportType="consultation_summary"
+          data={{
+            consultation: {
+              ...consultation,
+              diagnoses,
+              symptoms,
+              tests,
+              procedures,
+              clinicalNotes,
+              followUp,
+              prescriptions,
+              fee
+            }
+          }}
+        />
       )}
     </div>
   );

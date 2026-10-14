@@ -7,6 +7,8 @@ import { EditPatientModal } from './EditPatientModal';
 import { ScheduleAppointmentModal } from './ScheduleAppointmentModal';
 import { MarkdownView } from './MarkdownView';
 import { LesionProgressionModal } from './LesionProgressionModal';
+import { WhatsAppShareModal, WhatsAppIcon, WhatsAppReportType } from './WhatsAppShareModal';
+import { PatientVitalsChart } from './PatientVitalsChart';
 import { useAuth } from '../context/AuthContext';
 import {
   ArrowLeft,
@@ -37,7 +39,7 @@ interface PatientProfileViewProps {
   onNavigateToImageAnalyzer?: (patientId: string) => void;
 }
 
-type TabType = 'overview' | 'appointments' | 'bodymap' | 'visits' | 'prescriptions' | 'timeline';
+type TabType = 'overview' | 'vitals' | 'appointments' | 'bodymap' | 'visits' | 'prescriptions' | 'timeline';
 
 export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
   patientId,
@@ -74,6 +76,13 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
   // Lesion Progression Modal
   const [showProgressionModal, setShowProgressionModal] = useState(false);
+
+  // WhatsApp Medical Report Modal
+  const [whatsAppData, setWhatsAppData] = useState<{
+    isOpen: boolean;
+    reportType: WhatsAppReportType;
+    data: any;
+  } | null>(null);
 
   const loadPatientData = async () => {
     setIsLoading(true);
@@ -241,6 +250,22 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => setWhatsAppData({
+              isOpen: true,
+              reportType: 'patient_summary',
+              data: {
+                activePrescriptions: prescriptions,
+                consultation: consultations[0] || null
+              }
+            })}
+            className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors"
+            title="Send Medical Summary directly to patient's WhatsApp"
+          >
+            <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+            <span>WhatsApp Summary</span>
+          </button>
+          <button
+            type="button"
             onClick={() => onStartConsultation(patient)}
             className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold shadow-md transition-all"
           >
@@ -288,7 +313,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
       {/* Profile Navigation Tabs */}
       <div className="border-b border-slate-200 flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-        {(['overview', 'appointments', 'bodymap', 'visits', 'prescriptions', 'timeline'] as TabType[]).map(tab => (
+        {(['overview', 'vitals', 'appointments', 'bodymap', 'visits', 'prescriptions', 'timeline'] as TabType[]).map(tab => (
           <button
             key={tab}
             type="button"
@@ -300,6 +325,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             }`}
           >
             {tab === 'overview' && 'Overview'}
+            {tab === 'vitals' && 'Vitals & Growth'}
             {tab === 'appointments' && `Appointments & Follow-ups (${appointments.length})`}
             {tab === 'bodymap' && 'Body map'}
             {tab === 'visits' && `Visits (${consultations.length})`}
@@ -500,7 +526,47 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                 </div>
               );
             })()}
+
+            {/* Quick Vitals & Growth Summary Card */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-teal-50 text-teal-800 flex items-center justify-center">
+                    <Activity className="w-3.5 h-3.5" />
+                  </div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Vitals & Biometrics
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('vitals')}
+                  className="text-xs font-bold text-teal-800 hover:text-teal-950 flex items-center gap-1 transition-colors"
+                >
+                  <span>View Trends</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Historical weight, height, and body mass index (BMI) curves tracked over consultations.
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveTab('vitals')}
+                className="w-full py-2 bg-slate-50 hover:bg-teal-50/80 border border-slate-200 hover:border-teal-300 rounded-xl text-xs font-semibold text-slate-700 hover:text-teal-950 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Activity className="w-3.5 h-3.5 text-teal-700" />
+                <span>Open Biometric Charts & Trends</span>
+              </button>
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB: VITALS & GROWTH DATA VISUALIZATION (Recharts) */}
+      {activeTab === 'vitals' && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          <PatientVitalsChart patient={patient} consultations={consultations} />
         </div>
       )}
 
@@ -661,13 +727,28 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                     Doctor: {c.doctorName} • Fee: ₹{c.fee} • Procedures: {c.procedures.length}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('timeline')}
-                  className="text-xs font-semibold text-teal-700 hover:text-teal-800 flex items-center gap-1"
-                >
-                  View in Timeline <ChevronRight className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setWhatsAppData({
+                      isOpen: true,
+                      reportType: 'consultation_summary',
+                      data: { consultation: c }
+                    })}
+                    className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition"
+                    title="Send Consultation Visit Report to Patient's WhatsApp"
+                  >
+                    <WhatsAppIcon className="w-3.5 h-3.5 fill-[#128C7E]" />
+                    <span>WhatsApp</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('timeline')}
+                    className="text-xs font-semibold text-teal-700 hover:text-teal-800 flex items-center gap-1"
+                  >
+                    View in Timeline <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -677,18 +758,33 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
       {/* TAB 4: PRESCRIPTIONS */}
       {activeTab === 'prescriptions' && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs divide-y divide-slate-100 animate-in fade-in duration-150">
-          <div className="p-4 bg-slate-50/70 flex items-center justify-between">
+          <div className="p-4 bg-slate-50/70 flex items-center justify-between flex-wrap gap-2">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">
               Active & Historical Prescriptions ({prescriptions.length})
             </h4>
-            <button
-              type="button"
-              onClick={() => setShowPrintRx(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs"
-            >
-              <Printer className="w-3.5 h-3.5 text-teal-700" />
-              Print Prescription (Rx)
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setWhatsAppData({
+                  isOpen: true,
+                  reportType: 'prescription',
+                  data: { prescriptions }
+                })}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-lg text-xs font-bold shadow-2xs transition"
+                title="Send all prescriptions to patient's WhatsApp"
+              >
+                <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                <span>WhatsApp Rx</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPrintRx(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs"
+              >
+                <Printer className="w-3.5 h-3.5 text-teal-700" />
+                Print Prescription (Rx)
+              </button>
+            </div>
           </div>
 
           {prescriptions.length === 0 ? (
@@ -697,7 +793,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             </div>
           ) : (
             prescriptions.map(rx => (
-              <div key={rx.id} className="p-4 flex items-center justify-between text-xs">
+              <div key={rx.id} className="p-4 flex items-center justify-between text-xs hover:bg-slate-50/80 transition-colors">
                 <div>
                   <p className="font-bold text-slate-900 text-sm">{rx.medicineName}</p>
                   <p className="text-slate-600 mt-0.5">
@@ -707,9 +803,23 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                     <p className="text-[11px] text-slate-500 mt-0.5 italic">Instructions: {rx.instructions}</p>
                   )}
                 </div>
-                <span className="text-[11px] text-slate-400">
-                  {new Date(rx.date || rx.createdAt).toLocaleDateString()}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-slate-400">
+                    {new Date(rx.date || rx.createdAt).toLocaleDateString()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setWhatsAppData({
+                      isOpen: true,
+                      reportType: 'prescription',
+                      data: { prescriptions: [rx] }
+                    })}
+                    className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg border border-transparent hover:border-emerald-200 transition"
+                    title="Send this prescription via WhatsApp"
+                  >
+                    <WhatsAppIcon className="w-4 h-4 fill-emerald-600" />
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -909,6 +1019,18 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           patient={patient}
           images={images}
           onClose={() => setShowProgressionModal(false)}
+        />
+      )}
+
+      {/* WhatsApp Medical Report Modal */}
+      {whatsAppData?.isOpen && (
+        <WhatsAppShareModal
+          isOpen={whatsAppData.isOpen}
+          onClose={() => setWhatsAppData(null)}
+          patient={patient}
+          doctor={doctor}
+          reportType={whatsAppData.reportType}
+          data={whatsAppData.data}
         />
       )}
     </div>

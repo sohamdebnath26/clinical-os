@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Patient, PrescriptionItem, Doctor } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import { X, Printer, Pill, Globe } from 'lucide-react';
 
 interface PrintRxModalProps {
@@ -17,6 +18,7 @@ export const PrintRxModal: React.FC<PrintRxModalProps> = ({
   onClose
 }) => {
   const { t, language, setLanguage, supportedLanguages } = useLanguage();
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
 
   const handlePrint = () => {
     window.print();
@@ -57,6 +59,15 @@ export const PrintRxModal: React.FC<PrintRxModalProps> = ({
               ))}
             </div>
 
+            <button
+              type="button"
+              onClick={() => setShowWhatsApp(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+              title="Send Prescription directly to patient's WhatsApp"
+            >
+              <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+              <span>WhatsApp Rx</span>
+            </button>
             <button
               type="button"
               onClick={handlePrint}
@@ -184,6 +195,19 @@ export const PrintRxModal: React.FC<PrintRxModalProps> = ({
           </div>
         </div>
       </div>
+
+      {showWhatsApp && (
+        <WhatsAppShareModal
+          isOpen={showWhatsApp}
+          onClose={() => setShowWhatsApp(false)}
+          patient={patient}
+          doctor={doctor}
+          reportType="prescription"
+          data={{
+            prescriptions
+          }}
+        />
+      )}
     </div>
   );
 };

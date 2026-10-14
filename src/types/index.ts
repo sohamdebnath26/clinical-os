@@ -194,6 +194,27 @@ export interface ProgressionAnalysisResult {
   analyzedAt: string;
 }
 
+export interface ABCDEScoreResult {
+  id: string;
+  asymmetryScore: number; // 0 (Symmetric), 1 (1-axis), 2 (2-axis)
+  asymmetryNotes: string;
+  borderScore: number; // 0 (Regular), 1 (Uneven/notched), 2 (Ragged/abrupt)
+  borderNotes: string;
+  colorScore: number; // 0 (Uniform), 1 (2-3 colors), 2 (4+ colors / variegated)
+  colorNotes: string;
+  diameterMm: number; // e.g. 5.5
+  diameterScore: number; // 0 (<6mm), 1 (>=6mm)
+  diameterNotes: string;
+  evolutionScore: number; // 0 (Stable), 2 (Changing / itching / bleeding)
+  evolutionNotes: string;
+  totalScore: number; // 0 - 9
+  riskLevel: 'Low Risk / Benign Characteristics' | 'Moderate Risk / Dysplastic / Follow-up Needed' | 'High Suspicion / Urgent Dermoscopy or Biopsy';
+  recommendations: string[];
+  disclaimer: string;
+  isAiPowered: boolean;
+  analyzedAt: string;
+}
+
 
 export interface ClinicStats {
   totalPatients: number;

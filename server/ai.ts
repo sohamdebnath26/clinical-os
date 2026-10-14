@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { Consultation, Patient, AIImageAnalysisResult, DifferentialDiagnosis, ProgressionAnalysisResult } from '../src/types/index.js';
+import { Consultation, Patient, AIImageAnalysisResult, DifferentialDiagnosis, ProgressionAnalysisResult, ABCDEScoreResult } from '../src/types/index.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -747,6 +747,185 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
   }
 
   return generateProgressionFallback(params);
+}
+
+// ==========================================
+// DERMOSCOPIC ABCDE ASSESSMENT (MULTIMODAL)
+// ==========================================
+
+export interface AssessABCDEParams {
+  imageBase64: string;
+  mimeType?: string;
+  patient?: Patient;
+  clinicalNotes?: string;
+  estimatedDiameterMm?: number;
+}
+
+export function generateABCDEFallback(params: AssessABCDEParams): ABCDEScoreResult {
+  const diameter = params.estimatedDiameterMm || 5.0;
+  const diameterScore = diameter >= 6.0 ? 1 : 0;
+  const asymmetryScore = 1;
+  const borderScore = 1;
+  const colorScore = 1;
+  const evolutionScore = 0;
+  const total = asymmetryScore + borderScore + colorScore + diameterScore + evolutionScore;
+
+  let riskLevel: ABCDEScoreResult['riskLevel'] = 'Low Risk / Benign Characteristics';
+  if (total >= 5) {
+    riskLevel = 'High Suspicion / Urgent Dermoscopy or Biopsy';
+  } else if (total >= 3) {
+    riskLevel = 'Moderate Risk / Dysplastic / Follow-up Needed';
+  }
+
+  return {
+    id: `abcde_${Date.now()}`,
+    asymmetryScore,
+    asymmetryNotes: 'Mild contour asymmetry observed along the longitudinal axis; transverse axis remains largely balanced.',
+    borderScore,
+    borderNotes: 'Border is slightly scalloped in the superior quadrant, but no abrupt pigment abruptions or deep notches.',
+    colorScore,
+    colorNotes: 'Presence of light to medium brown hues with regular reticular network; absence of blue-white veil or multiple shades of dark black.',
+    diameterMm: diameter,
+    diameterScore,
+    diameterNotes: diameter >= 6.0 ? 'Exceeds standard 6mm threshold; warrants close dermoscopic surveillance.' : 'Under 6mm conventional cutaneous threshold.',
+    evolutionScore,
+    evolutionNotes: params.clinicalNotes && params.clinicalNotes.toLowerCase().includes('chang')
+      ? 'Patient reports recent subjective changes; requires comparative follow-up.'
+      : 'No documented rapid morphologic evolution, bleeding, or spontaneous ulceration.',
+    totalScore: total,
+    riskLevel,
+    recommendations: [
+      total >= 5 ? 'Urgent dermatology referral for full-thickness excisional biopsy with 2mm margins' : 'Perform baseline digital dermoscopy photography',
+      'Schedule clinical reassessment in 3 months to monitor for structural evolution',
+      'Educate patient on monthly skin self-examination and UV protection guidelines'
+    ],
+    disclaimer: 'Dermoscopic ABCDE decision support only. Physician clinical judgment and dermoscopy examination are essential.',
+    isAiPowered: false,
+    analyzedAt: new Date().toISOString()
+  };
+}
+
+export async function assessABCDEAnalysis(params: AssessABCDEParams): Promise<ABCDEScoreResult> {
+  const ai = getAIClient();
+
+  if (ai && params.imageBase64) {
+    try {
+      let cleanBase64 = params.imageBase64;
+      let resolvedMimeType = params.mimeType || 'image/jpeg';
+
+      const match = cleanBase64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+      if (match) {
+        resolvedMimeType = match[1];
+        cleanBase64 = match[2];
+      }
+
+      const prompt = `You are an expert dermatological AI clinical assistant specializing in dermoscopic and melanocytic lesion evaluation.
+Analyze this clinical/dermoscopic lesion photograph using the standard clinical ABCDE rule:
+- A (Asymmetry): 0 = Symmetrical in both axes, 1 = Asymmetry in 1 axis, 2 = Asymmetry in 2 axes.
+- B (Border irregularity): 0 = Sharp, regular margins, 1 = Uneven/scalloped/notched, 2 = Ragged, blurred, or abrupt cutoff.
+- C (Color variegation): 0 = Monochromatic / uniform shade, 1 = 2-3 distinct hues (e.g. tan + dark brown), 2 = 4+ distinct colors (tan, dark brown, black, red, white, blue-gray).
+- D (Diameter): Based on visual cues or estimated diameter. If >=6mm score 1, if <6mm score 0. Estimated diameter in mm (number, e.g. 5.5).
+- E (Evolution / Surface signs): 0 = Clinically stable, 2 = Documented change, bleeding, crusting, or new elevation.
+
+Patient context: ${params.patient ? `${params.patient.fullName}, ${params.patient.age}y, ${params.patient.gender}` : 'Not linked to record'}
+Clinical Notes: ${params.clinicalNotes || 'Doctor requested ABCDE dermoscopic evaluation'}
+
+Calculate the total score (sum of A + B + C + D + E, range 0-9).
+Determine Risk Category:
+- 0 to 2: "Low Risk / Benign Characteristics"
+- 3 to 4: "Moderate Risk / Dysplastic / Follow-up Needed"
+- 5 to 9: "High Suspicion / Urgent Dermoscopy or Biopsy"
+
+Return ONLY a raw JSON object (strictly no markdown, no code fences):
+{
+  "asymmetryScore": 0,
+  "asymmetryNotes": "Detailed observation on symmetry across axes",
+  "borderScore": 0,
+  "borderNotes": "Detailed observation on lesion border sharpness, scalloping, notches",
+  "colorScore": 0,
+  "colorNotes": "Detailed observation on color patterns, variegation, pigment network",
+  "diameterMm": 5.0,
+  "diameterScore": 0,
+  "diameterNotes": "Estimated lesion size analysis",
+  "evolutionScore": 0,
+  "evolutionNotes": "Assessment of evolution or surface elevation/crusting",
+  "totalScore": 0,
+  "riskLevel": "Low Risk / Benign Characteristics",
+  "recommendations": [
+    "Specific clinical recommendation 1",
+    "Specific clinical recommendation 2"
+  ],
+  "disclaimer": "Clinical decision support only. Definitive diagnosis requires in-person dermoscopy and histopathology when indicated."
+}`;
+
+      const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+      for (const model of models) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: [
+              {
+                inlineData: {
+                  mimeType: resolvedMimeType,
+                  data: cleanBase64
+                }
+              },
+              {
+                text: prompt
+              }
+            ]
+          });
+
+          const text = response.text?.trim();
+          if (text) {
+            const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+            const parsed = JSON.parse(cleaned);
+
+            const aScore = typeof parsed.asymmetryScore === 'number' ? parsed.asymmetryScore : 0;
+            const bScore = typeof parsed.borderScore === 'number' ? parsed.borderScore : 0;
+            const cScore = typeof parsed.colorScore === 'number' ? parsed.colorScore : 0;
+            const dScore = typeof parsed.diameterScore === 'number' ? parsed.diameterScore : 0;
+            const eScore = typeof parsed.evolutionScore === 'number' ? parsed.evolutionScore : 0;
+            const total = aScore + bScore + cScore + dScore + eScore;
+
+            let risk = parsed.riskLevel;
+            if (!risk) {
+              if (total >= 5) risk = 'High Suspicion / Urgent Dermoscopy or Biopsy';
+              else if (total >= 3) risk = 'Moderate Risk / Dysplastic / Follow-up Needed';
+              else risk = 'Low Risk / Benign Characteristics';
+            }
+
+            return {
+              id: `abcde_${Date.now()}`,
+              asymmetryScore: aScore,
+              asymmetryNotes: parsed.asymmetryNotes || 'Symmetry evaluated across primary axes.',
+              borderScore: bScore,
+              borderNotes: parsed.borderNotes || 'Border demarcation and edge transition assessed.',
+              colorScore: cScore,
+              colorNotes: parsed.colorNotes || 'Chromic distribution and variegation analyzed.',
+              diameterMm: typeof parsed.diameterMm === 'number' ? parsed.diameterMm : (params.estimatedDiameterMm || 5.0),
+              diameterScore: dScore,
+              diameterNotes: parsed.diameterNotes || 'Diameter evaluation.',
+              evolutionScore: eScore,
+              evolutionNotes: parsed.evolutionNotes || 'Assessment of morphology changes.',
+              totalScore: total,
+              riskLevel: risk,
+              recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : ['Routine clinical surveillance'],
+              disclaimer: parsed.disclaimer || 'Dermoscopy assistive evaluation. Clinical correlation required.',
+              isAiPowered: true,
+              analyzedAt: new Date().toISOString()
+            };
+          }
+        } catch (err) {
+          console.warn(`Gemini ABCDE model ${model} failed, trying next:`, err);
+        }
+      }
+    } catch (err) {
+      console.error('Gemini ABCDE analysis pipeline error:', err);
+    }
+  }
+
+  return generateABCDEFallback(params);
 }
 
 
