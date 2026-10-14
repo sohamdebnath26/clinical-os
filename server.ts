@@ -601,7 +601,7 @@ app.post('/api/ai/chat', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedRequest, res) => {
-  const { imageBase64, mimeType, patientId, clinicalNotes, imageUrl } = req.body;
+  const { imageBase64, mimeType, patientId, clinicalNotes, imageUrl, visualMetrics } = req.body;
 
   if (!imageBase64) {
     return res.status(400).json({ error: 'Clinical image data (imageBase64) is required for analysis' });
@@ -624,7 +624,8 @@ app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedReque
       patient,
       history,
       clinicalNotes,
-      imageUrl
+      imageUrl,
+      visualMetrics
     });
 
     const doctor = req.doctor!;
@@ -696,7 +697,7 @@ app.post('/api/ai/compare-progression', authMiddleware, async (req: Authenticate
 // AI DERMOSCOPIC ABCDE ASSESSMENT
 // ==========================================
 app.post('/api/ai/assess-abcde', authMiddleware, async (req: AuthenticatedRequest, res) => {
-  const { imageBase64, mimeType, patientId, clinicalNotes, estimatedDiameterMm } = req.body;
+  const { imageBase64, mimeType, patientId, clinicalNotes, estimatedDiameterMm, visualMetrics } = req.body;
 
   if (!imageBase64) {
     return res.status(400).json({ error: 'imageBase64 is required for ABCDE assessment' });
@@ -713,7 +714,8 @@ app.post('/api/ai/assess-abcde', authMiddleware, async (req: AuthenticatedReques
       mimeType,
       patient,
       clinicalNotes,
-      estimatedDiameterMm: estimatedDiameterMm ? Number(estimatedDiameterMm) : undefined
+      estimatedDiameterMm: estimatedDiameterMm ? Number(estimatedDiameterMm) : undefined,
+      visualMetrics
     });
 
     const doctor = req.doctor!;

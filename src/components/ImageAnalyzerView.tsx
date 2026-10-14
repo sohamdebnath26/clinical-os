@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Patient, Consultation, AIImageAnalysisResult, ABCDEScoreResult, BodyMarker } from '../types';
+import { Patient, Consultation, AIImageAnalysisResult, ABCDEScoreResult, BodyMarker, VisualMorphologyMetrics } from '../types';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { analyzeImageVisualFeatures } from '../utils/visualImageAnalyzer';
 import { ClinicalImageReportModal } from './ClinicalImageReportModal';
 import { DermoscopicToolModal } from './DermoscopicToolModal';
 import { PinToBodyMapModal } from './PinToBodyMapModal';
@@ -66,6 +67,8 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string>('');
   const [analysisResult, setAnalysisResult] = useState<AIImageAnalysisResult | null>(null);
+  const [visualMetrics, setVisualMetrics] = useState<VisualMorphologyMetrics | null>(null);
+  const [isExtractingFeatures, setIsExtractingFeatures] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isSavingToGallery, setIsSavingToGallery] = useState(false);
@@ -155,6 +158,12 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       setImageSrc(dataUrl);
       setMimeType('image/jpeg');
+      setAnalysisResult(null); // Clear previous result
+      setVisualMetrics(null);
+      setIsExtractingFeatures(true);
+      analyzeImageVisualFeatures(dataUrl)
+        .then(metrics => setVisualMetrics(metrics))
+        .finally(() => setIsExtractingFeatures(false));
     }
     stopCamera();
   };
@@ -174,15 +183,25 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
     }
 
     setErrorMsg(null);
+    setAnalysisResult(null); // Clear previous analysis result immediately
+    setVisualMetrics(null);
     setMimeType(file.type);
 
     const reader = new FileReader();
     reader.onload = () => {
-      setImageSrc(reader.result as string);
+      const dataUrl = reader.result as string;
+      setImageSrc(dataUrl);
+      setIsExtractingFeatures(true);
+      analyzeImageVisualFeatures(dataUrl)
+        .then(metrics => setVisualMetrics(metrics))
+        .finally(() => setIsExtractingFeatures(false));
     };
     reader.readAsDataURL(file);
-  };
 
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handleAnalyze = async () => {
     if (!imageSrc) {
@@ -208,14 +227,24 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
         clinicalNotes ? `Doctor observation: ${clinicalNotes}` : ''
       ].filter(Boolean).join(' ');
 
+      let metricsToSend = visualMetrics;
+      if (!metricsToSend && imageSrc) {
+        metricsToSend = await analyzeImageVisualFeatures(imageSrc);
+        setVisualMetrics(metricsToSend);
+      }
+
       const res = await api.ai.analyzeImage({
         imageBase64: imageSrc,
         mimeType,
         patientId: selectedPatientId || undefined,
-        clinicalNotes: fullQuery || undefined
+        clinicalNotes: fullQuery || undefined,
+        visualMetrics: metricsToSend || undefined
       });
 
       setAnalysisResult(res.analysis);
+      if (res.analysis.visualMetrics) {
+        setVisualMetrics(res.analysis.visualMetrics);
+      }
       if (res.patient && !selectedPatient) {
         setSelectedPatient(res.patient);
       }
@@ -494,6 +523,11 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   onClick={() => {
                     setImageSrc(null);
                     setAnalysisResult(null);
+                    setVisualMetrics(null);
+                    setErrorMsg(null);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
                   }}
                   className="text-xs text-rose-600 hover:text-rose-800 font-medium"
                 >
@@ -584,6 +618,75 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
               onChange={handleFileUpload}
               className="hidden"
             />
+
+            {/* Live Visual Feature Telemetry Card */}
+            {isExtractingFeatures && (
+              <div className="p-3 rounded-xl bg-teal-50/70 border border-teal-200 text-xs text-teal-800 flex items-center justify-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-600" />
+                <span>Extracting specimen color palette, asymmetry & erythema telemetry...</span>
+              </div>
+            )}
+
+            {visualMetrics && !isExtractingFeatures && (
+              <div className="p-3 rounded-xl bg-slate-900 text-white space-y-2 border border-slate-800 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-teal-300">
+                      Detected Specimen Telemetry
+                    </span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                    {visualMetrics.morphologyCategory.replace(/_/g, ' ')}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-slate-800/90 rounded-lg p-2 border border-slate-700/60">
+                    <div className="flex justify-between text-[10px] mb-1">
+                      <span className="text-slate-400">Erythema (Redness)</span>
+                      <span className="font-bold text-rose-400">{visualMetrics.erythemaIndex}/100</span>
+                    </div>
+                    <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                      <div className="bg-rose-500 h-full rounded-full" style={{ width: `${visualMetrics.erythemaIndex}%` }} />
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-800/90 rounded-lg p-2 border border-slate-700/60">
+                    <div className="flex justify-between text-[10px] mb-1">
+                      <span className="text-slate-400">Pigment / Melanin</span>
+                      <span className="font-bold text-amber-400">{visualMetrics.pigmentationIndex}/100</span>
+                    </div>
+                    <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                      <div className="bg-amber-500 h-full rounded-full" style={{ width: `${visualMetrics.pigmentationIndex}%` }} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[10px] text-slate-300 px-0.5">
+                  <span>Asymmetry: <strong className={visualMetrics.asymmetryScore > 50 ? 'text-amber-300' : 'text-emerald-300'}>{visualMetrics.asymmetryScore}/100</strong></span>
+                  <span>Border: <strong className={visualMetrics.borderIrregularity > 50 ? 'text-amber-300' : 'text-emerald-300'}>{visualMetrics.borderIrregularity}/100</strong></span>
+                  {visualMetrics.estimatedDiameterMm && (
+                    <span>Size: <strong>~{visualMetrics.estimatedDiameterMm} mm</strong></span>
+                  )}
+                </div>
+
+                {visualMetrics.dominantColors && visualMetrics.dominantColors.length > 0 && (
+                  <div className="flex items-center gap-1 pt-1 overflow-x-auto scrollbar-none">
+                    <span className="text-[10px] text-slate-400 shrink-0">Colors:</span>
+                    {visualMetrics.dominantColors.map((col, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300 border border-slate-700 shrink-0"
+                      >
+                        <span className="w-2 h-2 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: col.hex }} />
+                        <span className="truncate max-w-[100px]">{col.name} ({col.percentage}%)</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {cameraError && (
               <p className="text-xs text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
@@ -839,6 +942,79 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   </p>
                 )}
               </div>
+
+              {/* Visual Telemetry & Morphological Biomarkers Card */}
+              {analysisResult.visualMetrics && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-teal-700" />
+                      Extracted Specimen Telemetry & Visual Biomarkers
+                    </h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200 uppercase">
+                      {analysisResult.visualMetrics.morphologyCategory.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Erythema Flare</div>
+                      <div className="text-base font-black text-rose-600 mt-0.5">
+                        {analysisResult.visualMetrics.erythemaIndex}
+                        <span className="text-[10px] text-slate-400 font-normal"> / 100</span>
+                      </div>
+                      <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                        <div className="bg-rose-500 h-full rounded-full" style={{ width: `${analysisResult.visualMetrics.erythemaIndex}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Melanin Pigment</div>
+                      <div className="text-base font-black text-amber-700 mt-0.5">
+                        {analysisResult.visualMetrics.pigmentationIndex}
+                        <span className="text-[10px] text-slate-400 font-normal"> / 100</span>
+                      </div>
+                      <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                        <div className="bg-amber-600 h-full rounded-full" style={{ width: `${analysisResult.visualMetrics.pigmentationIndex}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Asymmetry Rating</div>
+                      <div className="text-base font-black text-slate-800 mt-0.5">
+                        {analysisResult.visualMetrics.asymmetryScore}
+                        <span className="text-[10px] text-slate-400 font-normal"> / 100</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-1 font-medium truncate">
+                        {analysisResult.visualMetrics.asymmetryScore > 50 ? 'Dual-axis asymmetric' : 'Symmetric axes'}
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Border Irregularity</div>
+                      <div className="text-base font-black text-slate-800 mt-0.5">
+                        {analysisResult.visualMetrics.borderIrregularity}
+                        <span className="text-[10px] text-slate-400 font-normal"> / 100</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-1 font-medium truncate">
+                        {analysisResult.visualMetrics.borderIrregularity > 50 ? 'Notched / Scalloped' : 'Regular margins'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {analysisResult.visualMetrics.dominantColors && analysisResult.visualMetrics.dominantColors.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
+                      <span className="text-[11px] font-semibold text-slate-600">Dominant Spectrum:</span>
+                      {analysisResult.visualMetrics.dominantColors.map((col, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-100 text-xs text-slate-700 border border-slate-200">
+                          <span className="w-2.5 h-2.5 rounded-full border border-slate-300" style={{ backgroundColor: col.hex }} />
+                          <span>{col.name} ({col.percentage}%)</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Differential Diagnoses Card */}
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">

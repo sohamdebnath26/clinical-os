@@ -166,6 +166,19 @@ export interface DifferentialDiagnosis {
   rationale: string;
 }
 
+export interface VisualMorphologyMetrics {
+  erythemaIndex: number; // 0 - 100 (cutaneous redness / vascular inflammation)
+  pigmentationIndex: number; // 0 - 100 (melanin absorption depth)
+  asymmetryScore: number; // 0 - 100 (2-axis contour deviation)
+  borderIrregularity: number; // 0 - 100 (gradient edge roughness / scalloping)
+  colorVariationScore: number; // 0 - 100 (color diversity dispersion)
+  morphologyCategory: 'pigmented_melanocytic' | 'annular_scaling' | 'inflammatory_plaque' | 'papulopustular_follicular' | 'vesicular_bullous' | 'ulcerative_eroded' | 'urticarial_wheal' | 'keratotic_verrucous' | 'eczematous_dermatitis';
+  dominantColors: { hex: string; name: string; percentage: number }[];
+  estimatedDiameterMm?: number;
+  textureEntropy?: number;
+  perceivedSharpness?: number;
+}
+
 export interface AIImageAnalysisResult {
   id: string;
   primaryImpression: string;
@@ -180,6 +193,7 @@ export interface AIImageAnalysisResult {
   isAiPowered: boolean;
   patientId?: string;
   imageUrl?: string;
+  visualMetrics?: VisualMorphologyMetrics;
 }
 
 export interface ProgressionAnalysisResult {

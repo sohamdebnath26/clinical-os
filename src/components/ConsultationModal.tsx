@@ -5,6 +5,7 @@ import { BodyMap } from './BodyMap';
 import { ClinicalImageUploader } from './ClinicalImageUploader';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { analyzeImageVisualFeatures } from '../utils/visualImageAnalyzer';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import confetti from 'canvas-confetti';
 import {
@@ -240,12 +241,15 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const handleAnalyzeConsultationImage = async (image: ClinicalImage) => {
     setIsAnalyzingImage(true);
     setActiveAnalyzedImage(image);
+    setActiveImageAnalysis(null); // Clear previous image's results
     setError(null);
     try {
+      const visualMetrics = await analyzeImageVisualFeatures(image.url);
       const res = await api.ai.analyzeImage({
         imageBase64: image.url,
         mimeType: image.mimeType,
         patientId: patient.id,
+        visualMetrics,
         clinicalNotes: [
           clinicalNotes.examination ? `Examination: ${clinicalNotes.examination}` : '',
           symptoms.length > 0 ? `Symptoms: ${symptoms.join(', ')}` : '',

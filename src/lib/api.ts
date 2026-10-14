@@ -265,6 +265,7 @@ export const api = {
       patientId?: string;
       clinicalNotes?: string;
       imageUrl?: string;
+      visualMetrics?: import('../types').VisualMorphologyMetrics;
     }) =>
       fetchWithAuth<{ analysis: AIImageAnalysisResult; patient?: Patient }>('/api/ai/analyze-image', {
         method: 'POST',
