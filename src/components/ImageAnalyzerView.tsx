@@ -177,7 +177,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
       return;
     }
 
-    // Immediately clear ALL previous analysis, ABCDE scores, metrics, feedback
+    // Immediately clear ALL previous analysis, ABCDE scores, metrics, feedback, and notes
     setErrorMsg(null);
     setAnalysisResult(null);
     setVisualMetrics(null);
@@ -186,6 +186,8 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
     setSavedToGallery(false);
     setCopied(false);
     setActivePresetId(null);
+    setClinicalNotes('');
+    setAnatomicalSite('');
     setMimeType(file.type);
 
     const reader = new FileReader();
@@ -269,6 +271,8 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
       setSavedToGallery(false);
       setCopied(false);
       setActivePresetId(null);
+      setClinicalNotes('');
+      setAnatomicalSite('');
       setImageSrc(dataUrl);
       setMimeType('image/jpeg');
       setIsExtractingFeatures(true);

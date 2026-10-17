@@ -8,13 +8,19 @@ dotenv.config();
 let genAI: GoogleGenAI | null = null;
 
 function getAIClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+  const apiKey =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.API_KEY ||
+    process.env.GEMINI_KEY ||
+    process.env.VITE_GEMINI_API_KEY;
+
+  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim() === '') {
     return null;
   }
   if (!genAI) {
     genAI = new GoogleGenAI({
-      apiKey,
+      apiKey: apiKey.trim(),
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build'
@@ -26,7 +32,7 @@ function getAIClient(): GoogleGenAI | null {
 }
 
 async function generateWithGemini(ai: GoogleGenAI, prompt: string): Promise<string | null> {
-  const models = ['gemini-3.8-flash', 'gemini-flash-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
   for (const model of models) {
     try {
       const response = await ai.models.generateContent({
@@ -472,30 +478,36 @@ export function generateAdaptiveClinicalImageAnalysis(
   const notes = (params.clinicalNotes || '').toLowerCase();
   const pastDiagnoses = history.flatMap(c => c.diagnoses).map(d => d.toLowerCase());
 
-  // Allow doctor notes to refine category if specific clinical keywords match
-  let category = metrics.morphologyCategory;
-  if (notes.includes('eczema') || notes.includes('dermatitis') || notes.includes('atopic') || notes.includes('contact') || notes.includes('flexural') || notes.includes('xerosis')) {
-    category = 'eczematous_dermatitis';
-  } else if (notes.includes('psoriasis') || notes.includes('silvery') || notes.includes('plaque')) {
-    category = 'inflammatory_plaque';
-  } else if (notes.includes('ring') || notes.includes('fungal') || notes.includes('ringworm') || notes.includes('tinea') || notes.includes('annular') || notes.includes('circular')) {
-    category = 'annular_scaling';
-  } else if (notes.includes('acne') || notes.includes('pimple') || notes.includes('comedo') || notes.includes('blackhead') || notes.includes('rosacea') || notes.includes('pustule')) {
-    category = 'papulopustular_follicular';
-  } else if (notes.includes('shingles') || notes.includes('blister') || notes.includes('vesicle') || notes.includes('zoster') || notes.includes('herpes')) {
-    category = 'vesicular_bullous';
-  } else if (notes.includes('ulcer') || notes.includes('wound') || notes.includes('sore') || notes.includes('necrosis') || notes.includes('slough') || notes.includes('stasis')) {
-    category = 'ulcerative_eroded';
-  } else if (notes.includes('hive') || notes.includes('urticaria') || notes.includes('wheal') || notes.includes('welt')) {
-    category = 'urticarial_wheal';
-  } else if (notes.includes('wart') || notes.includes('verruca') || notes.includes('verrucous') || notes.includes('hyperkeratot')) {
-    category = 'keratotic_verrucous';
-  } else if (notes.includes('purpura') || notes.includes('vasculitis') || notes.includes('petechia')) {
-    category = 'vascular_purpuric';
-  } else if (notes.includes('vitiligo') || notes.includes('white patch') || notes.includes('hypopigment') || notes.includes('depigment') || notes.includes('versicolor')) {
-    category = 'hypopigmented_macular';
-  } else if (notes.includes('pigment') || notes.includes('mole') || notes.includes('nevus') || notes.includes('melanoma') || notes.includes('melanocytic') || notes.includes('dark spot')) {
-    category = 'pigmented_melanocytic';
+  // The visual morphology extracted from actual image pixels is the primary clinical ground truth.
+  // We only refine using doctor notes if the doctor explicitly indicated a diagnostic inquiry/suspicion,
+  // preventing incidental words like 'dermatitis' from overriding genuine visual features.
+  let category = metrics.morphologyCategory || 'eczematous_dermatitis';
+  const isDirectQuery = notes.startsWith('suspect') || notes.startsWith('query') || notes.includes('rule out') || notes.includes('dx:') || notes.includes('differential:');
+
+  if (isDirectQuery || category === 'eczematous_dermatitis') {
+    if (notes.includes('pigment') || notes.includes('mole') || notes.includes('nevus') || notes.includes('melanoma') || notes.includes('dark spot')) {
+      category = 'pigmented_melanocytic';
+    } else if (notes.includes('vitiligo') || notes.includes('white patch') || notes.includes('hypopigment') || notes.includes('depigment') || notes.includes('versicolor')) {
+      category = 'hypopigmented_macular';
+    } else if (notes.includes('ring') || notes.includes('ringworm') || notes.includes('tinea') || notes.includes('annular')) {
+      category = 'annular_scaling';
+    } else if (notes.includes('psoriasis') || notes.includes('silvery scale') || notes.includes('psoriatic')) {
+      category = 'inflammatory_plaque';
+    } else if (notes.includes('acne') || notes.includes('pustule') || notes.includes('comedo') || notes.includes('folliculitis')) {
+      category = 'papulopustular_follicular';
+    } else if (notes.includes('shingles') || notes.includes('blister') || notes.includes('vesicle') || notes.includes('zoster') || notes.includes('herpes')) {
+      category = 'vesicular_bullous';
+    } else if (notes.includes('ulcer') || notes.includes('wound') || notes.includes('slough') || notes.includes('venous stasis')) {
+      category = 'ulcerative_eroded';
+    } else if (notes.includes('hive') || notes.includes('urticaria') || notes.includes('wheal') || notes.includes('angioedema')) {
+      category = 'urticarial_wheal';
+    } else if (notes.includes('wart') || notes.includes('verruca') || notes.includes('verrucous')) {
+      category = 'keratotic_verrucous';
+    } else if (notes.includes('purpura') || notes.includes('vasculitis') || notes.includes('petechia')) {
+      category = 'vascular_purpuric';
+    } else if (notes.includes('atopic dermatitis') || notes.includes('eczema flare') || notes.includes('contact dermatitis') || notes.includes('flexural dermatitis')) {
+      category = 'eczematous_dermatitis';
+    }
   }
 
   let primaryImpression = '';
@@ -1203,7 +1215,7 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
   "disclaimer": "Diagnostic decision support only. Physician clinical judgment is required."
 }`;
 
-      const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+      const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
       for (const model of models) {
         try {
           const response = await ai.models.generateContent({
@@ -1338,7 +1350,7 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
   "disclaimer": "Diagnostic progression decision support only. Physician clinical judgment is required."
 }`;
 
-      const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+      const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
       for (const model of models) {
         try {
           const response = await ai.models.generateContent({
@@ -1528,7 +1540,7 @@ Return ONLY a raw JSON object (strictly no markdown, no code fences):
   "disclaimer": "Clinical decision support only. Definitive diagnosis requires in-person dermoscopy and histopathology when indicated."
 }`;
 
-      const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+      const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
       for (const model of models) {
         try {
           const response = await ai.models.generateContent({
