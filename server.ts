@@ -931,7 +931,13 @@ app.get('/api/dashboard/stats', authMiddleware, (req, res) => {
   const stats = db.getStats();
   const recentVisits = db.getRecentVisits(8);
   const recentPatients = db.getRecentPatients(8);
-  res.json({ stats, recentVisits, recentPatients });
+  const revenue = db.getPracticeRevenueAnalytics();
+  res.json({ stats, recentVisits, recentPatients, revenue });
+});
+
+app.get('/api/dashboard/revenue', authMiddleware, (req, res) => {
+  const revenue = db.getPracticeRevenueAnalytics();
+  res.json({ revenue });
 });
 
 app.get('/api/audit', authMiddleware, (req, res) => {

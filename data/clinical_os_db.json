@@ -120,7 +120,14 @@
         "Skin tags / Moles"
       ],
       "tests": [],
-      "procedures": [],
+      "procedures": [
+        {
+          "id": "proc-rf-01",
+          "name": "Radiofrequency Cauterisation (Skin tags / Moles)",
+          "cost": 800,
+          "notes": "Complete ablation of 6 lesions"
+        }
+      ],
       "clinicalNotes": {
         "examination": "",
         "investigationsAdvised": "",
@@ -154,7 +161,14 @@
         "Post-treatment follow-up"
       ],
       "tests": [],
-      "procedures": [],
+      "procedures": [
+        {
+          "id": "proc-dress-01",
+          "name": "Dressing — antiseptic & non-adherent",
+          "cost": 200,
+          "notes": "Follow-up wound dressing"
+        }
+      ],
       "clinicalNotes": {
         "examination": "",
         "investigationsAdvised": "",
@@ -297,6 +311,72 @@
       "aiSummary": "",
       "createdAt": "2026-10-17T18:07:18.243Z",
       "updatedAt": "2026-10-17T18:07:18.243Z"
+    },
+    {
+      "id": "con-kabir-01",
+      "patientId": "pat-mv0er2l2-uln3",
+      "patientCode": "P-24619",
+      "patientName": "Kabir Kashyap",
+      "patientAge": 28,
+      "patientGender": "male",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "consultationDate": "2026-10-15T10:30:00.000Z",
+      "status": "signed",
+      "fee": 500,
+      "symptoms": [
+        "Severe cystic acne",
+        "Facial comedones"
+      ],
+      "diagnoses": [
+        "Acne Vulgaris (Grade III)",
+        "Post-inflammatory Erythema"
+      ],
+      "tests": [
+        "Serum Free Testosterone",
+        "Liver Function Panel"
+      ],
+      "procedures": [
+        {
+          "id": "proc-comedone-01",
+          "name": "Comedone extraction",
+          "cost": 350,
+          "notes": "Closed & open comedones extraction"
+        },
+        {
+          "id": "proc-peel-01",
+          "name": "Chemical Peel (Salicylic / Glycolic)",
+          "cost": 1500,
+          "notes": "20% Salicylic acid superficial peel"
+        }
+      ],
+      "clinicalNotes": {
+        "examination": "Multiple inflammatory papulopustules across bilateral cheeks with deep comedones.",
+        "investigationsAdvised": "Hormonal workup and baseline LFT.",
+        "plan": "Initiate oral minocycline 100mg and topical adapalene 0.1%."
+      },
+      "bodyMarkers": [],
+      "images": [],
+      "followUp": {
+        "date": "2026-11-01",
+        "instructions": "Review peel response and comedone clearance in 2 weeks"
+      },
+      "prescriptions": [
+        {
+          "id": "rx-kabir-01",
+          "patientId": "pat-mv0er2l2-uln3",
+          "medicineName": "Minocycline 100mg",
+          "dosage": "1 capsule",
+          "frequency": "Once daily with food",
+          "duration": "30 days",
+          "instructions": "Do not lie down for 30 minutes after taking",
+          "date": "2026-10-15T10:30:00.000Z",
+          "createdAt": "2026-10-15T10:30:00.000Z"
+        }
+      ],
+      "aiSummary": "Acne Vulgaris Grade III managed with chemical peel and comedone extraction.",
+      "createdAt": "2026-10-15T10:30:00.000Z",
+      "updatedAt": "2026-10-15T10:30:00.000Z"
     }
   ],
   "prescriptions": [],
@@ -939,7 +1019,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-17T18:07:18.243Z"
+    "updatedAt": "2026-10-17T18:53:05.491Z"
   },
   "appointments": [
     {
@@ -961,6 +1041,26 @@
       "notes": "",
       "createdAt": "2026-10-07T11:38:20.746Z",
       "updatedAt": "2026-10-07T11:38:20.746Z"
+    },
+    {
+      "id": "apt-fup-con-kabir-01",
+      "patientId": "pat-mv0er2l2-uln3",
+      "patientCode": "P-24619",
+      "patientName": "Kabir Kashyap",
+      "patientAge": 28,
+      "patientGender": "male",
+      "patientMobile": "1212121212",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "date": "2026-11-01",
+      "time": "10:00 AM",
+      "type": "follow_up",
+      "status": "scheduled",
+      "consultationId": "con-kabir-01",
+      "instructions": "Review peel response and comedone clearance in 2 weeks",
+      "notes": "",
+      "createdAt": "2026-10-15T10:30:00.000Z",
+      "updatedAt": "2026-10-15T10:30:00.000Z"
     }
   ]
 }

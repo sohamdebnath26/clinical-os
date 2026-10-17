@@ -280,3 +280,74 @@ export interface VisitComparisonResult {
   analyzedAt: string;
 }
 
+export interface ProcedureRevenueItem {
+  id: string;
+  name: string;
+  cost: number;
+  date: string;
+  consultationId: string;
+}
+
+export interface PatientVisitRevenueItem {
+  consultationId: string;
+  date: string;
+  doctorName: string;
+  fee: number;
+  diagnoses: string[];
+  procedures: ProcedureItem[];
+  totalAmount: number;
+}
+
+export interface PatientRevenueBreakdown {
+  patientId: string;
+  patientName: string;
+  patientCode: string;
+  gender: string;
+  age: number;
+  totalRevenue: number;
+  consultationRevenue: number;
+  procedureRevenue: number;
+  visitCount: number;
+  procedureCount: number;
+  lastVisitDate: string;
+  visits: PatientVisitRevenueItem[];
+  proceduresList: ProcedureRevenueItem[];
+}
+
+export interface DailyRevenuePoint {
+  date: string;
+  dayLabel: string;
+  consultationRevenue: number;
+  procedureRevenue: number;
+  totalRevenue: number;
+  visitCount: number;
+}
+
+export interface MonthlyRevenuePoint {
+  month: string;
+  monthLabel: string;
+  consultationRevenue: number;
+  procedureRevenue: number;
+  totalRevenue: number;
+  uniquePatients: number;
+  visitCount: number;
+}
+
+export interface PracticeRevenueAnalytics {
+  dailyTotalRevenue: number;
+  yesterdayRevenue: number;
+  dailyChangePercent: number;
+  monthlyRecurringRevenue: number;
+  lastMonthRevenue: number;
+  mrrGrowthPercent: number;
+  currentMonthRevenue: number;
+  allTimeRevenue: number;
+  totalConsultationsRevenue: number;
+  totalProceduresRevenue: number;
+  totalProceduresCount: number;
+  activeBillingPatientsCount: number;
+  avgRevenuePerPatient: number;
+  dailyTrend: DailyRevenuePoint[];
+  monthlyTrend: MonthlyRevenuePoint[];
+  patientBreakdown: PatientRevenueBreakdown[];
+}

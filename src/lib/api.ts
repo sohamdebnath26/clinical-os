@@ -321,7 +321,12 @@ export const api = {
         stats: ClinicStats;
         recentVisits: Consultation[];
         recentPatients: Patient[];
+        revenue?: import('../types').PracticeRevenueAnalytics;
       }>('/api/dashboard/stats'),
+    getRevenue: () =>
+      fetchWithAuth<{
+        revenue: import('../types').PracticeRevenueAnalytics;
+      }>('/api/dashboard/revenue'),
   },
 
   reports: {

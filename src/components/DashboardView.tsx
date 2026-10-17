@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ClinicStats, Consultation, Patient, Appointment } from '../types';
+import { ClinicStats, Consultation, Patient, Appointment, PracticeRevenueAnalytics } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { api } from '../lib/api';
+import { PracticeRevenueWidget } from './PracticeRevenueWidget';
 import {
   UserPlus,
   Users,
@@ -35,12 +36,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const { doctor } = useAuth();
   const { t, language } = useLanguage();
   const [stats, setStats] = useState<ClinicStats | null>(null);
+  const [revenue, setRevenue] = useState<PracticeRevenueAnalytics | null>(null);
   const [recentVisits, setRecentVisits] = useState<Consultation[]>([]);
   const [recentPatients, setRecentPatients] = useState<Patient[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+  const loadDashboardData = () => {
     Promise.all([
       api.dashboard.getStats(),
       api.appointments.list()
@@ -49,6 +51,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         setStats(dashRes.stats);
         setRecentVisits(dashRes.recentVisits);
         setRecentPatients(dashRes.recentPatients);
+        if (dashRes.revenue) {
+          setRevenue(dashRes.revenue);
+        }
         setAppointments(apptRes.appointments);
       })
       .catch(err => {
@@ -57,6 +62,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       .finally(() => {
         setIsLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadDashboardData();
   }, []);
 
   // Compute greeting based on time of day and language
@@ -181,6 +190,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <span className="text-xs text-slate-500 block">prescribed regimens</span>
         </div>
       </div>
+
+      {/* Practice Revenue & Financial Performance Dashboard Widget */}
+      <PracticeRevenueWidget
+        revenue={revenue}
+        onSelectPatient={onSelectPatient}
+        onRefresh={loadDashboardData}
+      />
 
       {/* Upcoming Appointments & Follow-ups Registry Card */}
       {(() => {
