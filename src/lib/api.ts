@@ -302,6 +302,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    compareVisits: (data: {
+      visitAId: string;
+      visitBId: string;
+      patientId: string;
+    }) =>
+      fetchWithAuth<{ comparison: import('../types').VisitComparisonResult }>('/api/ai/compare-visits', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
 
 

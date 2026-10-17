@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { db } from './server/db.js';
-import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis } from './server/ai.js';
+import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits } from './server/ai.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -828,6 +828,58 @@ app.post('/api/ai/assess-abcde', authMiddleware, async (req: AuthenticatedReques
   } catch (err: unknown) {
     console.error('ABCDE assessment error:', err);
     const message = err instanceof Error ? err.message : 'Failed to assess dermoscopic ABCDE';
+    res.status(500).json({ error: message });
+  }
+});
+
+// ==========================================
+// VISIT & CLINICAL REPORT COMPARISON
+// ==========================================
+app.post('/api/ai/compare-visits', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const { visitAId, visitBId, patientId } = req.body;
+
+  if (!visitAId || !visitBId || !patientId) {
+    return res.status(400).json({ error: 'visitAId, visitBId, and patientId are required' });
+  }
+
+  const patient = db.findPatientById(patientId);
+  if (!patient) {
+    return res.status(404).json({ error: 'Patient not found' });
+  }
+
+  const visitA = db.getConsultationById(visitAId);
+  const visitB = db.getConsultationById(visitBId);
+
+  if (!visitA || !visitB) {
+    return res.status(404).json({ error: 'One or both consultation visits not found' });
+  }
+
+  try {
+    const comparison = await comparePatientVisits({
+      visitA,
+      visitB,
+      patient
+    });
+
+    const doctor = req.doctor!;
+    db.logAudit({
+      actorId: doctor.id,
+      actorName: doctor.name,
+      action: 'ai_longitudinal_visits_compared',
+      resourceType: 'consultation_comparison',
+      resourceId: comparison.id,
+      metadata: {
+        patientId: patient.id,
+        visitAId,
+        visitBId,
+        overallStatus: comparison.overallStatus
+      }
+    });
+
+    res.json({ comparison });
+  } catch (err: unknown) {
+    console.error('Visit comparison error:', err);
+    const message = err instanceof Error ? err.message : 'Failed to compare patient visits';
     res.status(500).json({ error: message });
   }
 });

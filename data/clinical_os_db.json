@@ -268,12 +268,63 @@
       "createdAt": "2026-10-09T03:22:25.499Z",
       "updatedAt": "2026-10-09T03:22:27.503Z",
       "signedAt": "2026-10-09T03:22:27.503Z"
+    },
+    {
+      "id": "con-mvcpl8tf-k4wu",
+      "patientId": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "patientName": "Harman",
+      "patientAge": 25,
+      "patientGender": "Male",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "consultationDate": "2026-10-17T18:07:18.243Z",
+      "status": "draft",
+      "fee": 500,
+      "symptoms": [],
+      "diagnoses": [],
+      "tests": [],
+      "procedures": [],
+      "clinicalNotes": {
+        "examination": "",
+        "investigationsAdvised": "",
+        "plan": ""
+      },
+      "bodyMarkers": [],
+      "images": [],
+      "followUp": {},
+      "prescriptions": [],
+      "aiSummary": "",
+      "createdAt": "2026-10-17T18:07:18.243Z",
+      "updatedAt": "2026-10-17T18:07:18.243Z"
     }
   ],
   "prescriptions": [],
   "bodyMarkers": [],
   "clinicalImages": [],
   "auditLogs": [
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_started",
+      "resourceType": "consultation",
+      "resourceId": "con-mvcpl8tf-k4wu",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618"
+      },
+      "id": "aud-mvcpl8tf-sl6w",
+      "timestamp": "2026-10-17T18:07:18.243Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mvcpksdi-wmf5",
+      "timestamp": "2026-10-17T18:06:56.934Z"
+    },
     {
       "actorId": "doc-demo-001",
       "actorName": "Dr. Demo",
@@ -888,7 +939,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-17T17:58:11.518Z"
+    "updatedAt": "2026-10-17T18:07:18.243Z"
   },
   "appointments": [
     {

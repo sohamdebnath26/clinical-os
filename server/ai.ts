@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { Consultation, Patient, AIImageAnalysisResult, DifferentialDiagnosis, ProgressionAnalysisResult, ABCDEScoreResult, VisualMorphologyMetrics } from '../src/types/index.js';
+import { Consultation, Patient, AIImageAnalysisResult, DifferentialDiagnosis, ProgressionAnalysisResult, ABCDEScoreResult, VisualMorphologyMetrics, VisitComparisonResult } from '../src/types/index.js';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 
@@ -1609,5 +1609,184 @@ Return ONLY a raw JSON object (strictly no markdown, no code fences):
 
   return generateABCDEFallback(params);
 }
+
+// ==========================================
+// LONGITUDINAL VISIT & REPORT COMPARISON
+// ==========================================
+
+export interface CompareVisitsParams {
+  visitA: Consultation;
+  visitB: Consultation;
+  patient: Patient;
+}
+
+export function generateVisitComparisonFallback(params: CompareVisitsParams): VisitComparisonResult {
+  const { visitA, visitB, patient } = params;
+  const dateA = new Date(visitA.consultationDate).getTime();
+  const dateB = new Date(visitB.consultationDate).getTime();
+  const intervalDays = Math.max(0, Math.round(Math.abs(dateB - dateA) / (1000 * 60 * 60 * 24)));
+
+  const resolvedSymptoms = (visitA.symptoms || []).filter(
+    s => !(visitB.symptoms || []).some(sb => sb.toLowerCase().trim() === s.toLowerCase().trim())
+  );
+  const persistentSymptoms = (visitA.symptoms || []).filter(
+    s => (visitB.symptoms || []).some(sb => sb.toLowerCase().trim() === s.toLowerCase().trim())
+  );
+  const newSymptoms = (visitB.symptoms || []).filter(
+    s => !(visitA.symptoms || []).some(sa => sa.toLowerCase().trim() === s.toLowerCase().trim())
+  );
+
+  const resolvedDiagnoses = (visitA.diagnoses || []).filter(
+    d => !(visitB.diagnoses || []).some(db => db.toLowerCase().trim() === d.toLowerCase().trim())
+  );
+  const persistentDiagnoses = (visitA.diagnoses || []).filter(
+    d => (visitB.diagnoses || []).some(db => db.toLowerCase().trim() === d.toLowerCase().trim())
+  );
+  const newDiagnoses = (visitB.diagnoses || []).filter(
+    d => !(visitA.diagnoses || []).some(da => da.toLowerCase().trim() === d.toLowerCase().trim())
+  );
+
+  const rxA = visitA.prescriptions || [];
+  const rxB = visitB.prescriptions || [];
+
+  const addedMeds = rxB
+    .filter(pb => !rxA.some(pa => pa.medicineName.toLowerCase().trim() === pb.medicineName.toLowerCase().trim()))
+    .map(p => `${p.medicineName} (${p.dosage}, ${p.frequency})`);
+
+  const continuedMeds = rxB
+    .filter(pb => rxA.some(pa => pa.medicineName.toLowerCase().trim() === pb.medicineName.toLowerCase().trim()))
+    .map(p => `${p.medicineName} (${p.dosage}, ${p.frequency})`);
+
+  const discontinuedMeds = rxA
+    .filter(pa => !rxB.some(pb => pb.medicineName.toLowerCase().trim() === pa.medicineName.toLowerCase().trim()))
+    .map(p => `${p.medicineName} (${p.dosage}, ${p.frequency})`);
+
+  let overallStatus: VisitComparisonResult['overallStatus'] = 'Moderate Improvement';
+  if (resolvedSymptoms.length > 0 && newSymptoms.length === 0) {
+    overallStatus = 'Marked Improvement';
+  } else if (newSymptoms.length > 0 && resolvedSymptoms.length === 0) {
+    overallStatus = 'Mild Progression / Worsening';
+  } else if (persistentSymptoms.length > 0 && newSymptoms.length === 0 && resolvedSymptoms.length === 0) {
+    overallStatus = 'Stable / Unchanged';
+  }
+
+  const summaryText =
+    `Longitudinal encounter comparison over a ${intervalDays}-day clinical interval for ${patient.fullName}. ` +
+    (resolvedSymptoms.length > 0 ? `Demonstrated positive therapeutic progression with remission of [${resolvedSymptoms.join(', ')}]. ` : '') +
+    (persistentSymptoms.length > 0 ? `Ongoing active symptoms noted: [${persistentSymptoms.join(', ')}]. ` : 'No ongoing baseline complaints documented. ') +
+    (newSymptoms.length > 0 ? `Newly reported findings include [${newSymptoms.join(', ')}]. ` : '') +
+    `Medication regimen includes ${addedMeds.length} adjusted/added therapeutic agent(s) and ${continuedMeds.length} maintenance agent(s).`;
+
+  const recommendations = [
+    'Monitor patient response to newly instituted or adjusted prescription regimen over 2-4 weeks',
+    'Verify treatment compliance and evaluate for cutaneous barrier recovery or adverse drug reactions',
+    'Review scheduled diagnostic investigations and schedule follow-up encounter accordingly'
+  ];
+
+  return {
+    id: `comp_${Date.now()}`,
+    intervalDays,
+    overallStatus,
+    summaryText,
+    resolvedSymptoms,
+    persistentSymptoms,
+    newSymptoms,
+    diagnosticEvolution: {
+      resolved: resolvedDiagnoses,
+      persistent: persistentDiagnoses,
+      newDiagnoses: newDiagnoses
+    },
+    medicationChanges: {
+      added: addedMeds,
+      continued: continuedMeds,
+      discontinued: discontinuedMeds
+    },
+    investigationsComparison: {
+      visitATests: visitA.tests || [],
+      visitBTests: visitB.tests || [],
+      notesDiff: `Visit A: ${visitA.clinicalNotes?.examination || 'None recorded'} | Visit B: ${visitB.clinicalNotes?.examination || 'None recorded'}`
+    },
+    recommendations,
+    isAiPowered: false,
+    analyzedAt: new Date().toISOString()
+  };
+}
+
+export async function comparePatientVisits(params: CompareVisitsParams): Promise<VisitComparisonResult> {
+  const ai = getAIClient();
+  const fallback = generateVisitComparisonFallback(params);
+
+  if (ai) {
+    try {
+      const prompt = `You are a clinical decision support system assisting a physician with a comprehensive longitudinal comparison between two patient visits.
+
+PATIENT:
+Name: ${params.patient.fullName}, Age: ${params.patient.age}y, Gender: ${params.patient.gender}, ID: ${params.patient.patientCode}
+
+VISIT 1 (EARLIER ENCOUNTER):
+Date: ${params.visitA.consultationDate}
+Doctor: ${params.visitA.doctorName}
+Diagnoses: ${params.visitA.diagnoses.join(', ') || 'None documented'}
+Symptoms / Chief Complaints: ${params.visitA.symptoms.join(', ') || 'None recorded'}
+Physical Examination Notes: ${params.visitA.clinicalNotes?.examination || 'None'}
+Investigations / Lab Tests Advised: ${params.visitA.tests?.join(', ') || 'None'} (${params.visitA.clinicalNotes?.investigationsAdvised || ''})
+Prescriptions: ${params.visitA.prescriptions.map(p => `${p.medicineName} ${p.dosage} ${p.frequency}`).join('; ') || 'None'}
+Plan: ${params.visitA.clinicalNotes?.plan || 'None'}
+
+VISIT 2 (FOLLOW-UP / SUBSEQUENT ENCOUNTER):
+Date: ${params.visitB.consultationDate}
+Doctor: ${params.visitB.doctorName}
+Diagnoses: ${params.visitB.diagnoses.join(', ') || 'None documented'}
+Symptoms / Chief Complaints: ${params.visitB.symptoms.join(', ') || 'None recorded'}
+Physical Examination Notes: ${params.visitB.clinicalNotes?.examination || 'None'}
+Investigations / Lab Tests Advised: ${params.visitB.tests?.join(', ') || 'None'} (${params.visitB.clinicalNotes?.investigationsAdvised || ''})
+Prescriptions: ${params.visitB.prescriptions.map(p => `${p.medicineName} ${p.dosage} ${p.frequency}`).join('; ') || 'None'}
+Plan: ${params.visitB.clinicalNotes?.plan || 'None'}
+
+INTERVAL: ${fallback.intervalDays} days.
+
+Compare these encounters and return strictly valid raw JSON (no markdown formatting, no code fences):
+{
+  "overallStatus": "One of: Marked Improvement, Moderate Improvement, Stable / Unchanged, Mild Progression / Worsening, Significant Flare / Deterioration",
+  "summaryText": "Concise executive synthesis comparing interval progress, treatment response, and diagnostic evolution",
+  "recommendations": [
+    "Actionable clinical recommendation 1",
+    "Actionable clinical recommendation 2"
+  ]
+}`;
+
+      const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+      for (const model of models) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: prompt
+          });
+          const text = response.text?.trim();
+          if (text) {
+            const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+            const parsed = JSON.parse(cleaned);
+
+            return {
+              ...fallback,
+              overallStatus: parsed.overallStatus || fallback.overallStatus,
+              summaryText: parsed.summaryText || fallback.summaryText,
+              recommendations: Array.isArray(parsed.recommendations) && parsed.recommendations.length > 0 ? parsed.recommendations : fallback.recommendations,
+              isAiPowered: true,
+              analyzedAt: new Date().toISOString()
+            };
+          }
+        } catch (err) {
+          console.warn(`Gemini visit comparison model ${model} failed:`, err);
+        }
+      }
+    } catch (err) {
+      console.error('Gemini visit comparison error:', err);
+    }
+  }
+
+  return fallback;
+}
+
 
 

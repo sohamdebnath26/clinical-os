@@ -252,3 +252,31 @@ export interface ClinicStats {
   activePrescriptions: number;
 }
 
+export interface VisitComparisonResult {
+  id: string;
+  intervalDays: number;
+  overallStatus: 'Marked Improvement' | 'Moderate Improvement' | 'Stable / Unchanged' | 'Mild Progression / Worsening' | 'Significant Flare / Deterioration';
+  summaryText: string;
+  resolvedSymptoms: string[];
+  persistentSymptoms: string[];
+  newSymptoms: string[];
+  diagnosticEvolution: {
+    resolved: string[];
+    persistent: string[];
+    newDiagnoses: string[];
+  };
+  medicationChanges: {
+    added: string[];
+    continued: string[];
+    discontinued: string[];
+  };
+  investigationsComparison: {
+    visitATests: string[];
+    visitBTests: string[];
+    notesDiff: string;
+  };
+  recommendations: string[];
+  isAiPowered: boolean;
+  analyzedAt: string;
+}
+

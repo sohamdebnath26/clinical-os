@@ -9,6 +9,7 @@ import { MarkdownView } from './MarkdownView';
 import { LesionProgressionModal } from './LesionProgressionModal';
 import { WhatsAppShareModal, WhatsAppIcon, WhatsAppReportType } from './WhatsAppShareModal';
 import { PatientVitalsChart } from './PatientVitalsChart';
+import { VisitComparisonSection } from './VisitComparisonSection';
 import { useAuth } from '../context/AuthContext';
 import {
   ArrowLeft,
@@ -383,6 +384,20 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Visit & Clinical Report Comparison (Longitudinal Tracking) */}
+            <VisitComparisonSection
+              patient={patient}
+              consultations={consultations}
+              images={images}
+              onStartConsultation={onStartConsultation}
+              onRefreshData={loadPatientData}
+              onOpenWhatsApp={(data) => setWhatsAppData({
+                isOpen: true,
+                reportType: 'consultation_summary',
+                data: { consultation: data.consultation }
+              })}
+            />
 
             {/* Medical History, Medications & Allergies */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
