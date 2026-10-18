@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { PracticeRevenueAnalytics, PatientRevenueBreakdown } from '../types';
+import { PracticeRevenueAnalytics, DailyRevenuePoint, MonthlyRevenuePoint } from '../types';
 import {
   TrendingUp,
   TrendingDown,
@@ -9,33 +9,12 @@ import {
   ChevronDown,
   ChevronUp,
   Search,
-  Filter,
-  Download,
   Printer,
-  DollarSign,
-  Activity,
-  Layers,
-  ArrowRight,
-  Sparkles,
-  Receipt,
   FileSpreadsheet,
-  CheckCircle2,
-  Clock,
-  PieChart as PieChartIcon,
-  BarChart3
+  Receipt,
+  BarChart3,
+  ArrowRight
 } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  AreaChart,
-  Area,
-  CartesianGrid
-} from 'recharts';
 
 interface PracticeRevenueWidgetProps {
   revenue: PracticeRevenueAnalytics | null;
@@ -43,10 +22,463 @@ interface PracticeRevenueWidgetProps {
   onRefresh?: () => void;
 }
 
+// Native high-fidelity SVG Stacked Bar Chart for 14-day daily trend
+const DailyStackedBarChart: React.FC<{ data: DailyRevenuePoint[] }> = ({ data }) => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const maxVal = useMemo(() => {
+    const highest = Math.max(...data.map(d => d.totalRevenue), 0);
+    if (highest <= 0) return 1000;
+    // Round up to nice number
+    if (highest <= 1000) return 1000;
+    if (highest <= 2500) return 2500;
+    if (highest <= 5000) return 5000;
+    return Math.ceil(highest / 1000) * 1000;
+  }, [data]);
+
+  const vbWidth = 720;
+  const vbHeight = 210;
+  const padLeft = 55;
+  const padRight = 20;
+  const padTop = 20;
+  const padBottom = 35;
+  const chartW = vbWidth - padLeft - padRight;
+  const chartH = vbHeight - padTop - padBottom;
+
+  const count = Math.max(1, data.length);
+  const colWidth = chartW / count;
+  const barW = Math.min(26, Math.max(14, colWidth * 0.55));
+
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(ratio => ({
+    val: Math.round(maxVal * ratio),
+    y: padTop + chartH - chartH * ratio
+  }));
+
+  const activeItem = hoveredIndex !== null && data[hoveredIndex] ? data[hoveredIndex] : null;
+
+  return (
+    <div className="w-full h-full flex flex-col justify-between select-none">
+      <div className="relative w-full h-[185px]">
+        <svg
+          viewBox={`0 0 ${vbWidth} ${vbHeight}`}
+          className="w-full h-full overflow-visible"
+          preserveAspectRatio="none"
+        >
+          {/* Horizontal Grid lines & Y Axis Ticks */}
+          {yTicks.map((tick, i) => (
+            <g key={i}>
+              <line
+                x1={padLeft}
+                y1={tick.y}
+                x2={vbWidth - padRight}
+                y2={tick.y}
+                stroke={i === 0 ? '#cbd5e1' : '#f1f5f9'}
+                strokeWidth={i === 0 ? 1.5 : 1}
+                strokeDasharray={i === 0 ? 'none' : '3 3'}
+              />
+              <text
+                x={padLeft - 8}
+                y={tick.y + 3.5}
+                textAnchor="end"
+                className="text-[10px] fill-slate-400 font-mono font-medium"
+              >
+                ₹{tick.val >= 1000 ? `${(tick.val / 1000).toFixed(tick.val % 1000 === 0 ? 0 : 1)}k` : tick.val}
+              </text>
+            </g>
+          ))}
+
+          {/* Bars */}
+          {data.map((d, idx) => {
+            const xCenter = padLeft + idx * colWidth + colWidth / 2;
+            const xBar = xCenter - barW / 2;
+
+            const consultRatio = Math.min(1, Math.max(0, d.consultationRevenue / maxVal));
+            const procRatio = Math.min(1, Math.max(0, d.procedureRevenue / maxVal));
+
+            const hConsult = chartH * consultRatio;
+            const hProc = chartH * procRatio;
+
+            const yConsult = padTop + chartH - hConsult;
+            const yProc = yConsult - hProc;
+
+            const isHovered = hoveredIndex === idx;
+
+            // Short label (e.g. "Oct 15" or "15")
+            const labelParts = d.dayLabel ? d.dayLabel.split(',') : [d.date];
+            const shortDay = labelParts[1] ? labelParts[1].trim() : d.date.slice(5);
+
+            return (
+              <g
+                key={d.date}
+                className="cursor-pointer group"
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                {/* Column background hover highlight */}
+                <rect
+                  x={padLeft + idx * colWidth}
+                  y={padTop}
+                  width={colWidth}
+                  height={chartH}
+                  fill={isHovered ? 'rgba(15, 118, 110, 0.08)' : 'transparent'}
+                  rx={4}
+                  className="transition-colors duration-150"
+                />
+
+                {/* Consultation Bar (Bottom - Teal) */}
+                {hConsult > 0 && (
+                  <rect
+                    x={xBar}
+                    y={yConsult}
+                    width={barW}
+                    height={hConsult}
+                    fill={isHovered ? '#0d9488' : '#0f766e'}
+                    rx={hProc > 0 ? 0 : 3}
+                    className="transition-all duration-150"
+                  />
+                )}
+
+                {/* Procedure Bar (Stacked on top - Amber) */}
+                {hProc > 0 && (
+                  <rect
+                    x={xBar}
+                    y={yProc}
+                    width={barW}
+                    height={hProc}
+                    fill={isHovered ? '#fbbf24' : '#f59e0b'}
+                    rx={3}
+                    className="transition-all duration-150"
+                  />
+                )}
+
+                {/* Baseline zero dot if 0 revenue */}
+                {d.totalRevenue === 0 && (
+                  <circle
+                    cx={xCenter}
+                    cy={padTop + chartH - 2}
+                    r={2}
+                    fill={isHovered ? '#0f766e' : '#cbd5e1'}
+                  />
+                )}
+
+                {/* X Axis Date label */}
+                <text
+                  x={xCenter}
+                  y={vbHeight - padBottom + 16}
+                  textAnchor="middle"
+                  className={`text-[9.5px] font-medium transition-colors ${
+                    isHovered ? 'fill-teal-900 font-bold' : 'fill-slate-500'
+                  }`}
+                >
+                  {shortDay}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Dynamic Tooltip on Hover */}
+        {activeItem && hoveredIndex !== null && (
+          <div
+            className="absolute -top-3 z-20 pointer-events-none transform -translate-x-1/2 transition-all duration-150"
+            style={{
+              left: `${((padLeft + hoveredIndex * colWidth + colWidth / 2) / vbWidth) * 100}%`
+            }}
+          >
+            <div className="bg-slate-900 text-white rounded-xl shadow-xl px-3 py-2 text-xs border border-slate-800 space-y-1 min-w-[150px]">
+              <div className="font-bold text-[11px] text-teal-300 border-b border-slate-800 pb-1">
+                {activeItem.dayLabel || activeItem.date}
+              </div>
+              <div className="flex items-center justify-between gap-3 text-[11px]">
+                <span className="flex items-center gap-1.5 text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-teal-400 inline-block" />
+                  Consultation
+                </span>
+                <span className="font-mono font-bold text-white">
+                  ₹{activeItem.consultationRevenue.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 text-[11px]">
+                <span className="flex items-center gap-1.5 text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                  Procedures
+                </span>
+                <span className="font-mono font-bold text-white">
+                  ₹{activeItem.procedureRevenue.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 text-[11px] pt-1 border-t border-slate-800">
+                <span className="font-semibold text-slate-200">Daily Total:</span>
+                <span className="font-mono font-black text-emerald-400">
+                  ₹{activeItem.totalRevenue.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="text-[9.5px] text-slate-400 text-right">
+                {activeItem.visitCount} visit(s)
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Interactive Legend */}
+      <div className="flex items-center justify-center gap-6 pt-1 text-[11px] font-semibold text-slate-600">
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm bg-teal-700 shadow-2xs inline-block" />
+          <span>Consultation Fees</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm bg-amber-500 shadow-2xs inline-block" />
+          <span>Clinical Procedure Fees</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Native high-fidelity SVG Smooth Area Chart for 6-month MRR trend
+const MonthlyMRRAreaChart: React.FC<{ data: MonthlyRevenuePoint[] }> = ({ data }) => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const maxVal = useMemo(() => {
+    const highest = Math.max(...data.map(d => d.totalRevenue), 0);
+    if (highest <= 0) return 2000;
+    if (highest <= 2000) return 2000;
+    if (highest <= 5000) return 5000;
+    return Math.ceil(highest / 1000) * 1000;
+  }, [data]);
+
+  const vbWidth = 720;
+  const vbHeight = 210;
+  const padLeft = 55;
+  const padRight = 25;
+  const padTop = 20;
+  const padBottom = 35;
+  const chartW = vbWidth - padLeft - padRight;
+  const chartH = vbHeight - padTop - padBottom;
+
+  const count = Math.max(1, data.length);
+  const stepX = count > 1 ? chartW / (count - 1) : chartW;
+
+  const points = data.map((d, idx) => {
+    const x = padLeft + idx * stepX;
+    const ratio = Math.min(1, Math.max(0, d.totalRevenue / maxVal));
+    const y = padTop + chartH - chartH * ratio;
+    return { x, y, d, idx };
+  });
+
+  // Build smooth bezier SVG path
+  const pathD = useMemo(() => {
+    if (points.length === 0) return '';
+    if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i];
+      const p1 = points[i + 1];
+      const cpX1 = p0.x + (p1.x - p0.x) / 2;
+      const cpY1 = p0.y;
+      const cpX2 = p0.x + (p1.x - p0.x) / 2;
+      const cpY2 = p1.y;
+      d += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p1.x} ${p1.y}`;
+    }
+    return d;
+  }, [points]);
+
+  const areaD = useMemo(() => {
+    if (points.length < 2) return '';
+    const last = points[points.length - 1];
+    const first = points[0];
+    const baselineY = padTop + chartH;
+    return `${pathD} L ${last.x} ${baselineY} L ${first.x} ${baselineY} Z`;
+  }, [pathD, points]);
+
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(ratio => ({
+    val: Math.round(maxVal * ratio),
+    y: padTop + chartH - chartH * ratio
+  }));
+
+  const activePoint = hoveredIndex !== null && points[hoveredIndex] ? points[hoveredIndex] : null;
+
+  return (
+    <div className="w-full h-full flex flex-col justify-between select-none">
+      <div className="relative w-full h-[185px]">
+        <svg
+          viewBox={`0 0 ${vbWidth} ${vbHeight}`}
+          className="w-full h-full overflow-visible"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="mrrAreaGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#0f766e" stopOpacity={0.35} />
+              <stop offset="95%" stopColor="#0f766e" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+
+          {/* Horizontal Grid lines */}
+          {yTicks.map((tick, i) => (
+            <g key={i}>
+              <line
+                x1={padLeft}
+                y1={tick.y}
+                x2={vbWidth - padRight}
+                y2={tick.y}
+                stroke={i === 0 ? '#cbd5e1' : '#f1f5f9'}
+                strokeWidth={i === 0 ? 1.5 : 1}
+                strokeDasharray={i === 0 ? 'none' : '3 3'}
+              />
+              <text
+                x={padLeft - 8}
+                y={tick.y + 3.5}
+                textAnchor="end"
+                className="text-[10px] fill-slate-400 font-mono font-medium"
+              >
+                ₹{tick.val >= 1000 ? `${(tick.val / 1000).toFixed(tick.val % 1000 === 0 ? 0 : 1)}k` : tick.val}
+              </text>
+            </g>
+          ))}
+
+          {/* Gradient Area Fill */}
+          {areaD && <path d={areaD} fill="url(#mrrAreaGradient)" />}
+
+          {/* Smooth Stroke Line */}
+          {pathD && (
+            <path
+              d={pathD}
+              fill="none"
+              stroke="#0f766e"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {/* Data Points and Column Hit Areas */}
+          {points.map((pt) => {
+            const isHovered = hoveredIndex === pt.idx;
+            const hitW = chartW / count;
+
+            return (
+              <g
+                key={pt.d.month}
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredIndex(pt.idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                {/* Invisible hit column */}
+                <rect
+                  x={pt.x - hitW / 2}
+                  y={padTop}
+                  width={hitW}
+                  height={chartH + padBottom}
+                  fill="transparent"
+                />
+
+                {/* Vertical guideline on hover */}
+                {isHovered && (
+                  <line
+                    x1={pt.x}
+                    y1={padTop}
+                    x2={pt.x}
+                    y2={padTop + chartH}
+                    stroke="#0f766e"
+                    strokeWidth={1.5}
+                    strokeDasharray="3 3"
+                  />
+                )}
+
+                {/* Outer pulse circle when hovered */}
+                {isHovered && (
+                  <circle
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={9}
+                    fill="#0f766e"
+                    fillOpacity={0.25}
+                    className="animate-ping"
+                  />
+                )}
+
+                {/* Data point circle */}
+                <circle
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={isHovered ? 6 : 4}
+                  fill="#ffffff"
+                  stroke="#0f766e"
+                  strokeWidth={2.5}
+                  className="transition-all duration-150"
+                />
+
+                {/* Month Label */}
+                <text
+                  x={pt.x}
+                  y={vbHeight - padBottom + 16}
+                  textAnchor="middle"
+                  className={`text-[10px] font-medium transition-colors ${
+                    isHovered ? 'fill-teal-900 font-bold' : 'fill-slate-500'
+                  }`}
+                >
+                  {pt.d.monthLabel || pt.d.month}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Dynamic Tooltip */}
+        {activePoint && (
+          <div
+            className="absolute -top-3 z-20 pointer-events-none transform -translate-x-1/2 transition-all duration-150"
+            style={{
+              left: `${(activePoint.x / vbWidth) * 100}%`
+            }}
+          >
+            <div className="bg-slate-900 text-white rounded-xl shadow-xl px-3 py-2 text-xs border border-slate-800 space-y-1 min-w-[160px]">
+              <div className="font-bold text-[11px] text-teal-300 border-b border-slate-800 pb-1">
+                {activePoint.d.monthLabel || activePoint.d.month}
+              </div>
+              <div className="flex items-center justify-between gap-3 text-[11px]">
+                <span className="text-slate-300">Monthly Revenue:</span>
+                <span className="font-mono font-black text-emerald-400">
+                  ₹{activePoint.d.totalRevenue.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 text-[10px] text-slate-400">
+                <span>Consultations:</span>
+                <span className="font-mono text-slate-200">
+                  ₹{activePoint.d.consultationRevenue.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 text-[10px] text-slate-400">
+                <span>Procedures:</span>
+                <span className="font-mono text-slate-200">
+                  ₹{activePoint.d.procedureRevenue.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 text-[10px] pt-1 border-t border-slate-800 text-slate-400">
+                <span>Unique Patients:</span>
+                <span className="font-bold text-teal-300">{activePoint.d.uniquePatients}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-center gap-6 pt-1 text-[11px] font-semibold text-slate-600">
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-0.5 bg-teal-700 inline-block" />
+          <span className="w-2 h-2 rounded-full border-2 border-teal-700 bg-white inline-block" />
+          <span>Monthly Recurring Revenue (MRR) Curve</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const PracticeRevenueWidget: React.FC<PracticeRevenueWidgetProps> = ({
   revenue,
   onSelectPatient,
-  onRefresh
 }) => {
   const [activeTab, setActiveTab] = useState<'daily' | 'monthly' | 'mix'>('daily');
   const [searchQuery, setSearchQuery] = useState('');
@@ -179,7 +611,7 @@ export const PracticeRevenueWidget: React.FC<PracticeRevenueWidgetProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Aggregated daily collections, Monthly Recurring Revenue (MRR), and itemized patient billing across consultations and procedures
+              Aggregated daily collections, Monthly Recurring Revenue (MRR), and itemized patient billing across past visits and procedures
             </p>
           </div>
         </div>
@@ -189,9 +621,9 @@ export const PracticeRevenueWidget: React.FC<PracticeRevenueWidgetProps> = ({
             type="button"
             onClick={handleExportCSV}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-2xs transition"
-            title="Download itemized CSV ledger"
+            title="Download CSV breakdown"
           >
-            <Download className="w-3.5 h-3.5 text-slate-600" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
             <span>Export CSV</span>
           </button>
 
@@ -215,7 +647,7 @@ export const PracticeRevenueWidget: React.FC<PracticeRevenueWidgetProps> = ({
             <span className="text-[10px] font-bold uppercase tracking-wider block">
               Daily Total (Today)
             </span>
-            <Activity className="w-3.5 h-3.5 text-emerald-600" />
+            <Calendar className="w-3.5 h-3.5 text-emerald-600" />
           </div>
           <div className="text-2xl font-black text-emerald-950 tracking-tight tabular-nums">
             ₹{revenue.dailyTotalRevenue.toLocaleString('en-IN')}
@@ -350,44 +782,11 @@ export const PracticeRevenueWidget: React.FC<PracticeRevenueWidgetProps> = ({
         {/* Chart View */}
         <div className="h-64 w-full pt-2">
           {activeTab === 'daily' && (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenue.dailyTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="dayLabel" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}`} />
-                <Tooltip
-                  formatter={(val: any, name: any) => [`₹${Number(val).toLocaleString('en-IN')}`, name === 'consultationRevenue' ? 'Consultations' : 'Procedures']}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '0.75rem', color: '#fff', fontSize: '11px' }}
-                />
-                <Legend
-                  formatter={value => (value === 'consultationRevenue' ? 'Consultation Fees' : 'Procedure Fees')}
-                  wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
-                />
-                <Bar dataKey="consultationRevenue" stackId="a" fill="#0f766e" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="procedureRevenue" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <DailyStackedBarChart data={revenue.dailyTrend || []} />
           )}
 
           {activeTab === 'monthly' && (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenue.monthlyTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0f766e" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#0f766e" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="monthLabel" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}`} />
-                <Tooltip
-                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Monthly Total Revenue']}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '0.75rem', color: '#fff', fontSize: '11px' }}
-                />
-                <Area type="monotone" dataKey="totalRevenue" stroke="#0f766e" strokeWidth={2.5} fillOpacity={1} fill="url(#colorTotal)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            <MonthlyMRRAreaChart data={revenue.monthlyTrend || []} />
           )}
 
           {activeTab === 'mix' && (

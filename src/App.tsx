@@ -17,6 +17,7 @@ import { AIModal } from './components/AIModal';
 import { Patient, Consultation } from './types';
 import { api } from './lib/api';
 import { CheckCircle2, X } from 'lucide-react';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function MainApp() {
   const { doctor, isLoading } = useAuth();
@@ -219,51 +220,53 @@ function MainApp() {
         {/* Dynamic Route Viewport */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-8">
           <div className="max-w-7xl mx-auto">
-            {activePatientId ? (
-              <PatientProfileView
-                patientId={activePatientId}
-                onBack={() => setActivePatientId(null)}
-                onStartConsultation={handleStartConsultationForPatient}
-                onOpenAIWithPrompt={(prompt) => {
-                  api.patients.get(activePatientId).then(res => {
-                    handleOpenAIAssistant(res.patient, prompt);
-                  }).catch(() => {
-                    handleOpenAIAssistant(null, prompt);
-                  });
-                }}
-                onNavigateToImageAnalyzer={() => {
-                  setCurrentRoute('image-analyzer');
-                }}
-              />
-            ) : currentRoute === 'dashboard' ? (
-              <DashboardView
-                onOpenWalkIn={() => setShowWalkInModal(true)}
-                onOpenAIAssistant={() => handleOpenAIAssistant()}
-                onSelectPatient={handleSelectPatient}
-                onStartConsultationForPatient={handleStartConsultationForPatient}
-                onNavigateToAppointments={() => handleNavigate('appointments')}
-              />
-            ) : currentRoute === 'appointments' ? (
-              <AppointmentsView
-                onSelectPatient={handleSelectPatient}
-              />
-            ) : currentRoute === 'patients' ? (
-              <PatientsListView
-                onSelectPatient={handleSelectPatient}
-                onOpenWalkIn={() => setShowWalkInModal(true)}
-                onStartConsultationForPatient={handleStartConsultationForPatient}
-              />
-            ) : currentRoute === 'prescriptions' ? (
-              <PrescriptionsView onSelectPatient={handleSelectPatient} />
-            ) : currentRoute === 'image-analyzer' ? (
-              <ImageAnalyzerView
-                initialPatientId={activePatientId}
-                onSelectPatient={handleSelectPatient}
-                onStartConsultationForPatient={handleStartConsultationForPatient}
-              />
-            ) : currentRoute === 'settings' ? (
-              <SettingsView />
-            ) : null}
+            <ErrorBoundary fallbackTitle="Clinical View Encountered an Issue">
+              {activePatientId ? (
+                <PatientProfileView
+                  patientId={activePatientId}
+                  onBack={() => setActivePatientId(null)}
+                  onStartConsultation={handleStartConsultationForPatient}
+                  onOpenAIWithPrompt={(prompt) => {
+                    api.patients.get(activePatientId).then(res => {
+                      handleOpenAIAssistant(res.patient, prompt);
+                    }).catch(() => {
+                      handleOpenAIAssistant(null, prompt);
+                    });
+                  }}
+                  onNavigateToImageAnalyzer={() => {
+                    setCurrentRoute('image-analyzer');
+                  }}
+                />
+              ) : currentRoute === 'dashboard' ? (
+                <DashboardView
+                  onOpenWalkIn={() => setShowWalkInModal(true)}
+                  onOpenAIAssistant={() => handleOpenAIAssistant()}
+                  onSelectPatient={handleSelectPatient}
+                  onStartConsultationForPatient={handleStartConsultationForPatient}
+                  onNavigateToAppointments={() => handleNavigate('appointments')}
+                />
+              ) : currentRoute === 'appointments' ? (
+                <AppointmentsView
+                  onSelectPatient={handleSelectPatient}
+                />
+              ) : currentRoute === 'patients' ? (
+                <PatientsListView
+                  onSelectPatient={handleSelectPatient}
+                  onOpenWalkIn={() => setShowWalkInModal(true)}
+                  onStartConsultationForPatient={handleStartConsultationForPatient}
+                />
+              ) : currentRoute === 'prescriptions' ? (
+                <PrescriptionsView onSelectPatient={handleSelectPatient} />
+              ) : currentRoute === 'image-analyzer' ? (
+                <ImageAnalyzerView
+                  initialPatientId={activePatientId}
+                  onSelectPatient={handleSelectPatient}
+                  onStartConsultationForPatient={handleStartConsultationForPatient}
+                />
+              ) : currentRoute === 'settings' ? (
+                <SettingsView />
+              ) : null}
+            </ErrorBoundary>
           </div>
         </main>
       </div>
@@ -324,10 +327,12 @@ function MainApp() {
 
 export default function App() {
   return (
-    <LanguageProvider>
-      <AuthProvider>
-        <MainApp />
-      </AuthProvider>
-    </LanguageProvider>
+    <ErrorBoundary fallbackTitle="Clinical OS Application Error">
+      <LanguageProvider>
+        <AuthProvider>
+          <MainApp />
+        </AuthProvider>
+      </LanguageProvider>
+    </ErrorBoundary>
   );
 }
