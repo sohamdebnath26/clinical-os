@@ -170,7 +170,7 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#f8fafc] text-slate-800 antialiased selection:bg-teal-500 selection:text-white">
+    <div className="min-h-screen flex bg-[#f2f6f5] text-[#0f2926] antialiased selection:bg-teal-600 selection:text-white">
       {/* Desktop Persistent Left Sidebar */}
       <div className="hidden md:block shrink-0">
         <Sidebar
@@ -191,7 +191,7 @@ function MainApp() {
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="w-72 bg-white h-full shadow-2xl animate-in slide-in-from-left duration-200"
+            className="w-72 bg-[#0d3f3b] h-full shadow-2xl animate-in slide-in-from-left duration-200"
           >
             <Sidebar
               currentRoute={activePatientId ? 'patients' : currentRoute}
@@ -211,15 +211,17 @@ function MainApp() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Navbar */}
-        <Navbar
-          onOpenWalkIn={() => setShowWalkInModal(true)}
-          onOpenAIAssistant={() => handleOpenAIAssistant()}
-          onSelectPatient={handleSelectPatient}
-          onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
-          onToggleSidebar={toggleSidebar}
-          isSidebarCollapsed={isSidebarCollapsed}
-        />
+        {/* Top Navbar (shown on inner views; Dashboard has its own integrated header) */}
+        {(activePatientId || currentRoute !== 'dashboard') && (
+          <Navbar
+            onOpenWalkIn={() => setShowWalkInModal(true)}
+            onOpenAIAssistant={() => handleOpenAIAssistant()}
+            onSelectPatient={handleSelectPatient}
+            onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
+            onToggleSidebar={toggleSidebar}
+            isSidebarCollapsed={isSidebarCollapsed}
+          />
+        )}
 
         {/* Dynamic Route Viewport */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-8">
@@ -252,6 +254,10 @@ function MainApp() {
                   onSelectPatient={handleSelectPatient}
                   onStartConsultationForPatient={handleStartConsultationForPatient}
                   onNavigateToAppointments={() => handleNavigate('appointments')}
+                  onNavigateToPatients={() => handleNavigate('patients')}
+                  onNavigateToPrescriptions={() => handleNavigate('prescriptions')}
+                  onNavigateToImageAnalyzer={() => handleNavigate('image-analyzer')}
+                  onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
                 />
               ) : currentRoute === 'appointments' ? (
                 <AppointmentsView

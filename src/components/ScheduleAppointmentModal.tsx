@@ -3,6 +3,7 @@ import { Patient, Appointment, AppointmentType } from '../types';
 import { api } from '../lib/api';
 import { useLanguage } from '../context/LanguageContext';
 import { X, Calendar, Clock, User, FileText, CheckCircle2, Search } from 'lucide-react';
+import { VoiceDictationButton } from './VoiceDictationButton';
 
 interface ScheduleAppointmentModalProps {
   onClose: () => void;

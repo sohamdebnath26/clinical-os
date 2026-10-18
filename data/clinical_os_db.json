@@ -377,12 +377,150 @@
       "aiSummary": "Acne Vulgaris Grade III managed with chemical peel and comedone extraction.",
       "createdAt": "2026-10-15T10:30:00.000Z",
       "updatedAt": "2026-10-15T10:30:00.000Z"
+    },
+    {
+      "id": "con-mve46x1x-gaca",
+      "patientId": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "patientName": "Harman",
+      "patientAge": 25,
+      "patientGender": "Male",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "consultationDate": "2026-10-18T17:43:50.229Z",
+      "status": "draft",
+      "fee": 500,
+      "symptoms": [],
+      "diagnoses": [],
+      "tests": [],
+      "procedures": [],
+      "clinicalNotes": {
+        "examination": "",
+        "investigationsAdvised": "",
+        "plan": ""
+      },
+      "bodyMarkers": [],
+      "images": [],
+      "followUp": {},
+      "prescriptions": [],
+      "aiSummary": "",
+      "createdAt": "2026-10-18T17:43:50.229Z",
+      "updatedAt": "2026-10-18T17:43:50.229Z"
+    },
+    {
+      "id": "con-mve4kijw-0i2d",
+      "patientId": "pat-mumnf2c6-8awj",
+      "patientCode": "P-24618",
+      "patientName": "Harman",
+      "patientAge": 25,
+      "patientGender": "Male",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo",
+      "consultationDate": "2026-10-18T17:54:24.620Z",
+      "status": "draft",
+      "fee": 500,
+      "symptoms": [],
+      "diagnoses": [],
+      "tests": [],
+      "procedures": [],
+      "clinicalNotes": {
+        "examination": "",
+        "investigationsAdvised": "",
+        "plan": ""
+      },
+      "bodyMarkers": [],
+      "images": [],
+      "followUp": {},
+      "prescriptions": [],
+      "aiSummary": "",
+      "createdAt": "2026-10-18T17:54:24.620Z",
+      "updatedAt": "2026-10-18T17:54:24.620Z"
     }
   ],
   "prescriptions": [],
   "bodyMarkers": [],
   "clinicalImages": [],
   "auditLogs": [
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_started",
+      "resourceType": "consultation",
+      "resourceId": "con-mve4kijw-0i2d",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618"
+      },
+      "id": "aud-mve4kijw-07au",
+      "timestamp": "2026-10-18T17:54:24.620Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mve4kg55-4o6i",
+      "timestamp": "2026-10-18T17:54:21.497Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "consultation_started",
+      "resourceType": "consultation",
+      "resourceId": "con-mve46x1x-gaca",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "patientCode": "P-24618"
+      },
+      "id": "aud-mve46x1y-nomy",
+      "timestamp": "2026-10-18T17:43:50.230Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mve46uxz-mnyf",
+      "timestamp": "2026-10-18T17:43:47.495Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mve3u1l5-w2zq",
+      "timestamp": "2026-10-18T17:33:49.577Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mve3p8u9-a8mx",
+      "timestamp": "2026-10-18T17:30:05.697Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mve36le7-snfm",
+      "timestamp": "2026-10-18T17:15:35.503Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mvdz9f1g-cmcs",
+      "timestamp": "2026-10-18T15:25:48.772Z"
+    },
     {
       "actorId": "doc-demo-001",
       "actorName": "Dr. Demo",
@@ -1091,7 +1229,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-18T08:42:59.131Z"
+    "updatedAt": "2026-10-18T17:54:24.620Z"
   },
   "appointments": [
     {

@@ -29,7 +29,11 @@ import {
   Image as ImageIcon,
   Pencil,
   ScanEye,
-  Activity
+  Activity,
+  Search,
+  ArrowUpDown,
+  CheckCircle2,
+  FileEdit
 } from 'lucide-react';
 
 interface PatientProfileViewProps {
@@ -41,7 +45,9 @@ interface PatientProfileViewProps {
   onNavigateToImageAnalyzer?: (patientId: string) => void;
 }
 
-export type TabType = 'overview' | 'vitals' | 'appointments' | 'bodymap' | 'visits' | 'prescriptions' | 'timeline';
+export type TabType = 'overview' | 'vitals' | 'appointments' | 'bodymap' | 'timeline' | 'visits' | 'prescriptions';
+
+const normalizeTab = (tab?: TabType): TabType => (tab === 'visits' ? 'timeline' : tab || 'overview');
 
 export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
   patientId,
@@ -60,13 +66,13 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
   const [markers, setMarkers] = useState<BodyMarker[]>([]);
   const [images, setImages] = useState<ClinicalImage[]>([]);
 
-  const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'overview');
+  const [activeTab, setActiveTab] = useState<TabType>(normalizeTab(initialTab));
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialTab) {
-      setActiveTab(initialTab);
+      setActiveTab(normalizeTab(initialTab));
     }
   }, [initialTab]);
 
@@ -80,8 +86,11 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
 
-  // Expandable timeline events
+  // Unified Visits & Timeline controls
   const [expandedEvents, setExpandedEvents] = useState<Record<string, boolean>>({});
+  const [timelineSearch, setTimelineSearch] = useState('');
+  const [timelineStatusFilter, setTimelineStatusFilter] = useState<'all' | 'signed' | 'draft'>('all');
+  const [timelineSortOrder, setTimelineSortOrder] = useState<'desc' | 'asc'>('desc');
 
   // Lesion Progression Modal
   const [showProgressionModal, setShowProgressionModal] = useState(false);
@@ -126,6 +135,107 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
     loadPatientData();
   }, [patientId]);
 
+  // Merge consultations and timelineEvents into a single unified chronological model
+  const unifiedChronologicalEntries = React.useMemo(() => {
+    const timelineMap = new Map<string, any>();
+    timelineEvents.forEach(evt => {
+      timelineMap.set(evt.id, evt);
+    });
+
+    const mergedMap = new Map<string, {
+      id: string;
+      date: string;
+      status: 'signed' | 'draft';
+      doctorName: string;
+      fee: number;
+      symptoms: string[];
+      diagnoses: string[];
+      tests: string[];
+      procedures: Consultation['procedures'];
+      clinicalNotes: Consultation['clinicalNotes'];
+      prescriptions: PrescriptionItem[];
+      images: ClinicalImage[];
+      bodyMarkersCount: number;
+      followUp?: Consultation['followUp'];
+      aiSummary: string;
+      rawConsultation?: Consultation;
+    }>();
+
+    consultations.forEach(c => {
+      const tEvt = timelineMap.get(c.id);
+      mergedMap.set(c.id, {
+        id: c.id,
+        date: c.consultationDate || tEvt?.date || c.createdAt,
+        status: c.status || 'signed',
+        doctorName: c.doctorName || tEvt?.doctorName || 'Physician',
+        fee: c.fee ?? tEvt?.fee ?? 0,
+        symptoms: c.symptoms?.length ? c.symptoms : (tEvt?.symptoms || []),
+        diagnoses: c.diagnoses?.length ? c.diagnoses : (tEvt?.diagnoses || []),
+        tests: c.tests?.length ? c.tests : (tEvt?.tests || []),
+        procedures: c.procedures?.length ? c.procedures : (tEvt?.procedures || []),
+        clinicalNotes: c.clinicalNotes || tEvt?.clinicalNotes || { examination: '', investigationsAdvised: '', plan: '' },
+        prescriptions: c.prescriptions?.length ? c.prescriptions : (tEvt?.prescriptions || []),
+        images: c.images?.length ? c.images : (tEvt?.images || []),
+        bodyMarkersCount: c.bodyMarkers?.length ?? tEvt?.bodyMarkersCount ?? 0,
+        followUp: c.followUp || tEvt?.followUp,
+        aiSummary: c.aiSummary || tEvt?.aiSummary || '',
+        rawConsultation: c
+      });
+    });
+
+    timelineEvents.forEach(tEvt => {
+      if (!mergedMap.has(tEvt.id)) {
+        mergedMap.set(tEvt.id, {
+          id: tEvt.id,
+          date: tEvt.date,
+          status: 'signed',
+          doctorName: tEvt.doctorName || 'Physician',
+          fee: tEvt.fee ?? 0,
+          symptoms: tEvt.symptoms || [],
+          diagnoses: tEvt.diagnoses || [],
+          tests: tEvt.tests || [],
+          procedures: tEvt.procedures || [],
+          clinicalNotes: tEvt.clinicalNotes || { examination: '', investigationsAdvised: '', plan: '' },
+          prescriptions: tEvt.prescriptions || [],
+          images: tEvt.images || [],
+          bodyMarkersCount: tEvt.bodyMarkersCount ?? 0,
+          followUp: tEvt.followUp,
+          aiSummary: tEvt.aiSummary || ''
+        });
+      }
+    });
+
+    const list = Array.from(mergedMap.values());
+
+    const filtered = list.filter(entry => {
+      if (timelineStatusFilter !== 'all' && entry.status !== timelineStatusFilter) {
+        return false;
+      }
+      if (timelineSearch.trim()) {
+        const q = timelineSearch.toLowerCase();
+        const inDiag = entry.diagnoses.some(d => d.toLowerCase().includes(q));
+        const inSymp = entry.symptoms.some(s => s.toLowerCase().includes(q));
+        const inDoc = entry.doctorName.toLowerCase().includes(q);
+        const inProc = entry.procedures?.some(p => p.name.toLowerCase().includes(q));
+        const inMed = entry.prescriptions?.some(rx => rx.medicineName.toLowerCase().includes(q));
+        const inNotes =
+          entry.clinicalNotes?.examination?.toLowerCase().includes(q) ||
+          entry.clinicalNotes?.plan?.toLowerCase().includes(q) ||
+          entry.aiSummary?.toLowerCase().includes(q);
+        return inDiag || inSymp || inDoc || inProc || inMed || inNotes;
+      }
+      return true;
+    });
+
+    filtered.sort((a, b) => {
+      const timeA = new Date(a.date).getTime();
+      const timeB = new Date(b.date).getTime();
+      return timelineSortOrder === 'desc' ? timeB - timeA : timeA - timeB;
+    });
+
+    return filtered;
+  }, [consultations, timelineEvents, timelineStatusFilter, timelineSearch, timelineSortOrder]);
+
   if (isLoading) {
     return (
       <div className="p-8 text-center text-slate-500 flex flex-col items-center justify-center min-h-[400px]">
@@ -154,6 +264,16 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
     setExpandedEvents(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const totalUnifiedCount = Math.max(consultations.length, timelineEvents.length);
+
+  const toggleAllEvents = (expand: boolean) => {
+    const next: Record<string, boolean> = {};
+    unifiedChronologicalEntries.forEach(e => {
+      next[e.id] = expand;
+    });
+    setExpandedEvents(next);
+  };
+
   return (
     <div className="space-y-6">
       {/* Breadcrumb Navigation */}
@@ -170,7 +290,9 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           <span>/</span>
           <span className="text-slate-700 font-semibold">{patient.fullName}</span>
           <span>/</span>
-          <span className="capitalize">{activeTab}</span>
+          <span className="capitalize">
+            {activeTab === 'timeline' ? 'Visits & Timeline' : activeTab}
+          </span>
         </div>
       </div>
 
@@ -322,7 +444,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
       {/* Profile Navigation Tabs */}
       <div className="border-b border-slate-200 flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-        {(['overview', 'vitals', 'appointments', 'bodymap', 'visits', 'prescriptions', 'timeline'] as TabType[]).map(tab => (
+        {(['overview', 'vitals', 'appointments', 'bodymap', 'timeline', 'prescriptions'] as TabType[]).map(tab => (
           <button
             key={tab}
             type="button"
@@ -337,9 +459,8 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             {tab === 'vitals' && 'Vitals & Growth'}
             {tab === 'appointments' && `Appointments & Follow-ups (${appointments.length})`}
             {tab === 'bodymap' && 'Body map'}
-            {tab === 'visits' && `Visits (${consultations.length})`}
+            {tab === 'timeline' && `Visits & Timeline (${totalUnifiedCount})`}
             {tab === 'prescriptions' && `Prescriptions (${prescriptions.length})`}
-            {tab === 'timeline' && `Timeline (${timelineEvents.length})`}
           </button>
         ))}
       </div>
@@ -456,18 +577,30 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                 Patient Metrics
               </h3>
               <div className="grid grid-cols-2 gap-3 text-center">
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <span className="text-xl font-extrabold text-slate-800 block">{consultations.length}</span>
-                  <span className="text-[11px] text-slate-500 font-medium">Total Visits</span>
-                </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('timeline')}
+                  className="bg-slate-50 hover:bg-teal-50/70 p-3 rounded-xl border border-slate-100 hover:border-teal-200 transition-colors cursor-pointer"
+                >
+                  <span className="text-xl font-extrabold text-slate-800 block">{totalUnifiedCount}</span>
+                  <span className="text-[11px] text-slate-500 font-medium">Visits &amp; Timeline</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('prescriptions')}
+                  className="bg-slate-50 hover:bg-teal-50/70 p-3 rounded-xl border border-slate-100 hover:border-teal-200 transition-colors cursor-pointer"
+                >
                   <span className="text-xl font-extrabold text-teal-800 block">{prescriptions.length}</span>
                   <span className="text-[11px] text-slate-500 font-medium">Prescriptions</span>
-                </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('bodymap')}
+                  className="bg-slate-50 hover:bg-teal-50/70 p-3 rounded-xl border border-slate-100 hover:border-teal-200 transition-colors cursor-pointer"
+                >
                   <span className="text-xl font-extrabold text-slate-800 block">{markers.length}</span>
                   <span className="text-[11px] text-slate-500 font-medium">Body Pins</span>
-                </div>
+                </button>
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <span className="text-xl font-extrabold text-slate-800 block">{images.length}</span>
                   <span className="text-[11px] text-slate-500 font-medium">Images</span>
@@ -758,71 +891,405 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('visits')}
+              onClick={() => setActiveTab('timeline')}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
             >
-              <span>Next: Past Consultations</span>
+              <span>Next: Visits &amp; Timeline</span>
               <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
             </button>
           </div>
         </div>
       )}
 
-      {/* TAB 3: VISITS */}
-      {activeTab === 'visits' && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs divide-y divide-slate-100 animate-in fade-in duration-150">
-          {consultations.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-500">
-              No consultations recorded yet. Click &quot;New consultation&quot; above to start one.
+      {/* TAB 3: UNIFIED VISITS & CHRONOLOGICAL TIMELINE */}
+      {activeTab === 'timeline' && (
+        <div className="space-y-5 animate-in fade-in duration-150">
+          {/* Unified Header & Controls Bar */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-teal-700" />
+                  <span>Unified Visits &amp; Clinical Timeline</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Complete chronological history of consultations, diagnoses, procedures, billing, and clinical notes
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {unifiedChronologicalEntries.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => toggleAllEvents(true)}
+                      className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 transition"
+                    >
+                      Expand All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleAllEvents(false)}
+                      className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 transition"
+                    >
+                      Collapse All
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onStartConsultation(patient)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-2xs transition"
+                >
+                  <Stethoscope className="w-3.5 h-3.5" />
+                  <span>New Visit</span>
+                </button>
+              </div>
             </div>
-          ) : (
-            consultations.map((c) => (
-              <div key={c.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-900">
-                      {new Date(c.consultationDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                    </span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                      c.status === 'signed' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'
-                    }`}>
-                      {c.status.toUpperCase()}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600">
-                    <strong className="text-slate-700">Diagnosis:</strong> {c.diagnoses.join(', ') || 'None recorded'}
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    Doctor: {c.doctorName} • Fee: ₹{c.fee} • Procedures: {c.procedures.length}
-                  </p>
+
+            {totalUnifiedCount > 0 && (
+              <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                {/* Search Input */}
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={timelineSearch}
+                    onChange={e => setTimelineSearch(e.target.value)}
+                    placeholder="Filter visits by diagnosis, symptom, procedure, medicine, or doctor..."
+                    className="w-full text-xs pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-600 focus:bg-white"
+                  />
                 </div>
-                <div className="flex items-center gap-2">
+
+                {/* Status Filter & Chronological Sort */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200">
+                    {(['all', 'signed', 'draft'] as const).map(statusOpt => (
+                      <button
+                        key={statusOpt}
+                        type="button"
+                        onClick={() => setTimelineStatusFilter(statusOpt)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold capitalize transition ${
+                          timelineStatusFilter === statusOpt
+                            ? 'bg-white text-teal-900 shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        {statusOpt === 'all' ? `All (${totalUnifiedCount})` : statusOpt}
+                      </button>
+                    ))}
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => setWhatsAppData({
-                      isOpen: true,
-                      reportType: 'consultation_summary',
-                      data: { consultation: c }
-                    })}
-                    className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition"
-                    title="Send Consultation Visit Report to Patient's WhatsApp"
+                    onClick={() => setTimelineSortOrder(prev => (prev === 'desc' ? 'asc' : 'desc'))}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-semibold text-slate-700 transition"
+                    title="Toggle chronological sort order"
                   >
-                    <WhatsAppIcon className="w-3.5 h-3.5 fill-[#128C7E]" />
-                    <span>WhatsApp</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('timeline')}
-                    className="text-xs font-semibold text-teal-700 hover:text-teal-800 flex items-center gap-1"
-                  >
-                    View in Timeline <ChevronRight className="w-4 h-4" />
+                    <ArrowUpDown className="w-3.5 h-3.5 text-teal-700" />
+                    <span>{timelineSortOrder === 'desc' ? 'Newest First' : 'Oldest First'}</span>
                   </button>
                 </div>
               </div>
-            ))
+            )}
+          </div>
+
+          {/* Chronological Stream */}
+          {unifiedChronologicalEntries.length === 0 ? (
+            <div className="bg-white p-12 rounded-2xl border border-dashed border-slate-300 text-center space-y-2">
+              <Clock className="w-8 h-8 text-slate-300 mx-auto" />
+              <p className="text-xs font-bold text-slate-700">
+                {totalUnifiedCount === 0
+                  ? 'No Consultations or Timeline Visits Recorded Yet'
+                  : 'No Visits Match Your Filter'}
+              </p>
+              <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                {totalUnifiedCount === 0
+                  ? `When you start or sign a consultation for ${patient.fullName}, each visit and its clinical details will appear here in chronological order.`
+                  : 'Try clearing your search query or switching the status filter to view all visits.'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-5 relative before:absolute before:inset-0 before:left-5 before:w-0.5 before:bg-slate-200">
+              {unifiedChronologicalEntries.map((evt, index) => {
+                const isExpanded = !!expandedEvents[evt.id];
+                const dateObj = new Date(evt.date);
+                const dateFormatted = dateObj.toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+                });
+                const visitNumber =
+                  timelineSortOrder === 'desc'
+                    ? unifiedChronologicalEntries.length - index
+                    : index + 1;
+
+                // Construct consultation payload for WhatsApp sharing
+                const consultationForShare: Consultation = evt.rawConsultation || {
+                  id: evt.id,
+                  patientId: patient.id,
+                  patientCode: patient.patientCode,
+                  patientName: patient.fullName,
+                  patientAge: patient.age,
+                  patientGender: patient.gender,
+                  doctorId: doctor?.id || '',
+                  doctorName: evt.doctorName,
+                  consultationDate: evt.date,
+                  status: evt.status,
+                  fee: evt.fee,
+                  symptoms: evt.symptoms,
+                  diagnoses: evt.diagnoses,
+                  tests: evt.tests,
+                  procedures: evt.procedures || [],
+                  clinicalNotes: evt.clinicalNotes || { examination: '', investigationsAdvised: '', plan: '' },
+                  bodyMarkers: [],
+                  images: evt.images || [],
+                  followUp: evt.followUp || {},
+                  prescriptions: evt.prescriptions || [],
+                  aiSummary: evt.aiSummary || '',
+                  createdAt: evt.date,
+                  updatedAt: evt.date
+                };
+
+                return (
+                  <div key={evt.id} className="relative pl-12">
+                    {/* Chronological Node Indicator */}
+                    <div
+                      className={`absolute left-5 top-4 -translate-x-1/2 w-4 h-4 rounded-full border-2 border-white shadow-xs z-10 ${
+                        evt.status === 'signed' ? 'bg-teal-600' : 'bg-amber-500'
+                      }`}
+                      title={evt.status === 'signed' ? 'Signed Consultation' : 'Draft Consultation'}
+                    />
+
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden transition-all hover:border-slate-300">
+                      {/* Unified Visit & Timeline Header */}
+                      <div
+                        onClick={() => toggleExpandEvent(evt.id)}
+                        className="p-4 bg-slate-50/70 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer select-none"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-mono font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                              Visit #{visitNumber}
+                            </span>
+                            <span className="text-xs font-extrabold text-slate-900 tracking-tight">
+                              {dateFormatted}
+                            </span>
+                            <span
+                              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                evt.status === 'signed'
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+                              }`}
+                            >
+                              {evt.status === 'signed' ? (
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <FileEdit className="w-3 h-3 text-amber-600" />
+                              )}
+                              {evt.status.toUpperCase()}
+                            </span>
+                            <span className="text-slate-300 hidden sm:inline">•</span>
+                            <span className="text-xs font-bold text-teal-800">
+                              {evt.diagnoses.join(', ') || 'Consultation Encounter'}
+                            </span>
+                          </div>
+
+                          {/* Visit Metadata Summary Row (formerly in Visits tab) */}
+                          <div className="flex items-center gap-2.5 flex-wrap text-[11px] text-slate-500">
+                            <span>
+                              Doctor: <strong className="text-slate-700">Dr. {evt.doctorName.replace(/^Dr\.\s*/i, '')}</strong>
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Fee: <strong className="text-slate-700">₹{evt.fee}</strong>
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Procedures: <strong className="text-slate-700">{evt.procedures?.length || 0}</strong>
+                            </span>
+                            {evt.prescriptions && evt.prescriptions.length > 0 && (
+                              <>
+                                <span>•</span>
+                                <span>
+                                  Rx: <strong className="text-slate-700">{evt.prescriptions.length} meds</strong>
+                                </span>
+                              </>
+                            )}
+                            {evt.followUp?.date && (
+                              <>
+                                <span>•</span>
+                                <span className="text-amber-800 font-semibold">
+                                  Follow-up: {evt.followUp.date}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions & Expand Toggle */}
+                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setWhatsAppData({
+                                isOpen: true,
+                                reportType: 'consultation_summary',
+                                data: { consultation: consultationForShare }
+                              });
+                            }}
+                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition"
+                            title="Send Consultation Visit Report to Patient's WhatsApp"
+                          >
+                            <WhatsAppIcon className="w-3.5 h-3.5 fill-[#128C7E]" />
+                            <span>WhatsApp</span>
+                          </button>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-600 hover:text-slate-900">
+                            <span>{isExpanded ? 'Hide Details' : 'Full Record'}</span>
+                            {isExpanded ? (
+                              <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                            ) : (
+                              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Content Card Body */}
+                      <div className="p-5 space-y-4 text-xs">
+                        {/* Symptoms */}
+                        {evt.symptoms && evt.symptoms.length > 0 && (
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                              SYMPTOMS &amp; COMPLAINTS
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {evt.symptoms.map((s: string) => (
+                                <span
+                                  key={s}
+                                  className="px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-full font-medium text-[11px]"
+                                >
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* AI Summary Block */}
+                        {evt.aiSummary && (
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1 mb-1">
+                              <Sparkles className="w-3 h-3 text-teal-600" />
+                              VISIT SUMMARY &amp; CHARGES
+                            </span>
+                            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-800 leading-relaxed shadow-inner">
+                              <MarkdownView content={evt.aiSummary} />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Expanded details: Clinical Notes, Procedures, Investigations, Prescriptions, Photos */}
+                        {isExpanded && (
+                          <div className="pt-3 border-t border-slate-100 space-y-3.5 animate-in fade-in duration-150">
+                            {evt.clinicalNotes?.examination && (
+                              <div>
+                                <span className="font-bold text-slate-700 block mb-0.5">Clinical Examination:</span>
+                                <p className="text-slate-600 bg-slate-50/70 p-2.5 rounded-lg border border-slate-100">
+                                  {evt.clinicalNotes.examination}
+                                </p>
+                              </div>
+                            )}
+
+                            {evt.clinicalNotes?.plan && (
+                              <div>
+                                <span className="font-bold text-slate-700 block mb-0.5">Treatment Plan:</span>
+                                <p className="text-slate-600 bg-slate-50/70 p-2.5 rounded-lg border border-slate-100">
+                                  {evt.clinicalNotes.plan}
+                                </p>
+                              </div>
+                            )}
+
+                            {evt.procedures && evt.procedures.length > 0 && (
+                              <div>
+                                <span className="font-bold text-slate-700 block mb-1">Procedures Performed:</span>
+                                <div className="flex flex-wrap gap-2">
+                                  {evt.procedures.map((proc, idx) => (
+                                    <div
+                                      key={proc.id || idx}
+                                      className="px-3 py-1.5 bg-teal-50/60 border border-teal-200/80 rounded-lg text-[11px] text-teal-950 flex items-center gap-2"
+                                    >
+                                      <span className="font-semibold">{proc.name}</span>
+                                      <span className="font-mono font-bold text-teal-800">₹{proc.cost}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {evt.tests && evt.tests.length > 0 && (
+                              <div>
+                                <span className="font-bold text-slate-700 block mb-0.5">Investigations Ordered:</span>
+                                <p className="text-slate-600">{evt.tests.join(', ')}</p>
+                              </div>
+                            )}
+
+                            {evt.prescriptions && evt.prescriptions.length > 0 && (
+                              <div>
+                                <span className="font-bold text-slate-700 block mb-1">Medications Prescribed:</span>
+                                <ul className="list-disc list-inside text-slate-600 space-y-0.5">
+                                  {evt.prescriptions.map((p: any, i: number) => (
+                                    <li key={p.id || i}>
+                                      <span className="font-semibold text-slate-800">{p.medicineName}</span> ({p.dosage},{' '}
+                                      {p.frequency}
+                                      {p.duration ? `, ${p.duration}` : ''})
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {evt.images && evt.images.length > 0 && (
+                              <div>
+                                <span className="font-bold text-slate-700 block mb-1.5 flex items-center gap-1.5">
+                                  <ImageIcon className="w-3.5 h-3.5 text-teal-700" />
+                                  Clinical Photos Documented ({evt.images.length}):
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                  {evt.images.map((img: ClinicalImage) => (
+                                    <div
+                                      key={img.id}
+                                      onClick={() =>
+                                        onNavigateToImageAnalyzer && onNavigateToImageAnalyzer(patient.id)
+                                      }
+                                      className="group relative w-16 h-16 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 cursor-pointer hover:border-teal-500 shadow-2xs transition"
+                                      title={img.caption || 'Clinical photo'}
+                                    >
+                                      <img
+                                        src={img.url}
+                                        alt={img.caption || 'Encounter photo'}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                      />
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold transition-opacity">
+                                        Analyze
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
+
           {/* Step Navigation */}
-          <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+          <div className="p-4 bg-white rounded-2xl border border-slate-200 flex justify-between items-center">
             <button
               type="button"
               onClick={() => setActiveTab('bodymap')}
@@ -833,10 +1300,10 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('prescriptions')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition"
             >
               <span>Next: Prescriptions</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -847,7 +1314,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs divide-y divide-slate-100 animate-in fade-in duration-150">
           <div className="p-4 bg-slate-50/70 flex items-center justify-between flex-wrap gap-2">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">
-              Active & Historical Prescriptions ({prescriptions.length})
+              Active &amp; Historical Prescriptions ({prescriptions.length})
             </h4>
             <div className="flex items-center gap-2">
               <button
@@ -914,169 +1381,20 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
             <button
               type="button"
-              onClick={() => setActiveTab('visits')}
+              onClick={() => setActiveTab('timeline')}
               className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
             >
-              ← Past Consultations
+              ← Visits &amp; Timeline
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('timeline')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition"
+              onClick={() => setActiveTab('overview')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
             >
-              <span>Next: Longitudinal Timeline</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              <span>Back to Overview</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
             </button>
           </div>
-        </div>
-      )}
-
-      {/* TAB 5: TIMELINE (Crucial screen seen in video 00:52!) */}
-      {activeTab === 'timeline' && (
-        <div className="space-y-6 animate-in fade-in duration-150">
-          {timelineEvents.length === 0 ? (
-            <div className="bg-white p-12 rounded-2xl border border-dashed border-slate-300 text-center">
-              <Clock className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-              <p className="text-xs font-bold text-slate-700">No Historical Consultations Yet</p>
-              <p className="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
-                When you finish and sign a consultation for {patient.fullName}, it will be permanently recorded here in the chronological timeline.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6 relative before:absolute before:inset-0 before:left-5 before:w-0.5 before:bg-slate-200">
-              {timelineEvents.map((evt) => {
-                const isExpanded = !!expandedEvents[evt.id];
-                const dateObj = new Date(evt.date);
-                const dateFormatted = dateObj.toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric'
-                });
-
-                return (
-                  <div key={evt.id} className="relative pl-12">
-                    {/* Circle Node */}
-                    <div className="absolute left-3 top-1.5 -translate-x-1/2 w-4 h-4 rounded-full bg-teal-600 border-2 border-white shadow-xs z-10" />
-
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden transition-all hover:border-slate-300">
-                      {/* Timeline Event Header */}
-                      <div
-                        onClick={() => toggleExpandEvent(evt.id)}
-                        className="p-4 bg-slate-50/60 border-b border-slate-100 flex items-center justify-between cursor-pointer select-none"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-extrabold text-slate-900 tracking-tight">
-                            {dateFormatted}
-                          </span>
-                          <span className="text-slate-300">•</span>
-                          <span className="text-xs font-semibold text-teal-800">
-                            {evt.diagnoses.join(', ') || 'Consultation Encounter'}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] text-slate-400">Dr. {evt.doctorName}</span>
-                          {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-                        </div>
-                      </div>
-
-                      {/* Content Card Body */}
-                      <div className="p-5 space-y-4 text-xs">
-                        {/* Symptoms */}
-                        {evt.symptoms && evt.symptoms.length > 0 && (
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                              SYMPTOMS
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {evt.symptoms.map((s: string) => (
-                                <span key={s} className="px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-full font-medium text-[11px]">
-                                  {s}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* AI Summary Block (Exact format from video 00:52!) */}
-                        {evt.aiSummary && (
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1 mb-1">
-                              <Sparkles className="w-3 h-3 text-teal-600" />
-                              VISIT SUMMARY & CHARGES
-                            </span>
-                            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-800 leading-relaxed shadow-inner">
-                              <MarkdownView content={evt.aiSummary} />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Expanded details: Notes, Procedures, Tests */}
-                        {isExpanded && (
-                          <div className="pt-3 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
-                            {evt.clinicalNotes?.examination && (
-                              <div>
-                                <span className="font-bold text-slate-700 block">Examination:</span>
-                                <p className="text-slate-600">{evt.clinicalNotes.examination}</p>
-                              </div>
-                            )}
-
-                            {evt.clinicalNotes?.plan && (
-                              <div>
-                                <span className="font-bold text-slate-700 block">Plan:</span>
-                                <p className="text-slate-600">{evt.clinicalNotes.plan}</p>
-                              </div>
-                            )}
-
-                            {evt.tests && evt.tests.length > 0 && (
-                              <div>
-                                <span className="font-bold text-slate-700 block">Investigations Ordered:</span>
-                                <p className="text-slate-600">{evt.tests.join(', ')}</p>
-                              </div>
-                            )}
-
-                            {evt.prescriptions && evt.prescriptions.length > 0 && (
-                              <div>
-                                <span className="font-bold text-slate-700 block">Medications Prescribed:</span>
-                                <ul className="list-disc list-inside text-slate-600 space-y-0.5">
-                                  {evt.prescriptions.map((p: any, i: number) => (
-                                    <li key={i}>{p.medicineName} ({p.dosage}, {p.frequency})</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
-                            {evt.images && evt.images.length > 0 && (
-                              <div>
-                                <span className="font-bold text-slate-700 block mb-1.5 flex items-center gap-1.5">
-                                  <ImageIcon className="w-3.5 h-3.5 text-teal-700" />
-                                  Clinical Photos Documented ({evt.images.length}):
-                                </span>
-                                <div className="flex flex-wrap gap-2">
-                                  {evt.images.map((img: ClinicalImage) => (
-                                    <div
-                                      key={img.id}
-                                      onClick={() => onNavigateToImageAnalyzer && onNavigateToImageAnalyzer(patient.id)}
-                                      className="group relative w-16 h-16 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 cursor-pointer hover:border-teal-500 shadow-2xs transition"
-                                      title={img.caption || 'Clinical photo'}
-                                    >
-                                      <img src={img.url} alt={img.caption || 'Encounter photo'} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold transition-opacity">
-                                        Analyze
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
 

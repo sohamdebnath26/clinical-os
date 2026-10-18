@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Search, Plus, Trash2, Check, AlertCircle } from 'lucide-react';
+import { VoiceDictationButton } from './VoiceDictationButton';
 
 export interface DropdownOption {
   label: string;
@@ -99,7 +100,7 @@ export const DropdownSuggest: React.FC<DropdownSuggestProps> = ({
         {label}
       </label>
 
-      {/* Input bar with Dropdown toggle button */}
+      {/* Input bar with Mic and Dropdown toggle button */}
       <div className="relative">
         <div className="flex items-center w-full bg-white border border-slate-300 rounded-xl focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-teal-500 shadow-2xs">
           <input
@@ -122,6 +123,17 @@ export const DropdownSuggest: React.FC<DropdownSuggestProps> = ({
               }
             }}
             className="w-full text-xs px-3 py-2 bg-transparent border-0 focus:outline-hidden"
+          />
+
+          <VoiceDictationButton
+            value=""
+            onTranscript={spoken => {
+              setSearchTerm(spoken);
+              setIsOpen(true);
+            }}
+            variant="badge"
+            className="border-0 shadow-none bg-transparent mr-0.5"
+            title={`Dictate ${label.toLowerCase()}`}
           />
 
           <button

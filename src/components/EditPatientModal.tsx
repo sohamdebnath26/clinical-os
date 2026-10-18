@@ -5,6 +5,7 @@ import { calculateAgeFromDOB } from '../lib/dateUtils';
 import { useLanguage } from '../context/LanguageContext';
 import { COMMON_ALLERGIES, COMMON_MEDICATIONS } from '../data/clinicalCatalogues';
 import { DropdownSuggest } from './DropdownSuggest';
+import { VoiceDictationButton } from './VoiceDictationButton';
 import { X, Save, AlertCircle, CheckCircle, Sparkles, UserCheck } from 'lucide-react';
 
 interface EditPatientModalProps {
@@ -145,13 +146,24 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
                 {t('fullName')} *
               </label>
-              <input
-                type="text"
-                required
-                value={fullName}
-                onChange={e => setFullName(e.target.value)}
-                className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500 font-semibold text-slate-800"
-              />
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  className="w-full text-xs pl-3 pr-9 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500 font-semibold text-slate-800"
+                />
+                <div className="absolute right-1.5">
+                  <VoiceDictationButton
+                    value={fullName}
+                    onChange={setFullName}
+                    variant="badge"
+                    className="border-0 shadow-none bg-transparent"
+                    title="Dictate full name"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Mobile Number */}
@@ -252,13 +264,24 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
                 {t('emergencyContact')}
               </label>
-              <input
-                type="text"
-                placeholder="Name & contact phone"
-                value={emergencyContact}
-                onChange={e => setEmergencyContact(e.target.value)}
-                className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500"
-              />
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  placeholder="Name & contact phone"
+                  value={emergencyContact}
+                  onChange={e => setEmergencyContact(e.target.value)}
+                  className="w-full text-xs pl-3 pr-9 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500"
+                />
+                <div className="absolute right-1.5">
+                  <VoiceDictationButton
+                    value={emergencyContact}
+                    onChange={setEmergencyContact}
+                    variant="badge"
+                    className="border-0 shadow-none bg-transparent"
+                    title="Dictate emergency contact"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Residential Address */}
@@ -266,13 +289,24 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
                 {t('address')}
               </label>
-              <input
-                type="text"
-                placeholder="Street address, city"
-                value={address}
-                onChange={e => setAddress(e.target.value)}
-                className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500"
-              />
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  placeholder="Street address, city"
+                  value={address}
+                  onChange={e => setAddress(e.target.value)}
+                  className="w-full text-xs pl-3 pr-9 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500"
+                />
+                <div className="absolute right-1.5">
+                  <VoiceDictationButton
+                    value={address}
+                    onChange={setAddress}
+                    variant="badge"
+                    className="border-0 shadow-none bg-transparent"
+                    title="Dictate address"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Allergies: Dropdown Menu with Auto-Suggest (NOT chips!) */}
@@ -303,9 +337,17 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
 
             {/* Medical & Surgical History */}
             <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
-                {t('chronicConditions')} & Surgical History
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+                  {t('chronicConditions')} & Surgical History
+                </label>
+                <VoiceDictationButton
+                  value={medicalHistory}
+                  onChange={setMedicalHistory}
+                  variant="badge"
+                  title="Dictate medical & surgical history"
+                />
+              </div>
               <textarea
                 rows={2}
                 placeholder="e.g. Type 2 Diabetes, Hypertension, Asthma"

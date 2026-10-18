@@ -15,6 +15,7 @@ import {
   UserCheck,
   Sparkles
 } from 'lucide-react';
+import { VoiceDictationButton } from './VoiceDictationButton';
 
 interface WalkInModalProps {
   onClose: () => void;
@@ -412,13 +413,24 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
                     {t('fullName')} *
                   </label>
-                  <input
-                    type="text"
-                    placeholder={t('fullName')}
-                    value={fullName}
-                    onChange={e => setFullName(e.target.value)}
-                    className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500"
-                  />
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      placeholder={t('fullName')}
+                      value={fullName}
+                      onChange={e => setFullName(e.target.value)}
+                      className="w-full text-xs pl-3 pr-9 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500"
+                    />
+                    <div className="absolute right-1.5">
+                      <VoiceDictationButton
+                        value={fullName}
+                        onChange={setFullName}
+                        variant="badge"
+                        className="border-0 shadow-none bg-transparent"
+                        title="Dictate patient full name"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="sm:col-span-3">
@@ -508,13 +520,24 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                 )}
 
                 {/* Search symptoms */}
-                <input
-                  type="text"
-                  placeholder="Search all 90 symptoms..."
-                  value={symptomSearch}
-                  onChange={e => setSymptomSearch(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    placeholder="Search all 90 symptoms..."
+                    value={symptomSearch}
+                    onChange={e => setSymptomSearch(e.target.value)}
+                    className="w-full text-xs pl-3 pr-9 py-2 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500"
+                  />
+                  <div className="absolute right-1.5">
+                    <VoiceDictationButton
+                      value=""
+                      onTranscript={spoken => setSymptomSearch(spoken)}
+                      variant="badge"
+                      className="border-0 shadow-none bg-transparent"
+                      title="Speak to search symptoms"
+                    />
+                  </div>
+                </div>
 
                 {/* Common quick chips */}
                 <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
@@ -541,11 +564,17 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                 <div className="flex items-center gap-2 pt-1">
                   <input
                     type="text"
-                    placeholder="Add a custom symptom (press Enter)"
+                    placeholder="Add a custom symptom (press Enter or speak)"
                     value={customSymptom}
                     onChange={e => setCustomSymptom(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddCustomSymptom())}
                     className="flex-1 text-xs px-3 py-1.5 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500"
+                  />
+                  <VoiceDictationButton
+                    value={customSymptom}
+                    onChange={setCustomSymptom}
+                    variant="badge"
+                    title="Dictate custom symptom"
                   />
                   <button
                     type="button"

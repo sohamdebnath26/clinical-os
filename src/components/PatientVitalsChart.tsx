@@ -11,6 +11,7 @@ import {
   X,
   CheckCircle2
 } from 'lucide-react';
+import { VoiceDictationButton } from './VoiceDictationButton';
 
 export interface VitalsRecord {
   id: string;
@@ -985,9 +986,17 @@ export const PatientVitalsChart: React.FC<PatientVitalsChartProps> = ({
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Clinical Observation Notes
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700">
+                    Clinical Observation Notes
+                  </label>
+                  <VoiceDictationButton
+                    value={newNotes}
+                    onChange={setNewNotes}
+                    variant="badge"
+                    title="Dictate vitals observation notes with mic"
+                  />
+                </div>
                 <textarea
                   rows={2}
                   placeholder="e.g. Post-prandial weight, wearing winter attire, patient reports intentional weight reduction..."

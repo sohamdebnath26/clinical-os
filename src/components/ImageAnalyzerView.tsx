@@ -8,6 +8,7 @@ import { ClinicalImageReportModal } from './ClinicalImageReportModal';
 import { DermoscopicToolModal } from './DermoscopicToolModal';
 import { PinToBodyMapModal } from './PinToBodyMapModal';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
+import { VoiceDictationButton } from './VoiceDictationButton';
 import {
   Camera,
   Upload,
@@ -869,9 +870,17 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
             {/* Anatomical Site & Doctor Notes */}
             <div className="space-y-3 pt-1">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Anatomical Site / Location (Optional)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Anatomical Site / Location (Optional)
+                  </label>
+                  <VoiceDictationButton
+                    value={anatomicalSite}
+                    onChange={setAnatomicalSite}
+                    variant="badge"
+                    title="Dictate anatomical site with mic"
+                  />
+                </div>
                 <input
                   type="text"
                   placeholder="e.g. Left volar forearm, malar cheek, dorsal foot"
@@ -882,9 +891,18 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Doctor's Observation / Query (Optional)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Doctor&apos;s Observation / Query (Optional)
+                  </label>
+                  <VoiceDictationButton
+                    value={clinicalNotes}
+                    onChange={setClinicalNotes}
+                    variant="button"
+                    label="Dictate Observation"
+                    title="Dictate clinical observations or query for AI analysis"
+                  />
+                </div>
                 <textarea
                   rows={2}
                   placeholder="e.g. Erythematous papules appearing 2 weeks ago, itching at night, no response to mild hydrocortisone."

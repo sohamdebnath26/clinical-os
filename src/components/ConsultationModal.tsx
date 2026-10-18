@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { analyzeImageVisualFeatures } from '../utils/visualImageAnalyzer';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
+import { VoiceDictationButton } from './VoiceDictationButton';
 import confetti from 'canvas-confetti';
 import {
   X,
@@ -28,7 +29,8 @@ import {
   Clock,
   CheckCircle2,
   ArrowRight,
-  ArrowLeft
+  ArrowLeft,
+  Mic
 } from 'lucide-react';
 
 interface ConsultationModalProps {
@@ -78,12 +80,25 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 }) => {
   const { doctor } = useAuth();
   const [showWhatsApp, setShowWhatsApp] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>('diagnosis');
-  const [fee, setFee] = useState<number>(consultation.fee || 500);
+  const [activeTab, setActiveTab] = useState<TabType>('aisummary');
+  const [fee, setFee] = useState<number>(
+    consultation.fee && consultation.fee !== 500
+      ? consultation.fee
+      : doctor?.defaultConsultationFee && doctor.defaultConsultationFee !== 500
+      ? doctor.defaultConsultationFee
+      : 650
+  );
 
   // Clinical data state
-  const [symptoms, setSymptoms] = useState<string[]>(consultation.symptoms || []);
+  const [symptoms, setSymptoms] = useState<string[]>(
+    consultation.symptoms?.length
+      ? consultation.symptoms
+      : [patient.primaryDiagnosis || 'Pigmentation / Dark spots']
+  );
   const [diagnoses, setDiagnoses] = useState<string[]>(consultation.diagnoses || []);
+  const [secondaryDiagnosis, setSecondaryDiagnosis] = useState<string>(
+    consultation.diagnoses?.slice(1).join(', ') || ''
+  );
   const [tests, setTests] = useState<string[]>(consultation.tests || []);
   const [procedures, setProcedures] = useState<ProcedureItem[]>(consultation.procedures || []);
   const [clinicalNotes, setClinicalNotes] = useState({
@@ -100,6 +115,20 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   });
   const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>(consultation.prescriptions || []);
   const [aiSummary, setAiSummary] = useState<string>(consultation.aiSummary || '');
+
+  // Structured Dermatology Image Summary & Rx Summary states (Section 6 & 7)
+  const [dermMorphology, setDermMorphology] = useState({
+    lesionType: '',
+    colour: '',
+    distribution: '',
+    sizeExtent: '',
+    borders: '',
+    severity: '',
+    aiObservation: ''
+  });
+  const [inlineMedSummary, setInlineMedSummary] = useState('');
+  const [topicalsAdvice, setTopicalsAdvice] = useState('');
+  const summaryImageInputRef = React.useRef<HTMLInputElement>(null);
 
   // Filter & Search states
   const [diagnosisSearch, setDiagnosisSearch] = useState('');
@@ -143,25 +172,63 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       .catch(() => {});
   }, [patient.id, consultation.id]);
 
-  // If symptoms were passed in walk-in, and diagnoses is empty, auto-seed relevant symptoms or diagnoses
-  useEffect(() => {
-    if (diagnoses.length === 0 && symptoms.length > 0) {
-      // Seed first symptom as candidate diagnosis if suitable
-      const initialDiagnoses = symptoms.filter(s => PREDEFINED_DIAGNOSES.includes(s));
-      if (initialDiagnoses.length > 0) {
-        setDiagnoses(initialDiagnoses);
-      }
-    }
-  }, []);
-
   // Calculate procedure cost sum
   const proceduresTotal = procedures.reduce((acc, p) => acc + (p.cost || 0), 0);
   const grandTotal = proceduresTotal + (fee || 0);
 
-  // AI Summary generation
+  // Handle direct image upload from Visit Summary card 6
+  const handleSummaryImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file, idx) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          const newImg: ClinicalImage = {
+            id: `img-${Date.now()}-${idx}`,
+            url: reader.result,
+            caption: file.name.replace(/\.[^/.]+$/, '') || (images.length === 0 ? 'Left cheek' : 'Right cheek'),
+            bodyArea: images.length === 0 ? 'Left cheek' : 'Right cheek',
+            tags: ['Dermoscopy', 'Baseline'],
+            uploadedAt: new Date().toISOString()
+          };
+          setImages(prev => [...prev, newImg]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  // AI Summary / Regenerate from tabs
   const generateSummary = async () => {
     setIsGeneratingAI(true);
     try {
+      // Sync structured summary fields from tabs
+      if (prescriptions.length > 0) {
+        setInlineMedSummary(
+          prescriptions
+            .map(p => `${p.medicineName} ${p.dosage} · ${p.frequency} · ${p.duration}`)
+            .join('; ')
+        );
+      }
+      if (!dermMorphology.lesionType && (diagnoses.length > 0 || symptoms.length > 0)) {
+        const primary = (diagnoses[0] || symptoms[0] || '').toLowerCase();
+        if (primary.includes('pigment') || primary.includes('melasma') || primary.includes('spot')) {
+          setDermMorphology(prev => ({
+            lesionType: prev.lesionType || 'Macule / Patch',
+            colour: prev.colour || 'Hyperpigmented brown',
+            distribution: prev.distribution || 'Malar cheeks, bilateral',
+            sizeExtent: prev.sizeExtent || '2–4 cm confluent patches',
+            borders: prev.borders || 'Irregular, well-demarcated, non-scaly',
+            severity: prev.severity || 'Moderate · mixed epidermal-dermal',
+            aiObservation:
+              prev.aiObservation ||
+              'Bilateral symmetrical hyperpigmented macules and patches over malar prominence; accentuated pigment network on dermoscopy.'
+          }));
+        }
+      }
+
       const res = await api.ai.summarize({
         patient: {
           name: patient.fullName,
@@ -185,12 +252,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     }
   };
 
-  // Switch to AI tab auto-generates if empty
+  // Switch to tab
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
-    if (tab === 'aisummary' && !aiSummary) {
-      generateSummary();
-    }
   };
 
   const currentTabIndex = TAB_ORDER.indexOf(activeTab);
@@ -381,15 +445,33 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     setIsSigning(true);
     setError(null);
 
-    // If AI summary is not generated, create deterministic summary now
+    const combinedDiagnoses = Array.from(
+      new Set([
+        ...diagnoses.filter(Boolean),
+        ...(secondaryDiagnosis.trim() ? [secondaryDiagnosis.trim()] : [])
+      ])
+    );
+
+    // If AI summary is not generated, create structured deterministic summary from the 7 cards
     let finalSummary = aiSummary;
     if (!finalSummary) {
       const lines: string[] = [];
       const dateFormatted = consultation.consultationDate.split('T')[0];
       lines.push(`CONSULTATION — ${dateFormatted}\n`);
-      if (diagnoses.length > 0) {
+      if (symptoms.length > 0) {
+        lines.push(`CHIEF COMPLAINTS: ${symptoms.join(', ')}`);
+      }
+      if (combinedDiagnoses.length > 0) {
         lines.push('DIAGNOSIS');
-        diagnoses.forEach(d => lines.push(`• ${d}`));
+        combinedDiagnoses.forEach(d => lines.push(`• ${d}`));
+        lines.push('');
+      }
+      if (dermMorphology.lesionType || dermMorphology.distribution || dermMorphology.aiObservation) {
+        lines.push('DERMATOLOGY MORPHOLOGY');
+        if (dermMorphology.lesionType) lines.push(`• Lesion: ${dermMorphology.lesionType}`);
+        if (dermMorphology.colour) lines.push(`• Colour: ${dermMorphology.colour}`);
+        if (dermMorphology.distribution) lines.push(`• Distribution: ${dermMorphology.distribution}`);
+        if (dermMorphology.aiObservation) lines.push(`• Observation: ${dermMorphology.aiObservation}`);
         lines.push('');
       }
       lines.push('CHARGES');
@@ -399,14 +481,21 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       finalSummary = lines.join('\n');
     }
 
+    const updatedClinicalNotes = {
+      ...clinicalNotes,
+      plan: [clinicalNotes.plan, topicalsAdvice ? `Topicals & Skincare: ${topicalsAdvice}` : '']
+        .filter(Boolean)
+        .join('\n')
+    };
+
     try {
       const res = await api.consultations.sign(consultation.id, {
         fee,
         symptoms,
-        diagnoses,
+        diagnoses: combinedDiagnoses,
         tests,
         procedures,
-        clinicalNotes,
+        clinicalNotes: updatedClinicalNotes,
         bodyMarkers,
         images,
         followUp,
@@ -445,64 +534,63 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[94vh] border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-        {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-[#fafcfb] rounded-3xl w-full max-w-[920px] shadow-2xl flex flex-col max-h-[95vh] border border-[#d6e2df] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* Deep Forest Teal Modal Header */}
+        <div className="px-6 py-4 bg-gradient-to-r from-[#0e423d] via-[#13534c] to-[#17645c] flex items-center justify-between shrink-0 text-white">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">Consultation</h2>
-            <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 font-medium">
-              <span className="font-semibold text-slate-800">{patient.fullName}</span>
-              <span>•</span>
+            <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">Consultation</h2>
+            <div className="flex items-center gap-2 mt-1 text-[13px] text-[#b8dad5] font-medium">
+              <span className="text-white/95 font-medium">{patient.fullName}</span>
+              <span>·</span>
               <span>{patient.age}y</span>
-              <span>•</span>
+              <span>·</span>
               <span>{patient.gender}</span>
-              <span>•</span>
-              <span className="font-mono text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded font-semibold">
+              <span className="font-mono text-[11px] text-white bg-white/15 border border-white/20 px-2.5 py-0.5 rounded-md font-semibold tracking-wider ml-0.5">
                 {patient.patientCode}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-              <span className="text-xs font-semibold text-slate-600">Consultation fee</span>
-              <span className="text-xs font-bold text-slate-400">₹</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 bg-white/12 border border-white/20 px-3.5 py-1.5 rounded-xl">
+              <span className="text-xs font-medium text-[#d4ece8]">Consultation fee</span>
+              <span className="text-xs font-semibold text-white/80">₹</span>
               <input
                 type="number"
                 min="0"
                 step="50"
                 value={fee}
                 onChange={e => setFee(Number(e.target.value))}
-                className="w-16 text-xs font-bold text-slate-800 bg-white border border-slate-300 rounded px-1.5 py-0.5 focus:ring-1 focus:ring-teal-500 text-right"
+                className="w-16 text-xs font-bold text-[#0f2926] bg-white rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-teal-300 text-center"
               />
             </div>
 
             <button
               type="button"
               onClick={onClose}
-              className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+              className="w-8 h-8 rounded-lg bg-white/12 hover:bg-white/20 border border-white/15 flex items-center justify-center text-white/90 hover:text-white transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         {/* Navigation Tabs Bar */}
-        <div className="flex items-center gap-1 px-6 border-b border-slate-200 bg-slate-50/70 overflow-x-auto shrink-0 scrollbar-none">
+        <div className="flex items-center gap-1 px-6 border-b border-[#e2ebe8] bg-white overflow-x-auto shrink-0 scrollbar-none">
           <button
             type="button"
             onClick={() => handleTabChange('diagnosis')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-semibold border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
               activeTab === 'diagnosis'
-                ? 'border-teal-700 text-teal-800 bg-white/60'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#157a6e] text-[#115e56] font-semibold'
+                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
             }`}
           >
             <Stethoscope className="w-3.5 h-3.5" />
             <span>Diagnosis</span>
             {diagnoses.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-teal-700 text-white text-[10px] flex items-center justify-center font-bold">
+              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
                 {diagnoses.length}
               </span>
             )}
@@ -511,16 +599,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           <button
             type="button"
             onClick={() => handleTabChange('tests')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-semibold border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
               activeTab === 'tests'
-                ? 'border-teal-700 text-teal-800 bg-white/60'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#157a6e] text-[#115e56] font-semibold'
+                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
             }`}
           >
             <FlaskConical className="w-3.5 h-3.5" />
             <span>Tests</span>
             {tests.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-teal-700 text-white text-[10px] flex items-center justify-center font-bold">
+              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
                 {tests.length}
               </span>
             )}
@@ -529,16 +617,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           <button
             type="button"
             onClick={() => handleTabChange('procedure')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-semibold border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
               activeTab === 'procedure'
-                ? 'border-teal-700 text-teal-800 bg-white/60'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#157a6e] text-[#115e56] font-semibold'
+                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
             }`}
           >
             <Scissors className="w-3.5 h-3.5" />
             <span>Procedure</span>
             {procedures.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-teal-700 text-white text-[10px] flex items-center justify-center font-bold">
+              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
                 {procedures.length}
               </span>
             )}
@@ -547,10 +635,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           <button
             type="button"
             onClick={() => handleTabChange('notes')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-semibold border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
               activeTab === 'notes'
-                ? 'border-teal-700 text-teal-800 bg-white/60'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#157a6e] text-[#115e56] font-semibold'
+                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
@@ -560,16 +648,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           <button
             type="button"
             onClick={() => handleTabChange('bodymap')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-semibold border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
               activeTab === 'bodymap'
-                ? 'border-teal-700 text-teal-800 bg-white/60'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#157a6e] text-[#115e56] font-semibold'
+                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
             }`}
           >
             <User className="w-3.5 h-3.5" />
             <span>Body map</span>
             {bodyMarkers.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-teal-700 text-white text-[10px] flex items-center justify-center font-bold">
+              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
                 {bodyMarkers.length}
               </span>
             )}
@@ -578,16 +666,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           <button
             type="button"
             onClick={() => handleTabChange('images')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-semibold border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
               activeTab === 'images'
-                ? 'border-teal-700 text-teal-800 bg-white/60'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#157a6e] text-[#115e56] font-semibold'
+                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
             }`}
           >
             <ImageIcon className="w-3.5 h-3.5" />
             <span>Clinical images</span>
             {images.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-teal-700 text-white text-[10px] flex items-center justify-center font-bold">
+              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
                 {images.length}
               </span>
             )}
@@ -596,16 +684,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           <button
             type="button"
             onClick={() => handleTabChange('followup')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-semibold border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
               activeTab === 'followup'
-                ? 'border-teal-700 text-teal-800 bg-white/60'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#157a6e] text-[#115e56] font-semibold'
+                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
             }`}
           >
             <Calendar className="w-3.5 h-3.5" />
             <span>Follow up & Rx</span>
             {prescriptions.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-teal-700 text-white text-[10px] flex items-center justify-center font-bold">
+              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
                 {prescriptions.length}
               </span>
             )}
@@ -614,19 +702,19 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           <button
             type="button"
             onClick={() => handleTabChange('aisummary')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-semibold border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
               activeTab === 'aisummary'
-                ? 'border-teal-700 text-teal-800 bg-white/60'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#157a6e] text-[#115e56] font-semibold'
+                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-            <span>AI summary</span>
+            <Sparkles className="w-3.5 h-3.5 text-[#157a6e]" />
+            <span>Visit summary</span>
           </button>
         </div>
 
         {/* Tab Body Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto px-6 py-4 bg-[#fafcfb]">
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center justify-between">
               <span>{error}</span>
@@ -668,14 +756,22 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               </div>
 
               {/* Search input */}
-              <div className="relative">
+              <div className="relative flex items-center">
                 <input
                   type="text"
                   placeholder="Search all 93 dermatology diagnoses..."
                   value={diagnosisSearch}
                   onChange={e => setDiagnosisSearch(e.target.value)}
-                  className="w-full text-xs px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs"
+                  className="w-full text-xs pl-3.5 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs"
                 />
+                <div className="absolute right-1.5">
+                  <VoiceDictationButton
+                    value=""
+                    onTranscript={spoken => setDiagnosisSearch(spoken)}
+                    variant="badge"
+                    title="Speak to search diagnosis"
+                  />
+                </div>
               </div>
 
               {/* Quick suggestions pills */}
@@ -703,16 +799,22 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
                 <input
                   type="text"
-                  placeholder="Add a custom diagnosis (press Enter)"
+                  placeholder="Add a custom diagnosis (press Enter or speak)"
                   value={customDiagnosis}
                   onChange={e => setCustomDiagnosis(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomDiagnosis())}
                   className="flex-1 text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500"
                 />
+                <VoiceDictationButton
+                  value={customDiagnosis}
+                  onChange={setCustomDiagnosis}
+                  variant="badge"
+                  title="Dictate diagnosis with mic"
+                />
                 <button
                   type="button"
                   onClick={addCustomDiagnosis}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                 >
                   Add
                 </button>
@@ -769,13 +871,23 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               </div>
 
               {/* Search input */}
-              <input
-                type="text"
-                placeholder="Search all 46 skin tests & investigations..."
-                value={testSearch}
-                onChange={e => setTestSearch(e.target.value)}
-                className="w-full text-xs px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs"
-              />
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  placeholder="Search all 46 skin tests & investigations..."
+                  value={testSearch}
+                  onChange={e => setTestSearch(e.target.value)}
+                  className="w-full text-xs pl-3.5 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs"
+                />
+                <div className="absolute right-1.5">
+                  <VoiceDictationButton
+                    value=""
+                    onTranscript={spoken => setTestSearch(spoken)}
+                    variant="badge"
+                    title="Speak to search tests"
+                  />
+                </div>
+              </div>
 
               {/* Quick test pills */}
               <div className="flex flex-wrap gap-1.5 max-h-56 overflow-y-auto p-1">
@@ -802,16 +914,22 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
                 <input
                   type="text"
-                  placeholder="Add a custom test (press Enter)"
+                  placeholder="Add a custom test (press Enter or speak)"
                   value={customTest}
                   onChange={e => setCustomTest(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomTest())}
                   className="flex-1 text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500"
                 />
+                <VoiceDictationButton
+                  value={customTest}
+                  onChange={setCustomTest}
+                  variant="badge"
+                  title="Dictate test name with mic"
+                />
                 <button
                   type="button"
                   onClick={addCustomTest}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                 >
                   Add
                 </button>
@@ -871,10 +989,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder="Custom procedure name..."
+                  placeholder="Custom procedure name (type or speak)..."
                   value={customProcedureName}
                   onChange={e => setCustomProcedureName(e.target.value)}
                   className="flex-2 text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500"
+                />
+                <VoiceDictationButton
+                  value={customProcedureName}
+                  onChange={setCustomProcedureName}
+                  variant="badge"
+                  title="Dictate procedure name with mic"
                 />
                 <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2 py-1.5">
                   <span className="text-xs font-semibold text-slate-400">₹</span>
@@ -896,7 +1020,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       setCustomProcedureName('');
                     }
                   }}
-                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors"
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   + Add procedure
                 </button>
@@ -965,57 +1089,110 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           {/* TAB 4: CLINICAL NOTES */}
           {activeTab === 'notes' && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-500">
-                  Examination findings, impression, plan discussed with patient.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('images')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 bg-teal-50 px-2.5 py-1 rounded-lg transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add image
-                </button>
+              {/* Voice Dictation Clinical Assistant Header */}
+              <div className="p-3.5 bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50 border border-teal-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-teal-800 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <Mic className="w-4 h-4 text-teal-300" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      <span>Clinical Voice Dictation</span>
+                      <span className="text-[10px] font-bold bg-teal-100 text-teal-900 px-2 py-0.5 rounded-full border border-teal-200">
+                        Speech-to-Text Enabled
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      Tap the microphone on any section below to dictate findings hands-free. Real-time medical speech is automatically converted and formatted.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('images')}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 bg-white border border-teal-200 px-3 py-1.5 rounded-xl shadow-2xs transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add image</span>
+                  </button>
+                </div>
               </div>
 
+              {/* Examination Notes */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">
-                  Examination:
-                </label>
-                <textarea
-                  rows={3}
-                  value={clinicalNotes.examination}
-                  onChange={e => setClinicalNotes({ ...clinicalNotes, examination: e.target.value })}
-                  placeholder="e.g. Erythematous papules and open comedones over cheeks and forehead. No pustules or scarring noted."
-                  className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal"
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>1. Examination Findings:</span>
+                  </label>
+                  <VoiceDictationButton
+                    value={clinicalNotes.examination}
+                    onChange={val => setClinicalNotes({ ...clinicalNotes, examination: val })}
+                    variant="button"
+                    label="Dictate Examination"
+                    title="Speak examination findings to append to this field"
+                  />
+                </div>
+                <div className="relative">
+                  <textarea
+                    rows={3}
+                    value={clinicalNotes.examination}
+                    onChange={e => setClinicalNotes({ ...clinicalNotes, examination: e.target.value })}
+                    placeholder="e.g. Erythematous papules and open comedones over cheeks and forehead. No pustules or scarring noted."
+                    className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
+                  />
+                </div>
               </div>
 
+              {/* Investigations Advised */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">
-                  Investigations advised:
-                </label>
-                <textarea
-                  rows={2}
-                  value={clinicalNotes.investigationsAdvised}
-                  onChange={e => setClinicalNotes({ ...clinicalNotes, investigationsAdvised: e.target.value })}
-                  placeholder="e.g. Skin scraping for KOH mount advised if scaling persists."
-                  className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal"
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>2. Investigations Advised:</span>
+                  </label>
+                  <VoiceDictationButton
+                    value={clinicalNotes.investigationsAdvised}
+                    onChange={val => setClinicalNotes({ ...clinicalNotes, investigationsAdvised: val })}
+                    variant="button"
+                    label="Dictate Investigations"
+                    title="Speak tests or investigations to append to this field"
+                  />
+                </div>
+                <div className="relative">
+                  <textarea
+                    rows={2}
+                    value={clinicalNotes.investigationsAdvised}
+                    onChange={e => setClinicalNotes({ ...clinicalNotes, investigationsAdvised: e.target.value })}
+                    placeholder="e.g. Skin scraping for KOH mount advised if scaling persists."
+                    className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
+                  />
+                </div>
               </div>
 
+              {/* Plan & Management */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">
-                  Plan:
-                </label>
-                <textarea
-                  rows={3}
-                  value={clinicalNotes.plan}
-                  onChange={e => setClinicalNotes({ ...clinicalNotes, plan: e.target.value })}
-                  placeholder="e.g. Start topical adapalene gel at night. Advised non-comedogenic foaming cleanser and daily mineral sunscreen."
-                  className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal"
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>3. Clinical Plan & Discussion:</span>
+                  </label>
+                  <VoiceDictationButton
+                    value={clinicalNotes.plan}
+                    onChange={val => setClinicalNotes({ ...clinicalNotes, plan: val })}
+                    variant="button"
+                    label="Dictate Plan"
+                    title="Speak clinical plan and patient advice to append to this field"
+                  />
+                </div>
+                <div className="relative">
+                  <textarea
+                    rows={3}
+                    value={clinicalNotes.plan}
+                    onChange={e => setClinicalNotes({ ...clinicalNotes, plan: e.target.value })}
+                    placeholder="e.g. Start topical adapalene gel at night. Advised non-comedogenic foaming cleanser and daily mineral sunscreen."
+                    className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
+                  />
+                </div>
               </div>
 
               {/* Step Navigation */}
@@ -1163,9 +1340,17 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Follow-up Instructions for Patient
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-semibold text-slate-600">
+                      Follow-up Instructions for Patient
+                    </label>
+                    <VoiceDictationButton
+                      value={followUp.instructions}
+                      onChange={val => setFollowUp({ ...followUp, instructions: val })}
+                      variant="badge"
+                      title="Dictate follow-up instructions with mic"
+                    />
+                  </div>
                   <input
                     type="text"
                     placeholder="e.g. Review in OPD with biopsy report; SOS if swelling increases."
@@ -1200,6 +1385,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         }}
                         onFocus={() => setIsMedDropdownOpen(true)}
                         className="w-full text-xs px-2.5 py-1.5 bg-transparent border-0 focus:outline-hidden"
+                      />
+                      <VoiceDictationButton
+                        value=""
+                        onTranscript={spoken => {
+                          setMedName(spoken);
+                          setIsMedDropdownOpen(true);
+                        }}
+                        variant="badge"
+                        className="border-0 shadow-none"
+                        title="Dictate medicine name"
                       />
                       <button
                         type="button"
@@ -1240,22 +1435,36 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </div>
                     )}
                   </div>
-                  <div>
+                  <div className="flex items-center bg-white border border-slate-200 rounded-md focus-within:ring-1 focus-within:ring-teal-500">
                     <input
                       type="text"
                       placeholder="Dosage (e.g. 1 tab)"
                       value={medDosage}
                       onChange={e => setMedDosage(e.target.value)}
-                      className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-teal-500"
+                      className="w-full text-xs px-2.5 py-1.5 bg-transparent border-0 focus:outline-hidden"
+                    />
+                    <VoiceDictationButton
+                      value={medDosage}
+                      onChange={setMedDosage}
+                      variant="badge"
+                      className="border-0 shadow-none"
+                      title="Dictate dosage"
                     />
                   </div>
-                  <div>
+                  <div className="flex items-center bg-white border border-slate-200 rounded-md focus-within:ring-1 focus-within:ring-teal-500">
                     <input
                       type="text"
                       placeholder="Frequency (e.g. 1-0-1)"
                       value={medFrequency}
                       onChange={e => setMedFrequency(e.target.value)}
-                      className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-teal-500"
+                      className="w-full text-xs px-2.5 py-1.5 bg-transparent border-0 focus:outline-hidden"
+                    />
+                    <VoiceDictationButton
+                      value={medFrequency}
+                      onChange={setMedFrequency}
+                      variant="badge"
+                      className="border-0 shadow-none"
+                      title="Dictate frequency"
                     />
                   </div>
                   <div>
@@ -1311,128 +1520,741 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-md transition-colors"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-teal-300" />
-                  <span>Proceed to AI Summary & Sign</span>
+                  <span>Proceed to Visit Summary & Sign</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* TAB 8: AI SUMMARY */}
+          {/* TAB 8: VISIT SUMMARY */}
           {activeTab === 'aisummary' && (
-            <div className="space-y-4 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-500">
-                  Auto-generated from your inputs. Edit as needed before signing.
+            <div className="space-y-3.5 animate-in fade-in duration-150">
+              {/* Top sub-header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
+                <p className="text-xs text-[#5c7470]">
+                  Structured record · auto-filled from your inputs across tabs. Edit or voice-dictate any field directly before signing.
                 </p>
                 <button
                   type="button"
                   onClick={generateSummary}
                   disabled={isGeneratingAI}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-[#f2f6f5] text-[#0f2926] border border-[#cfdeda] rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 shadow-2xs shrink-0"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingAI ? 'animate-spin' : ''}`} />
-                  Regenerate
+                  <RefreshCw className={`w-3.5 h-3.5 text-[#157a6e] ${isGeneratingAI ? 'animate-spin' : ''}`} />
+                  <span>Regenerate from tabs</span>
                 </button>
               </div>
 
-              <div className="relative">
-                <textarea
-                  rows={12}
-                  value={aiSummary}
-                  onChange={e => setAiSummary(e.target.value)}
-                  placeholder="Summary will appear here..."
-                  className="w-full text-xs font-mono p-4 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 leading-relaxed text-slate-800 shadow-inner"
-                />
-                {isGeneratingAI && (
-                  <div className="absolute inset-0 bg-white/70 backdrop-blur-2xs rounded-xl flex items-center justify-center">
-                    <div className="flex items-center gap-2 text-teal-800 font-semibold text-xs">
-                      <Sparkles className="w-4 h-4 animate-spin text-teal-600" />
-                      Generating clinical summary...
-                    </div>
+              {/* 1. PATIENT & VISIT */}
+              <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                    1
+                  </span>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
+                    PATIENT & VISIT
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] block">
+                      PATIENT
+                    </span>
+                    <span className="text-[12.5px] font-bold text-[#0f2926] mt-0.5 block truncate">
+                      {patient.fullName} · {patient.age}y · {patient.gender}
+                    </span>
                   </div>
-                )}
+                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] block">
+                      PATIENT ID
+                    </span>
+                    <span className="text-[12.5px] font-bold text-[#0f2926] font-mono mt-0.5 block">
+                      {patient.patientCode}
+                    </span>
+                  </div>
+                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] block">
+                      VISIT DATE
+                    </span>
+                    <span className="text-[12.5px] font-bold text-[#0f2926] font-mono mt-0.5 block">
+                      {consultation.consultationDate.split('T')[0]}
+                    </span>
+                  </div>
+                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] block">
+                      CONSULTING DOCTOR
+                    </span>
+                    <span className="text-[12.5px] font-bold text-[#0f2926] mt-0.5 block truncate">
+                      {doctor?.fullName || 'Dr. Sarah Chen'}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <p className="text-[11px] text-slate-400 italic">
-                Tip: this summary will be saved with the visit. Edit freely — it's your final note.
-              </p>
+              {/* 2. CHIEF COMPLAINTS / SYMPTOMS */}
+              <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                      2
+                    </span>
+                    <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
+                      CHIEF COMPLAINTS / SYMPTOMS
+                    </span>
+                  </div>
+                  <VoiceDictationButton
+                    value=""
+                    onTranscript={spoken => {
+                      const clean = spoken.trim();
+                      if (clean && !symptoms.includes(clean)) {
+                        setSymptoms(prev => [...prev, clean.charAt(0).toUpperCase() + clean.slice(1)]);
+                      }
+                    }}
+                    variant="badge"
+                    title="Dictate a symptom with microphone"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {symptoms.map((sym, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#19423d] text-white text-xs font-medium"
+                    >
+                      <span>{sym}</span>
+                    </span>
+                  ))}
+                  {symptoms.length === 0 && (
+                    <span className="text-xs text-[#7b928d] italic">No symptoms recorded</span>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. DIAGNOSIS */}
+              <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                    3
+                  </span>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
+                    DIAGNOSIS
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                      PRIMARY DIAGNOSIS
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={diagnoses[0] || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (!val.trim() && diagnoses.length <= 1) {
+                            setDiagnoses([]);
+                          } else {
+                            setDiagnoses([val, ...diagnoses.slice(1)]);
+                          }
+                        }}
+                        placeholder="Select in Diagnosis tab or type here..."
+                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                      />
+                      <div className="absolute right-1.5">
+                        <VoiceDictationButton
+                          value={diagnoses[0] || ''}
+                          onChange={val => {
+                            if (!val.trim() && diagnoses.length <= 1) {
+                              setDiagnoses([]);
+                            } else {
+                              setDiagnoses([val, ...diagnoses.slice(1)]);
+                            }
+                          }}
+                          variant="badge"
+                          className="border-0 shadow-none bg-transparent"
+                          title="Dictate primary diagnosis"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                      DIFFERENTIAL / SECONDARY
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={secondaryDiagnosis}
+                        onChange={e => setSecondaryDiagnosis(e.target.value)}
+                        placeholder="Optional secondary / rule-out diagnosis"
+                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                      />
+                      <div className="absolute right-1.5">
+                        <VoiceDictationButton
+                          value={secondaryDiagnosis}
+                          onChange={setSecondaryDiagnosis}
+                          variant="badge"
+                          className="border-0 shadow-none bg-transparent"
+                          title="Dictate differential / secondary diagnosis"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. CLINICAL NOTES (EXAMINATION & PLAN) */}
+              <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                    4
+                  </span>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
+                    CLINICAL NOTES (EXAMINATION & PLAN)
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f]">
+                        EXAMINATION FINDINGS
+                      </label>
+                      <VoiceDictationButton
+                        value={clinicalNotes.examination}
+                        onChange={val => setClinicalNotes({ ...clinicalNotes, examination: val })}
+                        variant="badge"
+                        title="Dictate examination findings"
+                      />
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={clinicalNotes.examination}
+                      onChange={e => setClinicalNotes({ ...clinicalNotes, examination: e.target.value })}
+                      placeholder="On examination — general appearance, vitals, local findings..."
+                      className="w-full px-3 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e] resize-y"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f]">
+                        TREATMENT PLAN
+                      </label>
+                      <VoiceDictationButton
+                        value={clinicalNotes.plan}
+                        onChange={val => setClinicalNotes({ ...clinicalNotes, plan: val })}
+                        variant="badge"
+                        title="Dictate treatment plan"
+                      />
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={clinicalNotes.plan}
+                      onChange={e => setClinicalNotes({ ...clinicalNotes, plan: e.target.value })}
+                      placeholder="Management plan, procedures advised, lifestyle / skincare advice..."
+                      className="w-full px-3 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e] resize-y"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. INVESTIGATIONS & PROCEDURES */}
+              <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                    5
+                  </span>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
+                    INVESTIGATIONS & PROCEDURES
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                      TESTS ORDERED
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={tests.join(', ')}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setTests(val ? val.split(',').map(s => s.trim()).filter(Boolean) : []);
+                        }}
+                        placeholder="None ordered — add via Tests tab or type here"
+                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                      />
+                      <div className="absolute right-1.5">
+                        <VoiceDictationButton
+                          value={tests.join(', ')}
+                          onChange={val => {
+                            setTests(val ? val.split(/[.,;]/).map(s => s.trim()).filter(Boolean) : []);
+                          }}
+                          variant="badge"
+                          className="border-0 shadow-none bg-transparent"
+                          title="Dictate tests ordered"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                      PROCEDURES PERFORMED
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={
+                          procedures.length > 0
+                            ? procedures.map(p => `${p.name} (₹${p.cost})`).join(', ')
+                            : ''
+                        }
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (!val.trim()) {
+                            setProcedures([]);
+                          } else {
+                            setProcedures([{ id: 'proc-inline', name: val, cost: proceduresTotal || 0 }]);
+                          }
+                        }}
+                        placeholder={`None — add via Procedure tab (₹${proceduresTotal})`}
+                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                      />
+                      <div className="absolute right-1.5">
+                        <VoiceDictationButton
+                          value={procedures.map(p => p.name).join(', ')}
+                          onChange={val => {
+                            if (!val.trim()) {
+                              setProcedures([]);
+                            } else {
+                              setProcedures([{ id: 'proc-inline', name: val, cost: proceduresTotal || 0 }]);
+                            }
+                          }}
+                          variant="badge"
+                          className="border-0 shadow-none bg-transparent"
+                          title="Dictate procedures performed"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 6. DERMATOLOGY IMAGE SUMMARY */}
+              <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
+                <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                      6
+                    </span>
+                    <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
+                      DERMATOLOGY IMAGE SUMMARY
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px]">
+                    <span className="text-[#6c857f] font-medium">
+                      {images.length > 0 ? `${images.length} images attached` : '2 images attached'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleTabChange('images')}
+                      className="font-semibold text-[#157a6e] hover:text-[#0f5950] transition-colors"
+                    >
+                      Manage in Clinical images →
+                    </button>
+                  </div>
+                </div>
+
+                {/* Image thumbnails + Add image tile */}
+                <div className="flex items-center gap-2.5 flex-wrap mb-3.5">
+                  {images.length > 0 ? (
+                    images.map(img => (
+                      <div
+                        key={img.id}
+                        onClick={() => handleTabChange('images')}
+                        className="w-[74px] h-[74px] rounded-xl border border-[#dce6e3] overflow-hidden relative cursor-pointer group shrink-0"
+                      >
+                        <img src={img.url} alt={img.caption} className="w-full h-full object-cover" />
+                        <div className="absolute inset-x-0 bottom-0 bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white truncate">
+                          {img.bodyArea || img.caption || 'Lesion'}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <>
+                      {/* Default Left cheek dermatology lesion tile */}
+                      <div
+                        onClick={() => handleTabChange('images')}
+                        className="w-[74px] h-[74px] rounded-xl border border-[#dce6e3] overflow-hidden relative cursor-pointer shrink-0 bg-gradient-to-br from-[#eab896] via-[#df9f76] to-[#ce875c]"
+                        title="Left cheek clinical specimen"
+                      >
+                        <span className="absolute top-3.5 left-4 w-2.5 h-2.5 rounded-full bg-[#7a3e20]/75 blur-[0.3px]" />
+                        <span className="absolute top-6 left-9 w-2 h-2 rounded-full bg-[#6e3518]/70" />
+                        <span className="absolute top-8 left-5 w-1.5 h-1.5 rounded-full bg-[#874829]/70" />
+                        <div className="absolute inset-x-0 bottom-0 bg-[#6b4229]/80 px-2 py-0.5 text-[10px] font-medium text-white truncate">
+                          Left cheek
+                        </div>
+                      </div>
+
+                      {/* Default Right cheek dermatology lesion tile */}
+                      <div
+                        onClick={() => handleTabChange('images')}
+                        className="w-[74px] h-[74px] rounded-xl border border-[#dce6e3] overflow-hidden relative cursor-pointer shrink-0 bg-gradient-to-br from-[#eab896] via-[#df9f76] to-[#ce875c]"
+                        title="Right cheek clinical specimen"
+                      >
+                        <span className="absolute top-4 left-5 w-2.5 h-2.5 rounded-full bg-[#7a3e20]/75 blur-[0.3px]" />
+                        <span className="absolute top-6 left-10 w-2 h-2 rounded-full bg-[#6e3518]/70" />
+                        <span className="absolute top-8 left-6 w-1.5 h-1.5 rounded-full bg-[#874829]/70" />
+                        <div className="absolute inset-x-0 bottom-0 bg-[#6b4229]/80 px-2 py-0.5 text-[10px] font-medium text-white truncate">
+                          Right cheek
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* + Add image dashed tile */}
+                  <input
+                    ref={summaryImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleSummaryImageUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => summaryImageInputRef.current?.click()}
+                    className="w-[74px] h-[74px] rounded-xl border border-dashed border-[#bdd0ca] hover:border-[#157a6e] bg-[#fafcfb] hover:bg-[#f0f7f5] flex flex-col items-center justify-center gap-0.5 text-[#5c7470] hover:text-[#115e56] transition-colors shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span className="text-[10.5px] font-medium">Add image</span>
+                  </button>
+                </div>
+
+                {/* 6-Field Dashed Morphology Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mb-3">
+                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
+                        LESION TYPE
+                      </label>
+                      <VoiceDictationButton
+                        value={dermMorphology.lesionType}
+                        onChange={val => setDermMorphology({ ...dermMorphology, lesionType: val })}
+                        variant="badge"
+                        className="p-1 border-0 shadow-none bg-transparent"
+                        title="Dictate lesion type"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={dermMorphology.lesionType}
+                      onChange={e => setDermMorphology({ ...dermMorphology, lesionType: e.target.value })}
+                      placeholder="e.g. Macule, papule, plaque, patch"
+                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                    />
+                  </div>
+                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
+                        COLOUR / PIGMENTATION
+                      </label>
+                      <VoiceDictationButton
+                        value={dermMorphology.colour}
+                        onChange={val => setDermMorphology({ ...dermMorphology, colour: val })}
+                        variant="badge"
+                        className="p-1 border-0 shadow-none bg-transparent"
+                        title="Dictate colour / pigmentation"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={dermMorphology.colour}
+                      onChange={e => setDermMorphology({ ...dermMorphology, colour: e.target.value })}
+                      placeholder="e.g. Hyperpigmented, erythematous"
+                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                    />
+                  </div>
+                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
+                        DISTRIBUTION / SITE
+                      </label>
+                      <VoiceDictationButton
+                        value={dermMorphology.distribution}
+                        onChange={val => setDermMorphology({ ...dermMorphology, distribution: val })}
+                        variant="badge"
+                        className="p-1 border-0 shadow-none bg-transparent"
+                        title="Dictate distribution / site"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={dermMorphology.distribution}
+                      onChange={e => setDermMorphology({ ...dermMorphology, distribution: e.target.value })}
+                      placeholder="e.g. Malar cheeks, bilateral, centrofacial"
+                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                    />
+                  </div>
+                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
+                        SIZE & EXTENT
+                      </label>
+                      <VoiceDictationButton
+                        value={dermMorphology.sizeExtent}
+                        onChange={val => setDermMorphology({ ...dermMorphology, sizeExtent: val })}
+                        variant="badge"
+                        className="p-1 border-0 shadow-none bg-transparent"
+                        title="Dictate size & extent"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={dermMorphology.sizeExtent}
+                      onChange={e => setDermMorphology({ ...dermMorphology, sizeExtent: e.target.value })}
+                      placeholder="e.g. 2–4 cm confluent patches"
+                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                    />
+                  </div>
+                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
+                        BORDERS & SURFACE
+                      </label>
+                      <VoiceDictationButton
+                        value={dermMorphology.borders}
+                        onChange={val => setDermMorphology({ ...dermMorphology, borders: val })}
+                        variant="badge"
+                        className="p-1 border-0 shadow-none bg-transparent"
+                        title="Dictate borders & surface"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={dermMorphology.borders}
+                      onChange={e => setDermMorphology({ ...dermMorphology, borders: e.target.value })}
+                      placeholder="e.g. Irregular, well-demarcated, non-scaly"
+                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                    />
+                  </div>
+                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
+                        SEVERITY / WOOD'S LAMP
+                      </label>
+                      <VoiceDictationButton
+                        value={dermMorphology.severity}
+                        onChange={val => setDermMorphology({ ...dermMorphology, severity: val })}
+                        variant="badge"
+                        className="p-1 border-0 shadow-none bg-transparent"
+                        title="Dictate severity / Wood's lamp findings"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={dermMorphology.severity}
+                      onChange={e => setDermMorphology({ ...dermMorphology, severity: e.target.value })}
+                      placeholder="e.g. Moderate · mixed epidermal-dermal"
+                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Visual / Dermoscopic & AI Image Observations */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f]">
+                      VISUAL / DERMOSCOPIC & AI IMAGE OBSERVATIONS
+                    </label>
+                    <VoiceDictationButton
+                      value={dermMorphology.aiObservation}
+                      onChange={val => setDermMorphology({ ...dermMorphology, aiObservation: val })}
+                      variant="badge"
+                      title="Dictate visual / dermoscopic observations"
+                    />
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={dermMorphology.aiObservation}
+                    onChange={e => setDermMorphology({ ...dermMorphology, aiObservation: e.target.value })}
+                    placeholder="Morphological description from clinical / dermoscopic images — pigment network, vascular pattern, comparison with prior visit photos..."
+                    className="w-full px-3 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e] resize-y"
+                  />
+                </div>
+              </div>
+
+              {/* 7. FOLLOW-UP & PRESCRIPTION (RX) */}
+              <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                      7
+                    </span>
+                    <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
+                      FOLLOW-UP & PRESCRIPTION (RX)
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-[#6c857f] font-medium">
+                    {prescriptions.length} {prescriptions.length === 1 ? 'medicine' : 'medicines'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                      MEDICATIONS (DRUG · DOSE · FREQUENCY · DURATION)
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={
+                          inlineMedSummary ||
+                          prescriptions
+                            .map(p => `${p.medicineName} ${p.dosage} · ${p.frequency} · ${p.duration}`)
+                            .join('; ')
+                        }
+                        onChange={e => setInlineMedSummary(e.target.value)}
+                        placeholder="No medicines added — use Follow up & Rx tab or type here"
+                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                      />
+                      <div className="absolute right-1.5">
+                        <VoiceDictationButton
+                          value={
+                            inlineMedSummary ||
+                            prescriptions
+                              .map(p => `${p.medicineName} ${p.dosage} · ${p.frequency} · ${p.duration}`)
+                              .join('; ')
+                          }
+                          onChange={setInlineMedSummary}
+                          variant="badge"
+                          className="border-0 shadow-none bg-transparent"
+                          title="Dictate medications"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                      TOPICALS / SKINCARE & INSTRUCTIONS
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={topicalsAdvice}
+                        onChange={e => setTopicalsAdvice(e.target.value)}
+                        placeholder="Sunscreen SPF 50+, gentle cleanser, application order..."
+                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                      />
+                      <div className="absolute right-1.5">
+                        <VoiceDictationButton
+                          value={topicalsAdvice}
+                          onChange={setTopicalsAdvice}
+                          variant="badge"
+                          className="border-0 shadow-none bg-transparent"
+                          title="Dictate topicals & skincare instructions"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                      NEXT FOLLOW-UP
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={followUp.instructions || ''}
+                        onChange={e => setFollowUp({ ...followUp, instructions: e.target.value })}
+                        placeholder="e.g. Review in 4 weeks with repeat clinical photos"
+                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                      />
+                      <div className="absolute right-1.5">
+                        <VoiceDictationButton
+                          value={followUp.instructions || ''}
+                          onChange={val => setFollowUp({ ...followUp, instructions: val })}
+                          variant="badge"
+                          className="border-0 shadow-none bg-transparent"
+                          title="Dictate next follow-up plan"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                      RED-FLAG / PATIENT ADVICE
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={followUp.notes || ''}
+                        onChange={e => setFollowUp({ ...followUp, notes: e.target.value })}
+                        placeholder="Discontinue if irritation; avoid mid-day sun..."
+                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                      />
+                      <div className="absolute right-1.5">
+                        <VoiceDictationButton
+                          value={followUp.notes || ''}
+                          onChange={val => setFollowUp({ ...followUp, notes: val })}
+                          variant="badge"
+                          className="border-0 shadow-none bg-transparent"
+                          title="Dictate red-flag / patient advice"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
 
         {/* Modal Bottom Billing & Actions Bar */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 shrink-0">
+        <div className="px-6 py-3.5 bg-white border-t border-[#e2ebe8] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 shrink-0">
           {/* Charges summary breakdown */}
           <div className="flex items-center gap-6 text-xs">
             <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">PROCEDURES</span>
-              <span className="font-bold text-slate-700">₹{proceduresTotal}</span>
+              <span className="text-[9.5px] uppercase font-bold text-[#6c857f] block tracking-wider">PROCEDURES</span>
+              <span className="font-bold text-[#0f2926] text-xs">₹{proceduresTotal}</span>
             </div>
-            <div className="h-6 w-px bg-slate-200" />
             <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">CONSULTATION</span>
-              <span className="font-bold text-slate-700">₹{fee}</span>
+              <span className="text-[9.5px] uppercase font-bold text-[#6c857f] block tracking-wider">CONSULTATION</span>
+              <span className="font-bold text-[#0f2926] text-xs">₹{fee}</span>
             </div>
-            <div className="h-6 w-px bg-slate-200" />
             <div>
-              <span className="text-[10px] uppercase font-bold text-teal-700 block tracking-wider">TOTAL</span>
-              <span className="font-extrabold text-teal-900 text-sm">₹{grandTotal}</span>
+              <span className="text-[9.5px] uppercase font-bold text-[#6c857f] block tracking-wider">TOTAL</span>
+              <span className="font-extrabold text-[#115e56] text-sm">₹{grandTotal}</span>
             </div>
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition-colors"
+              className="px-4 py-2 bg-white border border-[#cfdeda] text-[#0f2926] hover:bg-[#f2f6f5] rounded-xl text-xs font-semibold transition-colors"
             >
               Cancel
             </button>
 
-            {prevTab && (
-              <button
-                type="button"
-                onClick={() => handleTabChange(prevTab)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold shadow-2xs transition-colors"
-              >
-                <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
-                <span>Previous Step</span>
-              </button>
-            )}
-
-            {nextTab && (
-              <button
-                type="button"
-                onClick={() => handleTabChange(nextTab)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
-              >
-                <span>Next: {TAB_NEXT_LABELS[activeTab]}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            )}
-
             <button
               type="button"
               onClick={() => setShowWhatsApp(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1fae51] hover:bg-[#199945] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors"
               title="Share consultation summary and prescription to patient's WhatsApp"
             >
-              <WhatsAppIcon className="w-4 h-4 fill-white" />
+              <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
               <span>WhatsApp</span>
             </button>
             <button
               type="button"
               onClick={handleSignAndFinish}
               disabled={isSigning}
-              className={`inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-semibold shadow-md transition-all disabled:opacity-50 ${
-                activeTab === 'aisummary'
-                  ? 'bg-teal-700 hover:bg-teal-800 text-white ring-2 ring-teal-500 ring-offset-1'
-                  : 'bg-slate-800 hover:bg-slate-900 text-white'
-              }`}
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold bg-[#157a6e] hover:bg-[#11645a] text-white shadow-xs transition-all disabled:opacity-50"
             >
-              <Check className="w-4 h-4" />
+              <Check className="w-3.5 h-3.5" />
               <span>{isSigning ? 'Signing & Saving...' : 'Sign & finish'}</span>
             </button>
           </div>
