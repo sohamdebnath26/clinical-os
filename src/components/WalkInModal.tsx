@@ -253,6 +253,21 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                     placeholder="Name, code, or 10-digit phone..."
                     value={searchQuery}
                     onChange={e => handleSearchChange(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (searchResults.length === 1) {
+                          handleSelectExistingPatient(searchResults[0]);
+                        } else if (searchResults.length === 0 && searchQuery.trim()) {
+                          if (/^\d+$/.test(searchQuery.trim())) {
+                            setMobile(searchQuery.trim().slice(0, 10));
+                          } else {
+                            setFullName(searchQuery.trim());
+                          }
+                          setStep('register');
+                        }
+                      }
+                    }}
                     maxLength={/^[\d\s+\-()]*$/.test(searchQuery) && /\d/.test(searchQuery) ? 10 : undefined}
                     className="w-full text-sm pl-10 pr-16 py-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs"
                   />

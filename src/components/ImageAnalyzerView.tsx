@@ -328,6 +328,11 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
       if (res.patient && !selectedPatient) {
         setSelectedPatient(res.patient);
       }
+
+      // Automatically advance view to results section
+      setTimeout(() => {
+        document.getElementById('analysis-results-section')?.scrollIntoView({ behavior: 'smooth' });
+      }, 150);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Analysis failed';
       setErrorMsg(`AI analysis could not complete: ${msg}`);
@@ -951,7 +956,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
               </div>
             </div>
           ) : (
-            <div className="space-y-4 animate-in fade-in duration-300">
+            <div id="analysis-results-section" className="space-y-4 animate-in fade-in duration-300">
               {/* Primary Impression Header Card */}
               <div className="bg-gradient-to-r from-teal-900 to-slate-900 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
                 <div className="flex items-center justify-between mb-2">
@@ -1038,6 +1043,17 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                       </button>
                     )}
 
+                    {savedToGallery && selectedPatient && onSelectPatient && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectPatient(selectedPatient.id)}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 text-xs font-semibold flex items-center gap-1 transition"
+                      >
+                        <span>View in Timeline</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={handleCopyReport}
@@ -1097,9 +1113,20 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
 
                 {/* Step 4: Pinned to Body Map Feedback */}
                 {pinnedSuccess && (
-                  <div className="mt-2 p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{pinnedSuccess}</span>
+                  <div className="mt-2 p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>{pinnedSuccess}</span>
+                    </div>
+                    {selectedPatient && onSelectPatient && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectPatient(selectedPatient.id)}
+                        className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-[11px] font-bold shrink-0 transition"
+                      >
+                        Open Body Map →
+                      </button>
+                    )}
                   </div>
                 )}
 

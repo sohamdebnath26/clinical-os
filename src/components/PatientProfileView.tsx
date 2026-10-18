@@ -34,16 +34,18 @@ import {
 
 interface PatientProfileViewProps {
   patientId: string;
+  initialTab?: TabType;
   onBack: () => void;
   onStartConsultation: (patient: Patient) => void;
   onOpenAIWithPrompt?: (prompt: string) => void;
   onNavigateToImageAnalyzer?: (patientId: string) => void;
 }
 
-type TabType = 'overview' | 'vitals' | 'appointments' | 'bodymap' | 'visits' | 'prescriptions' | 'timeline';
+export type TabType = 'overview' | 'vitals' | 'appointments' | 'bodymap' | 'visits' | 'prescriptions' | 'timeline';
 
 export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
   patientId,
+  initialTab,
   onBack,
   onStartConsultation,
   onOpenAIWithPrompt,
@@ -58,9 +60,15 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
   const [markers, setMarkers] = useState<BodyMarker[]>([]);
   const [images, setImages] = useState<ClinicalImage[]>([]);
 
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'overview');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Print Rx Modal
   const [showPrintRx, setShowPrintRx] = useState(false);
@@ -582,6 +590,16 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
       {activeTab === 'vitals' && (
         <div className="space-y-6 animate-in fade-in duration-150">
           <PatientVitalsChart patient={patient} consultations={consultations} />
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('appointments')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
+            >
+              <span>Next: Appointments & Follow-ups</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -699,6 +717,25 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               ))}
             </div>
           )}
+
+          {/* Step Navigation */}
+          <div className="flex justify-between items-center pt-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('vitals')}
+              className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
+            >
+              ← Vitals & Growth
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('bodymap')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
+            >
+              <span>Next: Body Map</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -711,6 +748,23 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             patientId={patient.id}
             onAnalyzeMarkerWithAI={(marker) => onNavigateToImageAnalyzer && onNavigateToImageAnalyzer(patient.id)}
           />
+          <div className="flex justify-between items-center pt-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('appointments')}
+              className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
+            >
+              ← Appointments
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('visits')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
+            >
+              <span>Next: Past Consultations</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -767,6 +821,24 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               </div>
             ))
           )}
+          {/* Step Navigation */}
+          <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+            <button
+              type="button"
+              onClick={() => setActiveTab('bodymap')}
+              className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
+            >
+              ← Body Map
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('prescriptions')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
+            >
+              <span>Next: Prescriptions</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -838,6 +910,24 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               </div>
             ))
           )}
+          {/* Step Navigation */}
+          <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+            <button
+              type="button"
+              onClick={() => setActiveTab('visits')}
+              className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
+            >
+              ← Past Consultations
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('timeline')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition"
+            >
+              <span>Next: Longitudinal Timeline</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -1007,6 +1097,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           onClose={() => setShowEditModal(false)}
           onPatientUpdated={(updated) => {
             setPatient(updated);
+            setActiveTab('overview');
           }}
         />
       )}
@@ -1024,6 +1115,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             setShowScheduleModal(false);
             setEditingAppointment(null);
             loadPatientData();
+            setActiveTab('appointments');
           }}
         />
       )}

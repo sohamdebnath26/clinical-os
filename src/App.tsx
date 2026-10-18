@@ -6,7 +6,7 @@ import { Sidebar, NavRoute } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { DashboardView } from './components/DashboardView';
 import { PatientsListView } from './components/PatientsListView';
-import { PatientProfileView } from './components/PatientProfileView';
+import { PatientProfileView, TabType } from './components/PatientProfileView';
 import { PrescriptionsView } from './components/PrescriptionsView';
 import { AppointmentsView } from './components/AppointmentsView';
 import { ImageAnalyzerView } from './components/ImageAnalyzerView';
@@ -25,6 +25,7 @@ function MainApp() {
   // Navigation & Active views
   const [currentRoute, setCurrentRoute] = useState<NavRoute>('dashboard');
   const [activePatientId, setActivePatientId] = useState<string | null>(null);
+  const [patientProfileInitialTab, setPatientProfileInitialTab] = useState<TabType | undefined>(undefined);
 
   // Collapsible sidebar state (persisted in localStorage)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -106,11 +107,13 @@ function MainApp() {
   const handleNavigate = (route: NavRoute) => {
     setCurrentRoute(route);
     setActivePatientId(null);
+    setPatientProfileInitialTab(undefined);
     setMobileMenuOpen(false);
   };
 
-  const handleSelectPatient = (patientId: string) => {
+  const handleSelectPatient = (patientId: string, initialTab?: TabType) => {
     setActivePatientId(patientId);
+    setPatientProfileInitialTab(initialTab);
     setMobileMenuOpen(false);
   };
 
@@ -133,8 +136,9 @@ function MainApp() {
   const handleConsultationSuccess = (signedConsultation: Consultation) => {
     setActiveConsultation(null);
     showToast('Consultation signed and saved to timeline');
-    // Open the patient profile directly to show updated timeline
+    // Open the patient profile directly on the timeline tab to show updated timeline
     setActivePatientId(signedConsultation.patientId);
+    setPatientProfileInitialTab('timeline');
   };
 
   // Helper to open AI Assistant, seamlessly preserving active patient context
@@ -224,7 +228,11 @@ function MainApp() {
               {activePatientId ? (
                 <PatientProfileView
                   patientId={activePatientId}
-                  onBack={() => setActivePatientId(null)}
+                  initialTab={patientProfileInitialTab}
+                  onBack={() => {
+                    setActivePatientId(null);
+                    setPatientProfileInitialTab(undefined);
+                  }}
                   onStartConsultation={handleStartConsultationForPatient}
                   onOpenAIWithPrompt={(prompt) => {
                     api.patients.get(activePatientId).then(res => {
@@ -248,6 +256,7 @@ function MainApp() {
               ) : currentRoute === 'appointments' ? (
                 <AppointmentsView
                   onSelectPatient={handleSelectPatient}
+                  onStartConsultationForPatient={handleStartConsultationForPatient}
                 />
               ) : currentRoute === 'patients' ? (
                 <PatientsListView

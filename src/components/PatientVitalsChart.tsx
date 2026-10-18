@@ -8,7 +8,8 @@ import {
   TrendingUp,
   TrendingDown,
   Calendar,
-  X
+  X,
+  CheckCircle2
 } from 'lucide-react';
 
 export interface VitalsRecord {
@@ -518,6 +519,7 @@ export const PatientVitalsChart: React.FC<PatientVitalsChartProps> = ({
   const [timeRange, setTimeRange] = useState<'all' | '1y' | '6m'>('all');
   const [metricMode, setMetricMode] = useState<'both' | 'weight' | 'height' | 'bmi'>('both');
   const [showLogModal, setShowLogModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // New vitals form state
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
@@ -560,7 +562,11 @@ export const PatientVitalsChart: React.FC<PatientVitalsChartProps> = ({
       return updated;
     });
 
+    setTimeRange('all');
+    setMetricMode('both');
     setShowLogModal(false);
+    setToastMessage(`Vitals entry saved (${Math.round(w * 10) / 10} kg · ${Math.round(h * 10) / 10} cm) · Chart updated to include latest entry`);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
   // Filter and enrich records with BMI calculations
@@ -616,6 +622,18 @@ export const PatientVitalsChart: React.FC<PatientVitalsChartProps> = ({
 
   return (
     <div className="space-y-6">
+      {toastMessage && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center justify-between animate-in fade-in duration-200">
+          <span className="flex items-center gap-2 font-semibold">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            {toastMessage}
+          </span>
+          <button type="button" onClick={() => setToastMessage(null)} className="text-emerald-700 hover:text-emerald-900">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Top Header & Actions Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>

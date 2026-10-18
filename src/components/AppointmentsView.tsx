@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Appointment, AppointmentStatus, Patient } from '../types';
 import { api } from '../lib/api';
 import { useLanguage } from '../context/LanguageContext';
+import { ScheduleAppointmentModal } from './ScheduleAppointmentModal';
 import {
   Calendar,
   Clock,
@@ -16,7 +17,9 @@ import {
   Trash2,
   X,
   ArrowRight,
-  Phone
+  Phone,
+  Plus,
+  Stethoscope
 } from 'lucide-react';
 
 interface AppointmentsViewProps {
@@ -27,7 +30,8 @@ interface AppointmentsViewProps {
 type FilterTab = 'all' | 'today' | 'upcoming' | 'follow_ups' | 'completed';
 
 export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
-  onSelectPatient
+  onSelectPatient,
+  onStartConsultationForPatient
 }) => {
   const { t } = useLanguage();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -35,8 +39,10 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [selectedDate, setSelectedDate] = useState<string>('');
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
 
   // Modals
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [viewingAppointment, setViewingAppointment] = useState<Appointment | null>(null);
   const [deleteConfirmAppt, setDeleteConfirmAppt] = useState<Appointment | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -68,6 +74,61 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
       console.error('Failed to delete appointment:', err);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleScheduleSuccess = (newAppt: Appointment) => {
+    setShowScheduleModal(false);
+    loadAppointments();
+    // Auto-advance view to the appropriate tab
+    if (newAppt.date === todayStr) {
+      setActiveTab('today');
+    } else if (newAppt.type === 'follow_up') {
+      setActiveTab('follow_ups');
+    } else {
+      setActiveTab('upcoming');
+    }
+    setNotificationMessage(`Appointment scheduled for ${newAppt.patientName} on ${newAppt.date}. View advanced.`);
+    setTimeout(() => setNotificationMessage(null), 4000);
+  };
+
+  const handleUpdateStatus = async (apptId: string, nextStatus: AppointmentStatus) => {
+    try {
+      const res = await api.appointments.update(apptId, { status: nextStatus });
+      if (res.appointment) {
+        setAppointments(prev => prev.map(a => a.id === apptId ? res.appointment : a));
+        if (viewingAppointment?.id === apptId) {
+          setViewingAppointment(res.appointment);
+        }
+        // Auto-advance view tab if moving to completed
+        if (nextStatus === 'completed') {
+          setActiveTab('completed');
+          setNotificationMessage(`Appointment marked as completed. View advanced to Completed.`);
+          setTimeout(() => setNotificationMessage(null), 4000);
+        } else if (nextStatus === 'checked_in') {
+          setNotificationMessage(`Patient checked in.`);
+          setTimeout(() => setNotificationMessage(null), 3000);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update appointment status:', err);
+    }
+  };
+
+  const handleStartVisit = async (appt: Appointment) => {
+    try {
+      await handleUpdateStatus(appt.id, 'in_progress');
+      if (onStartConsultationForPatient) {
+        const pRes = await api.patients.get(appt.patientId);
+        if (pRes.patient) {
+          if (viewingAppointment) setViewingAppointment(null);
+          onStartConsultationForPatient(pRes.patient);
+        }
+      } else {
+        onSelectPatient(appt.patientId);
+      }
+    } catch (err) {
+      console.error('Failed to start visit:', err);
     }
   };
 
@@ -169,17 +230,40 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
       {/* Top Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-          <span>{t('appointments')}</span>
-          <span className="text-xs font-semibold bg-teal-50 text-teal-900 border border-teal-200 px-2.5 py-0.5 rounded-full">
-            Follow-up & Visits
-          </span>
-        </h1>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Appointments and follow-up dates synchronized from clinical consultations
-        </p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <span>{t('appointments')}</span>
+            <span className="text-xs font-semibold bg-teal-50 text-teal-900 border border-teal-200 px-2.5 py-0.5 rounded-full">
+              Follow-up & Visits
+            </span>
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Appointments and follow-up dates synchronized from clinical consultations
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowScheduleModal(true)}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Schedule Appointment</span>
+        </button>
       </div>
+
+      {notificationMessage && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center justify-between animate-in fade-in duration-200">
+          <span className="flex items-center gap-2 font-semibold">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            {notificationMessage}
+          </span>
+          <button type="button" onClick={() => setNotificationMessage(null)} className="text-emerald-700 hover:text-emerald-900">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Metrics Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -379,8 +463,43 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Right Actions Bar - Strictly View and Delete options */}
-                <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+                {/* Right Actions Bar - Workflow progression & options */}
+                <div className="flex items-center gap-1.5 self-end md:self-center shrink-0 flex-wrap">
+                  {/* Step / Status Advancement Button */}
+                  {appt.status === 'scheduled' && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(appt.id, 'checked_in')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                      title="Advance patient to checked-in status"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Check In</span>
+                    </button>
+                  )}
+                  {appt.status === 'checked_in' && (
+                    <button
+                      type="button"
+                      onClick={() => handleStartVisit(appt)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                      title="Advance to active consultation"
+                    >
+                      <Stethoscope className="w-3.5 h-3.5 text-teal-200" />
+                      <span>Start Visit</span>
+                    </button>
+                  )}
+                  {appt.status === 'in_progress' && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(appt.id, 'completed')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                      title="Mark appointment fulfilled and advance view to Completed"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Complete</span>
+                    </button>
+                  )}
+
                   {/* View Appointment Button */}
                   <button
                     type="button"
@@ -396,7 +515,7 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setDeleteConfirmAppt(appt)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-rose-50 border border-rose-200 hover:border-rose-300 text-rose-700 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-rose-50 border border-rose-200 hover:border-rose-300 text-rose-700 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
                     title="Delete appointment"
                   >
                     <Trash2 className="w-3.5 h-3.5 text-rose-600" />
@@ -534,7 +653,7 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => {
@@ -542,19 +661,52 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
                   setViewingAppointment(null);
                   setDeleteConfirmAppt(target);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-rose-700 hover:bg-rose-50 rounded-xl font-semibold border border-rose-200 hover:border-rose-300 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-rose-700 hover:bg-rose-50 rounded-xl font-semibold border border-rose-200 hover:border-rose-300 transition-colors text-xs"
               >
                 <Trash2 className="w-4 h-4 text-rose-600" />
-                <span>Delete Appointment</span>
+                <span>Delete</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setViewingAppointment(null)}
-                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-semibold transition-colors"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                {viewingAppointment.status === 'scheduled' && (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus(viewingAppointment.id, 'checked_in')}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Advance to Checked In</span>
+                  </button>
+                )}
+                {viewingAppointment.status === 'checked_in' && (
+                  <button
+                    type="button"
+                    onClick={() => handleStartVisit(viewingAppointment)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+                  >
+                    <Stethoscope className="w-3.5 h-3.5 text-teal-200" />
+                    <span>Start Consultation</span>
+                  </button>
+                )}
+                {viewingAppointment.status === 'in_progress' && (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus(viewingAppointment.id, 'completed')}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Mark Completed</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setViewingAppointment(null)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-semibold text-xs transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -598,6 +750,14 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 3. Schedule Appointment Modal */}
+      {showScheduleModal && (
+        <ScheduleAppointmentModal
+          onClose={() => setShowScheduleModal(false)}
+          onSuccess={handleScheduleSuccess}
+        />
       )}
     </div>
   );

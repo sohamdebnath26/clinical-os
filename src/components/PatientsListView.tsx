@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Patient, Gender } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { EditPatientModal } from './EditPatientModal';
+import { AddPatientModal } from './AddPatientModal';
 import { api } from '../lib/api';
 import {
   Search,
   Users,
+  UserPlus,
   Filter,
   Stethoscope,
   ChevronRight,
@@ -31,6 +33,7 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
   const [genderFilter, setGenderFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const fetchPatients = async (query?: string) => {
     setIsLoading(true);
@@ -61,7 +64,7 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
     'bg-amber-500',
     'bg-emerald-600',
     'bg-sky-500',
-    'bg-indigo-600',
+    'indigo-600',
     'bg-purple-600'
   ];
 
@@ -79,8 +82,16 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+          >
+            <UserPlus className="w-3.5 h-3.5 text-teal-700" />
+            <span>Add Patient</span>
+          </button>
+          <button
+            type="button"
             onClick={onOpenWalkIn}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
           >
             <Users className="w-3.5 h-3.5" />
             <span>{t('walkIn')}</span>
@@ -217,6 +228,21 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
           onPatientUpdated={(updated) => {
             setPatients(prev => prev.map(p => p.id === updated.id ? updated : p));
             setEditingPatient(null);
+            // Auto-advance view to the updated patient's profile
+            onSelectPatient(updated.id);
+          }}
+        />
+      )}
+
+      {/* Add Patient Modal */}
+      {showAddModal && (
+        <AddPatientModal
+          onClose={() => setShowAddModal(false)}
+          onPatientCreated={(newPatient) => {
+            setPatients(prev => [newPatient, ...prev]);
+            setShowAddModal(false);
+            // Auto-advance user view directly to newly created patient profile
+            onSelectPatient(newPatient.id);
           }}
         />
       )}
