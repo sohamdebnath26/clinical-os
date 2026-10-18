@@ -486,18 +486,10 @@ export const PracticeRevenueWidget: React.FC<PracticeRevenueWidgetProps> = ({
   const [sortBy, setSortBy] = useState<'revenue_desc' | 'visits_desc' | 'recent' | 'name'>('revenue_desc');
   const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
 
-  if (!revenue) {
-    return (
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs p-8 text-center space-y-3">
-        <div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-xs font-semibold text-slate-600">Calculating practice revenue & patient ledger...</p>
-      </div>
-    );
-  }
-
-  // Filter and sort patient breakdown
+  // Filter and sort patient breakdown - Must be called before any early return to satisfy React Rules of Hooks
   const filteredPatients = useMemo(() => {
-    let list = [...(revenue.patientBreakdown || [])];
+    if (!revenue || !revenue.patientBreakdown) return [];
+    let list = [...revenue.patientBreakdown];
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -525,7 +517,16 @@ export const PracticeRevenueWidget: React.FC<PracticeRevenueWidgetProps> = ({
     });
 
     return list;
-  }, [revenue.patientBreakdown, searchQuery, filterType, sortBy]);
+  }, [revenue, searchQuery, filterType, sortBy]);
+
+  if (!revenue) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs p-8 text-center space-y-3">
+        <div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-xs font-semibold text-slate-600">Calculating practice revenue & patient ledger...</p>
+      </div>
+    );
+  }
 
   // Export itemized CSV
   const handleExportCSV = () => {
