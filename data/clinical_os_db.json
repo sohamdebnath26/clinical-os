@@ -1091,7 +1091,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-19T13:50:29.698Z"
+    "updatedAt": "2026-10-19T18:40:05.449Z"
   },
   "appointments": [
     {
@@ -1137,7 +1137,7 @@
   ],
   "testReports": [
     {
-      "id": "rep-con-kabir-01-ptpn5",
+      "id": "rep-con-kabir-01-fu5cr",
       "patientId": "pat-mv0er2l2-uln3",
       "consultationId": "con-kabir-01",
       "testName": "Serum Free Testosterone",
@@ -1153,10 +1153,25 @@
       "orderedByDoctor": "Dr. Demo",
       "clinicalNotes": "Baseline systemic screening satisfactory for planned dermatological therapy.",
       "createdAt": "2026-10-15T10:30:00.000Z",
-      "updatedAt": "2026-10-15T10:30:00.000Z"
+      "updatedAt": "2026-10-15T10:30:00.000Z",
+      "previousResults": [
+        {
+          "id": "prev-base-rep-con-kabir-01-fu5cr",
+          "orderedDate": "2026-09-17T10:30:00.000Z",
+          "reportDate": "2026-09-17T10:30:00.000Z",
+          "resultFlag": "abnormal",
+          "resultValue": "24.8 pg/mL (Mildly elevated baseline prior to therapy)",
+          "referenceRange": "Within normal physiological reference interval",
+          "specimenType": "Venous Blood (EDTA / Serum)",
+          "labName": "Central Clinical Diagnostics Lab",
+          "orderedByDoctor": "Dr. Demo",
+          "clinicalNotes": "Previous baseline report stored prior to current treatment cycle.",
+          "archivedAt": "2026-10-15T10:30:00.000Z"
+        }
+      ]
     },
     {
-      "id": "rep-con-kabir-01-je7ev",
+      "id": "rep-con-kabir-01-pqrku",
       "patientId": "pat-mv0er2l2-uln3",
       "consultationId": "con-kabir-01",
       "testName": "Liver Function Panel",
@@ -1172,7 +1187,116 @@
       "orderedByDoctor": "Dr. Demo",
       "clinicalNotes": "Baseline systemic screening satisfactory for planned dermatological therapy.",
       "createdAt": "2026-10-15T10:30:00.000Z",
-      "updatedAt": "2026-10-15T10:30:00.000Z"
+      "updatedAt": "2026-10-15T10:30:00.000Z",
+      "previousResults": [
+        {
+          "id": "prev-base-rep-con-kabir-01-pqrku",
+          "orderedDate": "2026-09-17T10:30:00.000Z",
+          "reportDate": "2026-09-17T10:30:00.000Z",
+          "resultFlag": "abnormal",
+          "resultValue": "ALT 34 U/L, AST 29 U/L, Bilirubin 0.8 mg/dL (Pre-treatment baseline)",
+          "referenceRange": "Within normal physiological reference interval",
+          "specimenType": "Venous Blood (EDTA / Serum)",
+          "labName": "Central Clinical Diagnostics Lab",
+          "orderedByDoctor": "Dr. Demo",
+          "clinicalNotes": "Previous baseline report stored prior to current treatment cycle.",
+          "archivedAt": "2026-10-15T10:30:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "rep-con-mumnfac9-ol53-3boax",
+      "patientId": "pat-mumnf2c6-8awj",
+      "consultationId": "con-muy1aite-6kt4",
+      "testName": "Dermoscopy (Dermatoscopy)",
+      "category": "Dermoscopy / Wood's Lamp",
+      "orderedDate": "2026-10-07T11:38:20.738Z",
+      "reportDate": "2026-10-07T11:38:20.746Z",
+      "status": "completed",
+      "resultFlag": "normal",
+      "resultValue": "Regular reticular pigment network without atypical globules or blue-white veil",
+      "referenceRange": "Uniform pigment network / No abnormal fluorescence",
+      "specimenType": "Non-invasive Optical / UV Examination",
+      "labName": "In-Clinic Optical Dermoscopy Suite",
+      "orderedByDoctor": "Dr. Demo",
+      "clinicalNotes": "Epidermal predominance confirmed; favorable response expected to topical depigmenting agents.",
+      "previousResults": [
+        {
+          "id": "prev-rep-con-mumnfac9-ol53-3boax-2",
+          "orderedDate": "2026-09-29T12:24:40.473Z",
+          "reportDate": "2026-09-29T12:24:47.360Z",
+          "resultFlag": "normal",
+          "resultValue": "Regular reticular pigment network without atypical globules or blue-white veil",
+          "referenceRange": "Uniform pigment network / No abnormal fluorescence",
+          "specimenType": "Non-invasive Optical / UV Examination",
+          "labName": "In-Clinic Optical Dermoscopy Suite",
+          "orderedByDoctor": "Dr. Demo",
+          "clinicalNotes": "Epidermal predominance confirmed; favorable response expected to topical depigmenting agents.",
+          "archivedAt": "2026-10-07T11:38:20.746Z"
+        },
+        {
+          "id": "prev-base-con-mumnfac9-ol53-x4zq",
+          "orderedDate": "2026-09-01T12:24:40.473Z",
+          "reportDate": "2026-09-01T12:24:40.473Z",
+          "resultFlag": "abnormal",
+          "resultValue": "Baseline polarized dermoscopy:Benign pedunculated papillomatous lesions prior to RF ablation",
+          "referenceRange": "Uniform pigment network / No abnormal fluorescence",
+          "specimenType": "Non-invasive Optical / UV Examination",
+          "labName": "In-Clinic Optical Dermoscopy Suite",
+          "orderedByDoctor": "Dr. Demo",
+          "clinicalNotes": "Previous baseline report stored prior to current treatment cycle.",
+          "archivedAt": "2026-09-29T12:24:40.473Z"
+        }
+      ],
+      "createdAt": "2026-09-29T12:24:40.473Z",
+      "updatedAt": "2026-10-07T11:38:20.746Z"
+    },
+    {
+      "id": "rep-con-mumnfac9-ol53-ukd6y",
+      "patientId": "pat-mumnf2c6-8awj",
+      "consultationId": "con-muy1aite-6kt4",
+      "testName": "Complete Blood Count (CBC) & Coagulation Screen",
+      "category": "Laboratory / Blood",
+      "orderedDate": "2026-10-07T11:38:20.738Z",
+      "reportDate": "2026-10-07T11:38:20.746Z",
+      "status": "completed",
+      "resultFlag": "normal",
+      "resultValue": "All hematological and biochemical parameters within normal reference limits",
+      "referenceRange": "Within normal physiological reference interval",
+      "specimenType": "Venous Blood (EDTA / Serum)",
+      "labName": "Central Clinical Diagnostics Lab",
+      "orderedByDoctor": "Dr. Demo",
+      "clinicalNotes": "Baseline systemic screening satisfactory for planned dermatological therapy.",
+      "previousResults": [
+        {
+          "id": "prev-rep-con-mumnfac9-ol53-ukd6y-2",
+          "orderedDate": "2026-09-29T12:24:40.473Z",
+          "reportDate": "2026-09-29T12:24:47.360Z",
+          "resultFlag": "normal",
+          "resultValue": "All hematological and biochemical parameters within normal reference limits",
+          "referenceRange": "Within normal physiological reference interval",
+          "specimenType": "Venous Blood (EDTA / Serum)",
+          "labName": "Central Clinical Diagnostics Lab",
+          "orderedByDoctor": "Dr. Demo",
+          "clinicalNotes": "Baseline systemic screening satisfactory for planned dermatological therapy.",
+          "archivedAt": "2026-10-07T11:38:20.746Z"
+        },
+        {
+          "id": "prev-base-con-mumnfac9-ol53-9mxb",
+          "orderedDate": "2026-09-01T12:24:40.473Z",
+          "reportDate": "2026-09-01T12:24:40.473Z",
+          "resultFlag": "abnormal",
+          "resultValue": "Baseline pre-treatment evaluation: All hematological and biochemical parameters within normal reference limits",
+          "referenceRange": "Within normal physiological reference interval",
+          "specimenType": "Venous Blood (EDTA / Serum)",
+          "labName": "Central Clinical Diagnostics Lab",
+          "orderedByDoctor": "Dr. Demo",
+          "clinicalNotes": "Previous baseline report stored prior to current treatment cycle.",
+          "archivedAt": "2026-09-29T12:24:40.473Z"
+        }
+      ],
+      "createdAt": "2026-09-29T12:24:40.473Z",
+      "updatedAt": "2026-10-07T11:38:20.746Z"
     }
   ]
 }

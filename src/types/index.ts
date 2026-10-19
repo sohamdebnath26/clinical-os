@@ -362,6 +362,23 @@ export type TestReportCategory =
   | 'Dermoscopy / Wood\'s Lamp'
   | 'Imaging / Other';
 
+export interface HistoricalReportSnapshot {
+  id: string;
+  orderedDate: string;
+  reportDate?: string;
+  resultFlag: TestResultFlag;
+  resultValue: string;
+  unit?: string;
+  referenceRange?: string;
+  specimenType?: string;
+  labName?: string;
+  orderedByDoctor?: string;
+  clinicalNotes?: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  archivedAt: string;
+}
+
 export interface PatientTestReport {
   id: string;
   patientId: string;
@@ -381,6 +398,8 @@ export interface PatientTestReport {
   clinicalNotes?: string;
   attachmentUrl?: string;
   attachmentName?: string;
+  isPreviousReport?: boolean;
+  previousResults?: HistoricalReportSnapshot[];
   createdAt: string;
   updatedAt: string;
 }

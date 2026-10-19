@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Patient,
   PatientTestReport,
+  HistoricalReportSnapshot,
   TestReportCategory,
   TestReportStatus,
   TestResultFlag
@@ -26,7 +27,12 @@ import {
   Eye,
   Microscope,
   Building2,
-  Calendar
+  Calendar,
+  History,
+  ChevronDown,
+  ChevronUp,
+  Archive,
+  RefreshCw
 } from 'lucide-react';
 
 interface PatientReportsSectionProps {
@@ -56,9 +62,14 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'pending' | 'flagged'>('all');
+  const [viewMode, setViewMode] = useState<'all_with_history' | 'previous_archive'>('all_with_history');
 
-  // Form / Modal state for adding or editing a report result
+  // Track which report cards have their "Previous Stored Reports" section expanded (default expanded so doctors see stored previous reports immediately)
+  const [expandedHistoryMap, setExpandedHistoryMap] = useState<Record<string, boolean>>({});
+
+  // Form / Modal state for adding, updating, or storing a previous report
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<'new' | 'edit' | 'repeat' | 'previous'>('new');
   const [editingReport, setEditingReport] = useState<PatientTestReport | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -79,6 +90,17 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
   const [clinicalNotes, setClinicalNotes] = useState('');
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
+
+  const isHistoryExpanded = (reportId: string) => {
+    return expandedHistoryMap[reportId] ?? true;
+  };
+
+  const toggleHistoryExpand = (reportId: string) => {
+    setExpandedHistoryMap(prev => ({
+      ...prev,
+      [reportId]: !(prev[reportId] ?? true)
+    }));
+  };
 
   const autoFillTestDefaults = (selectedTest: string) => {
     setTestName(selectedTest);
@@ -112,19 +134,23 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
     }
   };
 
-  const openAddForm = () => {
-    setEditingReport(null);
-    setTestName('');
-    setCategory('Laboratory / Blood');
-    setOrderedDate(new Date().toISOString().split('T')[0]);
-    setReportDate(new Date().toISOString().split('T')[0]);
+  const openAddForm = (asPrevious = false, presetReport?: PatientTestReport) => {
+    setEditingReport(presetReport || null);
+    setFormMode(asPrevious ? 'previous' : presetReport ? 'repeat' : 'new');
+    const pastDefaultDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const todayDate = new Date().toISOString().split('T')[0];
+
+    setTestName(presetReport ? presetReport.testName : '');
+    setCategory(presetReport ? presetReport.category : 'Laboratory / Blood');
+    setOrderedDate(asPrevious ? pastDefaultDate : todayDate);
+    setReportDate(asPrevious ? pastDefaultDate : todayDate);
     setStatus('completed');
     setResultFlag('normal');
     setResultValue('');
-    setUnit('');
-    setReferenceRange('');
-    setSpecimenType('Venous Blood / Skin Specimen');
-    setLabName('In-Clinic Diagnostics Lab');
+    setUnit(presetReport?.unit || '');
+    setReferenceRange(presetReport?.referenceRange || '');
+    setSpecimenType(presetReport?.specimenType || 'Venous Blood / Skin Specimen');
+    setLabName(presetReport?.labName || (asPrevious ? 'External / Prior Diagnostic Lab' : 'In-Clinic Diagnostics Lab'));
     setClinicalNotes('');
     setAttachmentUrl('');
     setAttachmentName('');
@@ -134,6 +160,7 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
 
   const openEditForm = (rep: PatientTestReport) => {
     setEditingReport(rep);
+    setFormMode('edit');
     setTestName(rep.testName);
     setCategory(rep.category);
     setOrderedDate(rep.orderedDate ? rep.orderedDate.split('T')[0] : new Date().toISOString().split('T')[0]);
@@ -175,14 +202,16 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
     setIsSaving(true);
     setFormError(null);
     try {
-      const payload: Partial<PatientTestReport> = {
+      const payload: Partial<PatientTestReport> & { archiveCurrentAsPrevious?: boolean } = {
         testName: testName.trim(),
         category,
         orderedDate,
         reportDate: status === 'completed' ? reportDate : undefined,
         status,
         resultFlag: status === 'pending' ? 'pending' : resultFlag,
-        resultValue: resultValue.trim() || (status === 'pending' ? 'Awaiting laboratory report' : 'Normal / Within reference limits'),
+        resultValue:
+          resultValue.trim() ||
+          (status === 'pending' ? 'Awaiting laboratory report' : 'Normal / Within reference limits'),
         unit: unit.trim(),
         referenceRange: referenceRange.trim(),
         specimenType: specimenType.trim(),
@@ -190,11 +219,17 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
         orderedByDoctor: editingReport?.orderedByDoctor || doctorName || 'Attending Physician',
         clinicalNotes: clinicalNotes.trim(),
         attachmentUrl,
-        attachmentName
+        attachmentName,
+        isPreviousReport: formMode === 'previous'
       };
 
-      if (editingReport) {
+      if (formMode === 'edit' && editingReport) {
         await api.reports.update(editingReport.id, payload);
+      } else if (formMode === 'repeat' && editingReport) {
+        await api.reports.update(editingReport.id, {
+          ...payload,
+          archiveCurrentAsPrevious: true
+        });
       } else {
         await api.patients.addReport(patient.id, payload);
       }
@@ -215,6 +250,19 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
       onRefresh();
     } catch (err) {
       console.warn('Error deleting report:', err);
+    }
+  };
+
+  const handleDeletePreviousSnapshot = async (parentReport: PatientTestReport, snapshotId: string) => {
+    try {
+      const updatedPrev = (parentReport.previousResults || []).filter(p => p.id !== snapshotId);
+      await api.reports.update(parentReport.id, {
+        previousResults: updatedPrev,
+        archiveCurrentAsPrevious: false
+      } as any);
+      onRefresh();
+    } catch (err) {
+      console.warn('Error deleting previous snapshot:', err);
     }
   };
 
@@ -239,19 +287,71 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
       const inNotes = r.clinicalNotes?.toLowerCase().includes(q);
       const inLab = r.labName?.toLowerCase().includes(q);
       const inCat = r.category.toLowerCase().includes(q);
-      return inName || inVal || inNotes || inLab || inCat;
+      const inPrev = (r.previousResults || []).some(
+        pr =>
+          pr.resultValue?.toLowerCase().includes(q) ||
+          pr.clinicalNotes?.toLowerCase().includes(q) ||
+          pr.labName?.toLowerCase().includes(q)
+      );
+      return inName || inVal || inNotes || inLab || inCat || inPrev;
     }
 
     return true;
   });
 
+  // Flatten all stored previous reports for the "Previous Reports Archive" view
+  const allPreviousRecords: {
+    parentReport: PatientTestReport;
+    snapshot: HistoricalReportSnapshot;
+  }[] = [];
+
+  filteredReports.forEach(rep => {
+    if (rep.previousResults && rep.previousResults.length > 0) {
+      rep.previousResults.forEach(snap => {
+        allPreviousRecords.push({ parentReport: rep, snapshot: snap });
+      });
+    }
+    if (rep.isPreviousReport) {
+      allPreviousRecords.push({
+        parentReport: rep,
+        snapshot: {
+          id: rep.id,
+          orderedDate: rep.orderedDate,
+          reportDate: rep.reportDate,
+          resultFlag: rep.resultFlag,
+          resultValue: rep.resultValue,
+          unit: rep.unit,
+          referenceRange: rep.referenceRange,
+          specimenType: rep.specimenType,
+          labName: rep.labName,
+          orderedByDoctor: rep.orderedByDoctor,
+          clinicalNotes: rep.clinicalNotes,
+          attachmentUrl: rep.attachmentUrl,
+          attachmentName: rep.attachmentName,
+          archivedAt: rep.createdAt
+        }
+      });
+    }
+  });
+
+  allPreviousRecords.sort(
+    (a, b) =>
+      new Date(b.snapshot.reportDate || b.snapshot.orderedDate).getTime() -
+      new Date(a.snapshot.reportDate || a.snapshot.orderedDate).getTime()
+  );
+
+  const totalPreviousStoredCount = reports.reduce(
+    (acc, r) => acc + (r.previousResults?.length || 0) + (r.isPreviousReport ? 1 : 0),
+    0
+  );
+  const totalAllStoredCount =
+    reports.length + reports.reduce((acc, r) => acc + (r.previousResults?.length || 0), 0);
   const completedCount = reports.filter(r => r.status === 'completed').length;
-  const pendingCount = reports.filter(r => r.status === 'pending').length;
   const flaggedCount = reports.filter(
     r => r.resultFlag === 'abnormal' || r.resultFlag === 'positive' || r.resultFlag === 'critical'
   ).length;
 
-  const getFlagBadge = (flag: TestResultFlag, statusVal: TestReportStatus) => {
+  const getFlagBadge = (flag: TestResultFlag, statusVal: TestReportStatus = 'completed') => {
     if (statusVal === 'pending' || flag === 'pending') {
       return (
         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
@@ -305,26 +405,30 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-            TOTAL TESTS &amp; REPORTS
+            TOTAL STORED REPORTS
           </span>
-          <div className="text-2xl font-extrabold text-[#0f2926] mt-1">{reports.length}</div>
-          <span className="text-[11px] text-slate-500">Ordered &amp; uploaded</span>
+          <div className="text-2xl font-extrabold text-[#0f2926] mt-1">{totalAllStoredCount}</div>
+          <span className="text-[11px] text-slate-500">Current + previous history</span>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">
-            COMPLETED RESULTS
+            LATEST TEST RESULTS
           </span>
           <div className="text-2xl font-extrabold text-emerald-800 mt-1">{completedCount}</div>
-          <span className="text-[11px] text-slate-500">Verified findings</span>
+          <span className="text-[11px] text-slate-500">Active clinical panels</span>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 block">
-            PENDING LAB RESULTS
+        <div
+          onClick={() => setViewMode(viewMode === 'previous_archive' ? 'all_with_history' : 'previous_archive')}
+          className="bg-white p-4 rounded-2xl border border-teal-200/80 hover:border-teal-500 shadow-2xs cursor-pointer transition-colors"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1">
+            <History className="w-3 h-3 text-teal-600" />
+            PREVIOUS REPORTS STORED
           </span>
-          <div className="text-2xl font-extrabold text-amber-700 mt-1">{pendingCount}</div>
-          <span className="text-[11px] text-slate-500">Awaiting values</span>
+          <div className="text-2xl font-extrabold text-teal-900 mt-1">{totalPreviousStoredCount}</div>
+          <span className="text-[11px] text-teal-700 font-medium">Click to view archive</span>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
@@ -332,7 +436,7 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
             FLAGGED / POSITIVE
           </span>
           <div className="text-2xl font-extrabold text-rose-700 mt-1">{flaggedCount}</div>
-          <span className="text-[11px] text-slate-500">Requires attention</span>
+          <span className="text-[11px] text-slate-500">Requires clinical review</span>
         </div>
       </div>
 
@@ -348,7 +452,7 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
                 Patient Diagnostic &amp; Laboratory Report Results
               </h3>
               <p className="text-xs text-slate-500">
-                Complete results of all investigations, skin biopsies, microscopy mounts, and blood tests taken by{' '}
+                Current test results and permanently stored previous reports for{' '}
                 <strong className="text-slate-700">{patient.fullName}</strong>
               </p>
             </div>
@@ -366,24 +470,62 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
 
             <button
               type="button"
-              onClick={openAddForm}
+              onClick={() => openAddForm(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-900 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              <History className="w-3.5 h-3.5 text-teal-700" />
+              <span>+ Store Previous Report</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => openAddForm(false)}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0d4a44] hover:bg-[#093834] text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Add Report Result</span>
+              <span>Add New Report Result</span>
             </button>
           </div>
         </div>
 
+        {/* View Switcher Tabs: All Reports (with Previous History) vs Previous Reports Archive */}
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-100 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setViewMode('all_with_history')}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              viewMode === 'all_with_history'
+                ? 'bg-[#0d4a44] text-white shadow-2xs'
+                : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FlaskConical className="w-3.5 h-3.5" />
+            <span>Current &amp; Stored History ({reports.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewMode('previous_archive')}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              viewMode === 'previous_archive'
+                ? 'bg-[#0d4a44] text-white shadow-2xs'
+                : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Archive className="w-3.5 h-3.5" />
+            <span>Previous Reports Archive ({totalPreviousStoredCount})</span>
+          </button>
+        </div>
+
         {/* Search & Filter Controls */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
           <div className="relative flex-1 flex items-center">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search test name, result value, lab, or pathologist notes..."
+              placeholder="Search current or previous reports by test name, result value, lab, or notes..."
               className="w-full pl-8 pr-10 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-teal-600"
             />
             <div className="absolute right-1.5">
@@ -437,7 +579,7 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
         </div>
       </div>
 
-      {/* Add / Edit Report Result Drawer Card */}
+      {/* Add / Edit / Store Previous Report Drawer Card */}
       {isFormOpen && (
         <form
           onSubmit={handleSaveReport}
@@ -445,10 +587,27 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
         >
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2.5">
-              <Microscope className="w-5 h-5 text-[#116960]" />
-              <h4 className="text-sm font-extrabold text-[#0f2926]">
-                {editingReport ? `Update Report Result: ${editingReport.testName}` : 'Record New Test / Report Result'}
-              </h4>
+              {formMode === 'previous' ? (
+                <History className="w-5 h-5 text-[#116960]" />
+              ) : (
+                <Microscope className="w-5 h-5 text-[#116960]" />
+              )}
+              <div>
+                <h4 className="text-sm font-extrabold text-[#0f2926]">
+                  {formMode === 'previous'
+                    ? 'Store Previous / Historical Report Result'
+                    : formMode === 'repeat' && editingReport
+                    ? `Log Repeat Test Result for ${editingReport.testName} (Previous Result Auto-Stored)`
+                    : formMode === 'edit' && editingReport
+                    ? `Update Report Result: ${editingReport.testName}`
+                    : 'Record New Test / Report Result'}
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  {formMode === 'previous'
+                    ? 'Store a past lab or diagnostic report into the patient’s permanent historical report archive.'
+                    : 'If a previous report exists for this test, it will automatically be preserved in Previous Stored Reports.'}
+                </p>
+              </div>
             </div>
             <button
               type="button"
@@ -569,12 +728,15 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
             {/* Report Date */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                Report / Result Date
+                {formMode === 'previous' ? 'Previous Report Date *' : 'Report / Result Date'}
               </label>
               <input
                 type="date"
                 value={reportDate}
-                onChange={e => setReportDate(e.target.value)}
+                onChange={e => {
+                  setReportDate(e.target.value);
+                  if (formMode === 'previous') setOrderedDate(e.target.value);
+                }}
                 className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:border-teal-600"
               />
             </div>
@@ -708,7 +870,7 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
               rows={2}
               value={clinicalNotes}
               onChange={e => setClinicalNotes(e.target.value)}
-              placeholder="Enter detailed microscopic findings, pathologist comments, or clinical correlation notes..."
+              placeholder="Enter detailed microscopic findings, comparison with previous reports, or clinical correlation notes..."
               className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:border-teal-600"
             />
           </div>
@@ -718,7 +880,7 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
             <div className="flex items-center gap-3">
               <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors">
                 <Upload className="w-3.5 h-3.5 text-teal-700" />
-                <span>{attachmentUrl ? 'Replace Report Image/Scan' : 'Attach Report Scan (Optional)'}</span>
+                <span>{attachmentUrl ? 'Replace Report Scan' : 'Attach Report Scan / Image'}</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -746,15 +908,111 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
                 disabled={isSaving}
                 className="px-5 py-2 rounded-xl bg-[#0d4a44] hover:bg-[#093834] text-white text-xs font-bold shadow-xs disabled:opacity-50 cursor-pointer"
               >
-                {isSaving ? 'Saving...' : editingReport ? 'Update Result' : 'Save Report Result'}
+                {isSaving
+                  ? 'Saving...'
+                  : formMode === 'previous'
+                  ? 'Store Previous Report'
+                  : formMode === 'repeat'
+                  ? 'Save Repeat Result & Archive Previous'
+                  : formMode === 'edit'
+                  ? 'Update Result (Store Previous)'
+                  : 'Save Report Result'}
               </button>
             </div>
           </div>
         </form>
       )}
 
-      {/* Report Results List */}
-      {filteredReports.length === 0 ? (
+      {/* VIEW MODE 2: DEDICATED PREVIOUS REPORTS ARCHIVE */}
+      {viewMode === 'previous_archive' ? (
+        allPreviousRecords.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+              <Archive className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-700">No previous reports stored yet</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                Click &quot;+ Store Previous Report&quot; to upload past lab/biopsy reports, or log repeat test results to automatically archive earlier findings.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openAddForm(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0d4a44] hover:bg-[#093834] text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>+ Store Previous Report</span>
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3.5">
+            {allPreviousRecords.map(({ parentReport, snapshot }) => (
+              <div
+                key={snapshot.id}
+                className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden"
+              >
+                <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-teal-900 text-white">
+                      <History className="w-3 h-3" />
+                      Stored Previous Report
+                    </span>
+                    <span className="font-bold text-sm text-[#0f2926]">{parentReport.testName}</span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-200/70 text-slate-700">
+                      {parentReport.category}
+                    </span>
+                    {getFlagBadge(snapshot.resultFlag, 'completed')}
+                  </div>
+
+                  <span className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-teal-700" />
+                    Report Date:{' '}
+                    {new Date(snapshot.reportDate || snapshot.orderedDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </span>
+                </div>
+
+                <div className="p-5 space-y-3 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                        PREVIOUS STORED RESULT ({new Date(snapshot.reportDate || snapshot.orderedDate).toLocaleDateString()})
+                      </span>
+                      <div className="text-sm font-extrabold text-slate-800 mt-1">
+                        {snapshot.resultValue}
+                        {snapshot.unit ? <span className="ml-1 text-teal-800">{snapshot.unit}</span> : null}
+                      </div>
+                      {snapshot.clinicalNotes && (
+                        <p className="text-[11px] text-slate-500 mt-1.5">{snapshot.clinicalNotes}</p>
+                      )}
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-[#f4f7f6] border border-[#dce5e3]">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#116960] block">
+                        LATEST RESULT FOR COMPARISON ({new Date(parentReport.reportDate || parentReport.orderedDate).toLocaleDateString()})
+                      </span>
+                      <div className="text-sm font-extrabold text-[#0f2926] mt-1">
+                        {parentReport.resultValue}
+                        {parentReport.unit ? <span className="ml-1 text-teal-800">{parentReport.unit}</span> : null}
+                      </div>
+                      {parentReport.referenceRange && (
+                        <p className="text-[11px] text-slate-500 mt-1.5">
+                          Reference Interval: {parentReport.referenceRange}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : /* VIEW MODE 1: CURRENT REPORTS WITH EXPANDABLE STORED PREVIOUS REPORTS */
+      filteredReports.length === 0 ? (
         <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
             <FlaskConical className="w-6 h-6" />
@@ -766,25 +1024,37 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
                 : 'No report results match your current filter'}
             </p>
             <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-              Tests ordered during consultations automatically sync here, or you can directly record blood tests, biopsies, KOH mounts, and lab results.
+              Tests ordered during consultations automatically sync here, and all previous reports are permanently stored for longitudinal comparison.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={openAddForm}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0d4a44] hover:bg-[#093834] text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add First Report Result</span>
-          </button>
+          <div className="flex items-center justify-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => openAddForm(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-900 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>+ Store Previous Report</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openAddForm(false)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0d4a44] hover:bg-[#093834] text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add First Report Result</span>
+            </button>
+          </div>
         </div>
       ) : (
-        <div className="space-y-3.5">
+        <div className="space-y-4">
           {filteredReports.map(rep => {
             const isFlagged =
               rep.resultFlag === 'abnormal' ||
               rep.resultFlag === 'positive' ||
               rep.resultFlag === 'critical';
+            const prevList = rep.previousResults || [];
+            const showPrevSection = isHistoryExpanded(rep.id);
 
             return (
               <div
@@ -801,19 +1071,60 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
                       {rep.category}
                     </span>
                     {getFlagBadge(rep.resultFlag, rep.status)}
+                    {prevList.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => toggleHistoryExpand(rep.id)}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#e3f2ef] text-[#116960] border border-[#b8dcd6] hover:bg-[#d2ebe6] transition-colors cursor-pointer"
+                      >
+                        <History className="w-3 h-3" />
+                        <span>
+                          {prevList.length} Previous {prevList.length === 1 ? 'Report' : 'Reports'} Stored
+                        </span>
+                        {showPrevSection ? (
+                          <ChevronUp className="w-3 h-3" />
+                        ) : (
+                          <ChevronDown className="w-3 h-3" />
+                        )}
+                      </button>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-2 self-end sm:self-center">
+                  <div className="flex items-center gap-1.5 self-end sm:self-center flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => openAddForm(false, rep)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#f4f7f6] hover:bg-[#e3f2ef] text-[#0f2926] border border-[#dce5e3] text-[11px] font-semibold transition-colors cursor-pointer"
+                      title="Record a new repeat test result and automatically store the current result in Previous Reports"
+                    >
+                      <RefreshCw className="w-3 h-3 text-[#116960]" />
+                      <span>Log Repeat Result</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openAddForm(true, rep)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-semibold transition-colors cursor-pointer"
+                      title="Add an older previous report for this test"
+                    >
+                      <History className="w-3 h-3 text-teal-700" />
+                      <span>+ Previous Report</span>
+                    </button>
+
                     {onOpenAIWithPrompt && (
                       <button
                         type="button"
                         onClick={() =>
                           onOpenAIWithPrompt(
-                            `Interpret the ${rep.testName} report result for ${patient.fullName}: Result = "${rep.resultValue} ${rep.unit || ''}" (Reference range: ${rep.referenceRange || 'Standard'}). Notes: ${rep.clinicalNotes || 'None'}`
+                            `Interpret the ${rep.testName} report result and compare with previous reports for ${patient.fullName}: Latest Result = "${rep.resultValue} ${rep.unit || ''}" (${rep.reportDate || rep.orderedDate}). Previous Stored Results = ${
+                              prevList.length > 0
+                                ? prevList.map(p => `"${p.resultValue}" on ${p.reportDate || p.orderedDate}`).join('; ')
+                                : 'None'
+                            }.`
                           )
                         }
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 text-[11px] font-semibold transition-colors cursor-pointer"
-                        title="Ask AI Assistant to interpret this result"
+                        title="Ask AI Assistant to interpret this result and compare with previous reports"
                       >
                         <Sparkles className="w-3 h-3 text-teal-600" />
                         <span>AI Interpret</span>
@@ -826,7 +1137,7 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-semibold transition-colors cursor-pointer"
                     >
                       <Pencil className="w-3 h-3 text-teal-700" />
-                      <span>{rep.status === 'pending' ? 'Enter Result' : 'Edit Result'}</span>
+                      <span>{rep.status === 'pending' ? 'Enter Result' : 'Edit'}</span>
                     </button>
 
                     <button
@@ -852,7 +1163,7 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
                       }`}
                     >
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                        REPORT RESULT / FINDING
+                        LATEST REPORT RESULT ({new Date(rep.reportDate || rep.orderedDate).toLocaleDateString()})
                       </span>
                       <div className="text-sm font-extrabold text-[#0f2926] mt-1 leading-snug">
                         {rep.resultValue || 'Pending laboratory result'}
@@ -953,6 +1264,90 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
                       </button>
                     )}
                   </div>
+
+                  {/* STORED PREVIOUS REPORTS TIMELINE SECTION */}
+                  {prevList.length > 0 && showPrevSection && (
+                    <div className="pt-3.5 mt-2 border-t border-dashed border-slate-200 space-y-2.5 animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#116960] flex items-center gap-1.5">
+                          <History className="w-3.5 h-3.5" />
+                          <span>Stored Previous Reports &amp; Historical Results ({prevList.length})</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openAddForm(true, rep)}
+                          className="text-[11px] font-bold text-[#116960] hover:underline cursor-pointer"
+                        >
+                          + Add Earlier Report
+                        </button>
+                      </div>
+
+                      <div className="space-y-2 pl-3 border-l-2 border-[#b8dcd6]">
+                        {prevList.map((prev, idx) => (
+                          <div
+                            key={prev.id || idx}
+                            className="p-3 rounded-xl bg-slate-50/90 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="px-2 py-0.5 rounded bg-slate-200/80 text-slate-700 font-bold text-[10px]">
+                                  Previous #{prevList.length - idx}
+                                </span>
+                                <span className="font-bold text-slate-800 text-xs">
+                                  {new Date(prev.reportDate || prev.orderedDate).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </span>
+                                {getFlagBadge(prev.resultFlag, 'completed')}
+                                {prev.labName && (
+                                  <span className="text-[11px] text-slate-500">· {prev.labName}</span>
+                                )}
+                              </div>
+
+                              <div className="text-xs font-extrabold text-[#0f2926]">
+                                Result: {prev.resultValue}
+                                {prev.unit ? <span className="ml-1 text-teal-800">{prev.unit}</span> : null}
+                              </div>
+
+                              {prev.clinicalNotes && (
+                                <p className="text-[11px] text-slate-500">{prev.clinicalNotes}</p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                              {prev.attachmentUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPreviewAttachment({
+                                      url: prev.attachmentUrl!,
+                                      title: `Previous ${rep.testName} (${new Date(
+                                        prev.reportDate || prev.orderedDate
+                                      ).toLocaleDateString()})`
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-teal-800 text-[11px] font-semibold hover:bg-teal-50 cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>View Scan</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePreviousSnapshot(rep, prev.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                                title="Remove this historical snapshot"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );

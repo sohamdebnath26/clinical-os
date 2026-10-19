@@ -418,7 +418,9 @@ app.post('/api/patients/:id/reports', authMiddleware, (req: AuthenticatedRequest
     clinicalNotes,
     attachmentUrl,
     attachmentName,
-    consultationId
+    consultationId,
+    isPreviousReport,
+    previousResults
   } = req.body;
 
   if (!testName || !testName.trim()) {
@@ -444,7 +446,9 @@ app.post('/api/patients/:id/reports', authMiddleware, (req: AuthenticatedRequest
       orderedByDoctor: orderedByDoctor || doctor.name,
       clinicalNotes: clinicalNotes || '',
       attachmentUrl: attachmentUrl || '',
-      attachmentName: attachmentName || ''
+      attachmentName: attachmentName || '',
+      isPreviousReport: Boolean(isPreviousReport),
+      previousResults: Array.isArray(previousResults) ? previousResults : []
     },
     { id: doctor.id, name: doctor.name }
   );
