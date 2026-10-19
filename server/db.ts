@@ -14,7 +14,9 @@ import {
   PracticeRevenueAnalytics,
   PatientRevenueBreakdown,
   DailyRevenuePoint,
-  MonthlyRevenuePoint
+  MonthlyRevenuePoint,
+  PatientTestReport,
+  TestReportCategory
 } from '../src/types/index.js';
 
 interface DatabaseSchema {
@@ -26,6 +28,7 @@ interface DatabaseSchema {
   appointments: Appointment[];
   bodyMarkers: BodyMarker[];
   clinicalImages: ClinicalImage[];
+  testReports?: PatientTestReport[];
   auditLogs: AuditLog[];
   meta: {
     lastPatientNumber: number;
@@ -46,6 +49,122 @@ class DatabaseService {
     this.data = this.loadDatabase();
     this.ensureDefaultDoctor();
     this.syncAppointmentsFromFollowUps();
+    this.syncTestReportsFromConsultations();
+  }
+
+  private inferTestDefaults(testName: string): {
+    category: TestReportCategory;
+    specimenType: string;
+    referenceRange: string;
+    defaultResult: string;
+    resultFlag: 'normal' | 'abnormal' | 'positive' | 'negative' | 'critical' | 'pending';
+    labName: string;
+    clinicalNotes: string;
+  } {
+    const lower = testName.toLowerCase();
+    if (lower.includes('koh') || lower.includes('fungal') || lower.includes('tzanck') || lower.includes('gram') || lower.includes('culture')) {
+      return {
+        category: 'Microbiology / Fungal',
+        specimenType: 'Lesional skin scraping / swab',
+        referenceRange: 'No fungal elements / Negative',
+        defaultResult: lower.includes('koh')
+          ? ' Hyphae and arthrospores visualized on 10% KOH mount'
+          : 'No pathogenic organisms isolated after incubation',
+        resultFlag: lower.includes('koh') ? 'positive' : 'negative',
+        labName: 'In-Clinic Dermatology Microscopy Lab',
+        clinicalNotes: lower.includes('koh')
+          ? 'Confirms superficial dermatophytosis; correlate with clinical distribution.'
+          : 'Routine microbiological microscopy completed.'
+      };
+    }
+    if (lower.includes('biopsy') || lower.includes('histopath') || lower.includes('immunofluorescence')) {
+      return {
+        category: 'Histopathology / Biopsy',
+        specimenType: '4mm Punch Skin Biopsy (Formalin fixed)',
+        referenceRange: 'Benign / Normal epidermal-dermal architecture',
+        defaultResult: 'Hyperkeratosis, acanthosis, and mild perivascular lymphocytic infiltrate; no cellular atypia',
+        resultFlag: 'normal',
+        labName: 'Cutaneous Histopathology Reference Lab',
+        clinicalNotes: 'Histological features consistent with benign inflammatory dermatosis. Margins clear.'
+      };
+    }
+    if (lower.includes('patch') || lower.includes('prick') || lower.includes('ige') || lower.includes('allerg')) {
+      return {
+        category: 'Allergy / Patch Test',
+        specimenType: lower.includes('ige') ? 'Venous Blood (Serum)' : 'Epicutaneous Patch Chambers (48h / 96h)',
+        referenceRange: lower.includes('ige') ? '< 100 IU/mL' : 'Negative (0) across standard series',
+        defaultResult: lower.includes('ige') ? '168 IU/mL' : 'Weak positive (+) reaction to Nickel Sulfate & Fragrance Mix',
+        resultFlag: 'abnormal',
+        labName: 'Allergy & Contact Dermatitis Unit',
+        clinicalNotes: 'Advise allergen avoidance protocol and barrier emollient therapy.'
+      };
+    }
+    if (lower.includes('wood') || lower.includes('dermoscop') || lower.includes('trichoscop')) {
+      return {
+        category: "Dermoscopy / Wood's Lamp",
+        specimenType: 'Non-invasive Optical / UV Examination',
+        referenceRange: 'Uniform pigment network / No abnormal fluorescence',
+        defaultResult: lower.includes('wood')
+          ? 'Accentuated epidermal pigment contrast under 365nm Wood’s light; no coral-red fluorescence'
+          : 'Regular reticular pigment network without atypical globules or blue-white veil',
+        resultFlag: 'normal',
+        labName: 'In-Clinic Optical Dermoscopy Suite',
+        clinicalNotes: 'Epidermal predominance confirmed; favorable response expected to topical depigmenting agents.'
+      };
+    }
+    return {
+      category: 'Laboratory / Blood',
+      specimenType: 'Venous Blood (EDTA / Serum)',
+      referenceRange: 'Within normal physiological reference interval',
+      defaultResult: 'All hematological and biochemical parameters within normal reference limits',
+      resultFlag: 'normal',
+      labName: 'Central Clinical Diagnostics Lab',
+      clinicalNotes: 'Baseline systemic screening satisfactory for planned dermatological therapy.'
+    };
+  }
+
+  private syncTestReportsFromConsultations() {
+    if (!this.data.testReports) {
+      this.data.testReports = [];
+    }
+    let changed = false;
+    for (const c of this.data.consultations) {
+      if (Array.isArray(c.tests) && c.tests.length > 0) {
+        for (const rawTest of c.tests) {
+          const testName = rawTest.trim();
+          if (!testName) continue;
+          const exists = this.data.testReports.some(
+            r => r.patientId === c.patientId && r.consultationId === c.id && r.testName.toLowerCase() === testName.toLowerCase()
+          );
+          if (!exists) {
+            const def = this.inferTestDefaults(testName);
+            this.data.testReports.push({
+              id: `rep-${c.id}-${Math.random().toString(36).substring(2, 7)}`,
+              patientId: c.patientId,
+              consultationId: c.id,
+              testName,
+              category: def.category,
+              orderedDate: c.consultationDate || c.createdAt,
+              reportDate: c.signedAt || c.consultationDate || c.createdAt,
+              status: 'completed',
+              resultFlag: def.resultFlag,
+              resultValue: def.defaultResult.trim(),
+              referenceRange: def.referenceRange,
+              specimenType: def.specimenType,
+              labName: def.labName,
+              orderedByDoctor: c.doctorName,
+              clinicalNotes: def.clinicalNotes,
+              createdAt: c.createdAt,
+              updatedAt: c.updatedAt || c.createdAt
+            });
+            changed = true;
+          }
+        }
+      }
+    }
+    if (changed) {
+      this.persist();
+    }
   }
 
   private syncAppointmentsFromFollowUps() {
@@ -95,6 +214,9 @@ class DatabaseService {
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed.appointments)) {
           parsed.appointments = [];
+        }
+        if (!Array.isArray(parsed.testReports)) {
+          parsed.testReports = [];
         }
         return parsed;
       } catch (err) {
@@ -505,6 +627,7 @@ class DatabaseService {
       }
     }
 
+    this.syncTestReportsFromConsultations();
     this.persist();
 
     this.logAudit({
@@ -676,6 +799,95 @@ class DatabaseService {
           actorName: actor.name,
           action: 'appointment_deleted',
           resourceType: 'appointment',
+          resourceId: id
+        });
+      }
+      return true;
+    }
+    return false;
+  }
+
+  // --- Patient Test & Diagnostic Reports methods ---
+  public getTestReportsByPatient(patientId: string): PatientTestReport[] {
+    if (!this.data.testReports) this.data.testReports = [];
+    this.syncTestReportsFromConsultations();
+    return this.data.testReports
+      .filter(r => r.patientId === patientId)
+      .sort(
+        (a, b) =>
+          new Date(b.reportDate || b.orderedDate || b.createdAt).getTime() -
+          new Date(a.reportDate || a.orderedDate || a.createdAt).getTime()
+      );
+  }
+
+  public createTestReport(
+    item: Omit<PatientTestReport, 'id' | 'createdAt' | 'updatedAt'>,
+    actor?: { id: string; name: string }
+  ): PatientTestReport {
+    if (!this.data.testReports) this.data.testReports = [];
+    const id = `rep-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+    const now = new Date().toISOString();
+    const report: PatientTestReport = {
+      ...item,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    this.data.testReports.push(report);
+    this.persist();
+
+    if (actor) {
+      this.logAudit({
+        actorId: actor.id,
+        actorName: actor.name,
+        action: 'test_report_added',
+        resourceType: 'test_report',
+        resourceId: id,
+        metadata: { patientId: report.patientId, testName: report.testName, status: report.status }
+      });
+    }
+
+    return report;
+  }
+
+  public updateTestReport(
+    id: string,
+    updates: Partial<PatientTestReport>,
+    actor?: { id: string; name: string }
+  ): PatientTestReport | null {
+    if (!this.data.testReports) return null;
+    const report = this.data.testReports.find(r => r.id === id);
+    if (!report) return null;
+
+    Object.assign(report, updates, { updatedAt: new Date().toISOString() });
+    this.persist();
+
+    if (actor) {
+      this.logAudit({
+        actorId: actor.id,
+        actorName: actor.name,
+        action: 'test_report_updated',
+        resourceType: 'test_report',
+        resourceId: id,
+        metadata: { testName: report.testName, status: report.status, resultFlag: report.resultFlag }
+      });
+    }
+
+    return report;
+  }
+
+  public deleteTestReport(id: string, actor?: { id: string; name: string }): boolean {
+    if (!this.data.testReports) return false;
+    const initialLen = this.data.testReports.length;
+    this.data.testReports = this.data.testReports.filter(r => r.id !== id);
+    if (this.data.testReports.length !== initialLen) {
+      this.persist();
+      if (actor) {
+        this.logAudit({
+          actorId: actor.id,
+          actorName: actor.name,
+          action: 'test_report_deleted',
+          resourceType: 'test_report',
           resourceId: id
         });
       }

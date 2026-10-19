@@ -10,7 +10,8 @@ import {
   Appointment,
   AIImageAnalysisResult,
   ProgressionAnalysisResult,
-  ABCDEScoreResult
+  ABCDEScoreResult,
+  PatientTestReport
 } from '../types/index';
 
 const TOKEN_KEY = 'clinical_os_token';
@@ -165,6 +166,18 @@ export const api = {
     getPrescriptions: (id: string) =>
       fetchWithAuth<{ prescriptions: PrescriptionItem[] }>(
         `/api/patients/${id}/prescriptions`
+      ),
+    getReports: (id: string) =>
+      fetchWithAuth<{ reports: PatientTestReport[] }>(
+        `/api/patients/${id}/reports`
+      ),
+    addReport: (id: string, data: Partial<PatientTestReport>) =>
+      fetchWithAuth<{ report: PatientTestReport }>(
+        `/api/patients/${id}/reports`,
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }
       ),
   },
 
@@ -330,6 +343,15 @@ export const api = {
   },
 
   reports: {
+    update: (id: string, data: Partial<PatientTestReport>) =>
+      fetchWithAuth<{ report: PatientTestReport }>(`/api/reports/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      fetchWithAuth<{ success: boolean; message: string }>(`/api/reports/${id}`, {
+        method: 'DELETE',
+      }),
     logWhatsApp: (data: {
       patientId?: string;
       reportType: string;

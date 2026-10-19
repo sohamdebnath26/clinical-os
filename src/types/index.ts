@@ -351,3 +351,37 @@ export interface PracticeRevenueAnalytics {
   monthlyTrend: MonthlyRevenuePoint[];
   patientBreakdown: PatientRevenueBreakdown[];
 }
+
+export type TestReportStatus = 'pending' | 'completed';
+export type TestResultFlag = 'normal' | 'abnormal' | 'positive' | 'negative' | 'critical' | 'pending';
+export type TestReportCategory =
+  | 'Laboratory / Blood'
+  | 'Microbiology / Fungal'
+  | 'Histopathology / Biopsy'
+  | 'Allergy / Patch Test'
+  | 'Dermoscopy / Wood\'s Lamp'
+  | 'Imaging / Other';
+
+export interface PatientTestReport {
+  id: string;
+  patientId: string;
+  consultationId?: string;
+  testName: string;
+  category: TestReportCategory;
+  orderedDate: string;
+  reportDate?: string;
+  status: TestReportStatus;
+  resultFlag: TestResultFlag;
+  resultValue: string;
+  unit?: string;
+  referenceRange?: string;
+  specimenType?: string;
+  labName?: string;
+  orderedByDoctor?: string;
+  clinicalNotes?: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+

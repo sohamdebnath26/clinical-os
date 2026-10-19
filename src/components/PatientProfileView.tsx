@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Patient, Consultation, PrescriptionItem, BodyMarker, ClinicalImage, Appointment } from '../types';
+import { Patient, Consultation, PrescriptionItem, BodyMarker, ClinicalImage, Appointment, PatientTestReport } from '../types';
 import { api } from '../lib/api';
 import { BodyMap } from './BodyMap';
 import { PrintRxModal } from './PrintRxModal';
@@ -10,6 +10,7 @@ import { LesionProgressionModal } from './LesionProgressionModal';
 import { WhatsAppShareModal, WhatsAppIcon, WhatsAppReportType } from './WhatsAppShareModal';
 import { PatientVitalsChart } from './PatientVitalsChart';
 import { VisitComparisonSection } from './VisitComparisonSection';
+import { PatientReportsSection } from './PatientReportsSection';
 import { useAuth } from '../context/AuthContext';
 import {
   ArrowLeft,
@@ -45,7 +46,7 @@ interface PatientProfileViewProps {
   onNavigateToImageAnalyzer?: (patientId: string) => void;
 }
 
-export type TabType = 'overview' | 'vitals' | 'appointments' | 'bodymap' | 'timeline' | 'visits' | 'prescriptions';
+export type TabType = 'overview' | 'vitals' | 'appointments' | 'bodymap' | 'timeline' | 'visits' | 'reports' | 'prescriptions';
 
 const normalizeTab = (tab?: TabType): TabType => (tab === 'visits' ? 'timeline' : tab || 'overview');
 
@@ -65,6 +66,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [markers, setMarkers] = useState<BodyMarker[]>([]);
   const [images, setImages] = useState<ClinicalImage[]>([]);
+  const [testReports, setTestReports] = useState<PatientTestReport[]>([]);
 
   const [activeTab, setActiveTab] = useState<TabType>(normalizeTab(initialTab));
   const [isLoading, setIsLoading] = useState(true);
@@ -106,14 +108,15 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      const [patRes, conRes, timeRes, rxRes, markRes, imgRes, apptRes] = await Promise.all([
+      const [patRes, conRes, timeRes, rxRes, markRes, imgRes, apptRes, repRes] = await Promise.all([
         api.patients.get(patientId),
         api.patients.getConsultations(patientId),
         api.patients.getTimeline(patientId),
         api.patients.getPrescriptions(patientId),
         api.patients.getMarkers(patientId),
         api.patients.getImages(patientId),
-        api.appointments.list({ patientId })
+        api.appointments.list({ patientId }),
+        api.patients.getReports(patientId).catch(() => ({ reports: [] }))
       ]);
 
       setPatient(patRes.patient);
@@ -123,6 +126,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
       setMarkers(markRes.markers);
       setImages(imgRes.images);
       setAppointments(apptRes.appointments);
+      setTestReports(repRes.reports || []);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error loading patient profile';
       setError(message);
@@ -291,7 +295,11 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           <span className="text-slate-700 font-semibold">{patient.fullName}</span>
           <span>/</span>
           <span className="capitalize">
-            {activeTab === 'timeline' ? 'Visits & Timeline' : activeTab}
+            {activeTab === 'timeline'
+              ? 'Visits & Timeline'
+              : activeTab === 'reports'
+              ? 'Report Results'
+              : activeTab}
           </span>
         </div>
       </div>
@@ -444,7 +452,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
       {/* Profile Navigation Tabs */}
       <div className="border-b border-slate-200 flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-        {(['overview', 'vitals', 'appointments', 'bodymap', 'timeline', 'prescriptions'] as TabType[]).map(tab => (
+        {(['overview', 'vitals', 'appointments', 'bodymap', 'timeline', 'reports', 'prescriptions'] as TabType[]).map(tab => (
           <button
             key={tab}
             type="button"
@@ -460,6 +468,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             {tab === 'appointments' && `Appointments & Follow-ups (${appointments.length})`}
             {tab === 'bodymap' && 'Body map'}
             {tab === 'timeline' && `Visits & Timeline (${totalUnifiedCount})`}
+            {tab === 'reports' && `Report Results (${testReports.length})`}
             {tab === 'prescriptions' && `Prescriptions (${prescriptions.length})`}
           </button>
         ))}
@@ -601,10 +610,14 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                   <span className="text-xl font-extrabold text-slate-800 block">{markers.length}</span>
                   <span className="text-[11px] text-slate-500 font-medium">Body Pins</span>
                 </button>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <span className="text-xl font-extrabold text-slate-800 block">{images.length}</span>
-                  <span className="text-[11px] text-slate-500 font-medium">Images</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('reports')}
+                  className="bg-slate-50 hover:bg-teal-50/70 p-3 rounded-xl border border-slate-100 hover:border-teal-200 transition-colors cursor-pointer"
+                >
+                  <span className="text-xl font-extrabold text-teal-800 block">{testReports.length}</span>
+                  <span className="text-[11px] text-slate-500 font-medium">Report Results</span>
+                </button>
               </div>
             </div>
 
@@ -1299,6 +1312,36 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             </button>
             <button
               type="button"
+              onClick={() => setActiveTab('reports')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition"
+            >
+              <span>Next: Report Results</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: REPORT RESULTS */}
+      {activeTab === 'reports' && (
+        <div className="space-y-4">
+          <PatientReportsSection
+            patient={patient}
+            reports={testReports}
+            doctorName={doctor?.name}
+            onRefresh={loadPatientData}
+            onOpenAIWithPrompt={onOpenAIWithPrompt}
+          />
+          <div className="p-4 bg-white rounded-2xl border border-slate-200 flex justify-between items-center">
+            <button
+              type="button"
+              onClick={() => setActiveTab('timeline')}
+              className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
+            >
+              ← Visits &amp; Timeline
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('prescriptions')}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition"
             >
@@ -1309,7 +1352,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
         </div>
       )}
 
-      {/* TAB 4: PRESCRIPTIONS */}
+      {/* TAB: PRESCRIPTIONS */}
       {activeTab === 'prescriptions' && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs divide-y divide-slate-100 animate-in fade-in duration-150">
           <div className="p-4 bg-slate-50/70 flex items-center justify-between flex-wrap gap-2">

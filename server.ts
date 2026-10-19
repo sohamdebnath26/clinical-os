@@ -395,6 +395,83 @@ app.get('/api/patients/:id/prescriptions', authMiddleware, (req, res) => {
   res.json({ prescriptions });
 });
 
+// Patient test & diagnostic report results
+app.get('/api/patients/:id/reports', authMiddleware, (req, res) => {
+  const reports = db.getTestReportsByPatient(req.params.id);
+  res.json({ reports });
+});
+
+app.post('/api/patients/:id/reports', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const {
+    testName,
+    category,
+    orderedDate,
+    reportDate,
+    status,
+    resultFlag,
+    resultValue,
+    unit,
+    referenceRange,
+    specimenType,
+    labName,
+    orderedByDoctor,
+    clinicalNotes,
+    attachmentUrl,
+    attachmentName,
+    consultationId
+  } = req.body;
+
+  if (!testName || !testName.trim()) {
+    return res.status(400).json({ error: 'Test / report name is required' });
+  }
+
+  const doctor = req.doctor!;
+  const report = db.createTestReport(
+    {
+      patientId: req.params.id,
+      consultationId,
+      testName: testName.trim(),
+      category: category || 'Laboratory / Blood',
+      orderedDate: orderedDate || new Date().toISOString().split('T')[0],
+      reportDate: reportDate || new Date().toISOString().split('T')[0],
+      status: status || 'completed',
+      resultFlag: resultFlag || 'normal',
+      resultValue: resultValue || '',
+      unit: unit || '',
+      referenceRange: referenceRange || '',
+      specimenType: specimenType || '',
+      labName: labName || '',
+      orderedByDoctor: orderedByDoctor || doctor.name,
+      clinicalNotes: clinicalNotes || '',
+      attachmentUrl: attachmentUrl || '',
+      attachmentName: attachmentName || ''
+    },
+    { id: doctor.id, name: doctor.name }
+  );
+
+  res.status(201).json({ report });
+});
+
+app.put('/api/reports/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const doctor = req.doctor!;
+  const updated = db.updateTestReport(req.params.id, req.body, {
+    id: doctor.id,
+    name: doctor.name
+  });
+  if (!updated) return res.status(404).json({ error: 'Report not found' });
+  res.json({ report: updated });
+});
+
+app.delete('/api/reports/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const doctor = req.doctor!;
+  const deleted = db.deleteTestReport(req.params.id, {
+    id: doctor.id,
+    name: doctor.name
+  });
+  if (!deleted) return res.status(404).json({ error: 'Report not found' });
+  res.json({ success: true, message: 'Report deleted' });
+});
+
 // ==========================================
 // CONSULTATION WORKSPACE ROUTES
 // ==========================================
