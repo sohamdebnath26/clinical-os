@@ -6,6 +6,7 @@ import {
   Users,
   Calendar,
   FileText,
+  IndianRupee,
   Sparkles,
   Settings,
   LogOut,
@@ -15,7 +16,7 @@ import {
   PanelLeftOpen
 } from 'lucide-react';
 
-export type NavRoute = 'dashboard' | 'patients' | 'appointments' | 'prescriptions' | 'image-analyzer' | 'ai-assistant' | 'settings';
+export type NavRoute = 'dashboard' | 'patients' | 'appointments' | 'prescriptions' | 'revenue' | 'image-analyzer' | 'ai-assistant' | 'settings';
 
 interface SidebarProps {
   currentRoute: NavRoute;
@@ -192,6 +193,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }`}
               >
                 {isCollapsed ? <FileText className="w-4 h-4" /> : <span>{t('prescriptions')}</span>}
+              </button>
+
+              {/* Revenue */}
+              <button
+                type="button"
+                onClick={() => onNavigate('revenue')}
+                className={`w-full flex items-center rounded-xl text-sm transition-all cursor-pointer ${
+                  isCollapsed ? 'justify-center py-3 px-0' : 'px-4 py-2.5'
+                } ${
+                  currentRoute === 'revenue'
+                    ? 'bg-[#157a6e] text-white font-bold shadow-2xs'
+                    : 'text-[#d0e6e2] hover:bg-white/8 hover:text-white font-medium'
+                }`}
+              >
+                {isCollapsed ? <IndianRupee className="w-4 h-4" /> : <span>Revenue</span>}
               </button>
             </div>
           </div>

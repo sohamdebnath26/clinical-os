@@ -8,6 +8,7 @@ import { DashboardView } from './components/DashboardView';
 import { PatientsListView } from './components/PatientsListView';
 import { PatientProfileView, TabType } from './components/PatientProfileView';
 import { PrescriptionsView } from './components/PrescriptionsView';
+import { RevenueView } from './components/RevenueView';
 import { AppointmentsView } from './components/AppointmentsView';
 import { ImageAnalyzerView } from './components/ImageAnalyzerView';
 import { SettingsView } from './components/SettingsView';
@@ -272,6 +273,8 @@ function MainApp() {
                 />
               ) : currentRoute === 'prescriptions' ? (
                 <PrescriptionsView onSelectPatient={handleSelectPatient} />
+              ) : currentRoute === 'revenue' ? (
+                <RevenueView onSelectPatient={handleSelectPatient} />
               ) : currentRoute === 'image-analyzer' ? (
                 <ImageAnalyzerView
                   initialPatientId={activePatientId}
