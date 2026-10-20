@@ -220,25 +220,25 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
             </div>
           </div>
 
-          {/* Differential Diagnoses Table */}
+          {/* 01. Differential Diagnoses Table */}
           <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-            <div className="bg-slate-100/90 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-teal-800" />
+            <div className="bg-slate-100/90 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                Differential Diagnoses & Likelihood Matrix
+                01. Differential Diagnosis
               </h3>
+              <span className="text-[11px] text-slate-500">Ranked by likelihood</span>
             </div>
             <div className="divide-y divide-slate-100 text-xs">
               {analysis.differentials.map((diff, i) => (
-                <div key={i} className="p-3.5 flex flex-col sm:flex-row sm:items-start justify-between gap-2 hover:bg-slate-50/60">
+                <div key={i} className="p-3.5 flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-slate-900 text-sm">
                         {i + 1}. {diff.condition}
                       </span>
                       {diff.icdCode && (
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">
-                          ICD-10: {diff.icdCode}
+                        <span className="text-xs font-mono text-slate-500">
+                          · ICD-10: {diff.icdCode}
                         </span>
                       )}
                     </div>
@@ -247,57 +247,89 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
                     </p>
                   </div>
                   <span
-                    className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide self-start ${
+                    className={`shrink-0 text-xs font-bold self-start ${
                       diff.confidence === 'High'
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                        ? 'text-emerald-700'
                         : diff.confidence === 'Moderate'
-                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                        : 'bg-blue-100 text-blue-800 border border-blue-200'
+                        ? 'text-amber-700'
+                        : 'text-slate-500'
                     }`}
                   >
-                    {diff.confidence} Confidence
+                    {diff.confidence} Likelihood
                   </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Observed Morphological Findings & Timeline Correlation */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Morphological Observations */}
-            <div className="border border-slate-200 rounded-xl p-4 bg-white">
-              <div className="flex items-center gap-1.5 mb-2.5 text-xs font-bold uppercase tracking-wider text-slate-700">
-                <Eye className="w-4 h-4 text-teal-700" />
-                <span>Observed Morphological Features</span>
+          {/* 02. Observed Morphological Findings & Timeline Correlation */}
+          <div className="border border-slate-200 rounded-xl p-4 bg-white space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+              02. Key Visual Findings & Patient History
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="text-[11px] font-semibold text-slate-500 uppercase mb-1.5">
+                  Visual Observations
+                </div>
+                <ul className="space-y-1.5 text-xs text-slate-700">
+                  {analysis.visualFindings.map((finding, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-teal-600 shrink-0 mt-1.5" />
+                      <span>{finding}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="space-y-1.5 text-xs text-slate-700">
-                {analysis.visualFindings.map((finding, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-teal-600 shrink-0 mt-1.5" />
-                    <span>{finding}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
 
-            {/* Longitudinal Timeline Narrative */}
-            <div className="border border-teal-200/80 rounded-xl p-4 bg-teal-50/50">
-              <div className="flex items-center gap-1.5 mb-2.5 text-xs font-bold uppercase tracking-wider text-teal-900">
-                <Clock className="w-4 h-4 text-teal-800" />
-                <span>Longitudinal Health Record Correlation</span>
+              <div className="rounded-lg p-3 bg-teal-50/50 border border-teal-100">
+                <div className="text-[11px] font-semibold text-teal-900 uppercase mb-1">
+                  Patient History & Lab Correlation
+                </div>
+                <p className="text-xs text-teal-950 leading-relaxed font-normal">
+                  {analysis.timelineCorrelation}
+                </p>
               </div>
-              <p className="text-xs text-teal-950 leading-relaxed font-normal">
-                {analysis.timelineCorrelation}
-              </p>
             </div>
           </div>
 
-          {/* Safety Warnings & Red Flags */}
+          {/* 03. Recommended Workup & Suggested Management */}
+          <div className="border border-slate-200 rounded-xl p-4 bg-white space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+              03. Recommended Workup & Treatment Plan
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80">
+                <div className="text-[11px] font-semibold text-slate-600 uppercase mb-1.5">
+                  Recommended Tests / Workup
+                </div>
+                <ul className="space-y-1 text-xs text-slate-700">
+                  {analysis.recommendedInvestigations.map((inv, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="font-mono text-slate-400 font-semibold">{idx + 1}.</span>
+                      <span>{inv}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80">
+                <div className="text-[11px] font-semibold text-slate-600 uppercase mb-1.5">
+                  Suggested Treatment Regimen
+                </div>
+                <p className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
+                  {analysis.suggestedManagementPlan}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 04. Safety Warnings & Red Flags */}
           {analysis.redFlags.length > 0 && (
-            <div className="border border-rose-200 rounded-xl p-4 bg-rose-50/60">
+            <div className="border border-rose-200 rounded-xl p-4 bg-rose-50/50">
               <div className="flex items-center gap-1.5 mb-2 text-xs font-bold uppercase tracking-wider text-rose-900">
                 <ShieldAlert className="w-4 h-4 text-rose-600" />
-                <span>Clinical Red Flags & Signs to Exclude</span>
+                <span>04. Red Flags to Watch / Rule Out</span>
               </div>
               <ul className="space-y-1 text-xs text-rose-800">
                 {analysis.redFlags.map((flag, idx) => (
@@ -309,34 +341,6 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
               </ul>
             </div>
           )}
-
-          {/* Recommended Workup & Suggested Management */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-slate-200 rounded-xl p-4 bg-white">
-              <div className="flex items-center gap-1.5 mb-2 text-xs font-bold uppercase tracking-wider text-slate-700">
-                <FileText className="w-4 h-4 text-teal-700" />
-                <span>Recommended Investigations & Diagnostic Inquiries</span>
-              </div>
-              <ul className="space-y-1 text-xs text-slate-700">
-                {analysis.recommendedInvestigations.map((inv, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0 mt-1.5" />
-                    <span>{inv}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="border border-slate-200 rounded-xl p-4 bg-white">
-              <div className="flex items-center gap-1.5 mb-2 text-xs font-bold uppercase tracking-wider text-slate-700">
-                <Stethoscope className="w-4 h-4 text-teal-700" />
-                <span>Suggested Therapeutic Regimen</span>
-              </div>
-              <p className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
-                {analysis.suggestedManagementPlan}
-              </p>
-            </div>
-          </div>
 
           {/* Doctor Signature & Legal Disclaimer */}
           <div className="pt-6 border-t border-slate-200 mt-6 flex flex-col sm:flex-row sm:items-end justify-between gap-6">

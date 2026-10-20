@@ -348,28 +348,31 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
   const handleCopyReport = () => {
     if (!analysisResult) return;
     const lines = [
-      `AI CLINICAL IMAGE EVALUATION REPORT`,
+      `CLINICAL IMAGE DIAGNOSTIC REPORT`,
       `Date: ${new Date().toLocaleDateString()}`,
-      selectedPatient ? `Patient: ${selectedPatient.fullName} (${selectedPatient.patientCode}, ${selectedPatient.age}y ${selectedPatient.gender})` : 'Patient: Unlinked Presentation',
-      anatomicalSite ? `Site: ${anatomicalSite}` : '',
-      `Primary Impression: ${analysisResult.primaryImpression}`,
+      selectedPatient ? `Patient: ${selectedPatient.fullName} (${selectedPatient.patientCode}, ${selectedPatient.age}y/${selectedPatient.gender})` : 'Patient: Unlinked Presentation',
+      anatomicalSite ? `Anatomical Site: ${anatomicalSite}` : '',
       '',
-      `DIFFERENTIAL DIAGNOSES:`,
-      ...analysisResult.differentials.map(d => `• ${d.condition} [${d.confidence} confidence${d.icdCode ? ` · ICD: ${d.icdCode}` : ''}] — ${d.rationale}`),
+      `PRIMARY DIAGNOSIS / IMPRESSION:`,
+      `${analysisResult.primaryImpression}`,
       '',
-      `VISUAL MORPHOLOGICAL FINDINGS:`,
+      `01. DIFFERENTIAL DIAGNOSIS:`,
+      ...analysisResult.differentials.map((d, i) => `${i + 1}. ${d.condition} (${d.confidence} Likelihood${d.icdCode ? ` · ICD-10: ${d.icdCode}` : ''})\n   ${d.rationale}`),
+      '',
+      `02. KEY VISUAL FINDINGS & PATIENT CONTEXT:`,
       ...analysisResult.visualFindings.map(v => `• ${v}`),
+      `History Correlation: ${analysisResult.timelineCorrelation}`,
       '',
-      `TIMELINE CORRELATION:`,
-      analysisResult.timelineCorrelation,
-      '',
-      `RECOMMENDED INVESTIGATIONS:`,
+      `03. RECOMMENDED TESTS & TREATMENT PLAN:`,
+      `Tests / Workup:`,
       ...analysisResult.recommendedInvestigations.map(r => `• ${r}`),
-      '',
-      `SUGGESTED MANAGEMENT:`,
+      `Treatment Plan:`,
       analysisResult.suggestedManagementPlan,
       '',
-      `Disclaimer: ${analysisResult.disclaimer}`
+      `04. RED FLAGS TO WATCH:`,
+      ...analysisResult.redFlags.map(f => `• ${f}`),
+      '',
+      `Note: ${analysisResult.disclaimer}`
     ].filter(Boolean).join('\n');
 
     navigator.clipboard.writeText(lines).then(() => {
@@ -801,79 +804,34 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
             )}
 
             {visualMetrics && !isExtractingFeatures && (
-              <div className="p-3 rounded-xl bg-slate-900 text-white space-y-2 border border-slate-800 shadow-xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-teal-300">
-                      Detected Specimen Telemetry
-                    </span>
-                  </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-teal-500/20 text-teal-300 border border-teal-500/30">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700">
+                    Image Pre-Scan Summary
+                  </span>
+                  <span className="text-slate-500 font-medium capitalize">
                     {visualMetrics.morphologyCategory.replace(/_/g, ' ')}
+                    {visualMetrics.fitzpatrickType ? ` · Fitzpatrick ${visualMetrics.fitzpatrickType}` : ''}
                   </span>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-slate-800/90 rounded-lg p-2 border border-slate-700/60">
-                    <div className="flex justify-between text-[10px] mb-1">
-                      <span className="text-slate-400">Erythema (Redness)</span>
-                      <span className="font-bold text-rose-400">{visualMetrics.erythemaIndex}/100</span>
-                    </div>
-                    <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                      <div className="bg-rose-500 h-full rounded-full" style={{ width: `${visualMetrics.erythemaIndex}%` }} />
-                    </div>
+                <div className="grid grid-cols-4 gap-2 text-center bg-white rounded-lg p-2 border border-slate-200/80 text-xs">
+                  <div>
+                    <div className="text-[10px] text-slate-400">Redness</div>
+                    <div className="font-bold text-rose-600 font-mono">{visualMetrics.erythemaIndex}/100</div>
                   </div>
-
-                  <div className="bg-slate-800/90 rounded-lg p-2 border border-slate-700/60">
-                    <div className="flex justify-between text-[10px] mb-1">
-                      <span className="text-slate-400">Pigment / Melanin</span>
-                      <span className="font-bold text-amber-400">{visualMetrics.pigmentationIndex}/100</span>
-                    </div>
-                    <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                      <div className="bg-amber-500 h-full rounded-full" style={{ width: `${visualMetrics.pigmentationIndex}%` }} />
-                    </div>
+                  <div>
+                    <div className="text-[10px] text-slate-400">Pigment</div>
+                    <div className="font-bold text-amber-700 font-mono">{visualMetrics.pigmentationIndex}/100</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-400">Border</div>
+                    <div className="font-bold text-slate-800 font-mono">{visualMetrics.borderIrregularity}/100</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-400">Est. Size</div>
+                    <div className="font-bold text-slate-800 font-mono">~{visualMetrics.estimatedDiameterMm || 5.0}mm</div>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between text-[10px] text-slate-300 px-0.5">
-                  <span>Asymmetry: <strong className={visualMetrics.asymmetryScore > 50 ? 'text-amber-300' : 'text-emerald-300'}>{visualMetrics.asymmetryScore}/100</strong></span>
-                  <span>Border: <strong className={visualMetrics.borderIrregularity > 50 ? 'text-amber-300' : 'text-emerald-300'}>{visualMetrics.borderIrregularity}/100</strong></span>
-                  {visualMetrics.estimatedDiameterMm && (
-                    <span>Size: <strong>~{visualMetrics.estimatedDiameterMm} mm</strong></span>
-                  )}
-                </div>
-
-                {(visualMetrics.fitzpatrickType || visualMetrics.itaAngleDeg !== undefined) && (
-                  <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-slate-800 text-[10px] text-slate-300 px-0.5">
-                    {visualMetrics.fitzpatrickType && (
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold">
-                        Fitzpatrick {visualMetrics.fitzpatrickType}
-                        {visualMetrics.itaAngleDeg !== undefined ? ` (ITA° ${visualMetrics.itaAngleDeg}°)` : ''}
-                      </span>
-                    )}
-                    {(visualMetrics.cieLabDeltaA !== undefined || visualMetrics.cieLabDeltaL !== undefined) && (
-                      <span className="font-mono text-slate-400">
-                        CIE-LAB Δa* <strong className="text-rose-300">{visualMetrics.cieLabDeltaA && visualMetrics.cieLabDeltaA > 0 ? `+${visualMetrics.cieLabDeltaA}` : visualMetrics.cieLabDeltaA ?? 0}</strong> · ΔL* <strong className="text-amber-300">{visualMetrics.cieLabDeltaL ?? 0}</strong>
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {visualMetrics.dominantColors && visualMetrics.dominantColors.length > 0 && (
-                  <div className="flex items-center gap-1 pt-1 overflow-x-auto scrollbar-none">
-                    <span className="text-[10px] text-slate-400 shrink-0">Colors:</span>
-                    {visualMetrics.dominantColors.map((col, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300 border border-slate-700 shrink-0"
-                      >
-                        <span className="w-2 h-2 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: col.hex }} />
-                        <span className="truncate max-w-[100px]">{col.name} ({col.percentage}%)</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
 
@@ -990,430 +948,327 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
               </div>
             </div>
           ) : (
-            <div id="analysis-results-section" className="space-y-4 animate-in fade-in duration-300">
-              {/* Primary Impression Header Card */}
-              <div className="bg-gradient-to-r from-teal-900 to-slate-900 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-500/20 text-teal-200 border border-teal-400/30">
-                      Primary Clinical Impression
-                    </span>
-                    {analysisResult.isAiPowered ? (
-                      <span className="text-[10px] text-teal-300 font-mono">
-                        Multimodal Gemini Powered
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-slate-300 font-mono">
-                        Clinical Heuristics Synthesized
-                      </span>
-                    )}
+            <div id="analysis-results-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden animate-in fade-in duration-300">
+              {/* TOP BANNER: Primary Diagnosis & Action Bar */}
+              <div className="bg-slate-900 text-white p-6 border-b border-slate-800">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs text-teal-300 font-medium mb-1">
+                      <span>Primary Clinical Impression</span>
+                      {selectedPatient && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="text-slate-300">{selectedPatient.fullName} ({selectedPatient.patientCode})</span>
+                        </>
+                      )}
+                      {anatomicalSite && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="text-slate-300">{anatomicalSite}</span>
+                        </>
+                      )}
+                    </div>
+                    <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white">
+                      {analysisResult.primaryImpression}
+                    </h2>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* Step 4: Print Diagnostic Report */}
+                  {selectedPatient && onStartConsultationForPatient && (
                     <button
                       type="button"
-                      onClick={() => setShowReportModal(true)}
-                      className="px-2.5 py-1 rounded-lg bg-teal-800/90 hover:bg-teal-700 text-white text-xs font-semibold flex items-center gap-1.5 transition border border-teal-600/50 shadow-2xs"
-                      title="Print or Export Clinical Diagnostic Slip"
+                      onClick={() => {
+                        onStartConsultationForPatient(selectedPatient, {
+                          diagnosis: analysisResult.primaryImpression,
+                          notes: `Visual Findings: ${analysisResult.visualFindings.join('; ')}. Suggested Plan: ${analysisResult.suggestedManagementPlan}`
+                        });
+                      }}
+                      className="px-4 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-xs transition shrink-0 self-start"
                     >
-                      <Printer className="w-3.5 h-3.5 text-teal-200" />
-                      <span>Print Report</span>
+                      <Stethoscope className="w-4 h-4" />
+                      <span>Use in Consultation</span>
                     </button>
-
-                    {/* WhatsApp Report Dispatch */}
-                    <button
-                      type="button"
-                      onClick={() => setShowWhatsAppModal(true)}
-                      className="px-2.5 py-1 rounded-lg bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-bold flex items-center gap-1.5 transition shadow-2xs"
-                      title="Send Diagnostic Report directly to patient's WhatsApp"
-                    >
-                      <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
-                      <span>WhatsApp Report</span>
-                    </button>
-
-                    {/* Step 4: Dermoscopy & Caliper Tool */}
-                    <button
-                      type="button"
-                      onClick={() => setShowDermoscopicModal(true)}
-                      className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-teal-200 text-xs font-medium flex items-center gap-1.5 transition"
-                      title="Open Dermoscopic ABCDE Caliper"
-                    >
-                      <Ruler className="w-3.5 h-3.5 text-teal-300" />
-                      <span>Dermoscopy & ABCDE</span>
-                    </button>
-
-                    {/* Step 4: Pin to Patient Body Map */}
-                    {selectedPatient && (
-                      <button
-                        type="button"
-                        onClick={() => setShowPinModal(true)}
-                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 transition"
-                        title="Pin this lesion to patient anatomical body map"
-                      >
-                        <MapPin className="w-3.5 h-3.5 text-teal-300" />
-                        <span>Pin to Body Map</span>
-                      </button>
-                    )}
-
-                    {selectedPatient && (
-                      <button
-                        type="button"
-                        onClick={handleSaveToGallery}
-                        disabled={isSavingToGallery || savedToGallery}
-                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 transition disabled:opacity-60"
-                      >
-                        {savedToGallery ? (
-                          <>
-                            <BookmarkCheck className="w-3.5 h-3.5 text-emerald-400" />
-                            <span className="text-emerald-300">Saved to Record</span>
-                          </>
-                        ) : (
-                          <>
-                            <BookmarkPlus className="w-3.5 h-3.5 text-teal-300" />
-                            <span>{isSavingToGallery ? 'Saving...' : 'Save to Record'}</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-
-                    {savedToGallery && selectedPatient && onSelectPatient && (
-                      <button
-                        type="button"
-                        onClick={() => onSelectPatient(selectedPatient.id)}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 text-xs font-semibold flex items-center gap-1 transition"
-                      >
-                        <span>View in Timeline</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={handleCopyReport}
-                      className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 transition"
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copied ? 'Copied' : 'Copy'}</span>
-                    </button>
-
-                    {selectedPatient && onStartConsultationForPatient && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onStartConsultationForPatient(selectedPatient, {
-                            diagnosis: analysisResult.primaryImpression,
-                            notes: `AI Clinical Image Findings: ${analysisResult.visualFindings.join('; ')}. Suggested Plan: ${analysisResult.suggestedManagementPlan}`
-                          });
-                        }}
-                        className="px-3 py-1 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
-                      >
-                        <Stethoscope className="w-3.5 h-3.5" />
-                        <span>Start Consultation</span>
-                      </button>
-                    )}
-                  </div>
+                  )}
                 </div>
 
-                <h2 className="text-xl md:text-2xl font-black tracking-tight text-white mt-1">
-                  {analysisResult.primaryImpression}
-                </h2>
+                {/* Action Toolbar */}
+                <div className="flex items-center gap-2 flex-wrap mt-4 pt-4 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowReportModal(true)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium flex items-center gap-1.5 transition border border-slate-700"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-teal-300" />
+                    <span>Print / PDF</span>
+                  </button>
 
-                {/* Step 4: ABCDE Score Banner if evaluated */}
+                  <button
+                    type="button"
+                    onClick={() => setShowWhatsAppModal(true)}
+                    className="px-3 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-semibold flex items-center gap-1.5 transition"
+                  >
+                    <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                    <span>WhatsApp</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDermoscopicModal(true)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition border border-slate-700"
+                  >
+                    <Ruler className="w-3.5 h-3.5 text-teal-300" />
+                    <span>ABCDE Caliper</span>
+                  </button>
+
+                  {selectedPatient && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPinModal(true)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition border border-slate-700"
+                    >
+                      <MapPin className="w-3.5 h-3.5 text-teal-300" />
+                      <span>Pin to Body Map</span>
+                    </button>
+                  )}
+
+                  {selectedPatient && (
+                    <button
+                      type="button"
+                      onClick={handleSaveToGallery}
+                      disabled={isSavingToGallery || savedToGallery}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition border border-slate-700 disabled:opacity-60"
+                    >
+                      {savedToGallery ? (
+                        <>
+                          <BookmarkCheck className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-emerald-300">Saved</span>
+                        </>
+                      ) : (
+                        <>
+                          <BookmarkPlus className="w-3.5 h-3.5 text-teal-300" />
+                          <span>{isSavingToGallery ? 'Saving...' : 'Save to Record'}</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleCopyReport}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition border border-slate-700 ml-auto"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+
+                {/* Optional ABCDE or Body Map notification strip */}
                 {abcdeResult && (
-                  <div className="mt-2.5 p-2.5 rounded-xl bg-teal-950/80 border border-teal-500/40 text-xs flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="p-1 rounded bg-teal-500/20 text-teal-300">
-                        <Ruler className="w-3.5 h-3.5" />
-                      </span>
-                      <div>
-                        <span className="font-bold text-teal-100">
-                          Dermoscopic ABCDE Score: {abcdeResult.totalScore}/9
-                        </span>
-                        <span className="text-[11px] text-teal-300/80 block">
-                          {abcdeResult.riskLevel} · Caliper Diameter: {abcdeResult.diameterMm.toFixed(1)} mm
-                        </span>
-                      </div>
-                    </div>
+                  <div className="mt-3 px-3 py-2 rounded-lg bg-slate-800/90 border border-slate-700 text-xs flex items-center justify-between">
+                    <span>
+                      <strong className="text-teal-300">ABCDE Score: {abcdeResult.totalScore}/9</strong> · {abcdeResult.riskLevel} · Diameter: {abcdeResult.diameterMm.toFixed(1)} mm
+                    </span>
                     <button
                       type="button"
                       onClick={() => setShowDermoscopicModal(true)}
-                      className="text-[11px] text-teal-300 underline hover:text-white"
+                      className="text-teal-300 underline hover:text-white"
                     >
-                      Inspect
+                      Edit
                     </button>
                   </div>
                 )}
 
-                {/* Step 4: Pinned to Body Map Feedback */}
                 {pinnedSuccess && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-200 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span>{pinnedSuccess}</span>
-                    </div>
+                  <div className="mt-3 px-3 py-2 rounded-lg bg-emerald-950/90 border border-emerald-700/60 text-xs text-emerald-200 flex items-center justify-between">
+                    <span>{pinnedSuccess}</span>
                     {selectedPatient && onSelectPatient && (
                       <button
                         type="button"
                         onClick={() => onSelectPatient(selectedPatient.id)}
-                        className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-[11px] font-bold shrink-0 transition"
+                        className="text-emerald-300 underline font-semibold"
                       >
                         Open Body Map →
                       </button>
                     )}
                   </div>
                 )}
-
-                {selectedPatient && (
-                  <p className="text-xs text-teal-200/80 mt-1">
-                    Evaluated for <strong>{selectedPatient.fullName}</strong> ({selectedPatient.patientCode}) · Timeline correlated
-                  </p>
-                )}
               </div>
 
-              {/* Visual Telemetry & Morphological Biomarkers Card */}
-              {analysisResult.visualMetrics && (
-                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-teal-700" />
-                      Extracted Specimen Telemetry & Visual Biomarkers
+              {/* STRUCTURED REPORT BODY (SECTIONS 01 - 04) */}
+              <div className="divide-y divide-slate-200">
+                {/* SECTION 01: Differential Diagnoses */}
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-bold text-slate-900">
+                      01. Differential Diagnosis
                     </h3>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200 uppercase">
-                      {analysisResult.visualMetrics.morphologyCategory.replace(/_/g, ' ')}
+                    <span className="text-xs text-slate-500">
+                      Ranked by clinical likelihood
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Erythema Flare</div>
-                      <div className="text-base font-black text-rose-600 mt-0.5">
-                        {analysisResult.visualMetrics.erythemaIndex}
-                        <span className="text-[10px] text-slate-400 font-normal"> / 100</span>
-                      </div>
-                      <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                        <div className="bg-rose-500 h-full rounded-full" style={{ width: `${analysisResult.visualMetrics.erythemaIndex}%` }} />
-                      </div>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Melanin Pigment</div>
-                      <div className="text-base font-black text-amber-700 mt-0.5">
-                        {analysisResult.visualMetrics.pigmentationIndex}
-                        <span className="text-[10px] text-slate-400 font-normal"> / 100</span>
-                      </div>
-                      <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                        <div className="bg-amber-600 h-full rounded-full" style={{ width: `${analysisResult.visualMetrics.pigmentationIndex}%` }} />
-                      </div>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Asymmetry Rating</div>
-                      <div className="text-base font-black text-slate-800 mt-0.5">
-                        {analysisResult.visualMetrics.asymmetryScore}
-                        <span className="text-[10px] text-slate-400 font-normal"> / 100</span>
-                      </div>
-                      <div className="text-[10px] text-slate-500 mt-1 font-medium truncate">
-                        {analysisResult.visualMetrics.asymmetryScore > 50 ? 'Dual-axis asymmetric' : 'Symmetric axes'}
-                      </div>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Border Irregularity</div>
-                      <div className="text-base font-black text-slate-800 mt-0.5">
-                        {analysisResult.visualMetrics.borderIrregularity}
-                        <span className="text-[10px] text-slate-400 font-normal"> / 100</span>
-                      </div>
-                      <div className="text-[10px] text-slate-500 mt-1 font-medium truncate">
-                        {analysisResult.visualMetrics.borderIrregularity > 50 ? 'Notched / Scalloped' : 'Regular margins'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {(analysisResult.visualMetrics.fitzpatrickType || analysisResult.visualMetrics.itaAngleDeg !== undefined) && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                      <div className="p-2.5 rounded-xl bg-amber-50/60 border border-amber-200/70 flex items-center justify-between">
-                        <div>
-                          <div className="text-[10px] text-amber-800/80 uppercase font-semibold">Skin Phototype</div>
-                          <div className="text-xs font-bold text-amber-950 mt-0.5">
-                            Fitzpatrick {analysisResult.visualMetrics.fitzpatrickType || 'Type IV'}
-                          </div>
-                        </div>
-                        {analysisResult.visualMetrics.itaAngleDeg !== undefined && (
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">
-                            ITA° {analysisResult.visualMetrics.itaAngleDeg}°
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="p-2.5 rounded-xl bg-rose-50/50 border border-rose-200/70 flex items-center justify-between">
-                        <div>
-                          <div className="text-[10px] text-rose-800/80 uppercase font-semibold">Hemoglobin Axis (Δa*)</div>
-                          <div className="text-xs font-bold text-rose-950 mt-0.5">
-                            Lesion vs Perilesional
-                          </div>
-                        </div>
-                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200">
-                          {analysisResult.visualMetrics.cieLabDeltaA && analysisResult.visualMetrics.cieLabDeltaA > 0
-                            ? `+${analysisResult.visualMetrics.cieLabDeltaA}`
-                            : analysisResult.visualMetrics.cieLabDeltaA ?? 0}
-                        </span>
-                      </div>
-
-                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
-                        <div>
-                          <div className="text-[10px] text-slate-500 uppercase font-semibold">Luminance Shift (ΔL*)</div>
-                          <div className="text-xs font-bold text-slate-800 mt-0.5">
-                            Melanin Depth Contrast
-                          </div>
-                        </div>
-                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-slate-200/70 text-slate-800 border border-slate-300">
-                          {analysisResult.visualMetrics.cieLabDeltaL ?? 0}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {analysisResult.visualMetrics.dominantColors && analysisResult.visualMetrics.dominantColors.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
-                      <span className="text-[11px] font-semibold text-slate-600">Dominant Spectrum:</span>
-                      {analysisResult.visualMetrics.dominantColors.map((col, idx) => (
-                        <span key={idx} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-100 text-xs text-slate-700 border border-slate-200">
-                          <span className="w-2.5 h-2.5 rounded-full border border-slate-300" style={{ backgroundColor: col.hex }} />
-                          <span>{col.name} ({col.percentage}%)</span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Differential Diagnoses Card */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-teal-700" />
-                  Differential Diagnoses & Likelihood
-                </h3>
-
-                <div className="space-y-3">
-                  {analysisResult.differentials.map((diff, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition"
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-slate-900">
-                            {diff.condition}
-                          </span>
-                          {diff.icdCode && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/80 text-slate-700 font-mono font-semibold">
-                              {diff.icdCode}
+                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                    {analysisResult.differentials.map((diff, idx) => (
+                      <div key={idx} className="p-3.5 bg-white hover:bg-slate-50/70 transition flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-mono font-bold text-slate-400">
+                              #{idx + 1}
                             </span>
-                          )}
+                            <span className="text-sm font-bold text-slate-900">
+                              {diff.condition}
+                            </span>
+                            {diff.icdCode && (
+                              <span className="text-xs font-mono text-slate-500">
+                                · ICD-10: {diff.icdCode}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            {diff.rationale}
+                          </p>
                         </div>
 
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          className={`text-xs font-semibold shrink-0 ${
                             diff.confidence === 'High'
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              ? 'text-emerald-700'
                               : diff.confidence === 'Moderate'
-                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                              : 'bg-blue-100 text-blue-800 border border-blue-200'
+                              ? 'text-amber-700'
+                              : 'text-slate-500'
                           }`}
                         >
-                          {diff.confidence} Confidence
+                          {diff.confidence} Likelihood
                         </span>
                       </div>
-                      <p className="text-xs text-slate-600 leading-relaxed">
-                        {diff.rationale}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Timeline Correlation Card (The core feature requested by user!) */}
-              <div className="bg-teal-50/70 border border-teal-200/80 rounded-2xl p-5 shadow-xs">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-teal-900 mb-2 flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-teal-700" />
-                  Longitudinal Timeline & History Correlation
-                </h3>
-                <p className="text-xs text-teal-950 font-normal leading-relaxed">
-                  {analysisResult.timelineCorrelation}
-                </p>
-              </div>
-
-              {/* Morphological Visual Findings */}
-              {analysisResult.visualFindings.length > 0 && (
-                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1.5">
-                    <Eye className="w-4 h-4 text-teal-700" />
-                    Observed Visual Morphological Features
-                  </h3>
-                  <ul className="space-y-1.5 text-xs text-slate-700">
-                    {analysisResult.visualFindings.map((finding, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-teal-600 shrink-0 mt-1.5" />
-                        <span>{finding}</span>
-                      </li>
                     ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Red Flags & Safety Alerts */}
-              {analysisResult.redFlags.length > 0 && (
-                <div className="bg-rose-50/70 border border-rose-200 rounded-2xl p-5 shadow-xs">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-rose-900 mb-2 flex items-center gap-1.5">
-                    <ShieldAlert className="w-4 h-4 text-rose-600" />
-                    Clinical Red Flags / Signs to Exclude
-                  </h3>
-                  <ul className="space-y-1 text-xs text-rose-800">
-                    {analysisResult.redFlags.map((flag, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 mt-1.5" />
-                        <span>{flag}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Recommended Workup & Suggested Management */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2.5 flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-teal-700" />
-                    Recommended Workup
-                  </h3>
-                  <ul className="space-y-1.5 text-xs text-slate-700">
-                    {analysisResult.recommendedInvestigations.map((inv, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0 mt-1.5" />
-                        <span>{inv}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2.5 flex items-center gap-1.5">
-                    <Stethoscope className="w-4 h-4 text-teal-700" />
-                    Suggested Management Plan
-                  </h3>
-                  <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
-                    {analysisResult.suggestedManagementPlan}
                   </div>
                 </div>
-              </div>
 
-              {/* Medical Disclaimer Footer */}
-              <div className="p-3.5 rounded-xl bg-slate-100/80 border border-slate-200 text-[11px] text-slate-500 flex items-start gap-2">
-                <HelpCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Clinical Decision Support Disclaimer:</strong> {analysisResult.disclaimer}
-                </span>
+                {/* SECTION 02: Key Visual Findings & Patient Context */}
+                <div className="p-6 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900">
+                    02. Key Visual Findings & Patient History
+                  </h3>
+
+                  {/* Compact Metrics Bar */}
+                  {analysisResult.visualMetrics && (
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+                      <div>
+                        <span className="text-slate-500 block text-[11px]">Pattern</span>
+                        <strong className="text-slate-900 capitalize">
+                          {analysisResult.visualMetrics.morphologyCategory.replace(/_/g, ' ')}
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[11px]">Skin Phototype</span>
+                        <strong className="text-slate-900">
+                          Fitzpatrick {analysisResult.visualMetrics.fitzpatrickType || 'Type IV'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[11px]">Redness (Erythema)</span>
+                        <strong className="text-rose-600 font-mono">
+                          {analysisResult.visualMetrics.erythemaIndex}/100
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[11px]">Pigmentation</span>
+                        <strong className="text-amber-700 font-mono">
+                          {analysisResult.visualMetrics.pigmentationIndex}/100
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[11px]">Asymmetry / Border</span>
+                        <strong className="text-slate-900 font-mono">
+                          {analysisResult.visualMetrics.asymmetryScore} / {analysisResult.visualMetrics.borderIrregularity}
+                        </strong>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                        Visual Observations
+                      </h4>
+                      <ul className="space-y-1.5 text-xs text-slate-700">
+                        {analysisResult.visualFindings.map((finding, idx) => (
+                          <li key={idx} className="flex items-start gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-teal-600 shrink-0 mt-1.5" />
+                            <span>{finding}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                        Patient History & Lab Correlation
+                      </h4>
+                      <p className="text-xs text-slate-700 leading-relaxed bg-teal-50/50 border border-teal-100 rounded-xl p-3.5">
+                        {analysisResult.timelineCorrelation}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION 03: Action Plan (Tests & Treatment) */}
+                <div className="p-6">
+                  <h3 className="text-sm font-bold text-slate-900 mb-3">
+                    03. Recommended Workup & Treatment Plan
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/80">
+                      <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-teal-700" />
+                        <span>Recommended Tests / Workup</span>
+                      </h4>
+                      <ul className="space-y-1.5 text-xs text-slate-700">
+                        {analysisResult.recommendedInvestigations.map((inv, idx) => (
+                          <li key={idx} className="flex items-start gap-2">
+                            <span className="font-mono text-slate-400 font-semibold">{idx + 1}.</span>
+                            <span>{inv}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/80">
+                      <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Stethoscope className="w-3.5 h-3.5 text-teal-700" />
+                        <span>Suggested Treatment Regimen</span>
+                      </h4>
+                      <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
+                        {analysisResult.suggestedManagementPlan}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION 04: Red Flags & Disclaimer */}
+                {analysisResult.redFlags.length > 0 && (
+                  <div className="p-6 bg-rose-50/40">
+                    <h3 className="text-sm font-bold text-rose-900 mb-2 flex items-center gap-1.5">
+                      <ShieldAlert className="w-4 h-4 text-rose-600" />
+                      <span>04. Red Flags to Watch / Rule Out</span>
+                    </h3>
+                    <ul className="space-y-1 text-xs text-rose-800">
+                      {analysisResult.redFlags.map((flag, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 mt-1.5" />
+                          <span>{flag}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="px-6 py-3 bg-slate-50 text-[11px] text-slate-500 flex items-center justify-between gap-2">
+                  <span>
+                    <strong>Clinical Decision Support:</strong> {analysisResult.disclaimer}
+                  </span>
+                </div>
               </div>
             </div>
           )}
