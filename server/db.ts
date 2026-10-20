@@ -16,7 +16,8 @@ import {
   DailyRevenuePoint,
   MonthlyRevenuePoint,
   PatientTestReport,
-  TestReportCategory
+  TestReportCategory,
+  ClinicSubscriptionState
 } from '../src/types/index.js';
 
 interface DatabaseSchema {
@@ -29,6 +30,7 @@ interface DatabaseSchema {
   bodyMarkers: BodyMarker[];
   clinicalImages: ClinicalImage[];
   testReports?: PatientTestReport[];
+  subscription?: ClinicSubscriptionState;
   auditLogs: AuditLog[];
   meta: {
     lastPatientNumber: number;
@@ -48,6 +50,7 @@ class DatabaseService {
   constructor() {
     this.data = this.loadDatabase();
     this.ensureDefaultDoctor();
+    this.ensureDefaultSubscription();
     this.syncAppointmentsFromFollowUps();
     this.syncTestReportsFromConsultations();
   }
@@ -1447,6 +1450,149 @@ class DatabaseService {
   public getAuditLogs(limit = 100): AuditLog[] {
     return this.data.auditLogs.slice(0, limit);
   }
+
+  // --- Clinic Subscription & AI Credit Meter ---
+  private detectActiveVisionProvider(): { activeProvider: 'openrouter' | 'gemini' | 'adaptive_vision'; activeModel: string } {
+    if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim().length > 5) {
+      return {
+        activeProvider: 'openrouter',
+        activeModel: process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.5-pro'
+      };
+    }
+    const geminiKey =
+      process.env.CUSTOM_GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GEMINI_API_KEY ||
+      '';
+    if (geminiKey.trim().length > 5) {
+      return {
+        activeProvider: 'gemini',
+        activeModel: process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash'
+      };
+    }
+    return {
+      activeProvider: 'adaptive_vision',
+      activeModel: 'Adaptive Clinical Vision Engine'
+    };
+  }
+
+  private ensureDefaultSubscription() {
+    const providerInfo = this.detectActiveVisionProvider();
+    if (!this.data.subscription) {
+      const now = new Date().toISOString();
+      this.data.subscription = {
+        plan: 'free_trial',
+        planName: 'Clinic Starter (Free Trial)',
+        monthlyPriceInr: 0,
+        aiScansRemaining: 10,
+        aiScansTotalQuota: 10,
+        aiScansUsed: 0,
+        activeProvider: providerInfo.activeProvider,
+        activeModel: providerInfo.activeModel,
+        transactions: [
+          {
+            id: `tx-init-${Date.now().toString(36)}`,
+            type: 'initial_trial',
+            description: 'Welcome Trial: 10 Free AI Clinical Image Diagnostic Scans',
+            creditsDelta: 10,
+            amountInr: 0,
+            paymentMethod: 'System',
+            timestamp: now
+          }
+        ],
+        updatedAt: now
+      };
+      this.persist();
+    } else {
+      this.data.subscription.activeProvider = providerInfo.activeProvider;
+      this.data.subscription.activeModel = providerInfo.activeModel;
+    }
+  }
+
+  public getSubscription(): ClinicSubscriptionState {
+    this.ensureDefaultSubscription();
+    return this.data.subscription!;
+  }
+
+  public deductAiScanCredit(patientContext?: string): { allowed: boolean; subscription: ClinicSubscriptionState } {
+    this.ensureDefaultSubscription();
+    const sub = this.data.subscription!;
+    if (sub.aiScansRemaining <= 0) {
+      return { allowed: false, subscription: sub };
+    }
+    const now = new Date().toISOString();
+    sub.aiScansRemaining = Math.max(0, sub.aiScansRemaining - 1);
+    sub.aiScansUsed = (sub.aiScansUsed || 0) + 1;
+    sub.updatedAt = now;
+    sub.transactions.unshift({
+      id: `tx-scan-${Date.now().toString(36)}`,
+      type: 'scan_deduction',
+      description: patientContext
+        ? `AI Clinical Image Scan (${patientContext})`
+        : 'AI Clinical Image Diagnostic Scan',
+      creditsDelta: -1,
+      paymentMethod: 'System',
+      timestamp: now
+    });
+    if (sub.transactions.length > 50) {
+      sub.transactions = sub.transactions.slice(0, 50);
+    }
+    this.persist();
+    return { allowed: true, subscription: sub };
+  }
+
+  public upgradeToProPlan(paymentMethod: 'UPI' | 'Card' = 'UPI'): ClinicSubscriptionState {
+    this.ensureDefaultSubscription();
+    const sub = this.data.subscription!;
+    const now = new Date();
+    const renews = new Date(now);
+    renews.setDate(renews.getDate() + 30);
+
+    sub.plan = 'pro_monthly';
+    sub.planName = 'Clinic Pro Monthly Plan';
+    sub.monthlyPriceInr = 3999;
+    sub.aiScansRemaining += 150;
+    sub.aiScansTotalQuota += 150;
+    sub.renewsAt = renews.toISOString();
+    sub.updatedAt = now.toISOString();
+    sub.transactions.unshift({
+      id: `tx-pro-${Date.now().toString(36)}`,
+      type: 'plan_upgrade',
+      description: 'Upgraded to Clinic Pro Monthly Plan (+150 AI Image Scans)',
+      creditsDelta: 150,
+      amountInr: 3999,
+      paymentMethod,
+      timestamp: now.toISOString()
+    });
+    this.persist();
+    return sub;
+  }
+
+  public topUpScanCredits(
+    credits = 100,
+    amountInr = 999,
+    paymentMethod: 'UPI' | 'Card' = 'UPI'
+  ): ClinicSubscriptionState {
+    this.ensureDefaultSubscription();
+    const sub = this.data.subscription!;
+    const now = new Date().toISOString();
+
+    sub.aiScansRemaining += credits;
+    sub.aiScansTotalQuota += credits;
+    sub.updatedAt = now;
+    sub.transactions.unshift({
+      id: `tx-topup-${Date.now().toString(36)}`,
+      type: 'credit_topup',
+      description: `Purchased Top-Up Pack (+${credits} AI Image Scans)`,
+      creditsDelta: credits,
+      amountInr,
+      paymentMethod,
+      timestamp: now
+    });
+    this.persist();
+    return sub;
+  }
 }
 
 export const db = new DatabaseService();
+

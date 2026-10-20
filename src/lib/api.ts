@@ -290,7 +290,11 @@ export const api = {
       imageUrl?: string;
       visualMetrics?: import('../types').VisualMorphologyMetrics;
     }) =>
-      fetchWithAuth<{ analysis: AIImageAnalysisResult; patient?: Patient }>('/api/ai/analyze-image', {
+      fetchWithAuth<{
+        analysis: AIImageAnalysisResult;
+        patient?: Patient;
+        subscription?: import('../types').ClinicSubscriptionState;
+      }>('/api/ai/analyze-image', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -326,7 +330,26 @@ export const api = {
       }),
   },
 
-
+  subscription: {
+    get: () =>
+      fetchWithAuth<{ subscription: import('../types').ClinicSubscriptionState }>('/api/subscription'),
+    upgradeToPro: (paymentMethod: 'UPI' | 'Card' = 'UPI') =>
+      fetchWithAuth<{ subscription: import('../types').ClinicSubscriptionState; message: string }>(
+        '/api/subscription/upgrade',
+        {
+          method: 'POST',
+          body: JSON.stringify({ paymentMethod }),
+        }
+      ),
+    topUpCredits: (params?: { credits?: number; amountInr?: number; paymentMethod?: 'UPI' | 'Card' }) =>
+      fetchWithAuth<{ subscription: import('../types').ClinicSubscriptionState; message: string }>(
+        '/api/subscription/topup',
+        {
+          method: 'POST',
+          body: JSON.stringify(params || { credits: 100, amountInr: 999, paymentMethod: 'UPI' }),
+        }
+      ),
+  },
 
   dashboard: {
     getStats: () =>

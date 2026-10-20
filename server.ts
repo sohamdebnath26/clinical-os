@@ -773,11 +773,82 @@ app.post('/api/ai/chat', authMiddleware, async (req, res) => {
   }
 });
 
+// ==========================================
+// CLINIC SUBSCRIPTION & AI CREDIT METER ROUTES
+// ==========================================
+app.get('/api/subscription', authMiddleware, (req, res) => {
+  const subscription = db.getSubscription();
+  res.json({ subscription });
+});
+
+app.post('/api/subscription/upgrade', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const paymentMethod: 'UPI' | 'Card' = req.body?.paymentMethod === 'Card' ? 'Card' : 'UPI';
+  const subscription = db.upgradeToProPlan(paymentMethod);
+  const doctor = req.doctor!;
+
+  db.logAudit({
+    actorId: doctor.id,
+    actorName: doctor.name,
+    action: 'clinic_subscription_upgraded_pro',
+    resourceType: 'subscription',
+    resourceId: 'pro_monthly',
+    metadata: {
+      planName: subscription.planName,
+      amountInr: 3999,
+      creditsAdded: 150,
+      paymentMethod,
+      aiScansRemaining: subscription.aiScansRemaining
+    }
+  });
+
+  res.json({
+    subscription,
+    message: 'Upgraded to Clinic Pro Monthly Plan (₹3,999/mo) — 150 AI Image Diagnostic Scans added!'
+  });
+});
+
+app.post('/api/subscription/topup', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const paymentMethod: 'UPI' | 'Card' = req.body?.paymentMethod === 'Card' ? 'Card' : 'UPI';
+  const credits = Number(req.body?.credits) || 100;
+  const amountInr = Number(req.body?.amountInr) || 999;
+  const subscription = db.topUpScanCredits(credits, amountInr, paymentMethod);
+  const doctor = req.doctor!;
+
+  db.logAudit({
+    actorId: doctor.id,
+    actorName: doctor.name,
+    action: 'clinic_ai_credits_topped_up',
+    resourceType: 'subscription',
+    resourceId: 'credit_topup',
+    metadata: {
+      creditsAdded: credits,
+      amountInr,
+      paymentMethod,
+      aiScansRemaining: subscription.aiScansRemaining
+    }
+  });
+
+  res.json({
+    subscription,
+    message: `Added +${credits} AI Image Diagnostic Scans to your clinic account!`
+  });
+});
+
 app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedRequest, res) => {
   const { imageBase64, mimeType, patientId, clinicalNotes, imageUrl, visualMetrics } = req.body;
 
   if (!imageBase64) {
     return res.status(400).json({ error: 'Clinical image data (imageBase64) is required for analysis' });
+  }
+
+  // Enforce AI Scan Credit Meter before running analysis
+  const currentSub = db.getSubscription();
+  if (currentSub.aiScansRemaining <= 0) {
+    return res.status(402).json({
+      error: 'All 10 free AI Diagnostic Scans have been used. Upgrade to the Pro Monthly Plan (₹3,999/mo for 150 scans) or Top Up a pack of 100 scans to continue.',
+      code: 'OUT_OF_CREDITS',
+      subscription: currentSub
+    });
   }
 
   let patient = undefined;
@@ -804,6 +875,11 @@ app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedReque
       visualMetrics
     });
 
+    // Deduct 1 AI scan credit upon successful analysis
+    const { subscription } = db.deductAiScanCredit(
+      patient ? `${patient.fullName} (${patient.patientCode})` : undefined
+    );
+
     const doctor = req.doctor!;
     db.logAudit({
       actorId: doctor.id,
@@ -815,11 +891,12 @@ app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedReque
         patientId: patient?.id,
         patientName: patient?.fullName,
         primaryImpression: analysis.primaryImpression,
-        isAiPowered: analysis.isAiPowered
+        isAiPowered: analysis.isAiPowered,
+        aiScansRemaining: subscription.aiScansRemaining
       }
     });
 
-    res.json({ analysis, patient });
+    res.json({ analysis, patient, subscription });
   } catch (err: unknown) {
     console.error('AI image analysis endpoint error:', err);
     const message = err instanceof Error ? err.message : 'Failed to analyze clinical image';

@@ -1153,8 +1153,81 @@ export function generateAdaptiveClinicalImageAnalysis(
   };
 }
 
+const OPENROUTER_VISION_CHAIN = [
+  process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.5-pro',
+  'google/gemini-2.5-flash',
+  'openai/gpt-4o'
+];
+
+async function callOpenRouterVision(
+  prompt: string,
+  images: { mimeType: string; base64: string }[]
+): Promise<string | null> {
+  const openRouterKey = (process.env.OPENROUTER_API_KEY || '').trim();
+  if (!openRouterKey || openRouterKey.length < 8) {
+    return null;
+  }
+
+  for (const model of OPENROUTER_VISION_CHAIN) {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openRouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://clinical-os.onrender.com',
+          'X-Title': 'Clinical OS Multimodal Diagnostics'
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.1,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'user',
+              content: [
+                ...images.map(img => ({
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${img.mimeType};base64,${img.base64}`
+                  }
+                })),
+                {
+                  type: 'text',
+                  text: prompt
+                }
+              ]
+            }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        console.warn(`OpenRouter model ${model} returned ${response.status}: ${errBody.substring(0, 140)}`);
+        if (response.status === 401 || response.status === 402) {
+          break;
+        }
+        continue;
+      }
+
+      const data = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const text = data.choices?.[0]?.message?.content?.trim();
+      if (text) {
+        return text;
+      }
+    } catch (err) {
+      console.warn(`OpenRouter vision request failed for ${model}:`, err instanceof Error ? err.message : err);
+    }
+  }
+  return null;
+}
+
 export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<AIImageAnalysisResult> {
   const ai = getAIClient();
+  const hasOpenRouter = Boolean((process.env.OPENROUTER_API_KEY || '').trim());
 
   // Resolve visual morphology metrics: either passed from client canvas or extracted from image buffer
   const resolvedMetrics = params.visualMetrics || extractBufferVisualMetrics(params.imageBase64, params.mimeType);
@@ -1178,7 +1251,7 @@ export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<
       };
     }
 
-    if (ai) {
+    if (hasOpenRouter || ai) {
       try {
         let cleanBase64 = params.imageBase64;
         let resolvedMimeType = params.mimeType || 'image/jpeg';
@@ -1189,41 +1262,41 @@ export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<
           cleanBase64 = match[2];
         }
 
-      // Construct patient context
-      let patientContext = 'No registered patient profile attached (Evaluated as guest/isolated presentation).';
-      if (params.patient) {
-        patientContext = `Patient Name: ${params.patient.fullName} (Age: ${params.patient.age}, Gender: ${params.patient.gender}, ID: ${params.patient.patientCode})\n` +
-          `Known Allergies: ${params.patient.allergies || 'None documented (NKDA)'}\n` +
-          `Current Medications: ${params.patient.currentMedications || 'None recorded'}\n` +
-          `Medical History: ${params.patient.medicalHistory || 'Unremarkable'}\n` +
-          `Primary Chronic Diagnosis: ${params.patient.primaryDiagnosis || 'None'}`;
-      }
+        // Construct patient context
+        let patientContext = 'No registered patient profile attached (Evaluated as guest/isolated presentation).';
+        if (params.patient) {
+          patientContext = `Patient Name: ${params.patient.fullName} (Age: ${params.patient.age}, Gender: ${params.patient.gender}, ID: ${params.patient.patientCode})\n` +
+            `Known Allergies: ${params.patient.allergies || 'None documented (NKDA)'}\n` +
+            `Current Medications: ${params.patient.currentMedications || 'None recorded'}\n` +
+            `Medical History: ${params.patient.medicalHistory || 'Unremarkable'}\n` +
+            `Primary Chronic Diagnosis: ${params.patient.primaryDiagnosis || 'None'}`;
+        }
 
-      let timelineContext = 'No previous consultation visits recorded in EHR.';
-      if (params.history && params.history.length > 0) {
-        timelineContext = params.history.slice(0, 6).map((c, i) => {
-          const date = c.consultationDate.split('T')[0];
-          const symptoms = c.symptoms.length > 0 ? c.symptoms.join(', ') : 'None documented';
-          const diagnoses = c.diagnoses.length > 0 ? c.diagnoses.join(', ') : 'None documented';
-          const meds = c.prescriptions.map(p => `${p.medicineName} (${p.dosage}, ${p.frequency})`).join(', ') || 'None';
-          const notes = [c.clinicalNotes?.examination, c.clinicalNotes?.plan].filter(Boolean).join(' | ');
-          return `Consultation Visit #${i + 1} (${date}): Diagnoses: [${diagnoses}] | Symptoms: [${symptoms}] | Prescribed: [${meds}] ${notes ? `| Clinical Notes: ${notes}` : ''}`;
-        }).join('\n');
-      }
+        let timelineContext = 'No previous consultation visits recorded in EHR.';
+        if (params.history && params.history.length > 0) {
+          timelineContext = params.history.slice(0, 6).map((c, i) => {
+            const date = c.consultationDate.split('T')[0];
+            const symptoms = c.symptoms.length > 0 ? c.symptoms.join(', ') : 'None documented';
+            const diagnoses = c.diagnoses.length > 0 ? c.diagnoses.join(', ') : 'None documented';
+            const meds = c.prescriptions.map(p => `${p.medicineName} (${p.dosage}, ${p.frequency})`).join(', ') || 'None';
+            const notes = [c.clinicalNotes?.examination, c.clinicalNotes?.plan].filter(Boolean).join(' | ');
+            return `Consultation Visit #${i + 1} (${date}): Diagnoses: [${diagnoses}] | Symptoms: [${symptoms}] | Prescribed: [${meds}] ${notes ? `| Clinical Notes: ${notes}` : ''}`;
+          }).join('\n');
+        }
 
-      let labReportContext = 'No laboratory, microbiology, or histopathology test reports recorded for this patient.';
-      if (params.testReports && params.testReports.length > 0) {
-        labReportContext = params.testReports.slice(0, 8).map((r, idx) => {
-          const dateStr = r.reportDate || r.orderedDate || 'Recent';
-          const flagStr = r.resultFlag ? r.resultFlag.toUpperCase() : 'COMPLETED';
-          const valStr = r.resultValue ? `${r.resultValue}${r.unit ? ' ' + r.unit : ''}` : 'Pending value';
-          const refStr = r.referenceRange ? ` (Ref: ${r.referenceRange})` : '';
-          const noteStr = r.clinicalNotes ? ` — Note: ${r.clinicalNotes}` : '';
-          return `Report #${idx + 1} [${dateStr}] (${r.category}): ${r.testName} -> [${flagStr}] ${valStr}${refStr}${noteStr}`;
-        }).join('\n');
-      }
+        let labReportContext = 'No laboratory, microbiology, or histopathology test reports recorded for this patient.';
+        if (params.testReports && params.testReports.length > 0) {
+          labReportContext = params.testReports.slice(0, 8).map((r, idx) => {
+            const dateStr = r.reportDate || r.orderedDate || 'Recent';
+            const flagStr = r.resultFlag ? r.resultFlag.toUpperCase() : 'COMPLETED';
+            const valStr = r.resultValue ? `${r.resultValue}${r.unit ? ' ' + r.unit : ''}` : 'Pending value';
+            const refStr = r.referenceRange ? ` (Ref: ${r.referenceRange})` : '';
+            const noteStr = r.clinicalNotes ? ` — Note: ${r.clinicalNotes}` : '';
+            return `Report #${idx + 1} [${dateStr}] (${r.category}): ${r.testName} -> [${flagStr}] ${valStr}${refStr}${noteStr}`;
+          }).join('\n');
+        }
 
-      const prompt = `You are an expert clinical diagnostic assistance system and dermatological consultant working with a licensed physician.
+        const prompt = `You are an expert clinical diagnostic assistance system and dermatological consultant working with a licensed physician.
 Examine this clinical image/photograph in detail, integrating the patient's full longitudinal health record, previous consultation timeline, and documented laboratory/diagnostic test reports.
 
 DETECTED VISUAL TELEMETRY PARAMETERS (CIE-LAB FITZPATRICK NORMALIZED):
@@ -1291,119 +1364,163 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
   "disclaimer": "Diagnostic decision support only. Physician clinical judgment is required."
 }`;
 
-      for (const model of VISION_MODEL_CHAIN) {
-        try {
-          const response = await ai.models.generateContent({
-            model,
-            contents: [
-              {
-                inlineData: {
-                  mimeType: resolvedMimeType,
-                  data: cleanBase64
-                }
-              },
-              {
-                text: prompt
+        // 1. Try OpenRouter Multimodal Vision first if OPENROUTER_API_KEY is configured
+        if (hasOpenRouter) {
+          const openRouterText = await callOpenRouterVision(prompt, [
+            { mimeType: resolvedMimeType, base64: cleanBase64 }
+          ]);
+          if (openRouterText) {
+            try {
+              const cleaned = openRouterText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+              const parsed = JSON.parse(cleaned);
+              const finalResult: AIImageAnalysisResult = {
+                id: `ai_img_${Date.now()}`,
+                primaryImpression: parsed.primaryImpression || 'Clinical evaluation pending confirmation',
+                differentials: Array.isArray(parsed.differentials) ? parsed.differentials : [],
+                visualFindings: Array.isArray(parsed.visualFindings) ? parsed.visualFindings : [],
+                timelineCorrelation: parsed.timelineCorrelation || 'Correlated with patient longitudinal record.',
+                redFlags: Array.isArray(parsed.redFlags) ? parsed.redFlags : [],
+                recommendedInvestigations: Array.isArray(parsed.recommendedInvestigations) ? parsed.recommendedInvestigations : [],
+                suggestedManagementPlan: parsed.suggestedManagementPlan || 'Continue standard clinical management and monitoring.',
+                disclaimer: parsed.disclaimer || 'AI diagnostic decision support tool. Final clinical judgment rests with the treating physician.',
+                analyzedAt: new Date().toISOString(),
+                isAiPowered: true,
+                patientId: params.patient?.id,
+                imageUrl: params.imageUrl,
+                visualMetrics: resolvedMetrics
+              };
+
+              if (imageAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
+                const oldestKey = imageAnalysisCache.keys().next().value;
+                if (oldestKey) imageAnalysisCache.delete(oldestKey);
               }
-            ],
-            config: {
-              temperature: 0.1,
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  primaryImpression: { type: Type.STRING },
-                  differentials: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        condition: { type: Type.STRING },
-                        confidence: { type: Type.STRING },
-                        icdCode: { type: Type.STRING },
-                        rationale: { type: Type.STRING }
-                      },
-                      required: ['condition', 'confidence', 'rationale']
-                    }
-                  },
-                  visualFindings: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                  },
-                  timelineCorrelation: { type: Type.STRING },
-                  redFlags: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                  },
-                  recommendedInvestigations: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                  },
-                  suggestedManagementPlan: { type: Type.STRING },
-                  disclaimer: { type: Type.STRING }
-                },
-                required: [
-                  'primaryImpression',
-                  'differentials',
-                  'visualFindings',
-                  'timelineCorrelation',
-                  'redFlags',
-                  'recommendedInvestigations',
-                  'suggestedManagementPlan'
-                ]
-              }
+              imageAnalysisCache.set(cacheKey, {
+                result: finalResult,
+                expiresAt: Date.now() + IMAGE_CACHE_TTL_MS
+              });
+
+              return finalResult;
+            } catch (parseErr) {
+              console.warn('OpenRouter JSON parse warning, falling back to next provider:', parseErr);
             }
-          });
-
-          const text = response.text?.trim();
-          if (text) {
-            const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
-            const parsed = JSON.parse(cleaned);
-
-            const finalResult: AIImageAnalysisResult = {
-              id: `ai_img_${Date.now()}`,
-              primaryImpression: parsed.primaryImpression || 'Clinical evaluation pending confirmation',
-              differentials: Array.isArray(parsed.differentials) ? parsed.differentials : [],
-              visualFindings: Array.isArray(parsed.visualFindings) ? parsed.visualFindings : [],
-              timelineCorrelation: parsed.timelineCorrelation || 'Correlated with patient longitudinal record.',
-              redFlags: Array.isArray(parsed.redFlags) ? parsed.redFlags : [],
-              recommendedInvestigations: Array.isArray(parsed.recommendedInvestigations) ? parsed.recommendedInvestigations : [],
-              suggestedManagementPlan: parsed.suggestedManagementPlan || 'Continue standard clinical management and monitoring.',
-              disclaimer: parsed.disclaimer || 'AI diagnostic decision support tool. Final clinical judgment rests with the treating physician.',
-              analyzedAt: new Date().toISOString(),
-              isAiPowered: true,
-              patientId: params.patient?.id,
-              imageUrl: params.imageUrl,
-              visualMetrics: resolvedMetrics
-            };
-
-            if (imageAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
-              const oldestKey = imageAnalysisCache.keys().next().value;
-              if (oldestKey) imageAnalysisCache.delete(oldestKey);
-            }
-            imageAnalysisCache.set(cacheKey, {
-              result: finalResult,
-              expiresAt: Date.now() + IMAGE_CACHE_TTL_MS
-            });
-
-            return finalResult;
-          }
-        } catch (err: unknown) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          console.warn(`Gemini image model ${model} unavailable: ${errMsg.substring(0, 120)}. Switching to Adaptive Clinical Vision Engine.`);
-          // If 401 unauthenticated, break immediately to avoid redundant latency
-          if (errMsg.includes('401') || errMsg.includes('UNAUTHENTICATED') || errMsg.includes('disabled')) {
-            break;
           }
         }
-      }
+
+        // 2. Try Direct Gemini SDK Vision Chain
+        if (ai) {
+          for (const model of VISION_MODEL_CHAIN) {
+            try {
+              const response = await ai.models.generateContent({
+                model,
+                contents: [
+                  {
+                    inlineData: {
+                      mimeType: resolvedMimeType,
+                      data: cleanBase64
+                    }
+                  },
+                  {
+                    text: prompt
+                  }
+                ],
+                config: {
+                  temperature: 0.1,
+                  responseMimeType: 'application/json',
+                  responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                      primaryImpression: { type: Type.STRING },
+                      differentials: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            condition: { type: Type.STRING },
+                            confidence: { type: Type.STRING },
+                            icdCode: { type: Type.STRING },
+                            rationale: { type: Type.STRING }
+                          },
+                          required: ['condition', 'confidence', 'rationale']
+                        }
+                      },
+                      visualFindings: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING }
+                      },
+                      timelineCorrelation: { type: Type.STRING },
+                      redFlags: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING }
+                      },
+                      recommendedInvestigations: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING }
+                      },
+                      suggestedManagementPlan: { type: Type.STRING },
+                      disclaimer: { type: Type.STRING }
+                    },
+                    required: [
+                      'primaryImpression',
+                      'differentials',
+                      'visualFindings',
+                      'timelineCorrelation',
+                      'redFlags',
+                      'recommendedInvestigations',
+                      'suggestedManagementPlan'
+                    ]
+                  }
+                }
+              });
+
+              const text = response.text?.trim();
+              if (text) {
+                const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+                const parsed = JSON.parse(cleaned);
+
+                const finalResult: AIImageAnalysisResult = {
+                  id: `ai_img_${Date.now()}`,
+                  primaryImpression: parsed.primaryImpression || 'Clinical evaluation pending confirmation',
+                  differentials: Array.isArray(parsed.differentials) ? parsed.differentials : [],
+                  visualFindings: Array.isArray(parsed.visualFindings) ? parsed.visualFindings : [],
+                  timelineCorrelation: parsed.timelineCorrelation || 'Correlated with patient longitudinal record.',
+                  redFlags: Array.isArray(parsed.redFlags) ? parsed.redFlags : [],
+                  recommendedInvestigations: Array.isArray(parsed.recommendedInvestigations) ? parsed.recommendedInvestigations : [],
+                  suggestedManagementPlan: parsed.suggestedManagementPlan || 'Continue standard clinical management and monitoring.',
+                  disclaimer: parsed.disclaimer || 'AI diagnostic decision support tool. Final clinical judgment rests with the treating physician.',
+                  analyzedAt: new Date().toISOString(),
+                  isAiPowered: true,
+                  patientId: params.patient?.id,
+                  imageUrl: params.imageUrl,
+                  visualMetrics: resolvedMetrics
+                };
+
+                if (imageAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
+                  const oldestKey = imageAnalysisCache.keys().next().value;
+                  if (oldestKey) imageAnalysisCache.delete(oldestKey);
+                }
+                imageAnalysisCache.set(cacheKey, {
+                  result: finalResult,
+                  expiresAt: Date.now() + IMAGE_CACHE_TTL_MS
+                });
+
+                return finalResult;
+              }
+            } catch (err: unknown) {
+              const errMsg = err instanceof Error ? err.message : String(err);
+              console.warn(`Gemini image model ${model} unavailable: ${errMsg.substring(0, 120)}. Switching to Adaptive Clinical Vision Engine.`);
+              if (errMsg.includes('401') || errMsg.includes('UNAUTHENTICATED') || errMsg.includes('disabled')) {
+                break;
+              }
+            }
+          }
+        }
       } catch (err: unknown) {
-        console.warn('Gemini image analysis pipeline using adaptive engine fallback:', err instanceof Error ? err.message : err);
+        console.warn('Multimodal image analysis pipeline using adaptive engine fallback:', err instanceof Error ? err.message : err);
       }
     }
   }
 
-  // Adaptive clinical computer vision analysis when Gemini is unavailable or unauthenticated
+  // Adaptive clinical computer vision analysis when live provider is unavailable
   return generateAdaptiveClinicalImageAnalysis(params, resolvedMetrics);
 }
 
@@ -1446,8 +1563,9 @@ export function generateProgressionFallback(params: CompareImagesParams): Progre
 
 export async function compareClinicalImages(params: CompareImagesParams): Promise<ProgressionAnalysisResult> {
   const ai = getAIClient();
+  const hasOpenRouter = Boolean((process.env.OPENROUTER_API_KEY || '').trim());
 
-  if (ai && params.imageA?.base64 && params.imageB?.base64) {
+  if ((hasOpenRouter || ai) && params.imageA?.base64 && params.imageB?.base64) {
     try {
       const cleanA = params.imageA.base64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
       const mimeA = params.imageA.mimeType || 'image/jpeg';
@@ -1484,62 +1602,15 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
   "disclaimer": "Diagnostic progression decision support only. Physician clinical judgment is required."
 }`;
 
-      for (const model of VISION_MODEL_CHAIN) {
-        try {
-          const response = await ai.models.generateContent({
-            model,
-            contents: [
-              {
-                inlineData: {
-                  mimeType: mimeA,
-                  data: cleanA
-                }
-              },
-              {
-                inlineData: {
-                  mimeType: mimeB,
-                  data: cleanB
-                }
-              },
-              {
-                text: prompt
-              }
-            ],
-            config: {
-              temperature: 0.1,
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  overallProgression: { type: Type.STRING },
-                  progressionScore: { type: Type.NUMBER },
-                  visualComparisonObservations: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                  },
-                  treatmentResponseSummary: { type: Type.STRING },
-                  recommendedAdjustments: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                  },
-                  disclaimer: { type: Type.STRING }
-                },
-                required: [
-                  'overallProgression',
-                  'progressionScore',
-                  'visualComparisonObservations',
-                  'treatmentResponseSummary',
-                  'recommendedAdjustments'
-                ]
-              }
-            }
-          });
-
-          const text = response.text?.trim();
-          if (text) {
-            const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+      if (hasOpenRouter) {
+        const openRouterText = await callOpenRouterVision(prompt, [
+          { mimeType: mimeA, base64: cleanA },
+          { mimeType: mimeB, base64: cleanB }
+        ]);
+        if (openRouterText) {
+          try {
+            const cleaned = openRouterText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
             const parsed = JSON.parse(cleaned);
-
             return {
               id: `prog_${Date.now()}`,
               overallProgression: parsed.overallProgression || 'Moderate Improvement',
@@ -1551,13 +1622,88 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
               isAiPowered: true,
               analyzedAt: new Date().toISOString()
             };
+          } catch (parseErr) {
+            console.warn('OpenRouter progression JSON parse warning:', parseErr);
           }
-        } catch (err) {
-          console.warn(`Gemini progression comparison with ${model} failed:`, err);
+        }
+      }
+
+      if (ai) {
+        for (const model of VISION_MODEL_CHAIN) {
+          try {
+            const response = await ai.models.generateContent({
+              model,
+              contents: [
+                {
+                  inlineData: {
+                    mimeType: mimeA,
+                    data: cleanA
+                  }
+                },
+                {
+                  inlineData: {
+                    mimeType: mimeB,
+                    data: cleanB
+                  }
+                },
+                {
+                  text: prompt
+                }
+              ],
+              config: {
+                temperature: 0.1,
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    overallProgression: { type: Type.STRING },
+                    progressionScore: { type: Type.NUMBER },
+                    visualComparisonObservations: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    },
+                    treatmentResponseSummary: { type: Type.STRING },
+                    recommendedAdjustments: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    },
+                    disclaimer: { type: Type.STRING }
+                  },
+                  required: [
+                    'overallProgression',
+                    'progressionScore',
+                    'visualComparisonObservations',
+                    'treatmentResponseSummary',
+                    'recommendedAdjustments'
+                  ]
+                }
+              }
+            });
+
+            const text = response.text?.trim();
+            if (text) {
+              const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+              const parsed = JSON.parse(cleaned);
+
+              return {
+                id: `prog_${Date.now()}`,
+                overallProgression: parsed.overallProgression || 'Moderate Improvement',
+                progressionScore: typeof parsed.progressionScore === 'number' ? parsed.progressionScore : 50,
+                visualComparisonObservations: Array.isArray(parsed.visualComparisonObservations) ? parsed.visualComparisonObservations : [],
+                treatmentResponseSummary: parsed.treatmentResponseSummary || 'Progressing in accordance with therapeutic course.',
+                recommendedAdjustments: Array.isArray(parsed.recommendedAdjustments) ? parsed.recommendedAdjustments : [],
+                disclaimer: parsed.disclaimer || 'AI progression estimation. Final evaluation by attending physician is required.',
+                isAiPowered: true,
+                analyzedAt: new Date().toISOString()
+              };
+            }
+          } catch (err) {
+            console.warn(`Gemini progression comparison with ${model} failed:`, err);
+          }
         }
       }
     } catch (err) {
-      console.error('Gemini image comparison error:', err);
+      console.error('Multimodal image comparison error:', err);
     }
   }
 

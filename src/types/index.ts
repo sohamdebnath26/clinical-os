@@ -408,3 +408,30 @@ export interface PatientTestReport {
   updatedAt: string;
 }
 
+export type ClinicSubscriptionPlan = 'free_trial' | 'pro_monthly' | 'enterprise';
+
+export interface CreditTransaction {
+  id: string;
+  type: 'initial_trial' | 'plan_upgrade' | 'credit_topup' | 'scan_deduction';
+  description: string;
+  creditsDelta: number;
+  amountInr?: number;
+  paymentMethod?: 'UPI' | 'Card' | 'System';
+  timestamp: string;
+}
+
+export interface ClinicSubscriptionState {
+  plan: ClinicSubscriptionPlan;
+  planName: string;
+  monthlyPriceInr: number;
+  aiScansRemaining: number;
+  aiScansTotalQuota: number;
+  aiScansUsed: number;
+  renewsAt?: string;
+  activeProvider: 'openrouter' | 'gemini' | 'adaptive_vision';
+  activeModel: string;
+  transactions: CreditTransaction[];
+  updatedAt: string;
+}
+
+

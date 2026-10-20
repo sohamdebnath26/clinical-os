@@ -1091,7 +1091,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-20T04:06:01.907Z"
+    "updatedAt": "2026-10-20T06:21:15.795Z"
   },
   "appointments": [
     {
@@ -1137,7 +1137,7 @@
   ],
   "testReports": [
     {
-      "id": "rep-con-mumnfac9-ol53-bevhz",
+      "id": "rep-con-mumnfac9-ol53-wzcbu",
       "patientId": "pat-mumnf2c6-8awj",
       "consultationId": "con-muy1aite-6kt4",
       "testName": "Dermoscopy (Dermatoscopy)",
@@ -1154,7 +1154,7 @@
       "clinicalNotes": "Epidermal predominance confirmed; favorable response expected to topical depigmenting agents.",
       "previousResults": [
         {
-          "id": "prev-rep-con-mumnfac9-ol53-bevhz-2",
+          "id": "prev-rep-con-mumnfac9-ol53-wzcbu-2",
           "orderedDate": "2026-09-29T12:24:40.473Z",
           "reportDate": "2026-09-29T12:24:47.360Z",
           "resultFlag": "normal",
@@ -1167,7 +1167,7 @@
           "archivedAt": "2026-10-07T11:38:20.746Z"
         },
         {
-          "id": "prev-base-con-mumnfac9-ol53-xch9",
+          "id": "prev-base-con-mumnfac9-ol53-x04w",
           "orderedDate": "2026-09-01T12:24:40.473Z",
           "reportDate": "2026-09-01T12:24:40.473Z",
           "resultFlag": "abnormal",
@@ -1184,7 +1184,7 @@
       "updatedAt": "2026-10-07T11:38:20.746Z"
     },
     {
-      "id": "rep-con-mumnfac9-ol53-tsf9v",
+      "id": "rep-con-mumnfac9-ol53-eaa0z",
       "patientId": "pat-mumnf2c6-8awj",
       "consultationId": "con-muy1aite-6kt4",
       "testName": "Complete Blood Count (CBC) & Coagulation Screen",
@@ -1201,7 +1201,7 @@
       "clinicalNotes": "Baseline systemic screening satisfactory for planned dermatological therapy.",
       "previousResults": [
         {
-          "id": "prev-rep-con-mumnfac9-ol53-tsf9v-2",
+          "id": "prev-rep-con-mumnfac9-ol53-eaa0z-2",
           "orderedDate": "2026-09-29T12:24:40.473Z",
           "reportDate": "2026-09-29T12:24:47.360Z",
           "resultFlag": "normal",
@@ -1214,7 +1214,7 @@
           "archivedAt": "2026-10-07T11:38:20.746Z"
         },
         {
-          "id": "prev-base-con-mumnfac9-ol53-uvup",
+          "id": "prev-base-con-mumnfac9-ol53-qodv",
           "orderedDate": "2026-09-01T12:24:40.473Z",
           "reportDate": "2026-09-01T12:24:40.473Z",
           "resultFlag": "abnormal",
@@ -1231,7 +1231,7 @@
       "updatedAt": "2026-10-07T11:38:20.746Z"
     },
     {
-      "id": "rep-con-kabir-01-6sgai",
+      "id": "rep-con-kabir-01-k5pp7",
       "patientId": "pat-mv0er2l2-uln3",
       "consultationId": "con-kabir-01",
       "testName": "Serum Free Testosterone",
@@ -1248,7 +1248,7 @@
       "clinicalNotes": "Baseline systemic screening satisfactory for planned dermatological therapy.",
       "previousResults": [
         {
-          "id": "prev-base-con-kabir-01-27ju",
+          "id": "prev-base-con-kabir-01-ziza",
           "orderedDate": "2026-09-17T10:30:00.000Z",
           "reportDate": "2026-09-17T10:30:00.000Z",
           "resultFlag": "abnormal",
@@ -1265,7 +1265,7 @@
       "updatedAt": "2026-10-15T10:30:00.000Z"
     },
     {
-      "id": "rep-con-kabir-01-k6v20",
+      "id": "rep-con-kabir-01-ofxra",
       "patientId": "pat-mv0er2l2-uln3",
       "consultationId": "con-kabir-01",
       "testName": "Liver Function Panel",
@@ -1282,7 +1282,7 @@
       "clinicalNotes": "Baseline systemic screening satisfactory for planned dermatological therapy.",
       "previousResults": [
         {
-          "id": "prev-base-con-kabir-01-04ax",
+          "id": "prev-base-con-kabir-01-hb04",
           "orderedDate": "2026-09-17T10:30:00.000Z",
           "reportDate": "2026-09-17T10:30:00.000Z",
           "resultFlag": "abnormal",
@@ -1298,5 +1298,27 @@
       "createdAt": "2026-10-15T10:30:00.000Z",
       "updatedAt": "2026-10-15T10:30:00.000Z"
     }
-  ]
+  ],
+  "subscription": {
+    "plan": "free_trial",
+    "planName": "Clinic Starter (Free Trial)",
+    "monthlyPriceInr": 0,
+    "aiScansRemaining": 10,
+    "aiScansTotalQuota": 10,
+    "aiScansUsed": 0,
+    "activeProvider": "openrouter",
+    "activeModel": "google/gemini-2.5-pro",
+    "transactions": [
+      {
+        "id": "tx-init-mvgaotqo",
+        "type": "initial_trial",
+        "description": "Welcome Trial: 10 Free AI Clinical Image Diagnostic Scans",
+        "creditsDelta": 10,
+        "amountInr": 0,
+        "paymentMethod": "System",
+        "timestamp": "2026-10-20T06:21:15.792Z"
+      }
+    ],
+    "updatedAt": "2026-10-20T06:21:15.792Z"
+  }
 }
