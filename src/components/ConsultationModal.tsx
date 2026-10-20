@@ -948,6 +948,20 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleTabChange('aisummary')}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border shadow-2xs shrink-0 ${
+                activeTab === 'aisummary'
+                  ? 'bg-white text-[#0f2926] border-white ring-2 ring-teal-300/60'
+                  : 'bg-white/15 hover:bg-white/25 text-white border-white/25'
+              }`}
+              title="Open AI-auto-filled consultation summary"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${activeTab === 'aisummary' ? 'text-[#157a6e]' : 'text-teal-200'}`} />
+              <span>View Summary</span>
+            </button>
+
             <div className="flex items-center gap-2.5 bg-white/12 border border-white/20 px-3.5 py-1.5 rounded-xl">
               <span className="text-xs font-medium text-[#d4ece8]">Consultation fee</span>
               <span className="text-xs font-semibold text-white/80">₹</span>
@@ -1092,19 +1106,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 {prescriptions.length}
               </span>
             )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleTabChange('aisummary')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
-              activeTab === 'aisummary'
-                ? 'border-[#157a6e] text-[#115e56] font-semibold'
-                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[#157a6e]" />
-            <span>Visit summary</span>
           </button>
         </div>
 
@@ -1555,7 +1556,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         className="inline-flex items-center gap-1 text-[10.5px] font-bold text-white bg-teal-800 hover:bg-teal-900 px-2.5 py-1 rounded-lg transition-colors shadow-2xs"
                       >
                         <Sparkles className="w-2.5 h-2.5 text-teal-200" />
-                        <span>View & Edit AI Summary →</span>
+                        <span>View Summary →</span>
                       </button>
                     </div>
                   </div>
@@ -2032,7 +2033,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-md transition-colors"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-teal-300" />
-                  <span>Proceed to Visit Summary & Sign</span>
+                  <span>View Summary & Sign</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
