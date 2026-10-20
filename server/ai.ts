@@ -6,21 +6,26 @@ import crypto from 'crypto';
 dotenv.config();
 
 let genAI: GoogleGenAI | null = null;
+let activeApiKey: string | null = null;
 
 function getAIClient(): GoogleGenAI | null {
-  const apiKey =
-    process.env.GEMINI_API_KEY ||
+  const apiKey = (
+    process.env.CUSTOM_GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
+    process.env.GEMINI_API_KEY ||
     process.env.API_KEY ||
     process.env.GEMINI_KEY ||
-    process.env.VITE_GEMINI_API_KEY;
+    process.env.VITE_GEMINI_API_KEY ||
+    ''
+  ).trim();
 
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim() === '') {
+  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey === 'YOUR_GEMINI_API_KEY') {
     return null;
   }
-  if (!genAI) {
+  if (!genAI || activeApiKey !== apiKey) {
+    activeApiKey = apiKey;
     genAI = new GoogleGenAI({
-      apiKey: apiKey.trim(),
+      apiKey,
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build'
