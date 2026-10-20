@@ -191,6 +191,10 @@ export interface VisualMorphologyMetrics {
   estimatedDiameterMm?: number;
   textureEntropy?: number;
   perceivedSharpness?: number;
+  fitzpatrickType?: 'Type I' | 'Type II' | 'Type III' | 'Type IV' | 'Type V' | 'Type VI';
+  itaAngleDeg?: number;
+  cieLabDeltaA?: number;
+  cieLabDeltaL?: number;
 }
 
 export interface AIImageAnalysisResult {

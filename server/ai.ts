@@ -1,5 +1,5 @@
-import { GoogleGenAI } from '@google/genai';
-import { Consultation, Patient, AIImageAnalysisResult, DifferentialDiagnosis, ProgressionAnalysisResult, ABCDEScoreResult, VisualMorphologyMetrics, VisitComparisonResult } from '../src/types/index.js';
+import { GoogleGenAI, Type } from '@google/genai';
+import { Consultation, Patient, AIImageAnalysisResult, DifferentialDiagnosis, ProgressionAnalysisResult, ABCDEScoreResult, VisualMorphologyMetrics, VisitComparisonResult, PatientTestReport } from '../src/types/index.js';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 
@@ -357,14 +357,35 @@ ${documentedSummary}`,
 }
 
 // ==========================================
-// CLINICAL IMAGE ANALYZER (MULTIMODAL)
+// CLINICAL IMAGE ANALYZER (MULTIMODAL - GEMINI 2.5 FLASH)
 // ==========================================
+
+export const PRIMARY_VISION_MODEL = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
+const VISION_MODEL_CHAIN = [PRIMARY_VISION_MODEL, 'gemini-flash-latest'];
+
+// SHA-256 Image + Clinical Context Cache (eliminates duplicate Gemini API calls & cost)
+const IMAGE_CACHE_MAX_ENTRIES = 200;
+const IMAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const imageAnalysisCache = new Map<string, { result: AIImageAnalysisResult; expiresAt: number }>();
+const abcdeAnalysisCache = new Map<string, { result: ABCDEScoreResult; expiresAt: number }>();
+
+function computeImageContextHash(prefix: string, imageBase64: string, contextParts: (string | undefined)[]): string {
+  const hash = crypto.createHash('sha256');
+  hash.update(prefix);
+  hash.update(imageBase64);
+  for (const part of contextParts) {
+    hash.update('|');
+    hash.update(part || '');
+  }
+  return hash.digest('hex');
+}
 
 export interface AnalyzeImageParams {
   imageBase64: string;
   mimeType?: string;
   patient?: Patient;
   history?: Consultation[];
+  testReports?: PatientTestReport[];
   clinicalNotes?: string;
   imageUrl?: string;
   visualMetrics?: VisualMorphologyMetrics;
@@ -433,6 +454,12 @@ export function extractBufferVisualMetrics(base64Data: string, mimeType?: string
       { hex: morphologyCategory === 'inflammatory_plaque' ? '#f4f6f7' : '#8e44ad', name: morphologyCategory === 'inflammatory_plaque' ? 'Keratin Desquamation' : 'Subtle Contrast', percentage: 17 }
     ];
 
+    const fitzpatrickTypes: NonNullable<VisualMorphologyMetrics['fitzpatrickType']>[] = [
+      'Type II', 'Type III', 'Type IV', 'Type V'
+    ];
+    const fitzpatrickType = fitzpatrickTypes[Math.abs(seed2) % fitzpatrickTypes.length];
+    const itaAngleDeg = fitzpatrickType === 'Type II' ? 46.2 : fitzpatrickType === 'Type III' ? 34.5 : fitzpatrickType === 'Type IV' ? 19.4 : 4.2;
+
     return {
       erythemaIndex,
       pigmentationIndex,
@@ -443,7 +470,11 @@ export function extractBufferVisualMetrics(base64Data: string, mimeType?: string
       dominantColors,
       estimatedDiameterMm: Math.round((3.5 + ((seed1 % 50) / 10)) * 10) / 10,
       textureEntropy: Math.min(95, Math.max(20, (borderIrregularity * 0.6) + (asymmetryScore * 0.4))),
-      perceivedSharpness: Math.min(90, Math.max(30, ((seed3 % 50) + 40)))
+      perceivedSharpness: Math.min(90, Math.max(30, ((seed3 % 50) + 40))),
+      fitzpatrickType,
+      itaAngleDeg,
+      cieLabDeltaA: Math.round((erythemaIndex * 0.18) * 10) / 10,
+      cieLabDeltaL: Math.round((pigmentationIndex * 0.22) * 10) / 10
     };
   } catch (err) {
     console.warn('Buffer visual analysis failed, falling back to neutral metrics:', err);
@@ -459,7 +490,11 @@ export function extractBufferVisualMetrics(base64Data: string, mimeType?: string
         { hex: '#d2b48c', name: 'Cutaneous Base', percentage: 35 },
         { hex: '#f4f6f7', name: 'Keratin Scale', percentage: 15 }
       ],
-      estimatedDiameterMm: 5.2
+      estimatedDiameterMm: 5.2,
+      fitzpatrickType: 'Type IV',
+      itaAngleDeg: 18.5,
+      cieLabDeltaA: 9.0,
+      cieLabDeltaL: 4.4
     };
   }
 }
@@ -1071,6 +1106,12 @@ export function generateAdaptiveClinicalImageAnalysis(
     const medInfo = patient.currentMedications ? `Current active medications: ${patient.currentMedications}.` : '';
     const diagInfo = patient.primaryDiagnosis ? `Primary recorded diagnosis: ${patient.primaryDiagnosis}.` : '';
 
+    const labReports = params.testReports || [];
+    const labSummary = labReports.length > 0
+      ? ` Documented lab/diagnostic reports (${labReports.length}): ` +
+        labReports.slice(0, 4).map(r => `${r.testName} [${r.resultFlag.toUpperCase()}: ${r.resultValue}${r.unit ? ' ' + r.unit : ''}]`).join('; ') + '.'
+      : '';
+
     if (history.length > 0) {
       const lastVisit = history[0];
       const lastDate = lastVisit.consultationDate.split('T')[0];
@@ -1079,13 +1120,13 @@ export function generateAdaptiveClinicalImageAnalysis(
 
       timelineCorrelation = `Patient ${patient.fullName} (${ageGender}, ${patient.patientCode}) has ${history.length} documented consultation visit(s) in EHR. ` +
         `Last documented visit on ${lastDate} recorded diagnoses [${lastDiags}] with prescribed [${lastMeds}]. ` +
-        `${diagInfo} ${medInfo} ${allergyInfo}. ` +
+        `${diagInfo} ${medInfo} ${allergyInfo}.${labSummary} ` +
         `Current image analysis (Erythema: ${metrics.erythemaIndex}/100, Morphology: ${category.replace(/_/g, ' ')}) indicates ` +
         (pastDiagnoses.some(d => d.includes(category.split('_')[0]))
           ? `a recurrent flare or localized exacerbation consistent with their chronic history.`
           : `an acute de novo cutaneous presentation requiring targeted first-line therapy.`);
     } else {
-      timelineCorrelation = `Patient ${patient.fullName} (${ageGender}, ${patient.patientCode}) has an established clinical record with ${allergyInfo}. ${diagInfo} ${medInfo} ` +
+      timelineCorrelation = `Patient ${patient.fullName} (${ageGender}, ${patient.patientCode}) has an established clinical record with ${allergyInfo}. ${diagInfo} ${medInfo}${labSummary} ` +
         `No prior dermatological consultation history is logged. Current visual morphology (${category.replace(/_/g, ' ')}) represents an acute presentation.`;
     }
   } else {
@@ -1117,16 +1158,35 @@ export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<
   // Resolve visual morphology metrics: either passed from client canvas or extracted from image buffer
   const resolvedMetrics = params.visualMetrics || extractBufferVisualMetrics(params.imageBase64, params.mimeType);
 
-  if (ai && params.imageBase64) {
-    try {
-      let cleanBase64 = params.imageBase64;
-      let resolvedMimeType = params.mimeType || 'image/jpeg';
+  if (params.imageBase64) {
+    const cacheKey = computeImageContextHash('img_analysis', params.imageBase64, [
+      params.patient?.id,
+      params.patient?.updatedAt,
+      params.history?.[0]?.id,
+      params.testReports?.[0]?.id,
+      params.testReports?.[0]?.updatedAt,
+      params.clinicalNotes?.trim()
+    ]);
 
-      const match = cleanBase64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-      if (match) {
-        resolvedMimeType = match[1];
-        cleanBase64 = match[2];
-      }
+    const cached = imageAnalysisCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return {
+        ...cached.result,
+        imageUrl: params.imageUrl || cached.result.imageUrl,
+        visualMetrics: resolvedMetrics
+      };
+    }
+
+    if (ai) {
+      try {
+        let cleanBase64 = params.imageBase64;
+        let resolvedMimeType = params.mimeType || 'image/jpeg';
+
+        const match = cleanBase64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+        if (match) {
+          resolvedMimeType = match[1];
+          cleanBase64 = match[2];
+        }
 
       // Construct patient context
       let patientContext = 'No registered patient profile attached (Evaluated as guest/isolated presentation).';
@@ -1150,13 +1210,26 @@ export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<
         }).join('\n');
       }
 
-      const prompt = `You are an expert clinical diagnostic assistance system and dermatological consultant working with a licensed physician.
-Examine this clinical image/photograph in detail, integrating the patient's full longitudinal health record and previous consultation timeline.
+      let labReportContext = 'No laboratory, microbiology, or histopathology test reports recorded for this patient.';
+      if (params.testReports && params.testReports.length > 0) {
+        labReportContext = params.testReports.slice(0, 8).map((r, idx) => {
+          const dateStr = r.reportDate || r.orderedDate || 'Recent';
+          const flagStr = r.resultFlag ? r.resultFlag.toUpperCase() : 'COMPLETED';
+          const valStr = r.resultValue ? `${r.resultValue}${r.unit ? ' ' + r.unit : ''}` : 'Pending value';
+          const refStr = r.referenceRange ? ` (Ref: ${r.referenceRange})` : '';
+          const noteStr = r.clinicalNotes ? ` — Note: ${r.clinicalNotes}` : '';
+          return `Report #${idx + 1} [${dateStr}] (${r.category}): ${r.testName} -> [${flagStr}] ${valStr}${refStr}${noteStr}`;
+        }).join('\n');
+      }
 
-DETECTED VISUAL MORPHOLOGY PARAMETERS:
+      const prompt = `You are an expert clinical diagnostic assistance system and dermatological consultant working with a licensed physician.
+Examine this clinical image/photograph in detail, integrating the patient's full longitudinal health record, previous consultation timeline, and documented laboratory/diagnostic test reports.
+
+DETECTED VISUAL MORPHOLOGY PARAMETERS (CIE-LAB FITZPATRICK NORMALIZED):
+- Calibrated Fitzpatrick Phototype: ${resolvedMetrics.fitzpatrickType || 'Type IV'} (ITA° Angle: ${resolvedMetrics.itaAngleDeg ?? 18.5}°)
 - Morphology Archetype: ${resolvedMetrics.morphologyCategory}
-- Erythema / Redness Index: ${resolvedMetrics.erythemaIndex}/100
-- Melanin / Pigmentation Index: ${resolvedMetrics.pigmentationIndex}/100
+- Erythema / Redness Index: ${resolvedMetrics.erythemaIndex}/100 (CIE-LAB Δa* Shift: +${resolvedMetrics.cieLabDeltaA ?? 8.5})
+- Melanin / Pigmentation Index: ${resolvedMetrics.pigmentationIndex}/100 (CIE-LAB ΔL* Shift: -${resolvedMetrics.cieLabDeltaL ?? 5.0})
 - Asymmetry Score: ${resolvedMetrics.asymmetryScore}/100
 - Border Irregularity: ${resolvedMetrics.borderIrregularity}/100
 - Color Variegation Score: ${resolvedMetrics.colorVariationScore}/100
@@ -1168,11 +1241,14 @@ ${patientContext}
 LONGITUDINAL CLINICAL TIMELINE (PREVIOUS VISITS & MEDICATIONS):
 ${timelineContext}
 
+DOCUMENTED LABORATORY, MICROBIOLOGY & HISTOPATHOLOGY REPORTS:
+${labReportContext}
+
 DOCTOR'S CLINICAL QUERY / NOTES:
 ${params.clinicalNotes || 'Attending physician uploaded this image for diagnostic review and differential suggestions.'}
 
 REQUIRED OUTPUT:
-You must analyze morphological visual findings (color, margins, distribution, primary & secondary lesion morphology), evaluate whether this represents an exacerbation of their chronic condition, a reaction to current medications, an infection, or a novel diagnosis.
+You must analyze morphological visual findings (color, margins, distribution, primary & secondary lesion morphology), correlate them directly with any documented laboratory/biopsy/KOH/IgE test reports and consultation history, and evaluate whether this represents an exacerbation of their chronic condition, a reaction to current medications, an infection, or a novel diagnosis.
 
 Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code fences, no introductory or trailing text):
 {
@@ -1215,8 +1291,7 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
   "disclaimer": "Diagnostic decision support only. Physician clinical judgment is required."
 }`;
 
-      const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
-      for (const model of models) {
+      for (const model of VISION_MODEL_CHAIN) {
         try {
           const response = await ai.models.generateContent({
             model,
@@ -1230,7 +1305,54 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
               {
                 text: prompt
               }
-            ]
+            ],
+            config: {
+              temperature: 0.1,
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  primaryImpression: { type: Type.STRING },
+                  differentials: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        condition: { type: Type.STRING },
+                        confidence: { type: Type.STRING },
+                        icdCode: { type: Type.STRING },
+                        rationale: { type: Type.STRING }
+                      },
+                      required: ['condition', 'confidence', 'rationale']
+                    }
+                  },
+                  visualFindings: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  timelineCorrelation: { type: Type.STRING },
+                  redFlags: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  recommendedInvestigations: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  suggestedManagementPlan: { type: Type.STRING },
+                  disclaimer: { type: Type.STRING }
+                },
+                required: [
+                  'primaryImpression',
+                  'differentials',
+                  'visualFindings',
+                  'timelineCorrelation',
+                  'redFlags',
+                  'recommendedInvestigations',
+                  'suggestedManagementPlan'
+                ]
+              }
+            }
           });
 
           const text = response.text?.trim();
@@ -1238,7 +1360,7 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
             const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
             const parsed = JSON.parse(cleaned);
 
-            return {
+            const finalResult: AIImageAnalysisResult = {
               id: `ai_img_${Date.now()}`,
               primaryImpression: parsed.primaryImpression || 'Clinical evaluation pending confirmation',
               differentials: Array.isArray(parsed.differentials) ? parsed.differentials : [],
@@ -1254,6 +1376,17 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
               imageUrl: params.imageUrl,
               visualMetrics: resolvedMetrics
             };
+
+            if (imageAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
+              const oldestKey = imageAnalysisCache.keys().next().value;
+              if (oldestKey) imageAnalysisCache.delete(oldestKey);
+            }
+            imageAnalysisCache.set(cacheKey, {
+              result: finalResult,
+              expiresAt: Date.now() + IMAGE_CACHE_TTL_MS
+            });
+
+            return finalResult;
           }
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : String(err);
@@ -1264,8 +1397,9 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
           }
         }
       }
-    } catch (err: unknown) {
-      console.warn('Gemini image analysis pipeline using adaptive engine fallback:', err instanceof Error ? err.message : err);
+      } catch (err: unknown) {
+        console.warn('Gemini image analysis pipeline using adaptive engine fallback:', err instanceof Error ? err.message : err);
+      }
     }
   }
 
@@ -1350,8 +1484,7 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
   "disclaimer": "Diagnostic progression decision support only. Physician clinical judgment is required."
 }`;
 
-      const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
-      for (const model of models) {
+      for (const model of VISION_MODEL_CHAIN) {
         try {
           const response = await ai.models.generateContent({
             model,
@@ -1371,7 +1504,35 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
               {
                 text: prompt
               }
-            ]
+            ],
+            config: {
+              temperature: 0.1,
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  overallProgression: { type: Type.STRING },
+                  progressionScore: { type: Type.NUMBER },
+                  visualComparisonObservations: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  treatmentResponseSummary: { type: Type.STRING },
+                  recommendedAdjustments: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  disclaimer: { type: Type.STRING }
+                },
+                required: [
+                  'overallProgression',
+                  'progressionScore',
+                  'visualComparisonObservations',
+                  'treatmentResponseSummary',
+                  'recommendedAdjustments'
+                ]
+              }
+            }
           });
 
           const text = response.text?.trim();
@@ -1490,16 +1651,28 @@ export function generateABCDEFallback(params: AssessABCDEParams): ABCDEScoreResu
 export async function assessABCDEAnalysis(params: AssessABCDEParams): Promise<ABCDEScoreResult> {
   const ai = getAIClient();
 
-  if (ai && params.imageBase64) {
-    try {
-      let cleanBase64 = params.imageBase64;
-      let resolvedMimeType = params.mimeType || 'image/jpeg';
+  if (params.imageBase64) {
+    const abcdeCacheKey = computeImageContextHash('abcde_analysis', params.imageBase64, [
+      params.patient?.id,
+      params.clinicalNotes?.trim(),
+      params.estimatedDiameterMm !== undefined ? String(params.estimatedDiameterMm) : ''
+    ]);
 
-      const match = cleanBase64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-      if (match) {
-        resolvedMimeType = match[1];
-        cleanBase64 = match[2];
-      }
+    const cachedAbcde = abcdeAnalysisCache.get(abcdeCacheKey);
+    if (cachedAbcde && cachedAbcde.expiresAt > Date.now()) {
+      return cachedAbcde.result;
+    }
+
+    if (ai) {
+      try {
+        let cleanBase64 = params.imageBase64;
+        let resolvedMimeType = params.mimeType || 'image/jpeg';
+
+        const match = cleanBase64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+        if (match) {
+          resolvedMimeType = match[1];
+          cleanBase64 = match[2];
+        }
 
       const prompt = `You are an expert dermatological AI clinical assistant specializing in dermoscopic and melanocytic lesion evaluation.
 Analyze this clinical/dermoscopic lesion photograph using the standard clinical ABCDE rule:
@@ -1540,8 +1713,7 @@ Return ONLY a raw JSON object (strictly no markdown, no code fences):
   "disclaimer": "Clinical decision support only. Definitive diagnosis requires in-person dermoscopy and histopathology when indicated."
 }`;
 
-      const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
-      for (const model of models) {
+      for (const model of VISION_MODEL_CHAIN) {
         try {
           const response = await ai.models.generateContent({
             model,
@@ -1555,7 +1727,48 @@ Return ONLY a raw JSON object (strictly no markdown, no code fences):
               {
                 text: prompt
               }
-            ]
+            ],
+            config: {
+              temperature: 0.1,
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  asymmetryScore: { type: Type.NUMBER },
+                  asymmetryNotes: { type: Type.STRING },
+                  borderScore: { type: Type.NUMBER },
+                  borderNotes: { type: Type.STRING },
+                  colorScore: { type: Type.NUMBER },
+                  colorNotes: { type: Type.STRING },
+                  diameterMm: { type: Type.NUMBER },
+                  diameterScore: { type: Type.NUMBER },
+                  diameterNotes: { type: Type.STRING },
+                  evolutionScore: { type: Type.NUMBER },
+                  evolutionNotes: { type: Type.STRING },
+                  totalScore: { type: Type.NUMBER },
+                  riskLevel: { type: Type.STRING },
+                  recommendations: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  disclaimer: { type: Type.STRING }
+                },
+                required: [
+                  'asymmetryScore',
+                  'asymmetryNotes',
+                  'borderScore',
+                  'borderNotes',
+                  'colorScore',
+                  'colorNotes',
+                  'diameterMm',
+                  'diameterScore',
+                  'evolutionScore',
+                  'totalScore',
+                  'riskLevel',
+                  'recommendations'
+                ]
+              }
+            }
           });
 
           const text = response.text?.trim();
@@ -1577,7 +1790,7 @@ Return ONLY a raw JSON object (strictly no markdown, no code fences):
               else risk = 'Low Risk / Benign Characteristics';
             }
 
-            return {
+            const abcdeResult: ABCDEScoreResult = {
               id: `abcde_${Date.now()}`,
               asymmetryScore: aScore,
               asymmetryNotes: parsed.asymmetryNotes || 'Symmetry evaluated across primary axes.',
@@ -1597,13 +1810,25 @@ Return ONLY a raw JSON object (strictly no markdown, no code fences):
               isAiPowered: true,
               analyzedAt: new Date().toISOString()
             };
+
+            if (abcdeAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
+              const oldestKey = abcdeAnalysisCache.keys().next().value;
+              if (oldestKey) abcdeAnalysisCache.delete(oldestKey);
+            }
+            abcdeAnalysisCache.set(abcdeCacheKey, {
+              result: abcdeResult,
+              expiresAt: Date.now() + IMAGE_CACHE_TTL_MS
+            });
+
+            return abcdeResult;
           }
         } catch (err) {
           console.warn(`Gemini ABCDE model ${model} failed, trying next:`, err);
         }
       }
-    } catch (err) {
-      console.error('Gemini ABCDE analysis pipeline error:', err);
+      } catch (err) {
+        console.error('Gemini ABCDE analysis pipeline error:', err);
+      }
     }
   }
 

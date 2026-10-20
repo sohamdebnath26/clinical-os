@@ -844,6 +844,22 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   )}
                 </div>
 
+                {(visualMetrics.fitzpatrickType || visualMetrics.itaAngleDeg !== undefined) && (
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-slate-800 text-[10px] text-slate-300 px-0.5">
+                    {visualMetrics.fitzpatrickType && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold">
+                        Fitzpatrick {visualMetrics.fitzpatrickType}
+                        {visualMetrics.itaAngleDeg !== undefined ? ` (ITA° ${visualMetrics.itaAngleDeg}°)` : ''}
+                      </span>
+                    )}
+                    {(visualMetrics.cieLabDeltaA !== undefined || visualMetrics.cieLabDeltaL !== undefined) && (
+                      <span className="font-mono text-slate-400">
+                        CIE-LAB Δa* <strong className="text-rose-300">{visualMetrics.cieLabDeltaA && visualMetrics.cieLabDeltaA > 0 ? `+${visualMetrics.cieLabDeltaA}` : visualMetrics.cieLabDeltaA ?? 0}</strong> · ΔL* <strong className="text-amber-300">{visualMetrics.cieLabDeltaL ?? 0}</strong>
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {visualMetrics.dominantColors && visualMetrics.dominantColors.length > 0 && (
                   <div className="flex items-center gap-1 pt-1 overflow-x-auto scrollbar-none">
                     <span className="text-[10px] text-slate-400 shrink-0">Colors:</span>
@@ -1213,6 +1229,50 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  {(analysisResult.visualMetrics.fitzpatrickType || analysisResult.visualMetrics.itaAngleDeg !== undefined) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                      <div className="p-2.5 rounded-xl bg-amber-50/60 border border-amber-200/70 flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] text-amber-800/80 uppercase font-semibold">Skin Phototype</div>
+                          <div className="text-xs font-bold text-amber-950 mt-0.5">
+                            Fitzpatrick {analysisResult.visualMetrics.fitzpatrickType || 'Type IV'}
+                          </div>
+                        </div>
+                        {analysisResult.visualMetrics.itaAngleDeg !== undefined && (
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">
+                            ITA° {analysisResult.visualMetrics.itaAngleDeg}°
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-rose-50/50 border border-rose-200/70 flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] text-rose-800/80 uppercase font-semibold">Hemoglobin Axis (Δa*)</div>
+                          <div className="text-xs font-bold text-rose-950 mt-0.5">
+                            Lesion vs Perilesional
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200">
+                          {analysisResult.visualMetrics.cieLabDeltaA && analysisResult.visualMetrics.cieLabDeltaA > 0
+                            ? `+${analysisResult.visualMetrics.cieLabDeltaA}`
+                            : analysisResult.visualMetrics.cieLabDeltaA ?? 0}
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] text-slate-500 uppercase font-semibold">Luminance Shift (ΔL*)</div>
+                          <div className="text-xs font-bold text-slate-800 mt-0.5">
+                            Melanin Depth Contrast
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-slate-200/70 text-slate-800 border border-slate-300">
+                          {analysisResult.visualMetrics.cieLabDeltaL ?? 0}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {analysisResult.visualMetrics.dominantColors && analysisResult.visualMetrics.dominantColors.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">

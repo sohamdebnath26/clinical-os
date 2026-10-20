@@ -782,11 +782,13 @@ app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedReque
 
   let patient = undefined;
   let history = undefined;
+  let testReports = undefined;
 
   if (patientId) {
     patient = db.findPatientById(patientId);
     if (patient) {
       history = db.getConsultationsByPatient(patient.id);
+      testReports = db.getTestReportsByPatient(patient.id);
     }
   }
 
@@ -796,6 +798,7 @@ app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedReque
       mimeType,
       patient,
       history,
+      testReports,
       clinicalNotes,
       imageUrl,
       visualMetrics

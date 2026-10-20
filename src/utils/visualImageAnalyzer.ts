@@ -1,10 +1,46 @@
 import { VisualMorphologyMetrics } from '../types';
 
 /**
+ * Converts sRGB (0-255) to CIE-LAB (L*: 0-100, a*: -128..127, b*: -128..127)
+ * Used for dermatological chromophore separation (L* = luminance/melanin, a* = hemoglobin erythema, b* = pigmentation/yellowness).
+ */
+function rgbToCieLab(r: number, g: number, b: number): { L: number; a: number; b: number } {
+  let sr = r / 255;
+  let sg = g / 255;
+  let sb = b / 255;
+
+  sr = sr > 0.04045 ? Math.pow((sr + 0.055) / 1.055, 2.4) : sr / 12.92;
+  sg = sg > 0.04045 ? Math.pow((sg + 0.055) / 1.055, 2.4) : sg / 12.92;
+  sb = sb > 0.04045 ? Math.pow((sb + 0.055) / 1.055, 2.4) : sb / 12.92;
+
+  const x = (sr * 0.4124 + sg * 0.3576 + sb * 0.1805) / 0.95047;
+  const y = (sr * 0.2126 + sg * 0.7152 + sb * 0.0722) / 1.00000;
+  const z = (sr * 0.0193 + sg * 0.1192 + sb * 0.9505) / 1.08883;
+
+  const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const fx = f(x);
+  const fy = f(y);
+  const fz = f(z);
+
+  return {
+    L: 116 * fy - 16,
+    a: 500 * (fx - fy),
+    b: 200 * (fy - fz)
+  };
+}
+
+function classifyFitzpatrickFromITA(itaDeg: number): NonNullable<VisualMorphologyMetrics['fitzpatrickType']> {
+  if (itaDeg > 55) return 'Type I';
+  if (itaDeg > 41) return 'Type II';
+  if (itaDeg > 28) return 'Type III';
+  if (itaDeg > 10) return 'Type IV';
+  if (itaDeg > -30) return 'Type V';
+  return 'Type VI';
+}
+
+/**
  * Client-Side Clinical Computer Vision Feature Extractor
- * Inspects real image pixels using an offscreen HTML5 canvas.
- * Implements lesion-aware focal segmentation (ROI) and accurate dermatological
- * chromophore separation (Hemoglobin vs Melanin vs Keratin vs Exudate).
+ * Inspects real image pixels using an offscreen HTML5 canvas with CIE-LAB Fitzpatrick skin-tone normalization.
  */
 export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<VisualMorphologyMetrics> {
   return new Promise((resolve) => {
@@ -34,8 +70,9 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
         const data = imgData.data;
         const totalPixels = sampleSize * sampleSize;
 
-        // 1. First pass: compute overall luminance, color baseline, and skin chromophores
+        // 1. First pass: compute overall luminance, color baseline, and CIE-LAB perilesional baseline
         let sumR = 0, sumG = 0, sumB = 0;
+        let borderLabL = 0, borderLabA = 0, borderLabB = 0, borderCount = 0;
         const lums: number[] = new Array(totalPixels);
         const reds: number[] = new Array(totalPixels);
 
@@ -54,18 +91,38 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           const denom = Math.max(1, r + g + b);
           // Red excess over green & blue (hemoglobin vascular signal)
           reds[i] = Math.max(0, (2 * r - g - b) / denom);
+
+          const x = i % sampleSize;
+          const y = Math.floor(i / sampleSize);
+          const isOuterFrame = x < 20 || x >= sampleSize - 20 || y < 20 || y >= sampleSize - 20;
+          if (isOuterFrame && lum > 25 && lum < 245) {
+            const lab = rgbToCieLab(r, g, b);
+            borderLabL += lab.L;
+            borderLabA += lab.a;
+            borderLabB += lab.b;
+            borderCount++;
+          }
         }
 
         const avgR = sumR / totalPixels;
         const avgG = sumG / totalPixels;
         const avgB = sumB / totalPixels;
         const baseLum = 0.299 * avgR + 0.587 * avgG + 0.114 * avgB;
+        const baseLabL = borderCount > 0 ? borderLabL / borderCount : 62;
+        const baseLabA = borderCount > 0 ? borderLabA / borderCount : 9;
+        const baseLabB = borderCount > 0 ? borderLabB / borderCount : 18;
+
+        // Individual Typology Angle (ITA°) & Fitzpatrick Skin Phototype
+        const itaAngleDeg = Math.round((Math.atan2(baseLabL - 50, Math.max(1, Math.abs(baseLabB))) * (180 / Math.PI)) * 10) / 10;
+        const fitzpatrickType = classifyFitzpatrickFromITA(itaAngleDeg);
 
         // 2. Second pass: Segment Lesion Region of Interest (ROI) vs Background Skin
         let lesionPixelCount = 0;
         let lesionErythemaSum = 0;
         let maxErythema = 0;
         let darkMelaninSum = 0;
+        let lesionDeltaASum = 0;
+        let lesionDeltaLSum = 0;
 
         let darkBrownBlackCount = 0;
         let erythematousRedCount = 0;
@@ -92,13 +149,16 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
             gridLum[y][x] = lum;
 
             const lumDiff = Math.abs(lum - baseLum);
+            const lab = rgbToCieLab(r, g, b);
+            const deltaA = Math.max(0, lab.a - baseLabA);
+            const deltaL = Math.max(0, baseLabL - lab.L);
 
-            // Clinically calibrated chromophore signatures:
-            // Vascular erythema / flare: prominent red dominance over both green and blue
-            const isRedFlare = redExcess > 0.16 && r > g * 1.18 && r > b * 1.15 && r > 110;
+            // Clinically calibrated chromophore signatures (CIE-LAB Fitzpatrick normalized):
+            // Vascular erythema / flare: prominent red dominance OR CIE-LAB Δa* hemoglobin shift
+            const isRedFlare = (redExcess > 0.16 && r > g * 1.18 && r > b * 1.15 && r > 110) || deltaA > 6.5;
 
-            // True deep melanin: dark brown or black (all channels low), NOT reddish skin
-            const isDarkMelanin = lum < 70 && r < 85 && g < 75 && b < 65 && (baseLum - lum) > 28;
+            // True deep melanin: dark brown or black calibrated against perilesional L*
+            const isDarkMelanin = (lum < 70 && r < 85 && g < 75 && b < 65 && (baseLum - lum) > 28) || (deltaL > 14 && deltaA < 5 && lab.L < 42);
 
             // Silvery-white lamellar scale (Psoriasis / hyperkeratosis): high luminance, low color saturation
             const isLightScale = lum > 180 && r > 165 && g > 165 && b > 165 && (lum - baseLum) > 20 && Math.abs(r - g) < 22 && Math.abs(g - b) < 22;
@@ -118,6 +178,8 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
               lesionPixelCount++;
               lesionErythemaSum += redExcess;
               maxErythema = Math.max(maxErythema, redExcess);
+              lesionDeltaASum += deltaA;
+              lesionDeltaLSum += deltaL;
 
               if (isDarkMelanin) {
                 const darkIntensity = (75 - lum) / 75;
@@ -180,19 +242,20 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           lesionPixelCount = 1;
         }
 
-        // 3. Focal Erythema Index (scaled 0 - 100 based on true vascular hemoglobin excess)
+        // 3. Focal Erythema Index (calibrated with CIE-LAB Δa* hemoglobin shift across Fitzpatrick types)
         const meanLesionErythema = lesionErythemaSum / lesionPixelCount;
+        const meanDeltaA = Math.round((lesionDeltaASum / Math.max(1, lesionPixelCount)) * 10) / 10;
+        const meanDeltaL = Math.round((lesionDeltaLSum / Math.max(1, lesionPixelCount)) * 10) / 10;
         const redLesionRatio = erythematousRedCount / Math.max(1, lesionPixelCount);
         const erythemaIndex = Math.min(100, Math.max(10, Math.round(
-          (redLesionRatio * 55) + (meanLesionErythema * 35) + (maxErythema * 30)
+          (redLesionRatio * 48) + (meanLesionErythema * 30) + (maxErythema * 22) + Math.min(22, meanDeltaA * 1.6)
         )));
 
-        // 4. Focal Pigmentation Index: Derived exclusively from TRUE Melanin Chromophores
-        // Will be naturally low (5-20) for red rashes, and high (50-95) for pigmented nevi/melanoma
+        // 4. Focal Pigmentation Index: Calibrated with CIE-LAB ΔL* melanin absorption relative to perilesional baseline
         const darkLesionRatio = darkBrownBlackCount / Math.max(1, lesionPixelCount);
         const meanMelaninDepth = darkBrownBlackCount > 0 ? darkMelaninSum / darkBrownBlackCount : 0;
         const pigmentationIndex = Math.min(100, Math.max(5, Math.round(
-          (darkLesionRatio * 85) + (meanMelaninDepth * 25)
+          (darkLesionRatio * 75) + (meanMelaninDepth * 20) + Math.min(20, meanDeltaL * 0.8)
         )));
 
         // 5. Asymmetry & Centroid Deviation
@@ -364,7 +427,11 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           dominantColors,
           estimatedDiameterMm,
           textureEntropy,
-          perceivedSharpness: Math.round(avgEdgeGrad * 100)
+          perceivedSharpness: Math.round(avgEdgeGrad * 100),
+          fitzpatrickType,
+          itaAngleDeg,
+          cieLabDeltaA: meanDeltaA,
+          cieLabDeltaL: meanDeltaL
         });
       } catch (err) {
         console.warn('Canvas visual feature extraction failed, using fallback:', err);
@@ -431,6 +498,10 @@ export function getFallbackMetrics(imageStr?: string): VisualMorphologyMetrics {
     ],
     estimatedDiameterMm: Math.round((3.5 + (hashNum % 60) / 10) * 10) / 10,
     textureEntropy: 40 + (hashNum % 40),
-    perceivedSharpness: 45 + (hashNum % 45)
+    perceivedSharpness: 45 + (hashNum % 45),
+    fitzpatrickType: 'Type IV',
+    itaAngleDeg: 18.5,
+    cieLabDeltaA: Math.round((erythemaIndex * 0.18) * 10) / 10,
+    cieLabDeltaL: Math.round((pigmentationIndex * 0.22) * 10) / 10
   };
 }
