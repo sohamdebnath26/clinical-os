@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { db } from './server/db.js';
-import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits } from './server/ai.js';
+import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI } from './server/ai.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -702,6 +702,16 @@ app.post('/api/ai/summarize-consultation', authMiddleware, async (req, res) => {
   } catch (err: unknown) {
     console.error('AI summary error:', err);
     res.status(500).json({ error: 'Failed to generate summary' });
+  }
+});
+
+app.post('/api/ai/parse-clinical-note', authMiddleware, async (req, res) => {
+  try {
+    const parsed = await parseClinicalNoteWithAI(req.body || {});
+    res.json({ parsed });
+  } catch (err: unknown) {
+    console.error('AI parse clinical note error:', err);
+    res.status(500).json({ error: 'Failed to parse clinical note' });
   }
 });
 

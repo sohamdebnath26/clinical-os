@@ -2159,5 +2159,153 @@ Compare these encounters and return strictly valid raw JSON (no markdown formatt
   return fallback;
 }
 
+import { parseClinicalNoteToStructuredSummary, ParsedClinicalNoteSummary } from '../src/utils/clinicalNoteAutoFill.js';
+
+export async function parseClinicalNoteWithAI(params: {
+  rawNote: string;
+  existingExamination?: string;
+  existingInvestigations?: string;
+  existingPlan?: string;
+  patientPrimaryDiagnosis?: string;
+  existingSymptoms?: string[];
+}): Promise<ParsedClinicalNoteSummary> {
+  const baseParsed = parseClinicalNoteToStructuredSummary(params.rawNote || '', {
+    existingExamination: params.existingExamination,
+    existingInvestigations: params.existingInvestigations,
+    existingPlan: params.existingPlan,
+    patientPrimaryDiagnosis: params.patientPrimaryDiagnosis,
+    existingSymptoms: params.existingSymptoms
+  });
+
+  const combinedText = [
+    params.rawNote?.trim() || '',
+    params.existingExamination?.trim() || '',
+    params.existingInvestigations?.trim() || '',
+    params.existingPlan?.trim() || ''
+  ]
+    .filter(Boolean)
+    .join('. ');
+
+  if (!combinedText || combinedText.length < 5) {
+    return baseParsed;
+  }
+
+  const prompt = `You are a dermatology & general clinical EMR AI assistant.
+A doctor has dictated or typed the following clinical note during a consultation:
+"""
+${combinedText}
+"""
+Patient baseline context: ${params.patientPrimaryDiagnosis || 'General dermatology consultation'}
+
+Extract and structure the clinical details to automatically populate the Consultation AI Visit Summary fields.
+If any field is not explicitly stated in the brief note, infer the most clinically appropriate, conservative dermatological values consistent with the findings in the note so the doctor has a complete draft they can edit.
+
+Return ONLY a valid raw JSON object (no markdown fences) with these keys:
+{
+  "examination": "Formatted examination findings sentence(s)",
+  "investigationsAdvised": "Formatted investigations advised sentence(s)",
+  "plan": "Formatted clinical treatment plan & discussion sentence(s)",
+  "symptoms": ["Chief complaint 1", "Chief complaint 2"],
+  "primaryDiagnosis": "Primary diagnosis",
+  "secondaryDiagnosis": "Differential / secondary diagnosis",
+  "tests": ["Test 1", "Test 2"],
+  "lesionType": "Morphology lesion type",
+  "colour": "Colour / pigmentation",
+  "distribution": "Anatomical distribution / site",
+  "sizeExtent": "Size & extent",
+  "borders": "Borders & surface",
+  "severity": "Severity / Wood's lamp findings",
+  "aiObservation": "Visual / dermoscopic clinical observation summary",
+  "aiResultNarrative": "Concise AI clinical summary narrative",
+  "inlineMedSummary": "Medications with dose, frequency, and duration separated by semicolons",
+  "topicalsAdvice": "Topicals, cleanser, moisturizer, and sunscreen instructions",
+  "followUpInstructions": "Next follow-up schedule & instructions",
+  "redFlagAdvice": "Red-flag / patient safety advice"
+}`;
+
+  const openRouterKey = (process.env.OPENROUTER_API_KEY || '').trim();
+  const ai = getAIClient();
+
+  let rawJsonText: string | null = null;
+
+  if (openRouterKey && openRouterKey.length >= 8) {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openRouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://clinical-os.onrender.com',
+          'X-Title': 'Clinical OS Voice-to-Summary AutoFill'
+        },
+        body: JSON.stringify({
+          model: process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.5-flash',
+          temperature: 0.1,
+          response_format: { type: 'json_object' },
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      if (response.ok) {
+        const data = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+        rawJsonText = data.choices?.[0]?.message?.content?.trim() || null;
+      }
+    } catch (err) {
+      console.warn('OpenRouter parseClinicalNoteWithAI fallback:', err);
+    }
+  }
+
+  if (!rawJsonText && ai) {
+    try {
+      rawJsonText = await generateWithGemini(ai, prompt);
+    } catch (err) {
+      console.warn('Gemini parseClinicalNoteWithAI fallback:', err);
+    }
+  }
+
+  if (rawJsonText) {
+    try {
+      const cleaned = rawJsonText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+      const parsed = JSON.parse(cleaned);
+      return {
+        ...baseParsed,
+        examination: parsed.examination || baseParsed.examination,
+        investigationsAdvised: parsed.investigationsAdvised || baseParsed.investigationsAdvised,
+        plan: parsed.plan || baseParsed.plan,
+        symptoms: Array.isArray(parsed.symptoms) && parsed.symptoms.length > 0 ? parsed.symptoms : baseParsed.symptoms,
+        primaryDiagnosis: parsed.primaryDiagnosis || baseParsed.primaryDiagnosis,
+        secondaryDiagnosis: parsed.secondaryDiagnosis || baseParsed.secondaryDiagnosis,
+        tests: Array.isArray(parsed.tests) && parsed.tests.length > 0 ? parsed.tests : baseParsed.tests,
+        dermMorphology: {
+          lesionType: parsed.lesionType || baseParsed.dermMorphology.lesionType,
+          colour: parsed.colour || baseParsed.dermMorphology.colour,
+          distribution: parsed.distribution || baseParsed.dermMorphology.distribution,
+          sizeExtent: parsed.sizeExtent || baseParsed.dermMorphology.sizeExtent,
+          borders: parsed.borders || baseParsed.dermMorphology.borders,
+          severity: parsed.severity || baseParsed.dermMorphology.severity,
+          aiObservation: parsed.aiObservation || baseParsed.dermMorphology.aiObservation
+        },
+        aiImageSummaryResult: {
+          ...baseParsed.aiImageSummaryResult,
+          title: parsed.primaryDiagnosis || baseParsed.aiImageSummaryResult.title,
+          leftSpecimenSummary: parsed.examination || baseParsed.aiImageSummaryResult.leftSpecimenSummary,
+          rightSpecimenSummary: parsed.plan || baseParsed.aiImageSummaryResult.rightSpecimenSummary,
+          narrative: parsed.aiResultNarrative || baseParsed.aiImageSummaryResult.narrative
+        },
+        inlineMedSummary: parsed.inlineMedSummary || baseParsed.inlineMedSummary,
+        topicalsAdvice: parsed.topicalsAdvice || baseParsed.topicalsAdvice,
+        followUp: {
+          ...baseParsed.followUp,
+          instructions: parsed.followUpInstructions || baseParsed.followUp.instructions,
+          notes: parsed.redFlagAdvice || baseParsed.followUp.notes
+        }
+      };
+    } catch (err) {
+      console.warn('Failed to parse LLM JSON in parseClinicalNoteWithAI, using deterministic result:', err);
+    }
+  }
+
+  return baseParsed;
+}
+
 
 

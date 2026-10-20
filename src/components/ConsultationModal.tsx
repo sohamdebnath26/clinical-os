@@ -6,6 +6,7 @@ import { ClinicalImageUploader } from './ClinicalImageUploader';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { analyzeImageVisualFeatures } from '../utils/visualImageAnalyzer';
+import { parseClinicalNoteToStructuredSummary, ParsedClinicalNoteSummary } from '../utils/clinicalNoteAutoFill';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import { VoiceDictationButton } from './VoiceDictationButton';
 import confetti from 'canvas-confetti';
@@ -253,7 +254,181 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [selectedSummarySpecimen, setSelectedSummarySpecimen] = useState<'all' | 'left' | 'right' | string>('all');
   const [inlineMedSummary, setInlineMedSummary] = useState('');
   const [topicalsAdvice, setTopicalsAdvice] = useState('');
+  const [customSymptomInput, setCustomSymptomInput] = useState('');
   const summaryImageInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Single Voice-to-Text Clinical Note state & auto-fill tracking
+  const [singleVoiceNote, setSingleVoiceNote] = useState<string>(
+    [
+      consultation.clinicalNotes?.examination,
+      consultation.clinicalNotes?.investigationsAdvised,
+      consultation.clinicalNotes?.plan
+    ]
+      .filter(Boolean)
+      .join(' ')
+  );
+  const [isAutoFillingSummary, setIsAutoFillingSummary] = useState(false);
+  const [autoFillSummaryReady, setAutoFillSummaryReady] = useState(false);
+  const doctorEditedFieldsRef = React.useRef<Set<string>>(new Set());
+
+  const markDoctorEdited = (fieldKey: string) => {
+    doctorEditedFieldsRef.current.add(fieldKey);
+  };
+
+  // Apply parsed clinical note into AI Summary (Visit Summary) and Clinical Notes fields
+  // while respecting any fields that the doctor manually edited later
+  const applyParsedClinicalNoteToSummary = React.useCallback(
+    (
+      parsed: ParsedClinicalNoteSummary,
+      options?: { source?: 'single' | 'sections'; forceOverwrite?: boolean }
+    ) => {
+      const edited = doctorEditedFieldsRef.current;
+      const force = Boolean(options?.forceOverwrite);
+
+      if (options?.source === 'single') {
+        setClinicalNotes(prev => ({
+          examination: force || !edited.has('notes.examination') ? parsed.examination : prev.examination,
+          investigationsAdvised:
+            force || !edited.has('notes.investigationsAdvised')
+              ? parsed.investigationsAdvised
+              : prev.investigationsAdvised,
+          plan: force || !edited.has('notes.plan') ? parsed.plan : prev.plan
+        }));
+      }
+
+      if (force || !edited.has('summary.symptoms')) {
+        setSymptoms(parsed.symptoms);
+      }
+      if (force || !edited.has('summary.primaryDiagnosis')) {
+        setDiagnoses(prev => [parsed.primaryDiagnosis, ...prev.slice(1).filter(d => d !== parsed.primaryDiagnosis)]);
+      }
+      if (force || !edited.has('summary.secondaryDiagnosis')) {
+        setSecondaryDiagnosis(parsed.secondaryDiagnosis);
+      }
+      if (force || !edited.has('summary.tests')) {
+        setTests(parsed.tests);
+      }
+      if ((force || !edited.has('summary.procedures')) && parsed.procedures.length > 0) {
+        setProcedures(parsed.procedures);
+      }
+
+      setDermMorphology(prev => ({
+        lesionType: force || !edited.has('derm.lesionType') ? parsed.dermMorphology.lesionType : prev.lesionType,
+        colour: force || !edited.has('derm.colour') ? parsed.dermMorphology.colour : prev.colour,
+        distribution: force || !edited.has('derm.distribution') ? parsed.dermMorphology.distribution : prev.distribution,
+        sizeExtent: force || !edited.has('derm.sizeExtent') ? parsed.dermMorphology.sizeExtent : prev.sizeExtent,
+        borders: force || !edited.has('derm.borders') ? parsed.dermMorphology.borders : prev.borders,
+        severity: force || !edited.has('derm.severity') ? parsed.dermMorphology.severity : prev.severity,
+        aiObservation: force || !edited.has('derm.aiObservation') ? parsed.dermMorphology.aiObservation : prev.aiObservation
+      }));
+
+      setAiImageSummaryResult(prev => ({
+        ...prev,
+        title: force || !edited.has('summary.primaryDiagnosis') ? parsed.aiImageSummaryResult.title : prev.title,
+        confidence: parsed.aiImageSummaryResult.confidence,
+        leftSpecimenTitle: parsed.aiImageSummaryResult.leftSpecimenTitle,
+        leftSpecimenSummary: parsed.aiImageSummaryResult.leftSpecimenSummary,
+        rightSpecimenTitle: parsed.aiImageSummaryResult.rightSpecimenTitle,
+        rightSpecimenSummary: parsed.aiImageSummaryResult.rightSpecimenSummary,
+        narrative: force || !edited.has('derm.narrative') ? parsed.aiImageSummaryResult.narrative : prev.narrative,
+        differentials: parsed.aiImageSummaryResult.differentials,
+        workup: parsed.aiImageSummaryResult.workup
+      }));
+
+      if (force || !edited.has('summary.medications')) {
+        setPrescriptions(
+          parsed.prescriptions.map(p => ({
+            ...p,
+            patientId: patient.id,
+            consultationId: consultation.id
+          }))
+        );
+        setInlineMedSummary(parsed.inlineMedSummary);
+      }
+
+      if (force || !edited.has('summary.topicalsAdvice')) {
+        setTopicalsAdvice(parsed.topicalsAdvice);
+      }
+
+      setFollowUp(prev => ({
+        date: force || !edited.has('summary.followUpDate') ? parsed.followUp.date : prev.date,
+        instructions:
+          force || !edited.has('summary.followUpInstructions') ? parsed.followUp.instructions : prev.instructions,
+        notes: force || !edited.has('summary.followUpNotes') ? parsed.followUp.notes : prev.notes
+      }));
+
+      if (force || !edited.has('summary.aiSummary')) {
+        setAiSummary(parsed.aiSummaryText);
+      }
+
+      setAutoFillSummaryReady(true);
+    },
+    [patient.id, consultation.id]
+  );
+
+  // Trigger instant client-side + background LLM AI Summary auto-fill whenever singleVoiceNote changes
+  const handleSingleVoiceNoteChange = (newText: string, forceOverwrite = false) => {
+    setSingleVoiceNote(newText);
+    if (!newText.trim()) {
+      setAutoFillSummaryReady(false);
+      return;
+    }
+    const instantParsed = parseClinicalNoteToStructuredSummary(newText, {
+      patientPrimaryDiagnosis: patient.primaryDiagnosis,
+      existingSymptoms: symptoms
+    });
+    applyParsedClinicalNoteToSummary(instantParsed, {
+      source: 'single',
+      forceOverwrite
+    });
+  };
+
+  // Also refine with backend AI (OpenRouter / Gemini) after brief debounce when clinical notes are filled
+  useEffect(() => {
+    const combined = [
+      singleVoiceNote.trim(),
+      clinicalNotes.examination.trim(),
+      clinicalNotes.investigationsAdvised.trim(),
+      clinicalNotes.plan.trim()
+    ]
+      .filter(Boolean)
+      .join('. ');
+
+    if (combined.length < 8) return;
+
+    const timer = setTimeout(async () => {
+      setIsAutoFillingSummary(true);
+      try {
+        const res = await api.ai.parseClinicalNote({
+          rawNote: singleVoiceNote,
+          existingExamination: clinicalNotes.examination,
+          existingInvestigations: clinicalNotes.investigationsAdvised,
+          existingPlan: clinicalNotes.plan,
+          patientPrimaryDiagnosis: patient.primaryDiagnosis,
+          existingSymptoms: symptoms
+        });
+        if (res?.parsed) {
+          applyParsedClinicalNoteToSummary(res.parsed, {
+            source: singleVoiceNote.trim() ? 'single' : 'sections',
+            forceOverwrite: false
+          });
+        }
+      } catch {
+        // Local deterministic parser already populated all fields
+      } finally {
+        setIsAutoFillingSummary(false);
+      }
+    }, 650);
+
+    return () => clearTimeout(timer);
+  }, [
+    singleVoiceNote,
+    clinicalNotes.examination,
+    clinicalNotes.investigationsAdvised,
+    clinicalNotes.plan,
+    patient.primaryDiagnosis,
+    applyParsedClinicalNoteToSummary
+  ]);
 
   // Filter & Search states
   const [diagnosisSearch, setDiagnosisSearch] = useState('');
@@ -1309,56 +1484,141 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           {/* TAB 4: CLINICAL NOTES */}
           {activeTab === 'notes' && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              {/* Voice Dictation Clinical Assistant Header */}
-              <div className="p-3.5 bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50 border border-teal-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-teal-800 text-white flex items-center justify-center shadow-xs shrink-0">
-                    <Mic className="w-4 h-4 text-teal-300" />
+              {/* Single Voice-to-Text Clinical Dictation Card (Auto-Fills AI Summary) */}
+              <div className="p-4 bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50 border border-teal-200 rounded-2xl space-y-3 shadow-2xs">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-teal-800 text-white flex items-center justify-center shadow-xs shrink-0">
+                      <Mic className="w-4 h-4 text-teal-300" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                        <span>Clinical Voice Dictation</span>
+                        <span className="text-[10px] font-bold bg-teal-100 text-teal-900 px-2 py-0.5 rounded-full border border-teal-200">
+                          Single Speech-to-Text
+                        </span>
+                        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                          <Sparkles className="w-2.5 h-2.5 text-emerald-700" />
+                          <span>Auto-Fills AI Summary</span>
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-600 mt-0.5">
+                        Dictate or type your clinical note in one go. AI automatically fills the sections below and all fields in the Visit Summary (editable anytime by the doctor).
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      <span>Clinical Voice Dictation</span>
-                      <span className="text-[10px] font-bold bg-teal-100 text-teal-900 px-2 py-0.5 rounded-full border border-teal-200">
-                        Speech-to-Text Enabled
-                      </span>
-                    </h4>
-                    <p className="text-[11px] text-slate-600 mt-0.5">
-                      Tap the microphone on any section below to dictate findings hands-free. Real-time medical speech is automatically converted and formatted.
-                    </p>
+
+                  {/* Single Voice-to-Text Button + Add Image in the top-right action bar */}
+                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                    <VoiceDictationButton
+                      value={singleVoiceNote}
+                      onChange={val => handleSingleVoiceNoteChange(val, false)}
+                      variant="prominent"
+                      label="Dictate Clinical Notes"
+                      title="Single Voice-to-Text: Speak consultation findings, diagnosis, investigations, and plan to auto-fill AI Summary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('images')}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 bg-white border border-teal-200 px-3 py-2 rounded-xl shadow-2xs transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add image</span>
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('images')}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 bg-white border border-teal-200 px-3 py-1.5 rounded-xl shadow-2xs transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add image</span>
-                  </button>
+                {/* Unified Single Voice-to-Text / Clinical Note Textarea */}
+                <div className="bg-white/95 border border-teal-200/90 rounded-xl p-3 space-y-2 shadow-2xs">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <label className="text-[10.5px] font-bold uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3 text-teal-700" />
+                      <span>Unified Voice-to-Text Clinical Note (Auto-Fills AI Summary & Sections Below)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {singleVoiceNote.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            doctorEditedFieldsRef.current.clear();
+                            handleSingleVoiceNoteChange(singleVoiceNote, true);
+                          }}
+                          className="text-[10.5px] font-semibold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-0.5 rounded-lg transition-colors"
+                          title="Re-sync all AI Summary fields from this note"
+                        >
+                          Sync all to AI Summary
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleTabChange('aisummary')}
+                        className="inline-flex items-center gap-1 text-[10.5px] font-bold text-white bg-teal-800 hover:bg-teal-900 px-2.5 py-1 rounded-lg transition-colors shadow-2xs"
+                      >
+                        <Sparkles className="w-2.5 h-2.5 text-teal-200" />
+                        <span>View & Edit AI Summary →</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <textarea
+                    rows={3}
+                    value={singleVoiceNote}
+                    onChange={e => handleSingleVoiceNoteChange(e.target.value, false)}
+                    placeholder="Tap 'Dictate Clinical Notes' above or type here in one box (e.g. 'Erythematous papules and open comedones over cheeks and forehead. Skin scraping for KOH mount advised if scaling persists. Start topical adapalene gel at night, non-comedogenic cleanser and daily mineral sunscreen. Review in 2 weeks.') — AI automatically populates all fields in the Visit Summary..."
+                    className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 font-normal transition-all"
+                  />
+
+                  {/* Auto-fill live status bar */}
+                  {(autoFillSummaryReady || singleVoiceNote.trim() || clinicalNotes.examination.trim()) && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px]">
+                      <div className="flex items-center gap-1.5 text-emerald-800 font-semibold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>
+                          {isAutoFillingSummary
+                            ? 'AI is updating Visit Summary fields...'
+                            : 'AI Summary fields automatically filled (Diagnosis, Morphology, Workup, Rx & Follow-up). Doctor can freely edit any field below or in Visit Summary.'}
+                        </span>
+                      </div>
+                      {diagnoses[0] && (
+                        <span className="px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-900 text-[10px] font-bold">
+                          Auto-Detected Dx: {diagnoses[0]}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Examination Notes */}
+              {/* Examination Notes (Auto-filled from single voice note, or directly editable by doctor) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
                     <span>1. Examination Findings:</span>
                   </label>
-                  <VoiceDictationButton
-                    value={clinicalNotes.examination}
-                    onChange={val => setClinicalNotes({ ...clinicalNotes, examination: val })}
-                    variant="button"
-                    label="Dictate Examination"
-                    title="Speak examination findings to append to this field"
-                  />
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Auto-filled from Voice-to-Text · Editable by Doctor
+                  </span>
                 </div>
                 <div className="relative">
                   <textarea
                     rows={3}
                     value={clinicalNotes.examination}
-                    onChange={e => setClinicalNotes({ ...clinicalNotes, examination: e.target.value })}
+                    onChange={e => {
+                      const val = e.target.value;
+                      markDoctorEdited('notes.examination');
+                      const nextNotes = { ...clinicalNotes, examination: val };
+                      setClinicalNotes(nextNotes);
+                      if (val.trim()) {
+                        const parsed = parseClinicalNoteToStructuredSummary(singleVoiceNote, {
+                          existingExamination: val,
+                          existingInvestigations: nextNotes.investigationsAdvised,
+                          existingPlan: nextNotes.plan,
+                          patientPrimaryDiagnosis: patient.primaryDiagnosis,
+                          existingSymptoms: symptoms
+                        });
+                        applyParsedClinicalNoteToSummary(parsed, { source: 'sections' });
+                      }
+                    }}
                     placeholder="e.g. Erythematous papules and open comedones over cheeks and forehead. No pustules or scarring noted."
                     className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
                   />
@@ -1371,19 +1631,30 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
                     <span>2. Investigations Advised:</span>
                   </label>
-                  <VoiceDictationButton
-                    value={clinicalNotes.investigationsAdvised}
-                    onChange={val => setClinicalNotes({ ...clinicalNotes, investigationsAdvised: val })}
-                    variant="button"
-                    label="Dictate Investigations"
-                    title="Speak tests or investigations to append to this field"
-                  />
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Auto-filled from Voice-to-Text · Editable by Doctor
+                  </span>
                 </div>
                 <div className="relative">
                   <textarea
                     rows={2}
                     value={clinicalNotes.investigationsAdvised}
-                    onChange={e => setClinicalNotes({ ...clinicalNotes, investigationsAdvised: e.target.value })}
+                    onChange={e => {
+                      const val = e.target.value;
+                      markDoctorEdited('notes.investigationsAdvised');
+                      const nextNotes = { ...clinicalNotes, investigationsAdvised: val };
+                      setClinicalNotes(nextNotes);
+                      if (val.trim()) {
+                        const parsed = parseClinicalNoteToStructuredSummary(singleVoiceNote, {
+                          existingExamination: nextNotes.examination,
+                          existingInvestigations: val,
+                          existingPlan: nextNotes.plan,
+                          patientPrimaryDiagnosis: patient.primaryDiagnosis,
+                          existingSymptoms: symptoms
+                        });
+                        applyParsedClinicalNoteToSummary(parsed, { source: 'sections' });
+                      }
+                    }}
                     placeholder="e.g. Skin scraping for KOH mount advised if scaling persists."
                     className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
                   />
@@ -1396,19 +1667,30 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
                     <span>3. Clinical Plan & Discussion:</span>
                   </label>
-                  <VoiceDictationButton
-                    value={clinicalNotes.plan}
-                    onChange={val => setClinicalNotes({ ...clinicalNotes, plan: val })}
-                    variant="button"
-                    label="Dictate Plan"
-                    title="Speak clinical plan and patient advice to append to this field"
-                  />
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Auto-filled from Voice-to-Text · Editable by Doctor
+                  </span>
                 </div>
                 <div className="relative">
                   <textarea
                     rows={3}
                     value={clinicalNotes.plan}
-                    onChange={e => setClinicalNotes({ ...clinicalNotes, plan: e.target.value })}
+                    onChange={e => {
+                      const val = e.target.value;
+                      markDoctorEdited('notes.plan');
+                      const nextNotes = { ...clinicalNotes, plan: val };
+                      setClinicalNotes(nextNotes);
+                      if (val.trim()) {
+                        const parsed = parseClinicalNoteToStructuredSummary(singleVoiceNote, {
+                          existingExamination: nextNotes.examination,
+                          existingInvestigations: nextNotes.investigationsAdvised,
+                          existingPlan: val,
+                          patientPrimaryDiagnosis: patient.primaryDiagnosis,
+                          existingSymptoms: symptoms
+                        });
+                        applyParsedClinicalNoteToSummary(parsed, { source: 'sections' });
+                      }
+                    }}
                     placeholder="e.g. Start topical adapalene gel at night. Advised non-comedogenic foaming cleanser and daily mineral sunscreen."
                     className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
                   />
@@ -1416,7 +1698,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               </div>
 
               {/* Step Navigation */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+              <div className="flex items-center justify-between pt-3 border-t border-slate-200 flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => handleTabChange('procedure')}
@@ -1425,14 +1707,24 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Back to Procedures</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleTabChange('bodymap')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
-                >
-                  <span>Continue to Body Map</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('aisummary')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-teal-900 border border-teal-200 text-xs font-bold rounded-xl transition-colors"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-teal-700" />
+                    <span>Review Auto-Filled AI Summary</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('bodymap')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                  >
+                    <span>Continue to Body Map</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1828,6 +2120,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     onTranscript={spoken => {
                       const clean = spoken.trim();
                       if (clean && !symptoms.includes(clean)) {
+                        markDoctorEdited('summary.symptoms');
                         setSymptoms(prev => [...prev, clean.charAt(0).toUpperCase() + clean.slice(1)]);
                       }
                     }}
@@ -1842,11 +2135,37 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#19423d] text-white text-xs font-medium"
                     >
                       <span>{sym}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          markDoctorEdited('summary.symptoms');
+                          setSymptoms(symptoms.filter((_, i) => i !== idx));
+                        }}
+                        className="hover:text-teal-200 p-0.5"
+                        title="Remove symptom"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
                     </span>
                   ))}
                   {symptoms.length === 0 && (
                     <span className="text-xs text-[#7b928d] italic">No symptoms recorded</span>
                   )}
+                  <input
+                    type="text"
+                    value={customSymptomInput}
+                    onChange={e => setCustomSymptomInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && customSymptomInput.trim()) {
+                        e.preventDefault();
+                        markDoctorEdited('summary.symptoms');
+                        setSymptoms(prev => [...prev, customSymptomInput.trim()]);
+                        setCustomSymptomInput('');
+                      }
+                    }}
+                    placeholder="+ Add or edit symptom (press Enter)..."
+                    className="text-xs px-2.5 py-1 bg-[#f6f9f8] border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e] min-w-[210px]"
+                  />
                 </div>
               </div>
 
@@ -1870,6 +2189,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         type="text"
                         value={diagnoses[0] || ''}
                         onChange={e => {
+                          markDoctorEdited('summary.primaryDiagnosis');
                           const val = e.target.value;
                           if (!val.trim() && diagnoses.length <= 1) {
                             setDiagnoses([]);
@@ -1884,6 +2204,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         <VoiceDictationButton
                           value={diagnoses[0] || ''}
                           onChange={val => {
+                            markDoctorEdited('summary.primaryDiagnosis');
                             if (!val.trim() && diagnoses.length <= 1) {
                               setDiagnoses([]);
                             } else {
@@ -1905,14 +2226,20 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <input
                         type="text"
                         value={secondaryDiagnosis}
-                        onChange={e => setSecondaryDiagnosis(e.target.value)}
+                        onChange={e => {
+                          markDoctorEdited('summary.secondaryDiagnosis');
+                          setSecondaryDiagnosis(e.target.value);
+                        }}
                         placeholder="Optional secondary / rule-out diagnosis"
                         className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                       />
                       <div className="absolute right-1.5">
                         <VoiceDictationButton
                           value={secondaryDiagnosis}
-                          onChange={setSecondaryDiagnosis}
+                          onChange={val => {
+                            markDoctorEdited('summary.secondaryDiagnosis');
+                            setSecondaryDiagnosis(val);
+                          }}
                           variant="badge"
                           className="border-0 shadow-none bg-transparent"
                           title="Dictate differential / secondary diagnosis"
@@ -1941,7 +2268,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </label>
                       <VoiceDictationButton
                         value={clinicalNotes.examination}
-                        onChange={val => setClinicalNotes({ ...clinicalNotes, examination: val })}
+                        onChange={val => {
+                          markDoctorEdited('notes.examination');
+                          setClinicalNotes({ ...clinicalNotes, examination: val });
+                        }}
                         variant="badge"
                         title="Dictate examination findings"
                       />
@@ -1949,7 +2279,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <textarea
                       rows={3}
                       value={clinicalNotes.examination}
-                      onChange={e => setClinicalNotes({ ...clinicalNotes, examination: e.target.value })}
+                      onChange={e => {
+                        markDoctorEdited('notes.examination');
+                        setClinicalNotes({ ...clinicalNotes, examination: e.target.value });
+                      }}
                       placeholder="On examination — general appearance, vitals, local findings..."
                       className="w-full px-3 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e] resize-y"
                     />
@@ -1961,7 +2294,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </label>
                       <VoiceDictationButton
                         value={clinicalNotes.plan}
-                        onChange={val => setClinicalNotes({ ...clinicalNotes, plan: val })}
+                        onChange={val => {
+                          markDoctorEdited('notes.plan');
+                          setClinicalNotes({ ...clinicalNotes, plan: val });
+                        }}
                         variant="badge"
                         title="Dictate treatment plan"
                       />
@@ -1969,7 +2305,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <textarea
                       rows={3}
                       value={clinicalNotes.plan}
-                      onChange={e => setClinicalNotes({ ...clinicalNotes, plan: e.target.value })}
+                      onChange={e => {
+                        markDoctorEdited('notes.plan');
+                        setClinicalNotes({ ...clinicalNotes, plan: e.target.value });
+                      }}
                       placeholder="Management plan, procedures advised, lifestyle / skincare advice..."
                       className="w-full px-3 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e] resize-y"
                     />
@@ -1997,6 +2336,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         type="text"
                         value={tests.join(', ')}
                         onChange={e => {
+                          markDoctorEdited('summary.tests');
                           const val = e.target.value;
                           setTests(val ? val.split(',').map(s => s.trim()).filter(Boolean) : []);
                         }}
@@ -2007,6 +2347,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         <VoiceDictationButton
                           value={tests.join(', ')}
                           onChange={val => {
+                            markDoctorEdited('summary.tests');
                             setTests(val ? val.split(/[.,;]/).map(s => s.trim()).filter(Boolean) : []);
                           }}
                           variant="badge"
@@ -2029,6 +2370,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             : ''
                         }
                         onChange={e => {
+                          markDoctorEdited('summary.procedures');
                           const val = e.target.value;
                           if (!val.trim()) {
                             setProcedures([]);
@@ -2043,6 +2385,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         <VoiceDictationButton
                           value={procedures.map(p => p.name).join(', ')}
                           onChange={val => {
+                            markDoctorEdited('summary.procedures');
                             if (!val.trim()) {
                               setProcedures([]);
                             } else {
@@ -2352,7 +2695,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </label>
                       <VoiceDictationButton
                         value={dermMorphology.lesionType}
-                        onChange={val => setDermMorphology({ ...dermMorphology, lesionType: val })}
+                        onChange={val => {
+                          markDoctorEdited('derm.lesionType');
+                          setDermMorphology({ ...dermMorphology, lesionType: val });
+                        }}
                         variant="badge"
                         className="p-1 border-0 shadow-none bg-transparent"
                         title="Dictate lesion type"
@@ -2361,7 +2707,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <input
                       type="text"
                       value={dermMorphology.lesionType}
-                      onChange={e => setDermMorphology({ ...dermMorphology, lesionType: e.target.value })}
+                      onChange={e => {
+                        markDoctorEdited('derm.lesionType');
+                        setDermMorphology({ ...dermMorphology, lesionType: e.target.value });
+                      }}
                       placeholder="e.g. Macule, papule, plaque, patch"
                       className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                     />
@@ -2373,7 +2722,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </label>
                       <VoiceDictationButton
                         value={dermMorphology.colour}
-                        onChange={val => setDermMorphology({ ...dermMorphology, colour: val })}
+                        onChange={val => {
+                          markDoctorEdited('derm.colour');
+                          setDermMorphology({ ...dermMorphology, colour: val });
+                        }}
                         variant="badge"
                         className="p-1 border-0 shadow-none bg-transparent"
                         title="Dictate colour / pigmentation"
@@ -2382,7 +2734,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <input
                       type="text"
                       value={dermMorphology.colour}
-                      onChange={e => setDermMorphology({ ...dermMorphology, colour: e.target.value })}
+                      onChange={e => {
+                        markDoctorEdited('derm.colour');
+                        setDermMorphology({ ...dermMorphology, colour: e.target.value });
+                      }}
                       placeholder="e.g. Hyperpigmented, erythematous"
                       className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                     />
@@ -2394,7 +2749,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </label>
                       <VoiceDictationButton
                         value={dermMorphology.distribution}
-                        onChange={val => setDermMorphology({ ...dermMorphology, distribution: val })}
+                        onChange={val => {
+                          markDoctorEdited('derm.distribution');
+                          setDermMorphology({ ...dermMorphology, distribution: val });
+                        }}
                         variant="badge"
                         className="p-1 border-0 shadow-none bg-transparent"
                         title="Dictate distribution / site"
@@ -2403,7 +2761,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <input
                       type="text"
                       value={dermMorphology.distribution}
-                      onChange={e => setDermMorphology({ ...dermMorphology, distribution: e.target.value })}
+                      onChange={e => {
+                        markDoctorEdited('derm.distribution');
+                        setDermMorphology({ ...dermMorphology, distribution: e.target.value });
+                      }}
                       placeholder="e.g. Malar cheeks, bilateral, centrofacial"
                       className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                     />
@@ -2415,7 +2776,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </label>
                       <VoiceDictationButton
                         value={dermMorphology.sizeExtent}
-                        onChange={val => setDermMorphology({ ...dermMorphology, sizeExtent: val })}
+                        onChange={val => {
+                          markDoctorEdited('derm.sizeExtent');
+                          setDermMorphology({ ...dermMorphology, sizeExtent: val });
+                        }}
                         variant="badge"
                         className="p-1 border-0 shadow-none bg-transparent"
                         title="Dictate size & extent"
@@ -2424,7 +2788,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <input
                       type="text"
                       value={dermMorphology.sizeExtent}
-                      onChange={e => setDermMorphology({ ...dermMorphology, sizeExtent: e.target.value })}
+                      onChange={e => {
+                        markDoctorEdited('derm.sizeExtent');
+                        setDermMorphology({ ...dermMorphology, sizeExtent: e.target.value });
+                      }}
                       placeholder="e.g. 2–4 cm confluent patches"
                       className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                     />
@@ -2436,7 +2803,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </label>
                       <VoiceDictationButton
                         value={dermMorphology.borders}
-                        onChange={val => setDermMorphology({ ...dermMorphology, borders: val })}
+                        onChange={val => {
+                          markDoctorEdited('derm.borders');
+                          setDermMorphology({ ...dermMorphology, borders: val });
+                        }}
                         variant="badge"
                         className="p-1 border-0 shadow-none bg-transparent"
                         title="Dictate borders & surface"
@@ -2445,7 +2815,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <input
                       type="text"
                       value={dermMorphology.borders}
-                      onChange={e => setDermMorphology({ ...dermMorphology, borders: e.target.value })}
+                      onChange={e => {
+                        markDoctorEdited('derm.borders');
+                        setDermMorphology({ ...dermMorphology, borders: e.target.value });
+                      }}
                       placeholder="e.g. Irregular, well-demarcated, non-scaly"
                       className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                     />
@@ -2457,7 +2830,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </label>
                       <VoiceDictationButton
                         value={dermMorphology.severity}
-                        onChange={val => setDermMorphology({ ...dermMorphology, severity: val })}
+                        onChange={val => {
+                          markDoctorEdited('derm.severity');
+                          setDermMorphology({ ...dermMorphology, severity: val });
+                        }}
                         variant="badge"
                         className="p-1 border-0 shadow-none bg-transparent"
                         title="Dictate severity / Wood's lamp findings"
@@ -2466,7 +2842,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <input
                       type="text"
                       value={dermMorphology.severity}
-                      onChange={e => setDermMorphology({ ...dermMorphology, severity: e.target.value })}
+                      onChange={e => {
+                        markDoctorEdited('derm.severity');
+                        setDermMorphology({ ...dermMorphology, severity: e.target.value });
+                      }}
                       placeholder="e.g. Moderate · mixed epidermal-dermal"
                       className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                     />
@@ -2483,7 +2862,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </label>
                       <VoiceDictationButton
                         value={dermMorphology.aiObservation}
-                        onChange={val => setDermMorphology({ ...dermMorphology, aiObservation: val })}
+                        onChange={val => {
+                          markDoctorEdited('derm.aiObservation');
+                          setDermMorphology({ ...dermMorphology, aiObservation: val });
+                        }}
                         variant="badge"
                         title="Dictate visual / dermoscopic observations"
                       />
@@ -2491,7 +2873,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <textarea
                       rows={3}
                       value={dermMorphology.aiObservation}
-                      onChange={e => setDermMorphology({ ...dermMorphology, aiObservation: e.target.value })}
+                      onChange={e => {
+                        markDoctorEdited('derm.aiObservation');
+                        setDermMorphology({ ...dermMorphology, aiObservation: e.target.value });
+                      }}
                       placeholder="Morphological description from clinical / dermoscopic images — pigment network, vascular pattern, comparison with prior visit photos..."
                       className="w-full px-3 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e] resize-y"
                     />
@@ -2507,12 +2892,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={() => {
+                            markDoctorEdited('derm.aiObservation');
                             setDermMorphology(prev => ({
                               ...prev,
                               aiObservation: aiImageSummaryResult.narrative
-                            }))
-                          }
+                            }));
+                          }}
                           className="px-2 py-0.5 rounded bg-white hover:bg-[#e3f2ef] text-[#115e56] border border-[#bdd6d0] text-[10px] font-semibold transition-colors"
                           title="Copy AI Image Summary Result into Visual / Dermoscopic Observations"
                         >
@@ -2520,12 +2906,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         </button>
                         <VoiceDictationButton
                           value={aiImageSummaryResult.narrative}
-                          onChange={val =>
+                          onChange={val => {
+                            markDoctorEdited('derm.narrative');
                             setAiImageSummaryResult(prev => ({
                               ...prev,
                               narrative: val
-                            }))
-                          }
+                            }));
+                          }}
                           variant="badge"
                           title="Dictate or append to AI Image Summary Result"
                         />
@@ -2534,12 +2921,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <textarea
                       rows={3}
                       value={aiImageSummaryResult.narrative}
-                      onChange={e =>
+                      onChange={e => {
+                        markDoctorEdited('derm.narrative');
                         setAiImageSummaryResult(prev => ({
                           ...prev,
                           narrative: e.target.value
-                        }))
-                      }
+                        }));
+                      }}
                       placeholder="AI-generated dermatology image summary result..."
                       className="w-full px-3 py-2 text-xs bg-white border border-[#c6dfd9] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e] resize-y"
                     />
@@ -2577,7 +2965,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             .map(p => `${p.medicineName} ${p.dosage} · ${p.frequency} · ${p.duration}`)
                             .join('; ')
                         }
-                        onChange={e => setInlineMedSummary(e.target.value)}
+                        onChange={e => {
+                          markDoctorEdited('summary.medications');
+                          setInlineMedSummary(e.target.value);
+                        }}
                         placeholder="No medicines added — use Follow up & Rx tab or type here"
                         className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                       />
@@ -2589,7 +2980,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                               .map(p => `${p.medicineName} ${p.dosage} · ${p.frequency} · ${p.duration}`)
                               .join('; ')
                           }
-                          onChange={setInlineMedSummary}
+                          onChange={val => {
+                            markDoctorEdited('summary.medications');
+                            setInlineMedSummary(val);
+                          }}
                           variant="badge"
                           className="border-0 shadow-none bg-transparent"
                           title="Dictate medications"
@@ -2605,14 +2999,20 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <input
                         type="text"
                         value={topicalsAdvice}
-                        onChange={e => setTopicalsAdvice(e.target.value)}
+                        onChange={e => {
+                          markDoctorEdited('summary.topicalsAdvice');
+                          setTopicalsAdvice(e.target.value);
+                        }}
                         placeholder="Sunscreen SPF 50+, gentle cleanser, application order..."
                         className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                       />
                       <div className="absolute right-1.5">
                         <VoiceDictationButton
                           value={topicalsAdvice}
-                          onChange={setTopicalsAdvice}
+                          onChange={val => {
+                            markDoctorEdited('summary.topicalsAdvice');
+                            setTopicalsAdvice(val);
+                          }}
                           variant="badge"
                           className="border-0 shadow-none bg-transparent"
                           title="Dictate topicals & skincare instructions"
@@ -2631,14 +3031,20 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <input
                         type="text"
                         value={followUp.instructions || ''}
-                        onChange={e => setFollowUp({ ...followUp, instructions: e.target.value })}
+                        onChange={e => {
+                          markDoctorEdited('summary.followUpInstructions');
+                          setFollowUp({ ...followUp, instructions: e.target.value });
+                        }}
                         placeholder="e.g. Review in 4 weeks with repeat clinical photos"
                         className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                       />
                       <div className="absolute right-1.5">
                         <VoiceDictationButton
                           value={followUp.instructions || ''}
-                          onChange={val => setFollowUp({ ...followUp, instructions: val })}
+                          onChange={val => {
+                            markDoctorEdited('summary.followUpInstructions');
+                            setFollowUp({ ...followUp, instructions: val });
+                          }}
                           variant="badge"
                           className="border-0 shadow-none bg-transparent"
                           title="Dictate next follow-up plan"
@@ -2654,14 +3060,20 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <input
                         type="text"
                         value={followUp.notes || ''}
-                        onChange={e => setFollowUp({ ...followUp, notes: e.target.value })}
+                        onChange={e => {
+                          markDoctorEdited('summary.followUpNotes');
+                          setFollowUp({ ...followUp, notes: e.target.value });
+                        }}
                         placeholder="Discontinue if irritation; avoid mid-day sun..."
                         className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                       />
                       <div className="absolute right-1.5">
                         <VoiceDictationButton
                           value={followUp.notes || ''}
-                          onChange={val => setFollowUp({ ...followUp, notes: val })}
+                          onChange={val => {
+                            markDoctorEdited('summary.followUpNotes');
+                            setFollowUp({ ...followUp, notes: val });
+                          }}
                           variant="badge"
                           className="border-0 shadow-none bg-transparent"
                           title="Dictate red-flag / patient advice"

@@ -273,6 +273,21 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    parseClinicalNote: (data: {
+      rawNote: string;
+      existingExamination?: string;
+      existingInvestigations?: string;
+      existingPlan?: string;
+      patientPrimaryDiagnosis?: string;
+      existingSymptoms?: string[];
+    }) =>
+      fetchWithAuth<{ parsed: import('../utils/clinicalNoteAutoFill').ParsedClinicalNoteSummary }>(
+        '/api/ai/parse-clinical-note',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }
+      ),
     chat: (data: {
       question: string;
       patientId?: string;
