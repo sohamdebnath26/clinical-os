@@ -361,7 +361,7 @@ ${documentedSummary}`,
 // ==========================================
 
 export const PRIMARY_VISION_MODEL = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
-const VISION_MODEL_CHAIN = [PRIMARY_VISION_MODEL, 'gemini-flash-latest'];
+const VISION_MODEL_CHAIN = [PRIMARY_VISION_MODEL, 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
 
 // SHA-256 Image + Clinical Context Cache (eliminates duplicate Gemini API calls & cost)
 const IMAGE_CACHE_MAX_ENTRIES = 200;
@@ -514,35 +514,31 @@ export function generateAdaptiveClinicalImageAnalysis(
   const pastDiagnoses = history.flatMap(c => c.diagnoses).map(d => d.toLowerCase());
 
   // The visual morphology extracted from actual image pixels is the primary clinical ground truth.
-  // We only refine using doctor notes if the doctor explicitly indicated a diagnostic inquiry/suspicion,
-  // preventing incidental words like 'dermatitis' from overriding genuine visual features.
+  // Refine using doctor clinical observations if specific diagnostic morphology keywords are provided.
   let category = metrics.morphologyCategory || 'eczematous_dermatitis';
-  const isDirectQuery = notes.startsWith('suspect') || notes.startsWith('query') || notes.includes('rule out') || notes.includes('dx:') || notes.includes('differential:');
 
-  if (isDirectQuery || category === 'eczematous_dermatitis') {
-    if (notes.includes('pigment') || notes.includes('mole') || notes.includes('nevus') || notes.includes('melanoma') || notes.includes('dark spot')) {
-      category = 'pigmented_melanocytic';
-    } else if (notes.includes('vitiligo') || notes.includes('white patch') || notes.includes('hypopigment') || notes.includes('depigment') || notes.includes('versicolor')) {
-      category = 'hypopigmented_macular';
-    } else if (notes.includes('ring') || notes.includes('ringworm') || notes.includes('tinea') || notes.includes('annular')) {
-      category = 'annular_scaling';
-    } else if (notes.includes('psoriasis') || notes.includes('silvery scale') || notes.includes('psoriatic')) {
-      category = 'inflammatory_plaque';
-    } else if (notes.includes('acne') || notes.includes('pustule') || notes.includes('comedo') || notes.includes('folliculitis')) {
-      category = 'papulopustular_follicular';
-    } else if (notes.includes('shingles') || notes.includes('blister') || notes.includes('vesicle') || notes.includes('zoster') || notes.includes('herpes')) {
-      category = 'vesicular_bullous';
-    } else if (notes.includes('ulcer') || notes.includes('wound') || notes.includes('slough') || notes.includes('venous stasis')) {
-      category = 'ulcerative_eroded';
-    } else if (notes.includes('hive') || notes.includes('urticaria') || notes.includes('wheal') || notes.includes('angioedema')) {
-      category = 'urticarial_wheal';
-    } else if (notes.includes('wart') || notes.includes('verruca') || notes.includes('verrucous')) {
-      category = 'keratotic_verrucous';
-    } else if (notes.includes('purpura') || notes.includes('vasculitis') || notes.includes('petechia')) {
-      category = 'vascular_purpuric';
-    } else if (notes.includes('atopic dermatitis') || notes.includes('eczema flare') || notes.includes('contact dermatitis') || notes.includes('flexural dermatitis')) {
-      category = 'eczematous_dermatitis';
-    }
+  if (notes.includes('pigment') || notes.includes('mole') || notes.includes('nevus') || notes.includes('melanoma') || notes.includes('dark spot') || notes.includes('lentigo')) {
+    category = 'pigmented_melanocytic';
+  } else if (notes.includes('vitiligo') || notes.includes('white patch') || notes.includes('hypopigment') || notes.includes('depigment') || notes.includes('versicolor') || notes.includes('amelanotic')) {
+    category = 'hypopigmented_macular';
+  } else if (notes.includes('ring') || notes.includes('ringworm') || notes.includes('tinea') || notes.includes('annular') || notes.includes('fungal') || notes.includes('dermatophyt')) {
+    category = 'annular_scaling';
+  } else if (notes.includes('psoriasis') || notes.includes('silvery scale') || notes.includes('psoriatic') || notes.includes('plaque') || notes.includes('lichen planus')) {
+    category = 'inflammatory_plaque';
+  } else if (notes.includes('acne') || notes.includes('pustule') || notes.includes('comedo') || notes.includes('folliculitis') || notes.includes('rosacea')) {
+    category = 'papulopustular_follicular';
+  } else if (notes.includes('shingles') || notes.includes('blister') || notes.includes('vesicle') || notes.includes('zoster') || notes.includes('herpes') || notes.includes('bullous')) {
+    category = 'vesicular_bullous';
+  } else if (notes.includes('ulcer') || notes.includes('wound') || notes.includes('slough') || notes.includes('venous stasis') || notes.includes('erosion')) {
+    category = 'ulcerative_eroded';
+  } else if (notes.includes('hive') || notes.includes('urticaria') || notes.includes('wheal') || notes.includes('angioedema') || notes.includes('allergic rash')) {
+    category = 'urticarial_wheal';
+  } else if (notes.includes('wart') || notes.includes('verruca') || notes.includes('verrucous') || notes.includes('keratosis') || notes.includes('hyperkeratotic')) {
+    category = 'keratotic_verrucous';
+  } else if (notes.includes('purpura') || notes.includes('vasculitis') || notes.includes('petechia') || notes.includes('angioma')) {
+    category = 'vascular_purpuric';
+  } else if (notes.includes('atopic dermatitis') || notes.includes('eczema') || notes.includes('contact dermatitis') || notes.includes('flexural dermatitis')) {
+    category = 'eczematous_dermatitis';
   }
 
   let primaryImpression = '';
@@ -1225,9 +1221,8 @@ export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<
       const prompt = `You are an expert clinical diagnostic assistance system and dermatological consultant working with a licensed physician.
 Examine this clinical image/photograph in detail, integrating the patient's full longitudinal health record, previous consultation timeline, and documented laboratory/diagnostic test reports.
 
-DETECTED VISUAL MORPHOLOGY PARAMETERS (CIE-LAB FITZPATRICK NORMALIZED):
+DETECTED VISUAL TELEMETRY PARAMETERS (CIE-LAB FITZPATRICK NORMALIZED):
 - Calibrated Fitzpatrick Phototype: ${resolvedMetrics.fitzpatrickType || 'Type IV'} (ITA° Angle: ${resolvedMetrics.itaAngleDeg ?? 18.5}°)
-- Morphology Archetype: ${resolvedMetrics.morphologyCategory}
 - Erythema / Redness Index: ${resolvedMetrics.erythemaIndex}/100 (CIE-LAB Δa* Shift: +${resolvedMetrics.cieLabDeltaA ?? 8.5})
 - Melanin / Pigmentation Index: ${resolvedMetrics.pigmentationIndex}/100 (CIE-LAB ΔL* Shift: -${resolvedMetrics.cieLabDeltaL ?? 5.0})
 - Asymmetry Score: ${resolvedMetrics.asymmetryScore}/100
