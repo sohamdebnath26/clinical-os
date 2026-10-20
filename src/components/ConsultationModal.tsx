@@ -36,6 +36,7 @@ import {
 interface ConsultationModalProps {
   consultation: Consultation;
   patient: Patient;
+  initialTab?: TabType;
   onClose: () => void;
   onSuccess: (updatedConsultation: Consultation) => void;
 }
@@ -75,12 +76,13 @@ export const TAB_NEXT_LABELS: Record<TabType, string> = {
 export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   consultation,
   patient,
+  initialTab = 'notes',
   onClose,
   onSuccess
 }) => {
   const { doctor } = useAuth();
   const [showWhatsApp, setShowWhatsApp] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>('aisummary');
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [fee, setFee] = useState<number>(
     consultation.fee && consultation.fee !== 500
       ? consultation.fee
