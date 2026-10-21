@@ -1303,7 +1303,109 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
             )}
           </div>
 
-          {/* 4. Notes (optional) */}
+          {/* 4. Symptoms / Reason (optional) */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-[11.5px] font-bold uppercase tracking-wider text-slate-500">
+                SYMPTOMS / REASON <span className="font-normal normal-case text-slate-400">(optional)</span>
+              </label>
+              {selectedSymptoms.length > 0 && (
+                <span className="text-[11px] font-semibold text-[#3f6f66] bg-teal-50 px-2 py-0.5 rounded-full">
+                  {selectedSymptoms.length} selected
+                </span>
+              )}
+            </div>
+
+            {selectedSymptoms.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 p-2 bg-teal-50/60 rounded-xl border border-teal-100">
+                {selectedSymptoms.map(sym => (
+                  <span
+                    key={sym}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#3f6f66] text-white"
+                  >
+                    {sym}
+                    <button
+                      type="button"
+                      onClick={() => toggleSymptom(sym)}
+                      className="hover:text-teal-200"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder={`Search all ${PREDEFINED_SYMPTOMS.length} symptoms...`}
+                value={symptomSearch}
+                onChange={e => setSymptomSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300/90 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
+              />
+              {symptomSearch && (
+                <button
+                  type="button"
+                  onClick={() => setSymptomSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto py-0.5">
+              {(symptomSearch.trim() ? filteredSymptoms : filteredSymptoms.slice(0, 16)).map(sym => {
+                const isSelected = selectedSymptoms.includes(sym);
+                return (
+                  <button
+                    key={sym}
+                    type="button"
+                    onClick={() => toggleSymptom(sym)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                      isSelected
+                        ? 'bg-[#3f6f66] text-white border-[#3f6f66] font-semibold shadow-2xs'
+                        : 'bg-slate-50/80 text-slate-700 border-slate-200/90 hover:border-slate-300 hover:bg-slate-100/70'
+                    }`}
+                  >
+                    {sym}
+                  </button>
+                );
+              })}
+              {filteredSymptoms.length === 0 && (
+                <span className="text-xs text-slate-400 py-1">
+                  No matching symptom found. Add it below as a custom symptom.
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Add a custom symptom (press Enter)"
+                value={customSymptom}
+                onChange={e => setCustomSymptom(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddCustomSymptom();
+                  }
+                }}
+                className="flex-1 px-3 py-2 bg-white border border-slate-300/90 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomSymptom}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl inline-flex items-center gap-1 transition-colors shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add
+              </button>
+            </div>
+          </div>
+
+          {/* 5. Notes (optional) */}
           <div>
             <label className="block text-[13px] font-semibold text-slate-800 mb-1.5">
               Notes (optional)
