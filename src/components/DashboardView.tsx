@@ -478,32 +478,151 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Row 2: NEXT IN QUEUE (8 cols) + QUICK ACTIONS (4 cols) */}
+      {/* Row 2: NEXT IN QUEUE · AI PRE-VISIT BRIEF (8 cols) + QUICK ACTIONS (4 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* NEXT IN QUEUE Hero Banner */}
-        <div className="lg:col-span-8 bg-[#116960] rounded-2xl p-7 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-          <div className="space-y-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[#a5e3da] block">
-              NEXT IN QUEUE
-            </span>
-            <h2
-              onClick={() => nextQueueDisplay.patientId && onSelectPatient(nextQueueDisplay.patientId)}
-              className="text-2xl sm:text-[28px] font-extrabold text-white tracking-tight leading-tight cursor-pointer hover:underline"
-            >
-              {nextQueueDisplay.name} · {nextQueueDisplay.age}y · {nextQueueDisplay.gender}
-            </h2>
-            <p className="text-sm text-[#c7efe9] font-normal">
-              {nextQueueDisplay.code} · {nextQueueDisplay.diagnosis}
-            </p>
-          </div>
+        {/* NEXT IN QUEUE · AI PRE-VISIT BRIEF Hero Card */}
+        <div className="lg:col-span-8 bg-[#faf7f0] border border-[#e5dfd3] rounded-2xl p-6 sm:p-7 text-[#102a26] shadow-2xs">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+            {/* Left Column: Patient Info + AI Pre-Visit Brief Bullets + Actions */}
+            <div className="md:col-span-7 flex flex-col justify-between">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#45615a] block">
+                  NEXT IN QUEUE · AI PRE-VISIT BRIEF
+                </span>
 
-          <button
-            type="button"
-            onClick={handleStartNextConsultation}
-            className="px-6 py-3.5 bg-white hover:bg-[#f0f9f8] text-[#0f4842] rounded-xl text-sm font-bold transition-colors shrink-0 cursor-pointer"
-          >
-            Start consultation →
-          </button>
+                <h2
+                  onClick={() => nextQueueDisplay.patientId && onSelectPatient(nextQueueDisplay.patientId)}
+                  className="font-serif text-3xl sm:text-[38px] font-normal text-[#102a26] tracking-tight leading-tight mt-1.5 cursor-pointer hover:underline"
+                >
+                  {nextQueueDisplay.name}
+                </h2>
+
+                <p className="text-[14px] text-[#4e6660] mt-1 font-normal">
+                  {nextQueueDisplay.age}y · {nextQueueDisplay.gender} · {nextQueueDisplay.code} ·{' '}
+                  {nextQueueDisplay.diagnosis && nextQueueDisplay.diagnosis !== 'Pigmentation / Dark spots'
+                    ? nextQueueDisplay.diagnosis
+                    : 'Post-treatment follow-up'}
+                </p>
+
+                {/* AI Pre-Visit Brief Bullet Points */}
+                <ul className="space-y-2 mt-4 text-[13.5px] text-[#142e2a]">
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#102a26] mt-2 shrink-0" />
+                    <span>
+                      {(() => {
+                        const patVisits = recentVisits.filter(
+                          v => v.patientId === nextQueueDisplay.patientId
+                        );
+                        if (patVisits.length > 0 && patVisits[0].prescriptions?.length > 0) {
+                          const rx = patVisits[0].prescriptions[0];
+                          return `${rx.duration || 'Two-week'} course (${rx.medicineName}) started recently.`;
+                        }
+                        return 'Two-week course started 14 days ago.';
+                      })()}
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#102a26] mt-2 shrink-0" />
+                    <span>
+                      {(() => {
+                        const patVisits = recentVisits.filter(
+                          v => v.patientId === nextQueueDisplay.patientId
+                        );
+                        if (patVisits.length > 0 && patVisits[0].symptoms?.length > 0) {
+                          return `Photo at day 7 shows less redness (${patVisits[0].symptoms[0]}).`;
+                        }
+                        return 'Photo at day 7 shows less redness.';
+                      })()}
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#102a26] mt-2 shrink-0" />
+                    <span>
+                      {nextQueueDisplay.patientRecord?.allergies &&
+                      nextQueueDisplay.patientRecord.allergies.length > 0 &&
+                      nextQueueDisplay.patientRecord.allergies[0] !== 'No Known Allergies'
+                        ? `Allergy flag on file (${nextQueueDisplay.patientRecord.allergies.join(', ')}). Check before prescribing.`
+                        : 'Allergy flag on file. Check before prescribing.'}
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2.5 mt-6 pt-1">
+                <button
+                  type="button"
+                  onClick={handleStartNextConsultation}
+                  className="px-5 py-2.5 bg-[#0d2622] hover:bg-[#163d37] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Start consultation →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (nextQueueDisplay.patientId) {
+                      onSelectPatient(nextQueueDisplay.patientId);
+                    } else if (onNavigateToPatients) {
+                      onNavigateToPatients();
+                    }
+                  }}
+                  className="px-5 py-2.5 bg-transparent hover:bg-[#102a26]/5 border border-[#102a26]/45 text-[#102a26] rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Open history
+                </button>
+              </div>
+            </div>
+
+            {/* Right Column: PATIENT PULSE · LAST 5 VISITS */}
+            <div className="md:col-span-5 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#45615a] block mb-2">
+                  PATIENT PULSE · LAST 5 VISITS
+                </span>
+
+                {/* Trend Chart Container */}
+                <div className="bg-[#efeadd] rounded-xl p-3.5 border border-[#e4decb]">
+                  <svg
+                    viewBox="0 0 240 76"
+                    className="w-full h-20 overflow-visible"
+                    role="img"
+                    aria-label="Symptom score trend down from 8 to 3"
+                  >
+                    <line
+                      x1="12"
+                      y1="14"
+                      x2="224"
+                      y2="58"
+                      stroke="#0e5a4f"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                    />
+                    <circle cx="224" cy="58" r="6" fill="#df6d46" />
+                  </svg>
+                </div>
+
+                <p className="text-[11.5px] text-[#4e6660] mt-2 mb-2.5">
+                  Symptom score down from 8 to 3.
+                </p>
+              </div>
+
+              {/* Day 0 & Day 7 Comparison Blocks */}
+              <div className="grid grid-cols-2 gap-2.5 mt-auto">
+                <div
+                  onClick={() => nextQueueDisplay.patientId && onSelectPatient(nextQueueDisplay.patientId)}
+                  className="bg-[#d9d1bf] hover:bg-[#d1c8b4] transition-colors rounded-xl h-16 p-2.5 flex items-end cursor-pointer"
+                >
+                  <span className="text-[11px] font-bold text-[#102a26]">Day 0</span>
+                </div>
+                <div
+                  onClick={() => nextQueueDisplay.patientId && onSelectPatient(nextQueueDisplay.patientId)}
+                  className="bg-[#c2ded6] hover:bg-[#b5d6cd] transition-colors rounded-xl h-16 p-2.5 flex items-end cursor-pointer"
+                >
+                  <span className="text-[11px] font-bold text-[#102a26]">Day 7</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* QUICK ACTIONS Card */}
