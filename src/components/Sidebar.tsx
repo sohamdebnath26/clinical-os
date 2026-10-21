@@ -66,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     shortLabel: string;
     icon: React.ComponentType<{ className?: string }>;
   }[] = [
-    { id: 'dashboard', label: t('dashboard'), shortLabel: 'Cockpit', icon: LayoutDashboard },
+    { id: 'dashboard', label: t('dashboard'), shortLabel: 'Dashboard', icon: LayoutDashboard },
     { id: 'appointments', label: t('appointments'), shortLabel: 'Calendar', icon: Calendar },
     { id: 'patients', label: t('patients'), shortLabel: 'Patients', icon: Users },
     { id: 'prescriptions', label: t('prescriptions'), shortLabel: 'Rx Notes', icon: FileText },
