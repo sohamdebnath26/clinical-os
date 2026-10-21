@@ -96,6 +96,7 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [mobileSessionSubmittedAt, setMobileSessionSubmittedAt] = useState<string | null>(null);
+  const [isQrExpanded, setIsQrExpanded] = useState(false);
 
   // Validation & Loading
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1250,15 +1251,33 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
 
                 {/* Optional QR Code & Direct Preview Link when expanded */}
                 {showMobileLinkPanel && mobileWalkInUrl && (
-                  <div className="pt-2 border-t border-teal-200/70 flex items-center gap-3">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(
-                        mobileWalkInUrl
-                      )}`}
-                      alt="Patient Mobile Walk-In QR"
-                      className="w-20 h-20 rounded-lg border border-slate-200 bg-white p-1 shrink-0"
-                    />
-                    <div className="space-y-1.5 text-[11px] text-slate-600 min-w-0 flex-1">
+                  <div
+                    className={`pt-2.5 border-t border-teal-200/70 transition-all duration-150 ease-out ${
+                      isQrExpanded
+                        ? 'flex flex-col items-center text-center gap-2.5'
+                        : 'flex items-center gap-3'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setIsQrExpanded(prev => !prev)}
+                      title={isQrExpanded ? 'Click to shrink QR code' : 'Click to expand QR code'}
+                      className="group relative rounded-xl border border-slate-200 bg-white p-1.5 shrink-0 shadow-2xs hover:border-[#3f6f66] transition-all duration-150 ease-out cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#3f6f66]/25"
+                    >
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(
+                          mobileWalkInUrl
+                        )}`}
+                        alt="Patient Mobile Walk-In QR"
+                        className={`object-contain transition-all duration-150 ease-out ${
+                          isQrExpanded ? 'w-52 h-52' : 'w-20 h-20'
+                        }`}
+                      />
+                      <span className="block text-[9.5px] font-medium text-slate-400 group-hover:text-[#3f6f66] mt-0.5">
+                        {isQrExpanded ? 'Click to shrink' : 'Click to expand'}
+                      </span>
+                    </button>
+                    <div className="space-y-1.5 text-[11px] text-slate-600 min-w-0 flex-1 w-full">
                       <div className="font-semibold text-slate-800">
                         Or let patient scan this QR on their phone
                       </div>

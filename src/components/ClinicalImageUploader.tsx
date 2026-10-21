@@ -55,6 +55,7 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [mobileSyncedCount, setMobileSyncedCount] = useState(0);
+  const [isQrExpanded, setIsQrExpanded] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -89,7 +90,7 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
       setMobileUploadUrl(url);
 
       const generatedQr = await QRCode.toDataURL(url, {
-        width: 280,
+        width: 380,
         margin: 2,
         color: {
           dark: '#0f2926',
@@ -330,7 +331,9 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            className={`bg-white border border-slate-200 rounded-2xl w-full shadow-2xl overflow-hidden transition-all duration-150 ease-out ${
+              isQrExpanded ? 'max-w-lg' : 'max-w-md'
+            }`}
           >
             <div className="bg-[#0d3f3b] text-white px-5 py-4 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -355,18 +358,28 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
 
             <div className="p-5 flex flex-col items-center text-center space-y-4">
               {isGeneratingQr ? (
-                <div className="w-64 h-64 flex flex-col items-center justify-center bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="w-60 h-60 flex flex-col items-center justify-center bg-slate-50 rounded-2xl border border-slate-200">
                   <Loader2 className="w-8 h-8 text-teal-700 animate-spin mb-2" />
                   <span className="text-xs font-semibold text-slate-600">Generating secure QR code...</span>
                 </div>
               ) : qrDataUrl ? (
-                <div className="p-3 bg-white rounded-2xl border-2 border-teal-600/30 shadow-md">
+                <button
+                  type="button"
+                  onClick={() => setIsQrExpanded(prev => !prev)}
+                  title={isQrExpanded ? 'Click to shrink QR code' : 'Click to expand QR code'}
+                  className="group p-3 bg-white rounded-2xl border-2 border-teal-600/30 hover:border-teal-600 shadow-md transition-all duration-150 ease-out cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-600/25"
+                >
                   <img
                     src={qrDataUrl}
                     alt="Scan QR code with mobile phone to upload clinical images"
-                    className="w-60 h-60 object-contain"
+                    className={`object-contain transition-all duration-150 ease-out ${
+                      isQrExpanded ? 'w-80 h-80' : 'w-56 h-56'
+                    }`}
                   />
-                </div>
+                  <span className="block text-[10px] font-medium text-slate-400 group-hover:text-teal-700 mt-1">
+                    {isQrExpanded ? 'Click QR to shrink' : 'Click QR to expand'}
+                  </span>
+                </button>
               ) : null}
 
               <div className="space-y-1.5 max-w-xs">
