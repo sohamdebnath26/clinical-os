@@ -29,12 +29,13 @@ function MainApp() {
   const [activePatientId, setActivePatientId] = useState<string | null>(null);
   const [patientProfileInitialTab, setPatientProfileInitialTab] = useState<TabType | undefined>(undefined);
 
-  // Collapsible sidebar state (persisted in localStorage)
+  // Collapsible sidebar state (defaults to sleek compact rail mode; persisted in localStorage)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('clinical_os_sidebar_collapsed') === 'true';
+      const saved = localStorage.getItem('clinical_os_sidebar_rail_v2');
+      return saved ? saved === 'true' : true;
     } catch {
-      return false;
+      return true;
     }
   });
 
@@ -42,7 +43,7 @@ function MainApp() {
     setIsSidebarCollapsed(prev => {
       const next = !prev;
       try {
-        localStorage.setItem('clinical_os_sidebar_collapsed', String(next));
+        localStorage.setItem('clinical_os_sidebar_rail_v2', String(next));
       } catch {
         // ignore
       }
@@ -193,11 +194,12 @@ function MainApp() {
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="w-72 bg-[#0d3f3b] h-full shadow-2xl animate-in slide-in-from-left duration-200"
+            className="w-[188px] bg-[#0d3f3b] h-full shadow-2xl animate-in slide-in-from-left duration-200"
           >
             <Sidebar
               currentRoute={activePatientId ? 'patients' : currentRoute}
               onNavigate={handleNavigate}
+              isCollapsed={false}
               onOpenWalkIn={() => {
                 setMobileMenuOpen(false);
                 setShowWalkInModal(true);
