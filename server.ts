@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { db } from './server/db.js';
-import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI } from './server/ai.js';
+import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI, askImageReportAssistant } from './server/ai.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -965,6 +965,39 @@ app.post('/api/ai/chat', authMiddleware, async (req, res) => {
   } catch (err: unknown) {
     console.error('AI chat error:', err);
     res.status(500).json({ error: 'Error generating AI response' });
+  }
+});
+
+app.post('/api/ai/report-chat', authMiddleware, async (req, res) => {
+  const { question, report, anatomicalSite, clinicalNotes, abcdeScore, patientId, conversationHistory } = req.body || {};
+  if (!question || !report) {
+    return res.status(400).json({ error: 'Both question and generated report context are required' });
+  }
+
+  let patient = undefined;
+  let history = undefined;
+  if (patientId) {
+    patient = db.findPatientById(patientId);
+    if (patient) {
+      history = db.getConsultationsByPatient(patient.id);
+    }
+  }
+
+  try {
+    const result = await askImageReportAssistant({
+      question,
+      report,
+      anatomicalSite,
+      clinicalNotes,
+      abcdeScore,
+      patient,
+      history,
+      conversationHistory
+    });
+    res.json(result);
+  } catch (err: unknown) {
+    console.error('AI report chat error:', err);
+    res.status(500).json({ error: 'Failed to generate AI report chat response' });
   }
 });
 

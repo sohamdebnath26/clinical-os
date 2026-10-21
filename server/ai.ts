@@ -2307,5 +2307,291 @@ Return ONLY a valid raw JSON object (no markdown fences) with these keys:
   return baseParsed;
 }
 
+export interface ImageReportChatTurn {
+  role: 'doctor' | 'assistant';
+  content: string;
+}
 
+export interface AskImageReportParams {
+  question: string;
+  report: AIImageAnalysisResult;
+  anatomicalSite?: string;
+  clinicalNotes?: string;
+  abcdeScore?: ABCDEScoreResult | null;
+  patient?: Patient;
+  history?: Consultation[];
+  conversationHistory?: ImageReportChatTurn[];
+}
 
+export async function askImageReportAssistant(
+  params: AskImageReportParams
+): Promise<{ answer: string; isAiPowered: boolean }> {
+  const {
+    question,
+    report,
+    anatomicalSite,
+    clinicalNotes,
+    abcdeScore,
+    patient,
+    history = [],
+    conversationHistory = []
+  } = params;
+
+  const qLower = question.toLowerCase().trim();
+  const diffsText = (report.differentials || [])
+    .map(
+      (d, idx) =>
+        `${idx + 1}. **${d.condition}** (${d.confidence} Likelihood${d.icdCode ? ` · ICD-10: ${d.icdCode}` : ''}) — ${d.rationale}`
+    )
+    .join('\n');
+
+  const metrics = report.visualMetrics;
+  const metricsSummary = metrics
+    ? `Pattern: ${metrics.morphologyCategory.replace(/_/g, ' ')}; Fitzpatrick Skin Type: ${metrics.fitzpatrickType || 'Type IV'}; Erythema Index: ${metrics.erythemaIndex}/100; Pigmentation Index: ${metrics.pigmentationIndex}/100; Asymmetry: ${metrics.asymmetryScore}/100; Border Irregularity: ${metrics.borderIrregularity}/100; Est. Diameter: ~${metrics.estimatedDiameterMm || 5.0} mm`
+    : 'Visual metrics not separately indexed';
+
+  const abcdeSummary = abcdeScore
+    ? `ABCDE Dermoscopic Score: ${abcdeScore.totalScore}/9 (${abcdeScore.riskLevel}) · Diameter: ${abcdeScore.diameterMm.toFixed(1)} mm · Recommendation: ${abcdeScore.clinicalRecommendation}`
+    : 'Not yet scored with ABCDE caliper';
+
+  const patientSummary = patient
+    ? `Patient: ${patient.fullName} (${patient.patientCode}, ${patient.age}y/${patient.gender}) | Allergies: ${patient.allergies || 'NKDA'} | Current Medications: ${patient.currentMedications || 'None'} | Past Visits: ${history.length}`
+    : 'Unlinked / Guest Presentation';
+
+  const reportContextBlock = `
+GENERATED AI CLINICAL IMAGE REPORT (ID: ${report.id}):
+- Primary Clinical Impression: ${report.primaryImpression}
+- Anatomical Site: ${anatomicalSite || 'Unspecified cutaneous site'}
+- Doctor Observation Notes: ${clinicalNotes || 'None provided'}
+- Linked Patient Context: ${patientSummary}
+- Quantitative Visual Telemetry: ${metricsSummary}
+- Dermoscopic ABCDE Assessment: ${abcdeSummary}
+
+01. DIFFERENTIAL DIAGNOSES:
+${diffsText}
+
+02. KEY VISUAL FINDINGS:
+${(report.visualFindings || []).map(v => `- ${v}`).join('\n')}
+
+03. TIMELINE & PATIENT HISTORY CORRELATION:
+${report.timelineCorrelation}
+
+04. RECOMMENDED INVESTIGATIONS / WORKUP:
+${(report.recommendedInvestigations || []).map((inv, idx) => `${idx + 1}. ${inv}`).join('\n')}
+
+05. SUGGESTED MANAGEMENT & TREATMENT PLAN:
+${report.suggestedManagementPlan}
+
+06. RED FLAGS TO WATCH / RULE OUT:
+${(report.redFlags || []).map(rf => `- ${rf}`).join('\n')}
+`.trim();
+
+  const recentTurns = conversationHistory
+    .slice(-6)
+    .map(t => `${t.role === 'doctor' ? 'Doctor' : 'AI Report Assistant'}: ${t.content}`)
+    .join('\n\n');
+
+  const prompt = `You are a board-certified Dermatology & Clinical Decision Support AI Assistant embedded directly inside the AI Clinical Image Analyzer.
+The attending doctor is communicating with you to get specific clinical information, clarifications, differential comparisons, therapeutic adjustments, or patient counseling points from the generated Clinical Image Diagnostic Report below.
+
+${reportContextBlock}
+
+${recentTurns ? `RECENT CONVERSATION HISTORY:\n${recentTurns}\n` : ''}
+DOCTOR'S QUESTION:
+${question}
+
+INSTRUCTIONS:
+1. Ground your answer directly in the generated report above (and linked patient allergies/medications/history when present).
+2. Use clear, concise medical formatting with bullet points and bold highlights so the doctor can scan it in seconds.
+3. Do NOT fabricate external patient history not present in the record, and keep recommendations clinically rigorous.`;
+
+  const openRouterKey = (process.env.OPENROUTER_API_KEY || '').trim();
+  const ai = getAIClient();
+
+  // 1. Try OpenRouter if configured
+  if (openRouterKey && openRouterKey.length >= 8) {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openRouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://clinical-os.onrender.com',
+          'X-Title': 'Clinical OS AI Image Report Chatbot'
+        },
+        body: JSON.stringify({
+          model: process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.5-flash',
+          temperature: 0.2,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      if (response.ok) {
+        const data = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+        const text = data.choices?.[0]?.message?.content?.trim();
+        if (text) {
+          return { answer: text, isAiPowered: true };
+        }
+      }
+    } catch (err) {
+      console.warn('OpenRouter report chat fallback:', err);
+    }
+  }
+
+  // 2. Try Gemini SDK if configured
+  if (ai) {
+    try {
+      const text = await generateWithGemini(ai, prompt);
+      if (text) {
+        return { answer: text, isAiPowered: true };
+      }
+    } catch (err) {
+      console.warn('Gemini report chat fallback:', err);
+    }
+  }
+
+  // 3. Intelligent Deterministic Report-Grounded Answer Engine
+  const topDiff = report.differentials?.[0];
+  const secondDiff = report.differentials?.[1];
+
+  if (
+    qLower.includes('differentiate') ||
+    qLower.includes('differential') ||
+    qLower.includes('compare') ||
+    qLower.includes('vs') ||
+    qLower.includes('icd')
+  ) {
+    return {
+      answer: `### Differential Diagnosis Breakdown from Report\n\n**Primary Impression:** **${report.primaryImpression}**\n\n${diffsText}\n\n${
+        topDiff && secondDiff
+          ? `### Clinical Differentiation (#1 vs #2)\n- **Favors ${topDiff.condition} (${topDiff.icdCode || 'Primary'}):** ${topDiff.rationale}\n- **Distinguishing ${secondDiff.condition} (${secondDiff.icdCode || 'Secondary'}):** ${secondDiff.rationale}\n- **Decisive Confirmatory Step:** ${report.recommendedInvestigations?.[0] || 'Targeted dermoscopy and clinical correlation.'}`
+          : ''
+      }`,
+      isAiPowered: false
+    };
+  }
+
+  if (
+    qLower.includes('treatment') ||
+    qLower.includes('management') ||
+    qLower.includes('medication') ||
+    qLower.includes('prescribe') ||
+    qLower.includes('rx') ||
+    qLower.includes('dose') ||
+    qLower.includes('allergy') ||
+    qLower.includes('allergies') ||
+    qLower.includes('steroid') ||
+    qLower.includes('plan')
+  ) {
+    const allergyNote = patient?.allergies
+      ? `> **Allergy Safety Check for ${patient.fullName}:** Documented allergy to **${patient.allergies}**. Verify all prescribed topical/systemic agents avoid cross-reactivity.`
+      : `> **Allergy Safety Check:** ${patient ? `${patient.fullName} has no known drug allergies (NKDA) on file.` : 'No patient linked — confirm drug allergies before prescribing.'}`;
+
+    return {
+      answer: `### Suggested Treatment & Management Protocol\n\n**Target Condition:** ${report.primaryImpression}\n\n${allergyNote}\n\n#### Report Regimen\n${report.suggestedManagementPlan}\n\n${
+        patient?.currentMedications
+          ? `#### Ongoing Medications Correlation\n- Current regimen on file: **${patient.currentMedications}**\n- Timeline note: ${report.timelineCorrelation}`
+          : ''
+      }`,
+      isAiPowered: false
+    };
+  }
+
+  if (
+    qLower.includes('test') ||
+    qLower.includes('workup') ||
+    qLower.includes('biopsy') ||
+    qLower.includes('investigation') ||
+    qLower.includes('lab') ||
+    qLower.includes('confirm')
+  ) {
+    return {
+      answer: `### Recommended Diagnostic Workup & Investigations\n\nTo confirm **${report.primaryImpression}** and rule out secondary differentials:\n\n${(
+        report.recommendedInvestigations || []
+      )
+        .map((inv, idx) => `${idx + 1}. **${inv}**`)
+        .join('\n')}\n\n- **Highest Priority Action:** Start with **${
+        report.recommendedInvestigations?.[0] || 'clinical dermoscopy'
+      }** prior to initiating empiric therapy that might alter lesion morphology.`,
+      isAiPowered: false
+    };
+  }
+
+  if (
+    qLower.includes('red flag') ||
+    qLower.includes('warning') ||
+    qLower.includes('urgent') ||
+    qLower.includes('danger') ||
+    qLower.includes('emergency') ||
+    qLower.includes('rule out')
+  ) {
+    return {
+      answer: `### Critical Red Flags & Escalation Criteria\n\nFor **${report.primaryImpression}**, monitor closely for:\n\n${(
+        report.redFlags || []
+      )
+        .map(rf => `- **${rf}**`)
+        .join('\n')}\n\n${
+        abcdeScore
+          ? `- **ABCDE Caliper Status:** Score **${abcdeScore.totalScore}/9** (${abcdeScore.riskLevel}) — ${abcdeScore.clinicalRecommendation}`
+          : ''
+      }`,
+      isAiPowered: false
+    };
+  }
+
+  if (
+    qLower.includes('metric') ||
+    qLower.includes('visual') ||
+    qLower.includes('erythema') ||
+    qLower.includes('pigment') ||
+    qLower.includes('border') ||
+    qLower.includes('asymmetry') ||
+    qLower.includes('morphology') ||
+    qLower.includes('finding')
+  ) {
+    return {
+      answer: `### Visual Morphology & Quantitative Telemetry\n\n${
+        metrics
+          ? `- **Morphology Pattern:** ${metrics.morphologyCategory.replace(/_/g, ' ')}\n- **Estimated Fitzpatrick Phototype:** ${metrics.fitzpatrickType || 'Type IV'}\n- **Erythema (Redness) Index:** ${metrics.erythemaIndex}/100\n- **Pigmentation Index:** ${metrics.pigmentationIndex}/100\n- **Asymmetry / Border Irregularity:** ${metrics.asymmetryScore}/100 · ${metrics.borderIrregularity}/100\n- **Estimated Lesion Diameter:** ~${metrics.estimatedDiameterMm || 5.0} mm\n`
+          : ''
+      }\n#### Key Visual Observations from Report\n${(report.visualFindings || [])
+        .map(v => `- ${v}`)
+        .join('\n')}\n\n#### Patient History Correlation\n${report.timelineCorrelation}`,
+      isAiPowered: false
+    };
+  }
+
+  if (
+    qLower.includes('counsel') ||
+    qLower.includes('patient') ||
+    qLower.includes('explain') ||
+    qLower.includes('precaution') ||
+    qLower.includes('referral')
+  ) {
+    return {
+      answer: `### Patient Counseling & Communication Guide\n\n- **Working Diagnosis to Explain:** **${report.primaryImpression}**${
+        anatomicalSite ? ` (Site: ${anatomicalSite})` : ''
+      }\n- **Key Reassurance / Explanation:** Findings correlate with ${
+        topDiff ? `${topDiff.condition} (${topDiff.confidence} likelihood)` : report.primaryImpression
+      }.\n- **Next Diagnostic Step:** ${(report.recommendedInvestigations || [])[0] || 'Follow clinical care plan'}\n- **Care & Treatment Summary:**\n${
+        report.suggestedManagementPlan
+      }\n- **When to Seek Immediate Review (Red Flags):**\n${(report.redFlags || [])
+        .map(rf => `  • ${rf}`)
+        .join('\n')}`,
+      isAiPowered: false
+    };
+  }
+
+  // Default comprehensive report synthesis answer
+  return {
+    answer: `### Report Summary & Clinical Insights: ${report.primaryImpression}\n\n- **Primary Impression:** **${report.primaryImpression}** ${
+      topDiff?.icdCode ? `(ICD-10: \`${topDiff.icdCode}\`)` : ''
+    }\n- **Top Differentials:** ${(report.differentials || [])
+      .map(d => `${d.condition} (${d.confidence})`)
+      .join(' · ')}\n- **Key Visual Findings:** ${(report.visualFindings || []).slice(0, 3).join('; ')}\n- **History Correlation:** ${
+      report.timelineCorrelation
+    }\n- **Priority Workup:** ${(report.recommendedInvestigations || []).slice(0, 2).join('; ')}\n- **Suggested Plan:**\n${
+      report.suggestedManagementPlan
+    }\n\n*Ask me specifically about differential comparisons, medication adjustments, red flags, visual metrics, or patient counseling notes from this report.*`,
+    isAiPowered: false
+  };
+}

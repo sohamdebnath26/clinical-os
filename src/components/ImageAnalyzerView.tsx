@@ -17,8 +17,10 @@ import { DermoscopicToolModal } from './DermoscopicToolModal';
 import { PinToBodyMapModal } from './PinToBodyMapModal';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import { VoiceDictationButton } from './VoiceDictationButton';
+import { ImageReportChatbot } from './ImageReportChatbot';
 import {
   Camera,
+  Bot,
   Upload,
   Sparkles,
   AlertTriangle,
@@ -109,6 +111,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const reportChatInputRef = useRef<HTMLInputElement>(null);
 
   // Load patients & clinic subscription credit meter on mount
   useEffect(() => {
@@ -1174,6 +1177,20 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                 <div className="flex items-center gap-2 flex-wrap mt-4 pt-4 border-t border-slate-800">
                   <button
                     type="button"
+                    onClick={() => {
+                      document
+                        .getElementById('ai-report-chatbot-section')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      setTimeout(() => reportChatInputRef.current?.focus(), 350);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                  >
+                    <Bot className="w-3.5 h-3.5 text-teal-100" />
+                    <span>Ask AI About Report</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setShowReportModal(true)}
                     className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium flex items-center gap-1.5 transition border border-slate-700"
                   >
@@ -1452,6 +1469,16 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
               </div>
             </div>
           )}
+
+          {/* AI Clinical Report Chatbot — Communicate & Extract Insights from Generated Report */}
+          <ImageReportChatbot
+            report={analysisResult}
+            patient={selectedPatient}
+            anatomicalSite={anatomicalSite}
+            clinicalNotes={clinicalNotes}
+            abcdeScore={abcdeResult}
+            externalInputRef={reportChatInputRef}
+          />
         </div>
       </div>
 

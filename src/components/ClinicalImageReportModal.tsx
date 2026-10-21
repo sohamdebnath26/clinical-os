@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { Patient, AIImageAnalysisResult, Doctor } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
+import { ImageReportChatbot } from './ImageReportChatbot';
 import {
   X,
+  Bot,
   Printer,
   Sparkles,
   ShieldAlert,
@@ -36,6 +38,7 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
 }) => {
   const { t, language } = useLanguage();
   const [showWhatsApp, setShowWhatsApp] = useState(false);
+  const [showReportChat, setShowReportChat] = useState(true);
 
   const handlePrint = () => {
     window.print();
@@ -68,6 +71,19 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowReportChat(prev => !prev)}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl shadow-xs transition ${
+                showReportChat
+                  ? 'bg-teal-700 text-white'
+                  : 'bg-white border border-teal-200 text-teal-900 hover:bg-teal-50'
+              }`}
+              title="Communicate with AI Chatbot about this report"
+            >
+              <Bot className="w-4 h-4" />
+              <span>{showReportChat ? 'Hide AI Report Chat' : 'Ask AI About Report'}</span>
+            </button>
             <button
               type="button"
               onClick={() => setShowWhatsApp(true)}
@@ -366,6 +382,18 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
               </span>
             </div>
           </div>
+
+          {/* Interactive AI Report Chatbot inside Modal (Hidden when printing) */}
+          {showReportChat && (
+            <div className="pt-4 print:hidden">
+              <ImageReportChatbot
+                report={analysis}
+                patient={patient}
+                anatomicalSite={anatomicalSite}
+                compact
+              />
+            </div>
+          )}
         </div>
       </div>
 

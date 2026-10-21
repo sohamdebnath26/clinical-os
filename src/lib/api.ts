@@ -361,6 +361,19 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    chatWithReport: (data: {
+      question: string;
+      report: AIImageAnalysisResult;
+      anatomicalSite?: string;
+      clinicalNotes?: string;
+      abcdeScore?: ABCDEScoreResult | null;
+      patientId?: string;
+      conversationHistory?: { role: 'doctor' | 'assistant'; content: string }[];
+    }) =>
+      fetchWithAuth<{ answer: string; isAiPowered: boolean }>('/api/ai/report-chat', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
     analyzeImage: (data: {
       imageBase64: string;
       mimeType?: string;
