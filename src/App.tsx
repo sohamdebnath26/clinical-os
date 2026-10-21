@@ -357,7 +357,9 @@ export default function App() {
   if (mobileUploadToken) {
     return (
       <ErrorBoundary fallbackTitle="Mobile Image Upload Error">
-        <MobileImageUploadView token={mobileUploadToken} />
+        <LanguageProvider>
+          <MobileImageUploadView token={mobileUploadToken} />
+        </LanguageProvider>
       </ErrorBoundary>
     );
   }
@@ -365,7 +367,9 @@ export default function App() {
   if (walkInToken) {
     return (
       <ErrorBoundary fallbackTitle="Mobile Patient Check-In Error">
-        <MobileWalkInView token={walkInToken} />
+        <LanguageProvider>
+          <MobileWalkInView token={walkInToken} />
+        </LanguageProvider>
       </ErrorBoundary>
     );
   }
