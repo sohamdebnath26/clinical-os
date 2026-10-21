@@ -900,6 +900,156 @@ app.post('/api/images/mobile-session/:token/upload', (req, res) => {
 });
 
 // ==========================================
+// MOBILE PATIENT WALK-IN SELF-INTAKE SESSIONS
+// ==========================================
+interface MobileWalkInSession {
+  token: string;
+  doctorId: string;
+  doctorName: string;
+  clinicName: string;
+  mobile: string;
+  countryCode: string;
+  fullName: string;
+  sex: string;
+  age: string;
+  weight: string;
+  symptoms: string[];
+  notes: string;
+  noKnownAllergies: boolean;
+  discountPanel: string;
+  status: 'pending' | 'submitted';
+  submittedAt?: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+const mobileWalkInSessions = new Map<string, MobileWalkInSession>();
+
+function cleanupExpiredWalkInSessions() {
+  const now = Date.now();
+  for (const [token, session] of mobileWalkInSessions.entries()) {
+    if (session.expiresAt < now) {
+      mobileWalkInSessions.delete(token);
+    }
+  }
+}
+
+// Create a mobile walk-in intake session (authenticated doctor)
+app.post('/api/walkin/mobile-session', authMiddleware, (req: AuthenticatedRequest, res) => {
+  cleanupExpiredWalkInSessions();
+  const doctor = req.doctor!;
+  const {
+    mobile = '',
+    countryCode = '+91',
+    fullName = '',
+    sex = 'Not specified',
+    age = '',
+    weight = '',
+    symptoms = [],
+    notes = '',
+    noKnownAllergies = false,
+    discountPanel = ''
+  } = req.body || {};
+
+  const token = `wlk_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
+  const now = Date.now();
+  const expiresAt = now + 60 * 60 * 1000; // 60 minutes validity
+
+  const session: MobileWalkInSession = {
+    token,
+    doctorId: doctor.id,
+    doctorName: doctor.name,
+    clinicName: doctor.clinicName || 'Dermatology & Clinical Practice',
+    mobile: String(mobile).replace(/\D/g, '').slice(0, 10),
+    countryCode: String(countryCode || '+91'),
+    fullName: String(fullName || ''),
+    sex: String(sex || 'Not specified'),
+    age: String(age || ''),
+    weight: String(weight || ''),
+    symptoms: Array.isArray(symptoms) ? symptoms : [],
+    notes: String(notes || ''),
+    noKnownAllergies: Boolean(noKnownAllergies),
+    discountPanel: String(discountPanel || ''),
+    status: 'pending',
+    createdAt: now,
+    expiresAt
+  };
+
+  mobileWalkInSessions.set(token, session);
+
+  res.status(201).json({
+    session: {
+      ...session,
+      expiresAt: new Date(session.expiresAt).toISOString()
+    }
+  });
+});
+
+// Public endpoint: Get mobile walk-in intake session info (used by patient's mobile phone & doctor polling)
+app.get('/api/walkin/mobile-session/:token', (req, res) => {
+  cleanupExpiredWalkInSessions();
+  const session = mobileWalkInSessions.get(req.params.token);
+  if (!session) {
+    return res.status(404).json({
+      error: 'This patient walk-in registration link has expired or is invalid. Please ask the clinic for a new link.'
+    });
+  }
+
+  res.json({
+    session: {
+      ...session,
+      expiresAt: new Date(session.expiresAt).toISOString()
+    }
+  });
+});
+
+// Public endpoint: Patient updates or submits their own walk-in details from their mobile phone
+app.post('/api/walkin/mobile-session/:token/submit', (req, res) => {
+  cleanupExpiredWalkInSessions();
+  const session = mobileWalkInSessions.get(req.params.token);
+  if (!session) {
+    return res.status(404).json({
+      error: 'Walk-in session expired or invalid. Please ask the clinic for a fresh link.'
+    });
+  }
+
+  const {
+    mobile,
+    countryCode,
+    fullName,
+    sex,
+    age,
+    weight,
+    symptoms,
+    notes,
+    noKnownAllergies,
+    discountPanel
+  } = req.body || {};
+
+  if (mobile !== undefined) session.mobile = String(mobile).replace(/\D/g, '').slice(0, 10);
+  if (countryCode !== undefined) session.countryCode = String(countryCode);
+  if (fullName !== undefined) session.fullName = String(fullName);
+  if (sex !== undefined) session.sex = String(sex);
+  if (age !== undefined) session.age = String(age);
+  if (weight !== undefined) session.weight = String(weight);
+  if (Array.isArray(symptoms)) session.symptoms = symptoms;
+  if (notes !== undefined) session.notes = String(notes);
+  if (noKnownAllergies !== undefined) session.noKnownAllergies = Boolean(noKnownAllergies);
+  if (discountPanel !== undefined) session.discountPanel = String(discountPanel);
+
+  session.status = 'submitted';
+  session.submittedAt = new Date().toISOString();
+  mobileWalkInSessions.set(session.token, session);
+
+  res.json({
+    session: {
+      ...session,
+      expiresAt: new Date(session.expiresAt).toISOString()
+    }
+  });
+});
+
+// ==========================================
 // AI ASSISTANT ROUTES
 // ==========================================
 app.post('/api/ai/summarize-consultation', authMiddleware, async (req, res) => {

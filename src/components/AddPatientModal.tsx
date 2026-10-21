@@ -13,6 +13,7 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
 }) => {
   return (
     <WalkInModal
+      initialStep="register"
       onClose={onClose}
       onPatientCreated={onPatientCreated}
     />

@@ -322,6 +322,131 @@ export const api = {
     },
   },
 
+  walkin: {
+    createMobileSession: (data: {
+      mobile?: string;
+      countryCode?: string;
+      fullName?: string;
+      sex?: string;
+      age?: string;
+      weight?: string;
+      symptoms?: string[];
+      notes?: string;
+      noKnownAllergies?: boolean;
+      discountPanel?: string;
+    }) =>
+      fetchWithAuth<{
+        session: {
+          token: string;
+          doctorId: string;
+          doctorName: string;
+          clinicName: string;
+          mobile: string;
+          countryCode: string;
+          fullName: string;
+          sex: string;
+          age: string;
+          weight: string;
+          symptoms: string[];
+          notes: string;
+          noKnownAllergies: boolean;
+          discountPanel: string;
+          status: 'pending' | 'submitted';
+          submittedAt?: string;
+          expiresAt: string;
+        };
+      }>('/api/walkin/mobile-session', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    getMobileSession: async (token: string) => {
+      const response = await fetch(`/api/walkin/mobile-session/${encodeURIComponent(token)}`);
+      if (!response.ok) {
+        let errorMessage = 'Walk-in registration link expired or invalid';
+        try {
+          const json = await response.json();
+          if (json.error) errorMessage = json.error;
+        } catch {
+          // ignore
+        }
+        throw new Error(errorMessage);
+      }
+      return response.json() as Promise<{
+        session: {
+          token: string;
+          doctorId: string;
+          doctorName: string;
+          clinicName: string;
+          mobile: string;
+          countryCode: string;
+          fullName: string;
+          sex: string;
+          age: string;
+          weight: string;
+          symptoms: string[];
+          notes: string;
+          noKnownAllergies: boolean;
+          discountPanel: string;
+          status: 'pending' | 'submitted';
+          submittedAt?: string;
+          expiresAt: string;
+        };
+      }>;
+    },
+    submitMobileSession: async (
+      token: string,
+      data: {
+        mobile: string;
+        countryCode?: string;
+        fullName: string;
+        sex: string;
+        age: string;
+        weight?: string;
+        symptoms?: string[];
+        notes?: string;
+        noKnownAllergies?: boolean;
+        discountPanel?: string;
+      }
+    ) => {
+      const response = await fetch(`/api/walkin/mobile-session/${encodeURIComponent(token)}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        let errorMessage = 'Failed to submit walk-in details';
+        try {
+          const json = await response.json();
+          if (json.error) errorMessage = json.error;
+        } catch {
+          // ignore
+        }
+        throw new Error(errorMessage);
+      }
+      return response.json() as Promise<{
+        session: {
+          token: string;
+          doctorId: string;
+          doctorName: string;
+          clinicName: string;
+          mobile: string;
+          countryCode: string;
+          fullName: string;
+          sex: string;
+          age: string;
+          weight: string;
+          symptoms: string[];
+          notes: string;
+          noKnownAllergies: boolean;
+          discountPanel: string;
+          status: 'pending' | 'submitted';
+          submittedAt?: string;
+          expiresAt: string;
+        };
+      }>;
+    },
+  },
+
   ai: {
     summarize: (data: {
       patient: { name: string; age: number; gender: string; code: string };

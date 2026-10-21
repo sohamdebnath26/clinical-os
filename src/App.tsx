@@ -20,6 +20,7 @@ import { api } from './lib/api';
 import { CheckCircle2, X } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MobileImageUploadView } from './components/MobileImageUploadView';
+import { MobileWalkInView } from './components/MobileWalkInView';
 
 function MainApp() {
   const { doctor, isLoading } = useAuth();
@@ -348,15 +349,23 @@ function MainApp() {
 }
 
 export default function App() {
-  const mobileUploadToken =
-    typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.search).get('mobileUploadToken')
-      : null;
+  const searchParams =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const mobileUploadToken = searchParams ? searchParams.get('mobileUploadToken') : null;
+  const walkInToken = searchParams ? searchParams.get('walkInToken') : null;
 
   if (mobileUploadToken) {
     return (
       <ErrorBoundary fallbackTitle="Mobile Image Upload Error">
         <MobileImageUploadView token={mobileUploadToken} />
+      </ErrorBoundary>
+    );
+  }
+
+  if (walkInToken) {
+    return (
+      <ErrorBoundary fallbackTitle="Mobile Patient Check-In Error">
+        <MobileWalkInView token={walkInToken} />
       </ErrorBoundary>
     );
   }
