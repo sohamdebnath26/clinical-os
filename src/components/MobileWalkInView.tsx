@@ -81,7 +81,7 @@ export const MobileWalkInView: React.FC<MobileWalkInViewProps> = ({ token }) => 
         const s = res.session;
         setSession(s);
         setCountryCode(s.countryCode || '+91');
-        setMobile(s.mobile || '');
+        setMobile((s.mobile || '').replace(/\D/g, '').slice(0, 10));
         setFullName(s.fullName || '');
         if (s.sex === 'Female' || s.sex === 'Male' || s.sex === 'Other') {
           setSex(s.sex);
@@ -342,12 +342,19 @@ export const MobileWalkInView: React.FC<MobileWalkInViewProps> = ({ token }) => 
             </select>
             <input
               type="tel"
+              inputMode="numeric"
+              pattern="[0-9]{10}"
               value={mobile}
               onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="9876543210"
+              placeholder="9876543210 (10 digits)"
               maxLength={10}
               className="flex-1 px-3.5 py-2.5 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none"
             />
+            {mobile.length > 0 && (
+              <span className="self-center mr-3 text-[11px] font-mono text-slate-400">
+                {mobile.length}/10
+              </span>
+            )}
           </div>
         </div>
 

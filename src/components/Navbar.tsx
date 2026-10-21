@@ -126,7 +126,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="text"
             placeholder={t('searchPlaceholder')}
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => {
+              let val = e.target.value;
+              if (/^\d+$/.test(val)) {
+                val = val.slice(0, 10);
+              }
+              setQuery(val);
+            }}
             onFocus={() => query.trim() && setIsOpen(true)}
             className="w-full text-xs pl-9 pr-14 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500/20 focus:bg-white focus:border-teal-600 shadow-2xs transition-all"
           />

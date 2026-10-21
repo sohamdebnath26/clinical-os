@@ -488,7 +488,13 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                     autoFocus
                     placeholder="Name, code, or mobile number..."
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    onChange={e => {
+                      let val = e.target.value;
+                      if (/^\d+$/.test(val)) {
+                        val = val.slice(0, 10);
+                      }
+                      setSearchQuery(val);
+                    }}
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -499,11 +505,16 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                         }
                       }
                     }}
-                    className="w-full text-sm pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600 shadow-2xs"
+                    className="w-full text-sm pl-10 pr-14 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600 shadow-2xs"
                   />
+                  {/^\d+$/.test(searchQuery) && searchQuery.length > 0 && (
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] font-mono font-semibold text-slate-400">
+                      {searchQuery.length}/10
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1.5">
-                  A name or a full mobile number — either finds them.
+                  A name or a 10-digit mobile number — either finds them.
                 </p>
               </div>
 
@@ -654,8 +665,10 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                 </select>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
                   autoFocus={!isPhoneComplete}
-                  placeholder="9876543210"
+                  placeholder="9876543210 (10 digits)"
                   value={mobile}
                   onChange={e => handleMobileChange(e.target.value)}
                   maxLength={10}
@@ -1129,14 +1142,23 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                 ))}
               </select>
 
-              <input
-                type="tel"
-                placeholder="9876543210"
-                value={mobile}
-                onChange={e => handleMobileChange(e.target.value)}
-                maxLength={10}
-                className="flex-1 px-3.5 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
-              />
+              <div className="relative flex-1 flex items-center">
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  placeholder="9876543210 (10 digits)"
+                  value={mobile}
+                  onChange={e => handleMobileChange(e.target.value)}
+                  maxLength={10}
+                  className="w-full pl-3.5 pr-12 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
+                />
+                {mobile.length > 0 && (
+                  <span className="absolute right-3 text-[11px] font-mono text-slate-400 pointer-events-none">
+                    {mobile.length}/10
+                  </span>
+                )}
+              </div>
             </div>
             <p className="text-[11.5px] text-slate-500 mt-1.5 leading-snug">
               Defaults to India (+91) — pick another country code for NRI/international patients.

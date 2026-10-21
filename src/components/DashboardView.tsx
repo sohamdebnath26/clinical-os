@@ -312,7 +312,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   type="text"
                   placeholder="Search patients, diagnoses..."
                   value={query}
-                  onChange={e => setQuery(e.target.value)}
+                  onChange={e => {
+                    let val = e.target.value;
+                    if (/^\d+$/.test(val)) {
+                      val = val.slice(0, 10);
+                    }
+                    setQuery(val);
+                  }}
                   onFocus={() => query.trim() && setIsSearchOpen(true)}
                   className="w-full text-sm text-[#0f2926] placeholder-[#688580] bg-transparent focus:outline-none"
                 />

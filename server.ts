@@ -238,7 +238,15 @@ app.post('/api/auth/logout', authMiddleware, (req, res) => {
 // Update Doctor Settings
 app.put('/api/doctor/profile', authMiddleware, (req: AuthenticatedRequest, res) => {
   if (!req.doctor) return res.status(401).json({ error: 'Unauthorized' });
-  const updated = db.updateDoctor(req.doctor.id, req.body);
+  const body = { ...req.body };
+  if (body.phone !== undefined) {
+    const cleanPhone = String(body.phone).replace(/\D/g, '').slice(0, 10);
+    if (cleanPhone.length > 0 && cleanPhone.length !== 10) {
+      return res.status(400).json({ error: 'Mobile number must be exactly 10 digits' });
+    }
+    body.phone = cleanPhone;
+  }
+  const updated = db.updateDoctor(req.doctor.id, body);
   res.json({ doctor: updated });
 });
 
@@ -290,8 +298,13 @@ app.post('/api/patients', authMiddleware, (req: AuthenticatedRequest, res) => {
     return res.status(400).json({ error: 'Full name and mobile number are required' });
   }
 
+  const cleanMobile = String(mobile).replace(/\D/g, '').slice(0, 10);
+  if (cleanMobile.length !== 10) {
+    return res.status(400).json({ error: 'Mobile number must be10 digits' });
+  }
+
   // Prevent accidental duplicate mobile
-  const existing = db.findPatientByMobile(mobile);
+  const existing = db.findPatientByMobile(cleanMobile);
   if (existing && !req.query.force) {
     return res.status(409).json({
       error: 'An existing patient was found with this mobile number.',
@@ -305,7 +318,7 @@ app.post('/api/patients', authMiddleware, (req: AuthenticatedRequest, res) => {
       fullName: fullName.trim(),
       age: age !== undefined && age !== '' ? Number(age) : 0,
       gender: gender || 'Prefer not to say',
-      mobile: mobile.trim(),
+      mobile: cleanMobile,
       countryCode: countryCode || '+91',
       weight: weight !== undefined && weight !== '' ? Number(weight) : undefined,
       notes: notes || '',
@@ -328,7 +341,15 @@ app.post('/api/patients', authMiddleware, (req: AuthenticatedRequest, res) => {
 
 app.put('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
-  const updated = db.updatePatient(req.params.id, req.body, { id: doctor.id, name: doctor.name });
+  const updates = { ...req.body };
+  if (updates.mobile !== undefined) {
+    const cleanMobile = String(updates.mobile).replace(/\D/g, '').slice(0, 10);
+    if (cleanMobile.length !== 10) {
+      return res.status(400).json({ error: 'Mobile number must be exactly 10 digits' });
+    }
+    updates.mobile = cleanMobile;
+  }
+  const updated = db.updatePatient(req.params.id, updates, { id: doctor.id, name: doctor.name });
   if (!updated) return res.status(404).json({ error: 'Patient not found' });
   res.json({ patient: updated });
 });

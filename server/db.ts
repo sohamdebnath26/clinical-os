@@ -406,7 +406,7 @@ class DatabaseService {
         speciality: 'Dermatologist & Cosmetologist',
         registrationNumber: 'MED-REG-847291',
         clinicName: 'Cliniq Dermatology Center',
-        phone: '+91 98765 43210',
+        phone: '9876543210',
         defaultConsultationFee: 500,
         avatarUrl: '',
         accountType: 'individual',
@@ -433,7 +433,7 @@ class DatabaseService {
         speciality: 'Chief of Dermatology & Cutaneous Medicine',
         registrationNumber: 'HOSP-ATT-49021',
         clinicName: 'Metro Health University Medical Center',
-        phone: '+1 (555) 392-1084',
+        phone: '5553921084',
         defaultConsultationFee: 650,
         avatarUrl: '',
         accountType: 'organisational',
@@ -551,6 +551,7 @@ class DatabaseService {
 
     const newPatient: Patient = {
       ...patientData,
+      mobile: String(patientData.mobile || '').replace(/\D/g, '').slice(-10),
       id,
       patientCode,
       createdAt: now,
@@ -575,6 +576,10 @@ class DatabaseService {
   public updatePatient(id: string, updates: Partial<Patient>, actor: { id: string; name: string }): Patient | null {
     const p = this.data.patients.find(item => item.id === id);
     if (!p) return null;
+
+    if (updates.mobile !== undefined) {
+      updates.mobile = String(updates.mobile).replace(/\D/g, '').slice(-10);
+    }
 
     Object.assign(p, updates, { updatedAt: new Date().toISOString() });
     this.persist();

@@ -173,10 +173,14 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Search patient by name, ID code, or mobile..."
+                  placeholder="Search patient by name, ID code, or 10-digit mobile..."
                   value={patientSearch}
                   onChange={e => {
-                    setPatientSearch(e.target.value);
+                    let val = e.target.value;
+                    if (/^\d+$/.test(val)) {
+                      val = val.slice(0, 10);
+                    }
+                    setPatientSearch(val);
                     setIsPatientDropdownOpen(true);
                   }}
                   onFocus={() => setIsPatientDropdownOpen(true)}

@@ -107,9 +107,20 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
             type="text"
             placeholder={t('searchPlaceholder')}
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full text-xs pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500 focus:bg-white"
+            onChange={e => {
+              let val = e.target.value;
+              if (/^\d+$/.test(val)) {
+                val = val.slice(0, 10);
+              }
+              setSearchQuery(val);
+            }}
+            className="w-full text-xs pl-9 pr-12 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500 focus:bg-white"
           />
+          {/^\d+$/.test(searchQuery) && searchQuery.length > 0 && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 pointer-events-none">
+              {searchQuery.length}/10
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">

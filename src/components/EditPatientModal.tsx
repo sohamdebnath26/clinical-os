@@ -26,10 +26,12 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
   const [age, setAge] = useState(String(patient.age));
   const [isAgeAutoCalculated, setIsAgeAutoCalculated] = useState(false);
   const [gender, setGender] = useState<Gender>(patient.gender);
-  const [mobile, setMobile] = useState(patient.mobile);
+  const [mobile, setMobile] = useState((patient.mobile || '').replace(/\D/g, '').slice(-10));
   const [bloodGroup, setBloodGroup] = useState(patient.bloodGroup || 'O+');
   const [address, setAddress] = useState(patient.address || '');
-  const [emergencyContact, setEmergencyContact] = useState(patient.emergencyContact || '');
+  const [emergencyContact, setEmergencyContact] = useState(
+    (patient.emergencyContact || '').replace(/\d{11,}/g, m => m.slice(0, 10))
+  );
   const [allergies, setAllergies] = useState(patient.allergies || '');
   const [currentMedications, setCurrentMedications] = useState(patient.currentMedications || '');
   const [medicalHistory, setMedicalHistory] = useState(patient.medicalHistory || '');
@@ -171,14 +173,24 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
                 {t('mobile')} (10 digits) *
               </label>
-              <input
-                type="tel"
-                required
-                maxLength={10}
-                value={mobile}
-                onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500 font-mono"
-              />
+              <div className="relative flex items-center">
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  required
+                  maxLength={10}
+                  placeholder="9876543210"
+                  value={mobile}
+                  onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  className="w-full text-xs pl-3 pr-11 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500 font-mono"
+                />
+                {mobile.length > 0 && (
+                  <span className="absolute right-2.5 text-[10px] font-mono text-slate-400 pointer-events-none">
+                    {mobile.length}/10
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Blood Group */}
@@ -267,9 +279,17 @@ export const EditPatientModal: React.FC<EditPatientModalProps> = ({
               <div className="relative flex items-center">
                 <input
                   type="text"
-                  placeholder="Name & contact phone"
+                  placeholder="Name & 10-digit contact phone"
                   value={emergencyContact}
-                  onChange={e => setEmergencyContact(e.target.value)}
+                  onChange={e => {
+                    let val = e.target.value;
+                    if (/^\d+$/.test(val)) {
+                      val = val.slice(0, 10);
+                    } else {
+                      val = val.replace(/\d{11,}/g, m => m.slice(0, 10));
+                    }
+                    setEmergencyContact(val);
+                  }}
                   className="w-full text-xs pl-3 pr-9 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500"
                 />
                 <div className="absolute right-1.5">

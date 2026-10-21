@@ -132,14 +132,17 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
     }
   };
 
-  // Reset launch prompt when modal opens/closes
+  // Reset launch prompt when modal opens/closes and sync patient's 10-digit mobile
   useEffect(() => {
     if (!isOpen) {
       setShowAppLaunchPrompt(false);
       setStatusMessage(null);
       setErrorMessage(null);
+    } else if (patient?.mobile) {
+      const digits = patient.mobile.replace(/\D/g, '');
+      setPhoneNumber(digits.length > 10 ? digits.slice(-10) : digits.slice(0, 10));
     }
-  }, [isOpen]);
+  }, [isOpen, patient]);
 
   // Compute clean normalized phone number
   const fullRawPhone = `${countryCode}${phoneNumber}`;
@@ -241,23 +244,24 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   const handleSendWhatsApp = async (openAsWeb = false) => {
     setErrorMessage(null);
 
-    if (phoneNumber.replace(/\D/g, '').length < 7) {
-      setErrorMessage('Please enter a valid patient mobile number.');
+    const cleanTenDigits = phoneNumber.replace(/\D/g, '').slice(0, 10);
+    if (cleanTenDigits.length !== 10) {
+      setErrorMessage('Please enter a valid 10-digit patient mobile number.');
       return;
     }
 
     if (!cleanedRecipient || cleanedRecipient.length < 10) {
-      setErrorMessage('Please enter a valid patient WhatsApp phone number.');
+      setErrorMessage('Please enter a valid 10-digit patient WhatsApp phone number.');
       return;
     }
 
     setIsLogging(true);
 
     try {
-      // 1. If doctor chose to update patient's record with this phone number
-      if (updatePatientMobile && patient && phoneNumber && phoneNumber !== patient.mobile) {
+      // 1. If doctor chose to update patient's record with this 10-digit phone number
+      if (updatePatientMobile && patient && cleanTenDigits && cleanTenDigits !== patient.mobile) {
         try {
-          await api.patients.update(patient.id, { mobile: fullRawPhone });
+          await api.patients.update(patient.id, { mobile: cleanTenDigits });
         } catch {
           // Non-critical, continue
         }
@@ -389,15 +393,23 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                 ))}
               </select>
 
-              <div className="relative flex-1">
-                <Phone className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+              <div className="relative flex-1 flex items-center">
+                <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
                   placeholder="e.g. 9876543210 (10 digits)"
                   value={phoneNumber}
-                  onChange={e => setPhoneNumber(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#128C7E] font-mono font-medium"
+                  onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  className="w-full pl-8 pr-12 py-2 rounded-lg border border-slate-300 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#128C7E] font-mono font-medium"
                 />
+                {phoneNumber.length > 0 && (
+                  <span className="absolute right-3 text-[10px] font-mono text-slate-400 pointer-events-none">
+                    {phoneNumber.length}/10
+                  </span>
+                )}
               </div>
             </div>
 

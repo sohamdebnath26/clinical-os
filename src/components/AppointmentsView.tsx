@@ -358,11 +358,22 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by patient name, patient code, mobile number, or clinical instruction..."
+            placeholder="Search by patient name, patient code, 10-digit mobile number, or clinical instruction..."
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full text-xs pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all text-slate-800"
+            onChange={e => {
+              let val = e.target.value;
+              if (/^\d+$/.test(val)) {
+                val = val.slice(0, 10);
+              }
+              setSearchQuery(val);
+            }}
+            className="w-full text-xs pl-9 pr-12 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all text-slate-800"
           />
+          {/^\d+$/.test(searchQuery) && searchQuery.length > 0 && (
+            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 pointer-events-none">
+              {searchQuery.length}/10
+            </span>
+          )}
         </div>
       </div>
 

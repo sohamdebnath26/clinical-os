@@ -13,12 +13,13 @@ export const SettingsView: React.FC = () => {
   const [speciality, setSpeciality] = useState(doctor?.speciality || '');
   const [clinicName, setClinicName] = useState(doctor?.clinicName || '');
   const [registrationNumber, setRegistrationNumber] = useState(doctor?.registrationNumber || '');
-  const [phone, setPhone] = useState(doctor?.phone || '');
+  const [phone, setPhone] = useState((doctor?.phone || '').replace(/\D/g, '').slice(-10));
   const [defaultFee, setDefaultFee] = useState(doctor?.defaultConsultationFee || 500);
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     api.audit.list()
@@ -28,15 +29,21 @@ export const SettingsView: React.FC = () => {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanPhone = phone.replace(/\D/g, '').slice(0, 10);
+    if (cleanPhone.length > 0 && cleanPhone.length !== 10) {
+      setErrorMsg('Mobile / hotline number must be exactly 10 digits.');
+      return;
+    }
     setIsSaving(true);
     setSuccessMsg(null);
+    setErrorMsg(null);
     try {
       await updateDoctor({
         name,
         speciality,
         clinicName,
         registrationNumber,
-        phone,
+        phone: cleanPhone,
         defaultConsultationFee: Number(defaultFee)
       });
       setSuccessMsg('Doctor profile & clinical defaults updated successfully.');
@@ -61,6 +68,12 @@ export const SettingsView: React.FC = () => {
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           <span>{successMsg}</span>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+          <span>{errorMsg}</span>
         </div>
       )}
 
@@ -128,13 +141,26 @@ export const SettingsView: React.FC = () => {
           </div>
 
           <div>
-            <label className="block font-bold text-slate-700 uppercase tracking-wide mb-1">{t('clinicHotline')}</label>
-            <input
-              type="text"
-              value={phone}
-              onChange={e => setPhone(e.target.value)}
-              className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500 font-mono"
-            />
+            <label className="block font-bold text-slate-700 uppercase tracking-wide mb-1">
+              {t('clinicHotline')} (10 digits)
+            </label>
+            <div className="relative flex items-center">
+              <input
+                type="tel"
+                inputMode="numeric"
+                pattern="[0-9]{10}"
+                maxLength={10}
+                placeholder="9876543210"
+                value={phone}
+                onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                className="w-full text-xs pl-3 pr-11 py-2 bg-white border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-500 font-mono"
+              />
+              {phone.length > 0 && (
+                <span className="absolute right-2.5 text-[10px] font-mono text-slate-400 pointer-events-none">
+                  {phone.length}/10
+                </span>
+              )}
+            </div>
           </div>
 
           <div>
