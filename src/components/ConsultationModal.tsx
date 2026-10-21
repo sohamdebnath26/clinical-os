@@ -31,7 +31,8 @@ import {
   CheckCircle2,
   ArrowRight,
   ArrowLeft,
-  Mic
+  Mic,
+  Search
 } from 'lucide-react';
 
 interface ConsultationModalProps {
@@ -443,11 +444,80 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
   // New medication form inside consultation
   const [medName, setMedName] = useState('');
-  const [medDosage, setMedDosage] = useState('');
-  const [medFrequency, setMedFrequency] = useState('Once daily');
-  const [medDuration, setMedDuration] = useState('7 days');
+  const [medDosage, setMedDosage] = useState('500 mg');
+  const [medRoute, setMedRoute] = useState('Oral');
+  const [medFrequency, setMedFrequency] = useState('1-0-1');
+  const [medDuration, setMedDuration] = useState('5 days');
+  const [medQty, setMedQty] = useState('10');
+  const [medQtyManual, setMedQtyManual] = useState(false);
   const [medInstructions, setMedInstructions] = useState('After meals');
   const [isMedDropdownOpen, setIsMedDropdownOpen] = useState(false);
+
+  // Helper to expand shorthand frequency like "101" -> "1-0-1"
+  const normalizeFrequencyInput = (raw: string): string => {
+    const trimmed = raw.trim();
+    if (/^[0-9]{3,4}$/.test(trimmed)) {
+      return trimmed.split('').join('-');
+    }
+    return raw;
+  };
+
+  // Helper to expand shorthand duration like "5d" -> "5 days", "2w" -> "2 weeks", "1m" -> "1 month"
+  const normalizeDurationInput = (raw: string): string => {
+    const trimmed = raw.trim().toLowerCase();
+    const match = trimmed.match(/^(\d+)\s*(d|w|m)$/);
+    if (!match) return raw;
+    const count = Number(match[1]);
+    const unit = match[2];
+    if (unit === 'd') return `${count} ${count === 1 ? 'day' : 'days'}`;
+    if (unit === 'w') return `${count} ${count === 1 ? 'week' : 'weeks'}`;
+    if (unit === 'm') return `${count} ${count === 1 ? 'month' : 'months'}`;
+    return raw;
+  };
+
+  // Auto-calculate QTY when frequency, duration, or route changes (unless manually overridden)
+  useEffect(() => {
+    if (medQtyManual) return;
+    if (medRoute && medRoute !== 'Oral') {
+      setMedQty('1');
+      return;
+    }
+
+    // Daily dose count from pattern like 1-0-1, 1-1-1, etc.
+    let dailyDoses = 1;
+    const dashParts = medFrequency.trim().split('-').map(n => parseFloat(n));
+    if (dashParts.length >= 2 && dashParts.every(n => !isNaN(n))) {
+      dailyDoses = dashParts.reduce((a, b) => a + b, 0) || 1;
+    } else if (/twice|bd|bid/i.test(medFrequency)) {
+      dailyDoses = 2;
+    } else if (/thrice|three|tid|tds/i.test(medFrequency)) {
+      dailyDoses = 3;
+    } else if (/four|qid/i.test(medFrequency)) {
+      dailyDoses = 4;
+    } else if (/sos|prn/i.test(medFrequency)) {
+      dailyDoses = 1;
+    }
+
+    // Total days from duration string
+    let days = 1;
+    const durLower = medDuration.trim().toLowerCase();
+    const dayMatch = durLower.match(/(\d+)\s*(d|day|days)/);
+    const weekMatch = durLower.match(/(\d+)\s*(w|wk|week|weeks)/);
+    const monthMatch = durLower.match(/(\d+)\s*(m|mo|month|months)/);
+    if (dayMatch) {
+      days = parseInt(dayMatch[1], 10);
+    } else if (weekMatch) {
+      days = parseInt(weekMatch[1], 10) * 7;
+    } else if (monthMatch) {
+      days = parseInt(monthMatch[1], 10) * 30;
+    } else {
+      const numOnly = parseInt(durLower, 10);
+      if (!isNaN(numOnly) && numOnly > 0) days = numOnly;
+    }
+
+    const total = Math.max(1, Math.round(dailyDoses * days));
+    setMedQty(String(total));
+  }, [medFrequency, medDuration, medRoute, medQtyManual]);
 
   // Prior body markers for this patient
   const [priorMarkers, setPriorMarkers] = useState<BodyMarker[]>([]);
@@ -807,21 +877,33 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   // Prescription handler
   const handleAddPrescription = () => {
     if (!medName.trim()) return;
+    const normalizedFreq = normalizeFrequencyInput(medFrequency) || '1-0-1';
+    const normalizedDur = normalizeDurationInput(medDuration) || '5 days';
+    const doseDisplay = [
+      medDosage.trim() || '500 mg',
+      medRoute ? `(${medRoute})` : '',
+      medQty ? `Qty: ${medQty}` : ''
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
     const item: PrescriptionItem = {
       id: `rx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       patientId: patient.id,
       consultationId: consultation.id,
       medicineName: medName.trim(),
-      dosage: medDosage.trim() || '1 tab',
-      frequency: medFrequency,
-      duration: medDuration,
-      instructions: medInstructions,
+      dosage: doseDisplay,
+      frequency: normalizedFreq,
+      duration: normalizedDur,
+      instructions: medInstructions.trim(),
       date: new Date().toISOString(),
       createdAt: new Date().toISOString()
     };
+    markDoctorEdited('summary.medications');
     setPrescriptions([...prescriptions, item]);
     setMedName('');
-    setMedDosage('');
+    setMedQtyManual(false);
+    setIsMedDropdownOpen(false);
   };
 
   const handleRemovePrescription = (id: string) => {
@@ -1875,146 +1957,438 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               </div>
 
               {/* Prescriptions inside consultation */}
-              <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                    <Pill className="w-3.5 h-3.5 text-teal-600" />
-                    Prescriptions ({prescriptions.length})
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                {/* Header bar */}
+                <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+                  <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-blue-600 text-white text-[10px] font-serif font-bold">
+                      ℞
+                    </span>
+                    <span>PRESCRIPTION</span>
+                    {prescriptions.length > 0 && (
+                      <span className="ml-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                        {prescriptions.length}
+                      </span>
+                    )}
                   </h4>
                   <span className="text-[11px] text-slate-400">Saved to patient medical record</span>
                 </div>
 
-                {/* Form to add medicine with auto-suggest drop-down menu (no chips) */}
-                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                  <div className="sm:col-span-2 relative">
-                    <div className="flex items-center w-full bg-white border border-slate-200 rounded-md focus-within:ring-1 focus-within:ring-teal-500">
-                      <input
-                        type="text"
-                        placeholder="Search or enter medicine..."
-                        value={medName}
-                        onChange={e => {
-                          setMedName(e.target.value);
-                          setIsMedDropdownOpen(true);
-                        }}
-                        onFocus={() => setIsMedDropdownOpen(true)}
-                        className="w-full text-xs px-2.5 py-1.5 bg-transparent border-0 focus:outline-hidden"
-                      />
-                      <VoiceDictationButton
-                        value=""
-                        onTranscript={spoken => {
-                          setMedName(spoken);
-                          setIsMedDropdownOpen(true);
-                        }}
-                        variant="badge"
-                        className="border-0 shadow-none"
-                        title="Dictate medicine name"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setIsMedDropdownOpen(!isMedDropdownOpen)}
-                        className="px-2 py-1.5 text-slate-400 hover:text-slate-600 border-l border-slate-100"
-                        title="Open medications dropdown"
-                      >
-                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isMedDropdownOpen ? 'rotate-180 text-teal-700' : ''}`} />
-                      </button>
+                {/* Inner Prescription Builder Box */}
+                <div className="p-4 space-y-4">
+                  <div className="p-4 bg-[#f8fafc] border border-slate-200/90 rounded-xl space-y-3.5">
+                    {/* Row 1: DRUG NAME | DOSE / STRENGTH | ROUTE | FREQUENCY | DURATION | QTY */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                      {/* DRUG NAME */}
+                      <div className="sm:col-span-4 relative">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                          DRUG NAME
+                        </label>
+                        <div className="relative flex items-center bg-white border border-slate-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-600 transition-all">
+                          <Search className="w-3.5 h-3.5 text-slate-400 ml-3 shrink-0" />
+                          <input
+                            type="text"
+                            placeholder="Search drug..."
+                            value={medName}
+                            onChange={e => {
+                              setMedName(e.target.value);
+                              setIsMedDropdownOpen(true);
+                            }}
+                            onFocus={() => setIsMedDropdownOpen(true)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddPrescription();
+                              }
+                            }}
+                            className="w-full text-xs pl-2 pr-8 py-2 bg-transparent border-0 text-slate-800 placeholder:text-slate-400 focus:outline-hidden"
+                          />
+                          <div className="flex items-center pr-1">
+                            <VoiceDictationButton
+                              value=""
+                              onTranscript={spoken => {
+                                setMedName(spoken);
+                                setIsMedDropdownOpen(true);
+                              }}
+                              variant="badge"
+                              className="border-0 shadow-none bg-transparent"
+                              title="Dictate drug name"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setIsMedDropdownOpen(!isMedDropdownOpen)}
+                              className="p-1 text-slate-400 hover:text-slate-600"
+                              title="Toggle drug catalog"
+                            >
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 transition-transform ${
+                                  isMedDropdownOpen ? 'rotate-180 text-blue-600' : ''
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Auto-suggest dropdown menu */}
+                        {isMedDropdownOpen && (
+                          <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+                            <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                              <span>
+                                Drug Catalogue (
+                                {
+                                  COMMON_MEDICATIONS.filter(m =>
+                                    m.name.toLowerCase().includes(medName.toLowerCase().trim())
+                                  ).length
+                                }
+                                )
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setIsMedDropdownOpen(false)}
+                                className="text-slate-400 hover:text-slate-600"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                            {COMMON_MEDICATIONS.filter(m =>
+                              m.name.toLowerCase().includes(medName.toLowerCase().trim())
+                            ).map(med => {
+                              const isTopical = /cream|gel|ointment|lotion|shampoo|solution|spf|sunscreen/i.test(
+                                med.name
+                              );
+                              return (
+                                <button
+                                  key={med.name}
+                                  type="button"
+                                  onClick={() => {
+                                    setMedName(med.name);
+                                    setMedDosage(med.dosage);
+                                    setMedRoute(isTopical ? 'Topical' : 'Oral');
+                                    setMedFrequency(
+                                      med.frequency.includes('1-0-1') || /twice/i.test(med.frequency)
+                                        ? '1-0-1'
+                                        : /three|thrice/i.test(med.frequency)
+                                        ? '1-1-1'
+                                        : /night|bedtime/i.test(med.frequency)
+                                        ? '0-0-1'
+                                        : '1-0-0'
+                                    );
+                                    setMedDuration(med.duration);
+                                    setMedInstructions(med.instructions);
+                                    setMedQtyManual(false);
+                                    setIsMedDropdownOpen(false);
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50/60 flex flex-col text-slate-800 transition-colors"
+                                >
+                                  <span className="font-semibold text-slate-900">{med.name}</span>
+                                  <span className="text-[10px] text-slate-400">
+                                    {med.dosage} • {med.frequency} • {med.duration}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* DOSE / STRENGTH */}
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                          DOSE / STRENGTH
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="500 mg"
+                          value={medDosage}
+                          onChange={e => setMedDosage(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddPrescription();
+                            }
+                          }}
+                          className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                        />
+                      </div>
+
+                      {/* ROUTE */}
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                          ROUTE
+                        </label>
+                        <select
+                          value={medRoute}
+                          onChange={e => {
+                            setMedRoute(e.target.value);
+                            setMedQtyManual(false);
+                          }}
+                          className="w-full text-xs px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                        >
+                          <option value="Oral">Oral</option>
+                          <option value="Topical">Topical</option>
+                          <option value="Intralesional">Intralesional</option>
+                          <option value="IV / IM">IV / IM</option>
+                          <option value="Subcutaneous">Subcutaneous</option>
+                          <option value="Sublingual">Sublingual</option>
+                          <option value="Nasal / Drops">Nasal / Drops</option>
+                        </select>
+                      </div>
+
+                      {/* FREQUENCY */}
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                          FREQUENCY <span className="font-normal lowercase text-slate-400">type 101</span>
+                        </label>
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            list="rx-frequency-options"
+                            placeholder="1-0-1 or type 101"
+                            value={medFrequency}
+                            onChange={e => {
+                              setMedFrequency(normalizeFrequencyInput(e.target.value));
+                              setMedQtyManual(false);
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddPrescription();
+                              }
+                            }}
+                            className="w-full text-xs px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                          />
+                          <datalist id="rx-frequency-options">
+                            <option value="1-0-0" />
+                            <option value="0-1-0" />
+                            <option value="0-0-1" />
+                            <option value="1-0-1" />
+                            <option value="1-1-1" />
+                            <option value="1-1-1-1" />
+                            <option value="SOS" />
+                          </datalist>
+                        </div>
+                      </div>
+
+                      {/* DURATION */}
+                      <div className="sm:col-span-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 whitespace-nowrap">
+                          DURATION <span className="font-normal lowercase text-slate-400">5d·2w·1m</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="5 days"
+                          value={medDuration}
+                          onChange={e => {
+                            setMedDuration(normalizeDurationInput(e.target.value));
+                            setMedQtyManual(false);
+                          }}
+                          onBlur={e => setMedDuration(normalizeDurationInput(e.target.value))}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddPrescription();
+                            }
+                          }}
+                          className="w-full text-xs px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                        />
+                      </div>
+
+                      {/* QTY */}
+                      <div className="sm:col-span-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 whitespace-nowrap">
+                          QTY <span className="font-normal lowercase text-slate-400">auto</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={medQty}
+                          onChange={e => {
+                            setMedQty(e.target.value);
+                            setMedQtyManual(true);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddPrescription();
+                            }
+                          }}
+                          className="w-full text-xs px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 text-center font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                        />
+                      </div>
                     </div>
 
-                    {/* Auto-suggest dropdown menu */}
-                    {isMedDropdownOpen && (
-                      <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
-                        <div className="px-3 py-1 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Medication Catalogue ({COMMON_MEDICATIONS.filter(m => m.name.toLowerCase().includes(medName.toLowerCase().trim())).length})
-                        </div>
-                        {COMMON_MEDICATIONS.filter(m => m.name.toLowerCase().includes(medName.toLowerCase().trim())).map(med => (
+                    {/* Row 2: Quick Frequency & Duration Preset Chips */}
+                    <div className="flex flex-wrap items-center gap-y-2 gap-x-4 pt-0.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">
+                          FREQUENCY
+                        </span>
+                        {['1-0-0', '0-1-0', '0-0-1', '1-0-1', '1-1-1', '1-1-1-1', 'SOS'].map(freq => (
                           <button
-                            key={med.name}
+                            key={freq}
                             type="button"
                             onClick={() => {
-                              setMedName(med.name);
-                              setMedDosage(med.dosage);
-                              setMedFrequency(med.frequency);
-                              setMedDuration(med.duration);
-                              setMedInstructions(med.instructions);
-                              setIsMedDropdownOpen(false);
+                              setMedFrequency(freq);
+                              setMedQtyManual(false);
                             }}
-                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 flex flex-col text-slate-800 transition-colors"
+                            className={`px-2 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                              medFrequency === freq
+                                ? 'bg-blue-50 border-blue-400 text-blue-700 font-semibold'
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
                           >
-                            <span className="font-semibold text-slate-900">{med.name}</span>
-                            <span className="text-[10px] text-slate-400">
-                              {med.dosage} • {med.frequency} • {med.instructions}
-                            </span>
+                            {freq}
                           </button>
                         ))}
                       </div>
-                    )}
-                  </div>
-                  <div className="flex items-center bg-white border border-slate-200 rounded-md focus-within:ring-1 focus-within:ring-teal-500">
-                    <input
-                      type="text"
-                      placeholder="Dosage (e.g. 1 tab)"
-                      value={medDosage}
-                      onChange={e => setMedDosage(e.target.value)}
-                      className="w-full text-xs px-2.5 py-1.5 bg-transparent border-0 focus:outline-hidden"
-                    />
-                    <VoiceDictationButton
-                      value={medDosage}
-                      onChange={setMedDosage}
-                      variant="badge"
-                      className="border-0 shadow-none"
-                      title="Dictate dosage"
-                    />
-                  </div>
-                  <div className="flex items-center bg-white border border-slate-200 rounded-md focus-within:ring-1 focus-within:ring-teal-500">
-                    <input
-                      type="text"
-                      placeholder="Frequency (e.g. 1-0-1)"
-                      value={medFrequency}
-                      onChange={e => setMedFrequency(e.target.value)}
-                      className="w-full text-xs px-2.5 py-1.5 bg-transparent border-0 focus:outline-hidden"
-                    />
-                    <VoiceDictationButton
-                      value={medFrequency}
-                      onChange={setMedFrequency}
-                      variant="badge"
-                      className="border-0 shadow-none"
-                      title="Dictate frequency"
-                    />
-                  </div>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={handleAddPrescription}
-                      className="w-full py-1.5 px-3 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors flex items-center justify-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add Rx
-                    </button>
-                  </div>
-                </div>
 
-                {/* Prescribed Items Table */}
-                {prescriptions.length > 0 && (
-                  <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
-                    {prescriptions.map(p => (
-                      <div key={p.id} className="p-3 flex items-center justify-between text-xs gap-3">
-                        <div className="flex-1">
-                          <p className="font-bold text-slate-800">{p.medicineName}</p>
-                          <p className="text-[11px] text-slate-500">
-                            {p.dosage} · {p.frequency} · {p.duration}
-                            {p.instructions && ` (${p.instructions})`}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePrescription(p.id)}
-                          className="text-slate-400 hover:text-red-600 p-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">
+                          DURATION
+                        </span>
+                        {[
+                          { label: '3d', value: '3 days' },
+                          { label: '5d', value: '5 days' },
+                          { label: '7d', value: '7 days' },
+                          { label: '10d', value: '10 days' },
+                          { label: '15d', value: '15 days' },
+                          { label: '1m', value: '1 month' }
+                        ].map(dur => (
+                          <button
+                            key={dur.label}
+                            type="button"
+                            onClick={() => {
+                              setMedDuration(dur.value);
+                              setMedQtyManual(false);
+                            }}
+                            className={`px-2 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                              medDuration.toLowerCase() === dur.value.toLowerCase() ||
+                              medDuration.toLowerCase() === dur.label
+                                ? 'bg-blue-50 border-blue-400 text-blue-700 font-semibold'
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            {dur.label}
+                          </button>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+
+                    {/* Row 3: INSTRUCTIONS + Add Button */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 pt-1">
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                          INSTRUCTIONS <span className="font-normal lowercase text-slate-400">Enter adds the row</span>
+                        </label>
+                        <div className="flex items-center bg-white border border-slate-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-600">
+                          <input
+                            type="text"
+                            placeholder="After meals"
+                            value={medInstructions}
+                            onChange={e => setMedInstructions(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddPrescription();
+                              }
+                            }}
+                            className="w-full text-xs px-3 py-2 bg-transparent border-0 text-slate-800 placeholder:text-slate-400 focus:outline-hidden"
+                          />
+                          <VoiceDictationButton
+                            value={medInstructions}
+                            onChange={setMedInstructions}
+                            variant="badge"
+                            className="border-0 shadow-none bg-transparent mr-1"
+                            title="Dictate instructions"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleAddPrescription}
+                        className="px-5 py-2 bg-[#5b87eb] hover:bg-[#4672dc] text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 h-[36px]"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add</span>
+                      </button>
+                    </div>
+
+                    {/* Row 4: Quick Instruction Chips */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {[
+                        'After food',
+                        'Before food',
+                        'Empty stomach',
+                        'With milk',
+                        'With plenty of water',
+                        'At bedtime',
+                        'Complete full course',
+                        'May cause drowsiness'
+                      ].map(chip => {
+                        const isSelected = medInstructions
+                          .toLowerCase()
+                          .split(',')
+                          .map(s => s.trim())
+                          .includes(chip.toLowerCase());
+                        return (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() => {
+                              if (!medInstructions.trim() || medInstructions === 'After meals') {
+                                setMedInstructions(chip);
+                              } else if (isSelected) {
+                                const remaining = medInstructions
+                                  .split(',')
+                                  .map(s => s.trim())
+                                  .filter(s => s.toLowerCase() !== chip.toLowerCase());
+                                setMedInstructions(remaining.join(', '));
+                              } else {
+                                setMedInstructions(`${medInstructions.trim()}, ${chip}`);
+                              }
+                            }}
+                            className={`px-2.5 py-1 text-[11px] rounded-md border transition-colors ${
+                              isSelected
+                                ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
+                                : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                            }`}
+                          >
+                            + {chip}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                )}
+
+                  {/* Prescribed Items List or Empty State */}
+                  {prescriptions.length === 0 ? (
+                    <div className="py-5 text-center text-xs text-slate-400 font-medium">
+                      No prescriptions added yet
+                    </div>
+                  ) : (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
+                      {prescriptions.map(p => (
+                        <div key={p.id} className="p-3 flex items-center justify-between text-xs gap-3 bg-white hover:bg-slate-50/60 transition-colors">
+                          <div className="flex-1">
+                            <p className="font-bold text-slate-800">{p.medicineName}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {p.dosage} · <span className="font-semibold text-slate-700">{p.frequency}</span> · {p.duration}
+                              {p.instructions && ` (${p.instructions})`}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePrescription(p.id)}
+                            className="text-slate-400 hover:text-red-600 p-1"
+                            title="Remove prescription"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Step Navigation */}
