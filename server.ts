@@ -267,10 +267,27 @@ app.get('/api/patients/:id', authMiddleware, (req, res) => {
 });
 
 app.post('/api/patients', authMiddleware, (req: AuthenticatedRequest, res) => {
-  const { fullName, age, gender, mobile, dateOfBirth, bloodGroup, address, emergencyContact, allergies, currentMedications, medicalHistory } = req.body;
+  const {
+    fullName,
+    age,
+    gender,
+    mobile,
+    countryCode,
+    weight,
+    notes,
+    discountPanel,
+    primaryDiagnosis,
+    dateOfBirth,
+    bloodGroup,
+    address,
+    emergencyContact,
+    allergies,
+    currentMedications,
+    medicalHistory
+  } = req.body;
 
-  if (!fullName || age === undefined || !gender || !mobile) {
-    return res.status(400).json({ error: 'Full name, age, gender, and mobile number are required' });
+  if (!fullName || !mobile) {
+    return res.status(400).json({ error: 'Full name and mobile number are required' });
   }
 
   // Prevent accidental duplicate mobile
@@ -286,14 +303,19 @@ app.post('/api/patients', authMiddleware, (req: AuthenticatedRequest, res) => {
   const newPatient = db.createPatient(
     {
       fullName: fullName.trim(),
-      age: Number(age),
-      gender,
+      age: age !== undefined && age !== '' ? Number(age) : 0,
+      gender: gender || 'Prefer not to say',
       mobile: mobile.trim(),
+      countryCode: countryCode || '+91',
+      weight: weight !== undefined && weight !== '' ? Number(weight) : undefined,
+      notes: notes || '',
+      discountPanel: discountPanel || '',
+      primaryDiagnosis: primaryDiagnosis || '',
       dateOfBirth: dateOfBirth || '',
       bloodGroup: bloodGroup || '',
       address: address || '',
       emergencyContact: emergencyContact || '',
-      allergies: allergies || '',
+      allergies: allergies || notes || '',
       currentMedications: currentMedications || '',
       medicalHistory: medicalHistory || '',
       createdById: doctor.id

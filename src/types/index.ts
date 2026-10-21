@@ -24,6 +24,10 @@ export interface Patient {
   age: number;
   gender: Gender;
   mobile: string;
+  countryCode?: string;
+  weight?: number;
+  notes?: string;
+  discountPanel?: string;
   bloodGroup?: string;
   address?: string;
   emergencyContact?: string;

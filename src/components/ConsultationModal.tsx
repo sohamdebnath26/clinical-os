@@ -106,7 +106,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [tests, setTests] = useState<string[]>(consultation.tests || []);
   const [procedures, setProcedures] = useState<ProcedureItem[]>(consultation.procedures || []);
   const [clinicalNotes, setClinicalNotes] = useState({
-    examination: consultation.clinicalNotes?.examination || '',
+    examination:
+      consultation.clinicalNotes?.examination ||
+      [
+        patient.weight ? `Weight: ${patient.weight} kg` : '',
+        patient.notes ? `Intake Notes: ${patient.notes}` : ''
+      ]
+        .filter(Boolean)
+        .join(' | '),
     investigationsAdvised: consultation.clinicalNotes?.investigationsAdvised || '',
     plan: consultation.clinicalNotes?.plan || ''
   });
@@ -1017,12 +1024,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         <div className="px-6 py-4 bg-gradient-to-r from-[#0e423d] via-[#13534c] to-[#17645c] flex items-center justify-between shrink-0 text-white">
           <div>
             <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">Consultation</h2>
-            <div className="flex items-center gap-2 mt-1 text-[13px] text-[#b8dad5] font-medium">
+            <div className="flex items-center gap-2 mt-1 text-[13px] text-[#b8dad5] font-medium flex-wrap">
               <span className="text-white/95 font-medium">{patient.fullName}</span>
               <span>·</span>
               <span>{patient.age}y</span>
               <span>·</span>
               <span>{patient.gender}</span>
+              {patient.weight ? (
+                <>
+                  <span>·</span>
+                  <span>{patient.weight} kg</span>
+                </>
+              ) : null}
               <span className="font-mono text-[11px] text-white bg-white/15 border border-white/20 px-2.5 py-0.5 rounded-md font-semibold tracking-wider ml-0.5">
                 {patient.patientCode}
               </span>
