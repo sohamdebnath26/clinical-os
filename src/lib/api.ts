@@ -256,6 +256,70 @@ export const api = {
       fetchWithAuth<{ message: string }>(`/api/images/${id}`, {
         method: 'DELETE',
       }),
+    createMobileSession: (data: { patientId: string; consultationId?: string }) =>
+      fetchWithAuth<{
+        session: {
+          token: string;
+          patientId: string;
+          patientName: string;
+          patientCode: string;
+          consultationId?: string;
+          doctorName: string;
+          clinicName: string;
+          expiresAt: string;
+          uploadedImages: ClinicalImage[];
+        };
+      }>('/api/images/mobile-session', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    getMobileSession: async (token: string) => {
+      const response = await fetch(`/api/images/mobile-session/${encodeURIComponent(token)}`);
+      if (!response.ok) {
+        let errorMessage = 'QR upload link expired or invalid';
+        try {
+          const json = await response.json();
+          if (json.error) errorMessage = json.error;
+        } catch {
+          // ignore
+        }
+        throw new Error(errorMessage);
+      }
+      return response.json() as Promise<{
+        session: {
+          token: string;
+          patientId: string;
+          patientName: string;
+          patientCode: string;
+          consultationId?: string;
+          doctorName: string;
+          clinicName: string;
+          expiresAt: string;
+          uploadedImages: ClinicalImage[];
+        };
+      }>;
+    },
+    uploadViaMobileSession: async (
+      token: string,
+      data: { dataUrl: string; filename?: string; caption?: string; tags?: string[] }
+    ) => {
+      const response = await fetch(`/api/images/mobile-session/${encodeURIComponent(token)}/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        let errorMessage = 'Failed to upload image from mobile';
+        try {
+          const json = await response.json();
+          if (json.error) errorMessage = json.error;
+        } catch {
+          // ignore
+        }
+        throw new Error(errorMessage);
+      }
+      return response.json() as Promise<{ image: ClinicalImage; uploadedCount: number }>;
+    },
   },
 
   ai: {

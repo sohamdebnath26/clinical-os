@@ -1,6 +1,22 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ClinicalImage } from '../types';
-import { Camera, Upload, Trash2, Eye, X, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { api } from '../lib/api';
+import QRCode from 'qrcode';
+import {
+  Camera,
+  Upload,
+  Trash2,
+  Eye,
+  X,
+  Image as ImageIcon,
+  Sparkles,
+  QrCode,
+  Smartphone,
+  CheckCircle2,
+  Copy,
+  RefreshCw,
+  Loader2
+} from 'lucide-react';
 
 interface ClinicalImageUploaderProps {
   images: ClinicalImage[];
@@ -8,6 +24,10 @@ interface ClinicalImageUploaderProps {
   onDelete?: (imageId: string) => Promise<void>;
   onAnalyzeWithAI?: (image: ClinicalImage) => void;
   readOnly?: boolean;
+  patientId?: string;
+  patientName?: string;
+  consultationId?: string;
+  onRemoteImagesSynced?: (syncedImages: ClinicalImage[]) => void;
 }
 
 export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
@@ -15,7 +35,11 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
   onUpload,
   onDelete,
   onAnalyzeWithAI,
-  readOnly = false
+  readOnly = false,
+  patientId,
+  patientName,
+  consultationId,
+  onRemoteImagesSynced
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<ClinicalImage | null>(null);
@@ -23,9 +47,99 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Mobile QR Code Upload State
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [mobileUploadUrl, setMobileUploadUrl] = useState<string>('');
+  const [mobileSessionToken, setMobileSessionToken] = useState<string | null>(null);
+  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [mobileSyncedCount, setMobileSyncedCount] = useState(0);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const knownImageIdsRef = useRef<Set<string>>(new Set(images.map(i => i.id)));
+
+  useEffect(() => {
+    images.forEach(img => knownImageIdsRef.current.add(img.id));
+  }, [images]);
+
+  const startMobileQrSession = async () => {
+    if (!patientId) {
+      setErrorMsg('Patient context is required to generate a mobile upload QR code.');
+      return;
+    }
+
+    setErrorMsg(null);
+    setShowQrModal(true);
+    setIsGeneratingQr(true);
+    setCopiedLink(false);
+
+    try {
+      const res = await api.images.createMobileSession({
+        patientId,
+        consultationId
+      });
+
+      const token = res.session.token;
+      setMobileSessionToken(token);
+
+      const url = `${window.location.origin}${window.location.pathname}?mobileUploadToken=${encodeURIComponent(token)}`;
+      setMobileUploadUrl(url);
+
+      const generatedQr = await QRCode.toDataURL(url, {
+        width: 280,
+        margin: 2,
+        color: {
+          dark: '#0f2926',
+          light: '#ffffff'
+        }
+      });
+      setQrDataUrl(generatedQr);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to generate QR code';
+      setErrorMsg(message);
+    } finally {
+      setIsGeneratingQr(false);
+    }
+  };
+
+  // Poll the active mobile session so images uploaded from the phone appear automatically on desktop
+  useEffect(() => {
+    if (!mobileSessionToken) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.images.getMobileSession(mobileSessionToken);
+        const sessionImages = res.session.uploadedImages || [];
+
+        const newRemoteImages = sessionImages.filter(img => !knownImageIdsRef.current.has(img.id));
+        if (newRemoteImages.length > 0) {
+          newRemoteImages.forEach(img => knownImageIdsRef.current.add(img.id));
+          setMobileSyncedCount(prev => prev + newRemoteImages.length);
+          if (onRemoteImagesSynced) {
+            onRemoteImagesSynced(sessionImages);
+          }
+        }
+      } catch {
+        // Ignore transient polling errors
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [mobileSessionToken, onRemoteImagesSynced]);
+
+  const handleCopyMobileUrl = async () => {
+    if (!mobileUploadUrl) return;
+    try {
+      await navigator.clipboard.writeText(mobileUploadUrl);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      // ignore
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -113,12 +227,22 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
       {/* Header & Upload Controls */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
         <div>
-          <h4 className="text-sm font-semibold text-slate-800">Clinical Documentation Images</h4>
-          <p className="text-xs text-slate-500">Upload or take clinical photos. JPG/PNG, up to 4MB each.</p>
+          <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+            <span>Clinical Documentation Images</span>
+            {mobileSyncedCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                <Smartphone className="w-3 h-3 text-emerald-700" />
+                {mobileSyncedCount} synced from mobile
+              </span>
+            )}
+          </h4>
+          <p className="text-xs text-slate-500">
+            Upload from computer, take photo with webcam, or scan QR code to upload directly from your mobile phone.
+          </p>
         </div>
 
         {!readOnly && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               ref={fileInputRef}
               type="file"
@@ -126,6 +250,17 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
               onChange={handleFileChange}
               className="hidden"
             />
+            {patientId && (
+              <button
+                type="button"
+                onClick={startMobileQrSession}
+                disabled={isUploading}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 border border-teal-300 rounded-lg text-xs font-bold text-teal-900 shadow-2xs transition-colors disabled:opacity-50"
+              >
+                <QrCode className="w-3.5 h-3.5 text-teal-700" />
+                <span>Scan QR from Mobile</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -148,10 +283,159 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
         )}
       </div>
 
+      {/* Inline Mobile QR Code Card (Quick-access banner inside Clinical Images section) */}
+      {!readOnly && patientId && (
+        <div className="bg-gradient-to-r from-teal-50/90 via-emerald-50/60 to-slate-50 border border-teal-200/90 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <QrCode className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h5 className="text-xs font-bold text-slate-900">
+                  Upload Clinical Photos from Doctor&apos;s Mobile Phone
+                </h5>
+                <span className="text-[10px] font-bold bg-white text-teal-800 px-2 py-0.5 rounded-full border border-teal-200">
+                  Instant Live Sync
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Generate a secure one-time QR code, scan it with your phone camera, and snap or select lesion photos — they appear here automatically.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={startMobileQrSession}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0 self-end sm:self-center"
+          >
+            <QrCode className="w-4 h-4 text-teal-200" />
+            <span>Generate QR Code</span>
+          </button>
+        </div>
+      )}
+
       {errorMsg && (
         <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center justify-between">
           <span>{errorMsg}</span>
           <button type="button" onClick={() => setErrorMsg(null)}><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
+      {/* Mobile QR Code Scanner Modal */}
+      {showQrModal && (
+        <div
+          onClick={() => setShowQrModal(false)}
+          className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-xs"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="bg-[#0d3f3b] text-white px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-300">
+                  <QrCode className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold leading-tight">Scan QR to Upload from Mobile</h3>
+                  <p className="text-[11px] text-teal-200">
+                    {patientName ? `Patient: ${patientName}` : 'Direct Mobile-to-Consultation Sync'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQrModal(false)}
+                className="text-teal-200 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 flex flex-col items-center text-center space-y-4">
+              {isGeneratingQr ? (
+                <div className="w-64 h-64 flex flex-col items-center justify-center bg-slate-50 rounded-2xl border border-slate-200">
+                  <Loader2 className="w-8 h-8 text-teal-700 animate-spin mb-2" />
+                  <span className="text-xs font-semibold text-slate-600">Generating secure QR code...</span>
+                </div>
+              ) : qrDataUrl ? (
+                <div className="p-3 bg-white rounded-2xl border-2 border-teal-600/30 shadow-md">
+                  <img
+                    src={qrDataUrl}
+                    alt="Scan QR code with mobile phone to upload clinical images"
+                    className="w-60 h-60 object-contain"
+                  />
+                </div>
+              ) : null}
+
+              <div className="space-y-1.5 max-w-xs">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Waiting for mobile photos (Live Sync Active)</span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  1. Open your phone&apos;s camera and point it at this QR code.<br />
+                  2. Tap the link that appears to take or select photos.<br />
+                  3. Uploaded photos appear automatically in this consultation.
+                </p>
+              </div>
+
+              {images.length > 0 && (
+                <div className="w-full bg-teal-50/70 border border-teal-200 rounded-xl p-2.5 flex items-center justify-between text-xs text-teal-900">
+                  <span className="font-semibold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-teal-700" />
+                    <span>{images.length} image{images.length === 1 ? '' : 's'} in consultation</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowQrModal(false)}
+                    className="text-xs font-bold text-teal-800 underline"
+                  >
+                    View Images
+                  </button>
+                </div>
+              )}
+
+              {/* Copy link / Regenerate controls */}
+              <div className="w-full pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyMobileUrl}
+                  className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                >
+                  {copiedLink ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700">Mobile Link Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Copy Mobile Link</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={startMobileQrSession}
+                  disabled={isGeneratingQr}
+                  className="py-2 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                  title="Generate a fresh QR code"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Refresh QR</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(false)}
+                  className="py-2 px-4 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold transition"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -212,7 +496,7 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
             <ImageIcon className="w-6 h-6" />
           </div>
-          <p className="text-xs font-medium text-slate-600">No images yet — click to upload</p>
+          <p className="text-xs font-medium text-slate-600">No images yet — upload from desktop or scan QR with mobile</p>
           <p className="text-[11px] text-slate-400 mt-1">Clinical photos document the visit</p>
         </div>
       ) : (

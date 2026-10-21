@@ -822,6 +822,15 @@ class DatabaseService {
 
   public addClinicalImage(img: ClinicalImage): ClinicalImage {
     this.data.clinicalImages.push(img);
+    if (img.consultationId) {
+      const consult = this.data.consultations.find(c => c.id === img.consultationId);
+      if (consult) {
+        if (!consult.images) consult.images = [];
+        if (!consult.images.some(existing => existing.id === img.id)) {
+          consult.images.push(img);
+        }
+      }
+    }
     this.persist();
     return img;
   }
@@ -830,6 +839,11 @@ class DatabaseService {
     const idx = this.data.clinicalImages.findIndex(i => i.id === id);
     if (idx >= 0) {
       this.data.clinicalImages.splice(idx, 1);
+      for (const consult of this.data.consultations) {
+        if (consult.images && consult.images.some(img => img.id === id)) {
+          consult.images = consult.images.filter(img => img.id !== id);
+        }
+      }
       this.persist();
       return true;
     }

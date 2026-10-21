@@ -693,6 +693,191 @@ app.delete('/api/images/:id', authMiddleware, (req, res) => {
 });
 
 // ==========================================
+// MOBILE QR CODE CLINICAL IMAGE UPLOAD SESSIONS
+// ==========================================
+interface MobileImageUploadSession {
+  token: string;
+  patientId: string;
+  patientName: string;
+  patientCode: string;
+  consultationId?: string;
+  doctorId: string;
+  doctorName: string;
+  clinicName: string;
+  createdAt: number;
+  expiresAt: number;
+  uploadedImages: import('./src/types/index.js').ClinicalImage[];
+}
+
+const mobileUploadSessions = new Map<string, MobileImageUploadSession>();
+
+function cleanupExpiredMobileSessions() {
+  const now = Date.now();
+  for (const [token, session] of mobileUploadSessions.entries()) {
+    if (session.expiresAt < now) {
+      mobileUploadSessions.delete(token);
+    }
+  }
+}
+
+// Create a QR mobile upload session (authenticated doctor)
+app.post('/api/images/mobile-session', authMiddleware, (req: AuthenticatedRequest, res) => {
+  cleanupExpiredMobileSessions();
+  const { patientId, consultationId } = req.body;
+  if (!patientId) {
+    return res.status(400).json({ error: 'patientId is required' });
+  }
+
+  const patient = db.findPatientById(patientId);
+  if (!patient) {
+    return res.status(404).json({ error: 'Patient not found' });
+  }
+
+  const doctor = req.doctor!;
+  const token = `mob_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
+  const now = Date.now();
+  const expiresAt = now + 30 * 60 * 1000; // 30 minutes validity
+
+  // Include any existing images for this consultation so desktop polling stays in sync
+  const existingImages = db
+    .getPatientImages(patient.id)
+    .filter(img => !consultationId || img.consultationId === consultationId);
+
+  const session: MobileImageUploadSession = {
+    token,
+    patientId: patient.id,
+    patientName: patient.fullName,
+    patientCode: patient.patientCode,
+    consultationId,
+    doctorId: doctor.id,
+    doctorName: doctor.name,
+    clinicName: doctor.clinicName || 'Dermatology & Clinical Practice',
+    createdAt: now,
+    expiresAt,
+    uploadedImages: [...existingImages]
+  };
+
+  mobileUploadSessions.set(token, session);
+
+  res.status(201).json({
+    session: {
+      token: session.token,
+      patientId: session.patientId,
+      patientName: session.patientName,
+      patientCode: session.patientCode,
+      consultationId: session.consultationId,
+      doctorName: session.doctorName,
+      clinicName: session.clinicName,
+      expiresAt: new Date(session.expiresAt).toISOString(),
+      uploadedImages: session.uploadedImages
+    }
+  });
+});
+
+// Public endpoint: Get mobile upload session info (used by mobile phone after scanning QR & by desktop polling)
+app.get('/api/images/mobile-session/:token', (req, res) => {
+  cleanupExpiredMobileSessions();
+  const session = mobileUploadSessions.get(req.params.token);
+  if (!session) {
+    return res.status(404).json({ error: 'QR upload link has expired or is invalid. Please generate a new QR code on your computer.' });
+  }
+
+  // Refresh images from DB in case any were added or removed
+  const latestImages = db
+    .getPatientImages(session.patientId)
+    .filter(img => !session.consultationId || img.consultationId === session.consultationId);
+  session.uploadedImages = latestImages;
+
+  res.json({
+    session: {
+      token: session.token,
+      patientId: session.patientId,
+      patientName: session.patientName,
+      patientCode: session.patientCode,
+      consultationId: session.consultationId,
+      doctorName: session.doctorName,
+      clinicName: session.clinicName,
+      expiresAt: new Date(session.expiresAt).toISOString(),
+      uploadedImages: session.uploadedImages
+    }
+  });
+});
+
+// Public token-authorized endpoint: Upload image from mobile phone via scanned QR code
+app.post('/api/images/mobile-session/:token/upload', (req, res) => {
+  cleanupExpiredMobileSessions();
+  const session = mobileUploadSessions.get(req.params.token);
+  if (!session) {
+    return res.status(404).json({ error: 'QR upload session expired or invalid. Please scan a fresh QR code.' });
+  }
+
+  const { dataUrl, filename, caption, tags } = req.body;
+  if (!dataUrl) {
+    return res.status(400).json({ error: 'Image dataUrl is required' });
+  }
+
+  try {
+    const matches = dataUrl.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      return res.status(400).json({ error: 'Invalid base64 image data' });
+    }
+
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    if (buffer.length > 8 * 1024 * 1024) {
+      return res.status(413).json({ error: 'Image exceeds maximum allowed size of 8MB' });
+    }
+
+    const ext = mimeType.includes('png') ? 'png' : 'jpg';
+    const imageId = `img-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+    const savedFilename = `${imageId}.${ext}`;
+    const filePath = path.join(UPLOADS_DIR, savedFilename);
+
+    fs.writeFileSync(filePath, buffer);
+
+    const publicUrl = `/uploads/${savedFilename}`;
+    const clinicalImage = db.addClinicalImage({
+      id: imageId,
+      patientId: session.patientId,
+      consultationId: session.consultationId,
+      url: publicUrl,
+      filename: filename || `mobile_${savedFilename}`,
+      mimeType,
+      sizeBytes: buffer.length,
+      caption: caption || 'Uploaded via Mobile QR Scan',
+      tags: tags || ['mobile-qr'],
+      createdAt: new Date().toISOString()
+    });
+
+    session.uploadedImages.push(clinicalImage);
+
+    db.logAudit({
+      actorId: session.doctorId,
+      actorName: session.doctorName,
+      action: 'image_uploaded_via_mobile_qr',
+      resourceType: 'clinical_image',
+      resourceId: imageId,
+      metadata: {
+        patientId: session.patientId,
+        consultationId: session.consultationId,
+        sizeBytes: buffer.length
+      }
+    });
+
+    res.status(201).json({
+      image: clinicalImage,
+      uploadedCount: session.uploadedImages.length
+    });
+  } catch (err: unknown) {
+    console.error('Mobile QR image upload failed:', err);
+    const message = err instanceof Error ? err.message : 'Failed to upload image from mobile';
+    res.status(500).json({ error: message });
+  }
+});
+
+// ==========================================
 // AI ASSISTANT ROUTES
 // ==========================================
 app.post('/api/ai/summarize-consultation', authMiddleware, async (req, res) => {

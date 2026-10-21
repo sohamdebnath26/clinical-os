@@ -1862,6 +1862,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 onUpload={handleImageUpload}
                 onDelete={handleImageDelete}
                 onAnalyzeWithAI={handleAnalyzeConsultationImage}
+                patientId={patient.id}
+                patientName={patient.fullName}
+                consultationId={consultation.id}
+                onRemoteImagesSynced={(syncedImages) => {
+                  setImages(prev => {
+                    const existingIds = new Set(prev.map(i => i.id));
+                    const added = syncedImages.filter(i => !existingIds.has(i.id));
+                    return added.length > 0 ? [...prev, ...added] : prev;
+                  });
+                }}
               />
 
               {/* Step Navigation */}

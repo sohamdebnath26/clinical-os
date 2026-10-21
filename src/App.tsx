@@ -19,6 +19,7 @@ import { Patient, Consultation } from './types';
 import { api } from './lib/api';
 import { CheckCircle2, X } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { MobileImageUploadView } from './components/MobileImageUploadView';
 
 function MainApp() {
   const { doctor, isLoading } = useAuth();
@@ -345,6 +346,19 @@ function MainApp() {
 }
 
 export default function App() {
+  const mobileUploadToken =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('mobileUploadToken')
+      : null;
+
+  if (mobileUploadToken) {
+    return (
+      <ErrorBoundary fallbackTitle="Mobile Image Upload Error">
+        <MobileImageUploadView token={mobileUploadToken} />
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary fallbackTitle="Clinical OS Application Error">
       <LanguageProvider>
