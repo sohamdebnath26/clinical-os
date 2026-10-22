@@ -124,6 +124,7 @@ export const VoiceDictationButton: React.FC<VoiceDictationButtonProps> = ({
       {variant === 'badge' && (
         <button
           type="button"
+          onMouseDown={e => e.preventDefault()}
           onClick={() => toggleListening(speechLang)}
           title={title || defaultTitle}
           aria-label={isListening ? 'Stop voice dictation' : 'Start voice dictation'}
@@ -153,6 +154,7 @@ export const VoiceDictationButton: React.FC<VoiceDictationButtonProps> = ({
       {variant === 'button' && (
         <button
           type="button"
+          onMouseDown={e => e.preventDefault()}
           onClick={() => toggleListening(speechLang)}
           title={title || defaultTitle}
           aria-label={isListening ? 'Stop voice dictation' : 'Start voice dictation'}
@@ -185,6 +187,7 @@ export const VoiceDictationButton: React.FC<VoiceDictationButtonProps> = ({
       {variant === 'prominent' && (
         <button
           type="button"
+          onMouseDown={e => e.preventDefault()}
           onClick={() => toggleListening(speechLang)}
           title={title || defaultTitle}
           aria-label={isListening ? 'Stop voice dictation' : 'Start clinical voice dictation'}

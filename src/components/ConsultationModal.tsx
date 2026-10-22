@@ -294,6 +294,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [isAutoFillingSummary, setIsAutoFillingSummary] = useState(false);
   const [autoFillSummaryReady, setAutoFillSummaryReady] = useState(false);
   const doctorEditedFieldsRef = React.useRef<Set<string>>(new Set());
+  const hasUserEditedNotesRef = React.useRef<boolean>(false);
+  const medDropdownContainerRef = React.useRef<HTMLDivElement>(null);
+  const medNameInputRef = React.useRef<HTMLInputElement>(null);
+  const [rxFeedbackHint, setRxFeedbackHint] = useState<string | null>(null);
+  const [procFeedbackHint, setProcFeedbackHint] = useState<string | null>(null);
 
   const markDoctorEdited = (fieldKey: string) => {
     doctorEditedFieldsRef.current.add(fieldKey);
@@ -394,6 +399,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
   // Trigger instant client-side + background LLM AI Summary auto-fill whenever singleVoiceNote changes
   const handleSingleVoiceNoteChange = (newText: string, forceOverwrite = false) => {
+    hasUserEditedNotesRef.current = true;
     setSingleVoiceNote(newText);
     if (!newText.trim()) {
       setAutoFillSummaryReady(false);
@@ -409,8 +415,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     });
   };
 
-  // Also refine with backend AI (OpenRouter / Gemini) after brief debounce when clinical notes are filled
+  // Refine with backend AI after debounce ONLY when the doctor has actively edited or dictated clinical notes
   useEffect(() => {
+    if (!hasUserEditedNotesRef.current) return;
+
     const combined = [
       singleVoiceNote.trim(),
       clinicalNotes.examination.trim(),
@@ -444,7 +452,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       } finally {
         setIsAutoFillingSummary(false);
       }
-    }, 650);
+    }, 900);
 
     return () => clearTimeout(timer);
   }, [
@@ -477,6 +485,21 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [medQtyManual, setMedQtyManual] = useState(false);
   const [medInstructions, setMedInstructions] = useState('After meals');
   const [isMedDropdownOpen, setIsMedDropdownOpen] = useState(false);
+
+  // Close Drug Catalogue dropdown cleanly when clicking outside
+  useEffect(() => {
+    if (!isMedDropdownOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (
+        medDropdownContainerRef.current &&
+        !medDropdownContainerRef.current.contains(e.target as Node)
+      ) {
+        setIsMedDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [isMedDropdownOpen]);
 
   // Helper to expand shorthand frequency like "101" -> "1-0-1"
   const normalizeFrequencyInput = (raw: string): string => {
@@ -852,8 +875,57 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     }
   };
 
-  // Switch to tab
+  // Switch to tab cleanly, committing any pending inline inputs
   const handleTabChange = (tab: TabType) => {
+    setIsMedDropdownOpen(false);
+    setRxFeedbackHint(null);
+    setProcFeedbackHint(null);
+
+    if (customDiagnosis.trim()) {
+      const cleanDiag = customDiagnosis.trim();
+      markDoctorEdited('summary.primaryDiagnosis');
+      setDiagnoses(prev => (prev.includes(cleanDiag) ? prev : [...prev, cleanDiag]));
+      setCustomDiagnosis('');
+    }
+    if (customTest.trim()) {
+      const cleanTest = customTest.trim();
+      markDoctorEdited('summary.tests');
+      setTests(prev => (prev.includes(cleanTest) ? prev : [...prev, cleanTest]));
+      setCustomTest('');
+    }
+    if (customProcedureName.trim()) {
+      const cleanProc = customProcedureName.trim();
+      markDoctorEdited('summary.procedures');
+      setProcedures(prev => [
+        ...prev,
+        {
+          id: `proc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          name: cleanProc,
+          cost: customProcedureCost
+        }
+      ]);
+      setCustomProcedureName('');
+    }
+    if (customSymptomInput.trim()) {
+      const cleanSym = customSymptomInput.trim();
+      markDoctorEdited('summary.symptoms');
+      setSymptoms(prev => (prev.includes(cleanSym) ? prev : [...prev, cleanSym]));
+      setCustomSymptomInput('');
+    }
+
+    if (tab === 'aisummary' && hasUserEditedNotesRef.current) {
+      const parsed = parseClinicalNoteToStructuredSummary(singleVoiceNote, {
+        existingExamination: clinicalNotes.examination,
+        existingInvestigations: clinicalNotes.investigationsAdvised,
+        existingPlan: clinicalNotes.plan,
+        patientPrimaryDiagnosis: patient.primaryDiagnosis,
+        existingSymptoms: symptoms
+      });
+      applyParsedClinicalNoteToSummary(parsed, {
+        source: singleVoiceNote.trim() ? 'single' : 'sections'
+      });
+    }
+
     setActiveTab(tab);
   };
 
@@ -869,54 +941,56 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
   // Diagnosis handlers
   const toggleDiagnosis = (diag: string) => {
-    if (diagnoses.includes(diag)) {
-      setDiagnoses(diagnoses.filter(d => d !== diag));
-    } else {
-      setDiagnoses([...diagnoses, diag]);
-    }
+    markDoctorEdited('summary.primaryDiagnosis');
+    setDiagnoses(prev =>
+      prev.includes(diag) ? prev.filter(d => d !== diag) : [...prev, diag]
+    );
   };
 
   const addCustomDiagnosis = () => {
-    if (!customDiagnosis.trim()) return;
-    if (!diagnoses.includes(customDiagnosis.trim())) {
-      setDiagnoses([...diagnoses, customDiagnosis.trim()]);
-    }
+    const trimmed = customDiagnosis.trim();
+    if (!trimmed) return;
+    markDoctorEdited('summary.primaryDiagnosis');
+    setDiagnoses(prev => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
     setCustomDiagnosis('');
   };
 
   // Test handlers
   const toggleTest = (test: string) => {
-    if (tests.includes(test)) {
-      setTests(tests.filter(t => t !== test));
-    } else {
-      setTests([...tests, test]);
-    }
+    markDoctorEdited('summary.tests');
+    setTests(prev =>
+      prev.includes(test) ? prev.filter(t => t !== test) : [...prev, test]
+    );
   };
 
   const addCustomTest = () => {
-    if (!customTest.trim()) return;
-    if (!tests.includes(customTest.trim())) {
-      setTests([...tests, customTest.trim()]);
-    }
+    const trimmed = customTest.trim();
+    if (!trimmed) return;
+    markDoctorEdited('summary.tests');
+    setTests(prev => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
     setCustomTest('');
   };
 
   // Procedure handlers
   const addProcedure = (name: string, cost: number) => {
+    markDoctorEdited('summary.procedures');
+    setProcFeedbackHint(null);
     const newProc: ProcedureItem = {
       id: `proc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       name,
       cost
     };
-    setProcedures([...procedures, newProc]);
+    setProcedures(prev => [...prev, newProc]);
   };
 
   const removeProcedure = (id: string) => {
-    setProcedures(procedures.filter(p => p.id !== id));
+    markDoctorEdited('summary.procedures');
+    setProcedures(prev => prev.filter(p => p.id !== id));
   };
 
   const updateProcedureCost = (id: string, cost: number) => {
-    setProcedures(procedures.map(p => p.id === id ? { ...p, cost } : p));
+    markDoctorEdited('summary.procedures');
+    setProcedures(prev => prev.map(p => (p.id === id ? { ...p, cost } : p)));
   };
 
   // Image Upload handler
@@ -935,7 +1009,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
   const handleImageDelete = async (imageId: string) => {
     await api.images.delete(imageId);
-    setImages(images.filter(i => i.id !== imageId));
+    setImages(prev => prev.filter(i => i.id !== imageId));
   };
 
   const handleAnalyzeConsultationImage = async (image: ClinicalImage) => {
@@ -955,9 +1029,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
   const handleApplyDiagnosesFromAI = () => {
     if (!activeImageAnalysis) return;
+    markDoctorEdited('summary.primaryDiagnosis');
     const newDiags = activeImageAnalysis.differentials.map(d => d.condition);
-    const updated = Array.from(new Set([...diagnoses, ...newDiags]));
-    setDiagnoses(updated);
+    setDiagnoses(prev => Array.from(new Set([...prev, ...newDiags])));
     setAnalysisFeedbackToast('Diagnoses applied! Advancing to Clinical Notes...');
     setActiveImageAnalysis(null);
     setIsAnalyzingImage(false);
@@ -969,6 +1043,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
   const handleApplyPlanFromAI = () => {
     if (!activeImageAnalysis) return;
+    markDoctorEdited('notes.investigationsAdvised');
+    markDoctorEdited('notes.plan');
     const currentNotes = { ...clinicalNotes };
     if (activeImageAnalysis.recommendedInvestigations.length > 0) {
       const testsStr = activeImageAnalysis.recommendedInvestigations.join(', ');
@@ -991,7 +1067,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     }, 600);
   };
 
-
   // Body Marker handlers
   const handleAddMarker = (newMarker: Omit<BodyMarker, 'id' | 'createdAt'>) => {
     const marker: BodyMarker = {
@@ -999,16 +1074,22 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       id: `bm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       createdAt: new Date().toISOString()
     };
-    setBodyMarkers([...bodyMarkers, marker]);
+    setBodyMarkers(prev => [...prev, marker]);
   };
 
   const handleRemoveMarker = (id: string) => {
-    setBodyMarkers(bodyMarkers.filter(m => m.id !== id));
+    setBodyMarkers(prev => prev.filter(m => m.id !== id));
   };
 
   // Prescription handler
   const handleAddPrescription = () => {
-    if (!medName.trim()) return;
+    if (!medName.trim()) {
+      setIsMedDropdownOpen(true);
+      medNameInputRef.current?.focus();
+      setRxFeedbackHint('Please select a drug from the catalogue or type a medication name to add.');
+      return;
+    }
+    setRxFeedbackHint(null);
     const normalizedFreq = normalizeFrequencyInput(medFrequency) || '1-0-1';
     const normalizedDur = normalizeDurationInput(medDuration) || '5 days';
     const doseDisplay = [
@@ -1032,14 +1113,15 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       createdAt: new Date().toISOString()
     };
     markDoctorEdited('summary.medications');
-    setPrescriptions([...prescriptions, item]);
+    setPrescriptions(prev => [...prev, item]);
     setMedName('');
     setMedQtyManual(false);
     setIsMedDropdownOpen(false);
   };
 
   const handleRemovePrescription = (id: string) => {
-    setPrescriptions(prescriptions.filter(p => p.id !== id));
+    markDoctorEdited('summary.medications');
+    setPrescriptions(prev => prev.filter(p => p.id !== id));
   };
 
   // Sign & Finish Handler
@@ -1047,12 +1129,69 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     setIsSigning(true);
     setError(null);
 
+    const finalSymptoms = Array.from(
+      new Set([
+        ...symptoms.filter(Boolean),
+        ...(customSymptomInput.trim() ? [customSymptomInput.trim()] : [])
+      ])
+    );
+
     const combinedDiagnoses = Array.from(
       new Set([
         ...diagnoses.filter(Boolean),
+        ...(customDiagnosis.trim() ? [customDiagnosis.trim()] : []),
         ...(secondaryDiagnosis.trim() ? [secondaryDiagnosis.trim()] : [])
       ])
     );
+
+    const finalTests = Array.from(
+      new Set([
+        ...tests.filter(Boolean),
+        ...(customTest.trim() ? [customTest.trim()] : [])
+      ])
+    );
+
+    const finalProcedures = [
+      ...procedures,
+      ...(customProcedureName.trim()
+        ? [
+            {
+              id: `proc_${Date.now()}`,
+              name: customProcedureName.trim(),
+              cost: customProcedureCost
+            }
+          ]
+        : [])
+    ];
+
+    const finalPrescriptions = [
+      ...prescriptions,
+      ...(medName.trim()
+        ? [
+            {
+              id: `rx_${Date.now()}`,
+              patientId: patient.id,
+              consultationId: consultation.id,
+              medicineName: medName.trim(),
+              dosage: [
+                medDosage.trim() || '500 mg',
+                medRoute ? `(${medRoute})` : '',
+                medQty ? `Qty: ${medQty}` : ''
+              ]
+                .filter(Boolean)
+                .join(' · '),
+              frequency: normalizeFrequencyInput(medFrequency) || '1-0-1',
+              duration: normalizeDurationInput(medDuration) || '5 days',
+              instructions: medInstructions.trim(),
+              date: new Date().toISOString(),
+              createdAt: new Date().toISOString()
+            }
+          ]
+        : [])
+    ];
+
+    const finalProceduresTotal = finalProcedures.reduce((acc, p) => acc + (p.cost || 0), 0);
+    const finalGrandTotal = finalProceduresTotal + (fee || 0);
 
     // If AI summary is not generated, create structured deterministic summary from the 7 cards
     let finalSummary = aiSummary;
@@ -1060,8 +1199,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       const lines: string[] = [];
       const dateFormatted = consultation.consultationDate.split('T')[0];
       lines.push(`CONSULTATION — ${dateFormatted}\n`);
-      if (symptoms.length > 0) {
-        lines.push(`CHIEF COMPLAINTS: ${symptoms.join(', ')}`);
+      if (finalSymptoms.length > 0) {
+        lines.push(`CHIEF COMPLAINTS: ${finalSymptoms.join(', ')}`);
       }
       if (combinedDiagnoses.length > 0) {
         lines.push('DIAGNOSIS');
@@ -1084,9 +1223,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         lines.push('');
       }
       lines.push('CHARGES');
-      lines.push(`• Procedures: ₹${proceduresTotal}`);
+      lines.push(`• Procedures: ₹${finalProceduresTotal}`);
       lines.push(`• Consultation fee: ₹${fee}`);
-      lines.push(`• Total: ₹${grandTotal}`);
+      lines.push(`• Total: ₹${finalGrandTotal}`);
       finalSummary = lines.join('\n');
     }
 
@@ -1100,15 +1239,15 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     try {
       const res = await api.consultations.sign(consultation.id, {
         fee,
-        symptoms,
+        symptoms: finalSymptoms,
         diagnoses: combinedDiagnoses,
-        tests,
-        procedures,
+        tests: finalTests,
+        procedures: finalProcedures,
         clinicalNotes: updatedClinicalNotes,
         bodyMarkers,
         images,
         followUp,
-        prescriptions,
+        prescriptions: finalPrescriptions,
         aiSummary: finalSummary
       });
 
@@ -1170,8 +1309,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           <div className="flex items-center gap-3">
             <button
               type="button"
+              onMouseDown={e => e.preventDefault()}
               onClick={() => handleTabChange('aisummary')}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border shadow-2xs shrink-0 ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border shadow-2xs shrink-0 cursor-pointer ${
                 activeTab === 'aisummary'
                   ? 'bg-white text-[#0f2926] border-white ring-2 ring-teal-300/60'
                   : 'bg-white/15 hover:bg-white/25 text-white border-white/25'
@@ -1197,8 +1337,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
             <button
               type="button"
+              onMouseDown={e => e.preventDefault()}
               onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-white/12 hover:bg-white/20 border border-white/15 flex items-center justify-center text-white/90 hover:text-white transition-colors"
+              className="w-8 h-8 rounded-lg bg-white/12 hover:bg-white/20 border border-white/15 flex items-center justify-center text-white/90 hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1209,8 +1350,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         <div className="flex items-center gap-1 px-6 border-b border-[#e2ebe8] bg-white overflow-x-auto shrink-0 scrollbar-none">
           <button
             type="button"
+            onMouseDown={e => e.preventDefault()}
             onClick={() => handleTabChange('diagnosis')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'diagnosis'
                 ? 'border-[#157a6e] text-[#115e56] font-semibold'
                 : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
@@ -1227,8 +1369,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
           <button
             type="button"
+            onMouseDown={e => e.preventDefault()}
             onClick={() => handleTabChange('tests')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'tests'
                 ? 'border-[#157a6e] text-[#115e56] font-semibold'
                 : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
@@ -1245,8 +1388,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
           <button
             type="button"
+            onMouseDown={e => e.preventDefault()}
             onClick={() => handleTabChange('procedure')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'procedure'
                 ? 'border-[#157a6e] text-[#115e56] font-semibold'
                 : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
@@ -1263,8 +1407,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
           <button
             type="button"
+            onMouseDown={e => e.preventDefault()}
             onClick={() => handleTabChange('notes')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'notes'
                 ? 'border-[#157a6e] text-[#115e56] font-semibold'
                 : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
@@ -1276,8 +1421,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
           <button
             type="button"
+            onMouseDown={e => e.preventDefault()}
             onClick={() => handleTabChange('bodymap')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'bodymap'
                 ? 'border-[#157a6e] text-[#115e56] font-semibold'
                 : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
@@ -1294,8 +1440,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
           <button
             type="button"
+            onMouseDown={e => e.preventDefault()}
             onClick={() => handleTabChange('images')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'images'
                 ? 'border-[#157a6e] text-[#115e56] font-semibold'
                 : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
@@ -1312,8 +1459,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
           <button
             type="button"
+            onMouseDown={e => e.preventDefault()}
             onClick={() => handleTabChange('followup')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'followup'
                 ? 'border-[#157a6e] text-[#115e56] font-semibold'
                 : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
@@ -1361,8 +1509,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       {diag}
                       <button
                         type="button"
+                        onMouseDown={e => e.preventDefault()}
                         onClick={() => toggleDiagnosis(diag)}
-                        className="hover:text-teal-200 p-0.5"
+                        className="hover:text-teal-200 p-0.5 cursor-pointer"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -1398,8 +1547,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <button
                       key={d}
                       type="button"
+                      onMouseDown={e => e.preventDefault()}
                       onClick={() => toggleDiagnosis(d)}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
                         isSelected
                           ? 'bg-teal-800 text-white border-teal-800 font-semibold shadow-xs'
                           : 'bg-white text-slate-700 border-slate-200 hover:border-teal-500 hover:text-teal-800'
@@ -1429,6 +1579,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 />
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={addCustomDiagnosis}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                 >
@@ -1443,8 +1594,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </span>
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('tests')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   <span>Continue to Skin Tests</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -1476,8 +1628,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       {test}
                       <button
                         type="button"
+                        onMouseDown={e => e.preventDefault()}
                         onClick={() => toggleTest(test)}
-                        className="hover:text-teal-200 p-0.5"
+                        className="hover:text-teal-200 p-0.5 cursor-pointer"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -1513,8 +1666,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <button
                       key={t}
                       type="button"
+                      onMouseDown={e => e.preventDefault()}
                       onClick={() => toggleTest(t)}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
                         isSelected
                           ? 'bg-teal-800 text-white border-teal-800 font-semibold shadow-xs'
                           : 'bg-white text-slate-700 border-slate-200 hover:border-teal-500 hover:text-teal-800'
@@ -1544,6 +1698,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 />
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={addCustomTest}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                 >
@@ -1555,16 +1710,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('diagnosis')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Back to Diagnosis</span>
                 </button>
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('procedure')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   <span>Continue to Procedures</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -1590,8 +1747,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <button
                       key={p.name}
                       type="button"
+                      onMouseDown={e => e.preventDefault()}
                       onClick={() => addProcedure(p.name, p.defaultCost)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:border-teal-500 hover:bg-teal-50/50 text-xs font-medium text-slate-700 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:border-teal-500 hover:bg-teal-50/50 text-xs font-medium text-slate-700 transition-colors cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5 text-teal-600" />
                       <span>{p.name}</span>
@@ -1602,44 +1760,62 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               </div>
 
               {/* Custom procedure input */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Custom procedure name (type or speak)..."
-                  value={customProcedureName}
-                  onChange={e => setCustomProcedureName(e.target.value)}
-                  className="flex-2 text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500"
-                />
-                <VoiceDictationButton
-                  value={customProcedureName}
-                  onChange={setCustomProcedureName}
-                  variant="badge"
-                  title="Dictate procedure name with mic"
-                />
-                <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2 py-1.5">
-                  <span className="text-xs font-semibold text-slate-400">₹</span>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
                   <input
-                    type="number"
-                    min="0"
-                    step="50"
-                    placeholder="Cost"
-                    value={customProcedureCost}
-                    onChange={e => setCustomProcedureCost(Number(e.target.value))}
-                    className="w-16 text-xs font-medium focus:outline-none"
+                    type="text"
+                    placeholder="Custom procedure name (type or speak)..."
+                    value={customProcedureName}
+                    onChange={e => {
+                      setCustomProcedureName(e.target.value);
+                      if (procFeedbackHint) setProcFeedbackHint(null);
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && customProcedureName.trim()) {
+                        e.preventDefault();
+                        addProcedure(customProcedureName.trim(), customProcedureCost);
+                        setCustomProcedureName('');
+                      }
+                    }}
+                    className="flex-2 text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500"
                   />
+                  <VoiceDictationButton
+                    value={customProcedureName}
+                    onChange={setCustomProcedureName}
+                    variant="badge"
+                    title="Dictate procedure name with mic"
+                  />
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2 py-1.5">
+                    <span className="text-xs font-semibold text-slate-400">₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="50"
+                      placeholder="Cost"
+                      value={customProcedureCost}
+                      onChange={e => setCustomProcedureCost(Number(e.target.value))}
+                      className="w-16 text-xs font-medium focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => {
+                      if (customProcedureName.trim()) {
+                        addProcedure(customProcedureName.trim(), customProcedureCost);
+                        setCustomProcedureName('');
+                      } else {
+                        setProcFeedbackHint('Enter a custom procedure name in the field to the left, or tap any preset procedure chip above.');
+                      }
+                    }}
+                    className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                  >
+                    + Add procedure
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (customProcedureName.trim()) {
-                      addProcedure(customProcedureName.trim(), customProcedureCost);
-                      setCustomProcedureName('');
-                    }
-                  }}
-                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
-                >
-                  + Add procedure
-                </button>
+                {procFeedbackHint && (
+                  <p className="text-[11px] text-amber-700 font-medium px-1">{procFeedbackHint}</p>
+                )}
               </div>
 
               {/* Added Procedures List */}
@@ -1668,8 +1844,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           />
                           <button
                             type="button"
+                            onMouseDown={e => e.preventDefault()}
                             onClick={() => removeProcedure(proc.id)}
-                            className="p-1 text-slate-400 hover:text-red-600 rounded-md transition-colors"
+                            className="p-1 text-slate-400 hover:text-red-600 rounded-md transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1684,16 +1861,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="flex items-center justify-between pt-3 border-t border-slate-200">
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('tests')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Back to Tests</span>
                 </button>
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('notes')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   <span>Continue to Clinical Notes</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -1740,8 +1919,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     />
                     <button
                       type="button"
-                      onClick={() => setActiveTab('images')}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 bg-white border border-teal-200 px-3 py-2 rounded-xl shadow-2xs transition-colors"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => handleTabChange('images')}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 bg-white border border-teal-200 px-3 py-2 rounded-xl shadow-2xs transition-colors cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Add image</span>
@@ -1760,11 +1940,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       {singleVoiceNote.trim() && (
                         <button
                           type="button"
+                          onMouseDown={e => e.preventDefault()}
                           onClick={() => {
                             doctorEditedFieldsRef.current.clear();
                             handleSingleVoiceNoteChange(singleVoiceNote, true);
                           }}
-                          className="text-[10.5px] font-semibold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-0.5 rounded-lg transition-colors"
+                          className="text-[10.5px] font-semibold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer"
                           title="Re-sync all AI Summary fields from this note"
                         >
                           Sync all to AI Summary
@@ -1772,8 +1953,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       )}
                       <button
                         type="button"
+                        onMouseDown={e => e.preventDefault()}
                         onClick={() => handleTabChange('aisummary')}
-                        className="inline-flex items-center gap-1 text-[10.5px] font-bold text-white bg-teal-800 hover:bg-teal-900 px-2.5 py-1 rounded-lg transition-colors shadow-2xs"
+                        className="inline-flex items-center gap-1 text-[10.5px] font-bold text-white bg-teal-800 hover:bg-teal-900 px-2.5 py-1 rounded-lg transition-colors shadow-2xs cursor-pointer"
                       >
                         <Sparkles className="w-2.5 h-2.5 text-teal-200" />
                         <span>View Summary →</span>
@@ -1789,15 +1971,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 font-normal transition-all"
                   />
 
-                  {/* Auto-fill live status bar */}
+                  {/* Auto-fill live status bar (fixed layout so buttons below never shift on timer) */}
                   {(autoFillSummaryReady || singleVoiceNote.trim() || clinicalNotes.examination.trim()) && (
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px]">
                       <div className="flex items-center gap-1.5 text-emerald-800 font-semibold">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                         <span>
-                          {isAutoFillingSummary
-                            ? 'AI is updating Visit Summary fields...'
-                            : 'AI Summary fields automatically filled (Diagnosis, Morphology, Workup, Rx & Follow-up). Doctor can freely edit any field below or in Visit Summary.'}
+                          AI Summary fields automatically filled (Diagnosis, Morphology, Workup, Rx & Follow-up). Doctor can freely edit any field below or in Visit Summary.
                         </span>
                       </div>
                       {diagnoses[0] && (
@@ -1826,19 +2006,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     value={clinicalNotes.examination}
                     onChange={e => {
                       const val = e.target.value;
+                      hasUserEditedNotesRef.current = true;
                       markDoctorEdited('notes.examination');
-                      const nextNotes = { ...clinicalNotes, examination: val };
-                      setClinicalNotes(nextNotes);
-                      if (val.trim()) {
-                        const parsed = parseClinicalNoteToStructuredSummary(singleVoiceNote, {
-                          existingExamination: val,
-                          existingInvestigations: nextNotes.investigationsAdvised,
-                          existingPlan: nextNotes.plan,
-                          patientPrimaryDiagnosis: patient.primaryDiagnosis,
-                          existingSymptoms: symptoms
-                        });
-                        applyParsedClinicalNoteToSummary(parsed, { source: 'sections' });
-                      }
+                      setClinicalNotes(prev => ({ ...prev, examination: val }));
                     }}
                     placeholder="e.g. Erythematous papules and open comedones over cheeks and forehead. No pustules or scarring noted."
                     className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
@@ -1862,19 +2032,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     value={clinicalNotes.investigationsAdvised}
                     onChange={e => {
                       const val = e.target.value;
+                      hasUserEditedNotesRef.current = true;
                       markDoctorEdited('notes.investigationsAdvised');
-                      const nextNotes = { ...clinicalNotes, investigationsAdvised: val };
-                      setClinicalNotes(nextNotes);
-                      if (val.trim()) {
-                        const parsed = parseClinicalNoteToStructuredSummary(singleVoiceNote, {
-                          existingExamination: nextNotes.examination,
-                          existingInvestigations: val,
-                          existingPlan: nextNotes.plan,
-                          patientPrimaryDiagnosis: patient.primaryDiagnosis,
-                          existingSymptoms: symptoms
-                        });
-                        applyParsedClinicalNoteToSummary(parsed, { source: 'sections' });
-                      }
+                      setClinicalNotes(prev => ({ ...prev, investigationsAdvised: val }));
                     }}
                     placeholder="e.g. Skin scraping for KOH mount advised if scaling persists."
                     className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
@@ -1898,19 +2058,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     value={clinicalNotes.plan}
                     onChange={e => {
                       const val = e.target.value;
+                      hasUserEditedNotesRef.current = true;
                       markDoctorEdited('notes.plan');
-                      const nextNotes = { ...clinicalNotes, plan: val };
-                      setClinicalNotes(nextNotes);
-                      if (val.trim()) {
-                        const parsed = parseClinicalNoteToStructuredSummary(singleVoiceNote, {
-                          existingExamination: nextNotes.examination,
-                          existingInvestigations: nextNotes.investigationsAdvised,
-                          existingPlan: val,
-                          patientPrimaryDiagnosis: patient.primaryDiagnosis,
-                          existingSymptoms: symptoms
-                        });
-                        applyParsedClinicalNoteToSummary(parsed, { source: 'sections' });
-                      }
+                      setClinicalNotes(prev => ({ ...prev, plan: val }));
                     }}
                     placeholder="e.g. Start topical adapalene gel at night. Advised non-comedogenic foaming cleanser and daily mineral sunscreen."
                     className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
@@ -1922,8 +2072,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="flex items-center justify-between pt-3 border-t border-slate-200 flex-wrap gap-2">
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('procedure')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Back to Procedures</span>
@@ -1931,16 +2082,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    onMouseDown={e => e.preventDefault()}
                     onClick={() => handleTabChange('aisummary')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-teal-900 border border-teal-200 text-xs font-bold rounded-xl transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-teal-900 border border-teal-200 text-xs font-bold rounded-xl transition-colors cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-teal-700" />
                     <span>Review Auto-Filled AI Summary</span>
                   </button>
                   <button
                     type="button"
+                    onMouseDown={e => e.preventDefault()}
                     onClick={() => handleTabChange('bodymap')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                   >
                     <span>Continue to Body Map</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -1965,7 +2118,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   if (linkedImage) {
                     handleAnalyzeConsultationImage(linkedImage);
                   } else {
-                    setActiveTab('images');
+                    handleTabChange('images');
                   }
                 }}
               />
@@ -1974,16 +2127,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="flex items-center justify-between pt-3 border-t border-slate-200">
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('notes')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Back to Notes</span>
                 </button>
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('images')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   <span>Continue to Clinical Images</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -2023,16 +2178,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="flex items-center justify-between pt-3 border-t border-slate-200">
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('bodymap')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Back to Body Map</span>
                 </button>
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('followup')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   <span>Continue to Follow-up & Rx</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -2067,12 +2224,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <button
                       key={preset.label}
                       type="button"
+                      onMouseDown={e => e.preventDefault()}
                       onClick={() => {
+                        markDoctorEdited('summary.followUpDate');
                         const target = new Date();
                         target.setDate(target.getDate() + preset.days);
-                        setFollowUp({ ...followUp, date: target.toISOString().split('T')[0] });
+                        setFollowUp(prev => ({ ...prev, date: target.toISOString().split('T')[0] }));
                       }}
-                      className="px-2.5 py-1 bg-white border border-slate-200 hover:border-teal-500 text-slate-700 text-xs font-medium rounded-lg transition-colors"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:border-teal-500 text-slate-700 text-xs font-medium rounded-lg transition-colors cursor-pointer"
                     >
                       +{preset.label}
                     </button>
@@ -2083,7 +2242,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <input
                       type="date"
                       value={followUp.date}
-                      onChange={e => setFollowUp({ ...followUp, date: e.target.value })}
+                      onChange={e => {
+                        markDoctorEdited('summary.followUpDate');
+                        setFollowUp(prev => ({ ...prev, date: e.target.value }));
+                      }}
                       className="text-xs px-2.5 py-1 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-teal-500"
                     />
                   </div>
@@ -2096,7 +2258,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     </label>
                     <VoiceDictationButton
                       value={followUp.instructions}
-                      onChange={val => setFollowUp({ ...followUp, instructions: val })}
+                      onChange={val => {
+                        markDoctorEdited('summary.followUpInstructions');
+                        setFollowUp(prev => ({ ...prev, instructions: val }));
+                      }}
                       variant="badge"
                       title="Dictate follow-up instructions with mic"
                     />
@@ -2105,7 +2270,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     type="text"
                     placeholder="e.g. Review in OPD with biopsy report; SOS if swelling increases."
                     value={followUp.instructions}
-                    onChange={e => setFollowUp({ ...followUp, instructions: e.target.value })}
+                    onChange={e => {
+                      markDoctorEdited('summary.followUpInstructions');
+                      setFollowUp(prev => ({ ...prev, instructions: e.target.value }));
+                    }}
                     className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-teal-500"
                   />
                 </div>
@@ -2132,28 +2300,46 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 {/* Inner Prescription Builder Box */}
                 <div className="p-4 space-y-4">
                   <div className="p-4 bg-[#f8fafc] border border-slate-200/90 rounded-xl space-y-3.5">
+                    {rxFeedbackHint && (
+                      <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium flex items-center justify-between">
+                        <span>{rxFeedbackHint}</span>
+                        <button
+                          type="button"
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => setRxFeedbackHint(null)}
+                          className="text-amber-600 hover:text-amber-900"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+
                     {/* Row 1: DRUG NAME | DOSE / STRENGTH | ROUTE | FREQUENCY | DURATION | QTY */}
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
                       {/* DRUG NAME */}
-                      <div className="sm:col-span-4 relative">
+                      <div ref={medDropdownContainerRef} className="sm:col-span-4 relative">
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
                           DRUG NAME
                         </label>
                         <div className="relative flex items-center bg-white border border-slate-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-600 transition-all">
                           <Search className="w-3.5 h-3.5 text-slate-400 ml-3 shrink-0" />
                           <input
+                            ref={medNameInputRef}
                             type="text"
                             placeholder="Search drug..."
                             value={medName}
                             onChange={e => {
                               setMedName(e.target.value);
                               setIsMedDropdownOpen(true);
+                              if (rxFeedbackHint) setRxFeedbackHint(null);
                             }}
                             onFocus={() => setIsMedDropdownOpen(true)}
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
                                 handleAddPrescription();
+                              } else if (e.key === 'Escape') {
+                                setIsMedDropdownOpen(false);
                               }
                             }}
                             className="w-full text-xs pl-2 pr-8 py-2 bg-transparent border-0 text-slate-800 placeholder:text-slate-400 focus:outline-hidden"
@@ -2164,6 +2350,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                               onTranscript={spoken => {
                                 setMedName(spoken);
                                 setIsMedDropdownOpen(true);
+                                if (rxFeedbackHint) setRxFeedbackHint(null);
                               }}
                               variant="badge"
                               className="border-0 shadow-none bg-transparent"
@@ -2171,8 +2358,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             />
                             <button
                               type="button"
+                              onMouseDown={e => e.preventDefault()}
                               onClick={() => setIsMedDropdownOpen(!isMedDropdownOpen)}
-                              className="p-1 text-slate-400 hover:text-slate-600"
+                              className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
                               title="Toggle drug catalog"
                             >
                               <ChevronDown
@@ -2199,8 +2387,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                               </span>
                               <button
                                 type="button"
+                                onMouseDown={e => e.preventDefault()}
                                 onClick={() => setIsMedDropdownOpen(false)}
-                                className="text-slate-400 hover:text-slate-600"
+                                className="text-slate-400 hover:text-slate-600 cursor-pointer"
                               >
                                 <X className="w-3 h-3" />
                               </button>
@@ -2215,6 +2404,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                 <button
                                   key={med.name}
                                   type="button"
+                                  onMouseDown={e => e.preventDefault()}
                                   onClick={() => {
                                     setMedName(med.name);
                                     setMedDosage(med.dosage);
@@ -2232,8 +2422,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                     setMedInstructions(med.instructions);
                                     setMedQtyManual(false);
                                     setIsMedDropdownOpen(false);
+                                    setRxFeedbackHint(null);
                                   }}
-                                  className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50/60 flex flex-col text-slate-800 transition-colors"
+                                  className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50/60 flex flex-col text-slate-800 transition-colors cursor-pointer"
                                 >
                                   <span className="font-semibold text-slate-900">{med.name}</span>
                                   <span className="text-[10px] text-slate-400">
@@ -2255,6 +2446,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           type="text"
                           placeholder="500 mg"
                           value={medDosage}
+                          onFocus={() => setIsMedDropdownOpen(false)}
                           onChange={e => setMedDosage(e.target.value)}
                           onKeyDown={e => {
                             if (e.key === 'Enter') {
@@ -2273,6 +2465,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         </label>
                         <select
                           value={medRoute}
+                          onFocus={() => setIsMedDropdownOpen(false)}
                           onChange={e => {
                             setMedRoute(e.target.value);
                             setMedQtyManual(false);
@@ -2300,6 +2493,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             list="rx-frequency-options"
                             placeholder="1-0-1 or type 101"
                             value={medFrequency}
+                            onFocus={() => setIsMedDropdownOpen(false)}
                             onChange={e => {
                               setMedFrequency(normalizeFrequencyInput(e.target.value));
                               setMedQtyManual(false);
@@ -2333,11 +2527,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           type="text"
                           placeholder="5 days"
                           value={medDuration}
+                          onFocus={() => setIsMedDropdownOpen(false)}
                           onChange={e => {
                             setMedDuration(normalizeDurationInput(e.target.value));
                             setMedQtyManual(false);
                           }}
-                          onBlur={e => setMedDuration(normalizeDurationInput(e.target.value))}
                           onKeyDown={e => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
@@ -2356,6 +2550,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         <input
                           type="text"
                           value={medQty}
+                          onFocus={() => setIsMedDropdownOpen(false)}
                           onChange={e => {
                             setMedQty(e.target.value);
                             setMedQtyManual(true);
@@ -2381,11 +2576,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           <button
                             key={freq}
                             type="button"
+                            onMouseDown={e => e.preventDefault()}
                             onClick={() => {
+                              setIsMedDropdownOpen(false);
                               setMedFrequency(freq);
                               setMedQtyManual(false);
                             }}
-                            className={`px-2 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                            className={`px-2 py-1 text-[11px] font-medium rounded-md border transition-colors cursor-pointer ${
                               medFrequency === freq
                                 ? 'bg-blue-50 border-blue-400 text-blue-700 font-semibold'
                                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -2411,11 +2608,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           <button
                             key={dur.label}
                             type="button"
+                            onMouseDown={e => e.preventDefault()}
                             onClick={() => {
+                              setIsMedDropdownOpen(false);
                               setMedDuration(dur.value);
                               setMedQtyManual(false);
                             }}
-                            className={`px-2 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                            className={`px-2 py-1 text-[11px] font-medium rounded-md border transition-colors cursor-pointer ${
                               medDuration.toLowerCase() === dur.value.toLowerCase() ||
                               medDuration.toLowerCase() === dur.label
                                 ? 'bg-blue-50 border-blue-400 text-blue-700 font-semibold'
@@ -2439,6 +2638,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             type="text"
                             placeholder="After meals"
                             value={medInstructions}
+                            onFocus={() => setIsMedDropdownOpen(false)}
                             onChange={e => setMedInstructions(e.target.value)}
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
@@ -2460,8 +2660,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                       <button
                         type="button"
+                        onMouseDown={e => e.preventDefault()}
                         onClick={handleAddPrescription}
-                        className="px-5 py-2 bg-[#5b87eb] hover:bg-[#4672dc] text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 h-[36px]"
+                        className="px-5 py-2 bg-[#5b87eb] hover:bg-[#4672dc] text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 h-[36px] cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Add</span>
@@ -2489,7 +2690,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           <button
                             key={chip}
                             type="button"
+                            onMouseDown={e => e.preventDefault()}
                             onClick={() => {
+                              setIsMedDropdownOpen(false);
                               if (!medInstructions.trim() || medInstructions === 'After meals') {
                                 setMedInstructions(chip);
                               } else if (isSelected) {
@@ -2502,7 +2705,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                 setMedInstructions(`${medInstructions.trim()}, ${chip}`);
                               }
                             }}
-                            className={`px-2.5 py-1 text-[11px] rounded-md border transition-colors ${
+                            className={`px-2.5 py-1 text-[11px] rounded-md border transition-colors cursor-pointer ${
                               isSelected
                                 ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
                                 : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100'
@@ -2533,8 +2736,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           </div>
                           <button
                             type="button"
+                            onMouseDown={e => e.preventDefault()}
                             onClick={() => handleRemovePrescription(p.id)}
-                            className="text-slate-400 hover:text-red-600 p-1"
+                            className="text-slate-400 hover:text-red-600 p-1 cursor-pointer"
                             title="Remove prescription"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -2550,16 +2754,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="flex items-center justify-between pt-3 border-t border-slate-200">
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('images')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Back to Images</span>
                 </button>
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => handleTabChange('aisummary')}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-md transition-colors"
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-md transition-colors cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-teal-300" />
                   <span>View Summary & Sign</span>
@@ -2579,9 +2785,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </p>
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={generateSummary}
                   disabled={isGeneratingAI}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-[#f2f6f5] text-[#0f2926] border border-[#cfdeda] rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 shadow-2xs shrink-0"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-[#f2f6f5] text-[#0f2926] border border-[#cfdeda] rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 shadow-2xs shrink-0 cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 text-[#157a6e] ${isGeneratingAI ? 'animate-spin' : ''}`} />
                   <span>Regenerate from tabs</span>
@@ -2667,11 +2874,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <span>{sym}</span>
                       <button
                         type="button"
+                        onMouseDown={e => e.preventDefault()}
                         onClick={() => {
                           markDoctorEdited('summary.symptoms');
-                          setSymptoms(symptoms.filter((_, i) => i !== idx));
+                          setSymptoms(prev => prev.filter((_, i) => i !== idx));
                         }}
-                        className="hover:text-teal-200 p-0.5"
+                        className="hover:text-teal-200 p-0.5 cursor-pointer"
                         title="Remove symptom"
                       >
                         <X className="w-3 h-3" />
@@ -2681,21 +2889,37 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   {symptoms.length === 0 && (
                     <span className="text-xs text-[#7b928d] italic">No symptoms recorded</span>
                   )}
-                  <input
-                    type="text"
-                    value={customSymptomInput}
-                    onChange={e => setCustomSymptomInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && customSymptomInput.trim()) {
-                        e.preventDefault();
-                        markDoctorEdited('summary.symptoms');
-                        setSymptoms(prev => [...prev, customSymptomInput.trim()]);
-                        setCustomSymptomInput('');
-                      }
-                    }}
-                    placeholder="+ Add or edit symptom (press Enter)..."
-                    className="text-xs px-2.5 py-1 bg-[#f6f9f8] border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e] min-w-[210px]"
-                  />
+                  <div className="inline-flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={customSymptomInput}
+                      onChange={e => setCustomSymptomInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && customSymptomInput.trim()) {
+                          e.preventDefault();
+                          markDoctorEdited('summary.symptoms');
+                          setSymptoms(prev => [...prev, customSymptomInput.trim()]);
+                          setCustomSymptomInput('');
+                        }
+                      }}
+                      placeholder="+ Add symptom..."
+                      className="text-xs px-2.5 py-1 bg-[#f6f9f8] border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e] min-w-[180px]"
+                    />
+                    <button
+                      type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => {
+                        if (customSymptomInput.trim()) {
+                          markDoctorEdited('summary.symptoms');
+                          setSymptoms(prev => [...prev, customSymptomInput.trim()]);
+                          setCustomSymptomInput('');
+                        }
+                      }}
+                      className="px-2.5 py-1 bg-[#e3f2ef] hover:bg-[#d2eae5] text-[#115e56] border border-[#bde0d9] rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      + Add
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -2953,17 +3177,19 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     </span>
                     <button
                       type="button"
+                      onMouseDown={e => e.preventDefault()}
                       onClick={() => handleRunSummaryAIAnalysis()}
                       disabled={isGeneratingImageSummaryAI}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#e8f5f2] hover:bg-[#d7ede8] text-[#0f5950] border border-[#bde0d9] font-semibold transition-colors disabled:opacity-50"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#e8f5f2] hover:bg-[#d7ede8] text-[#0f5950] border border-[#bde0d9] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       <RefreshCw className={`w-3 h-3 ${isGeneratingImageSummaryAI ? 'animate-spin' : ''}`} />
                       <span>{isGeneratingImageSummaryAI ? 'Analyzing...' : 'Refresh AI Summary'}</span>
                     </button>
                     <button
                       type="button"
+                      onMouseDown={e => e.preventDefault()}
                       onClick={() => handleTabChange('images')}
-                      className="font-semibold text-[#157a6e] hover:text-[#0f5950] transition-colors"
+                      className="font-semibold text-[#157a6e] hover:text-[#0f5950] transition-colors cursor-pointer"
                     >
                       Manage in Clinical images →
                     </button>
@@ -3039,6 +3265,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           return (
                             <div
                               key={img.id}
+                              onMouseDown={e => e.preventDefault()}
                               onClick={() => {
                                 setSelectedSummarySpecimen(img.id);
                                 handleRunSummaryAIAnalysis(img, { openOverlayModal: false });
@@ -3063,6 +3290,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         <>
                           {/* Default Left cheek dermatology lesion tile */}
                           <div
+                            onMouseDown={e => e.preventDefault()}
                             onClick={() =>
                               setSelectedSummarySpecimen(selectedSummarySpecimen === 'left' ? 'all' : 'left')
                             }
@@ -3086,6 +3314,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                           {/* Default Right cheek dermatology lesion tile */}
                           <div
+                            onMouseDown={e => e.preventDefault()}
                             onClick={() =>
                               setSelectedSummarySpecimen(selectedSummarySpecimen === 'right' ? 'all' : 'right')
                             }
@@ -3120,8 +3349,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       />
                       <button
                         type="button"
+                        onMouseDown={e => e.preventDefault()}
                         onClick={() => summaryImageInputRef.current?.click()}
-                        className="w-[78px] h-[78px] rounded-xl border border-dashed border-[#bdd0ca] hover:border-[#157a6e] bg-white hover:bg-[#f0f7f5] flex flex-col items-center justify-center gap-0.5 text-[#5c7470] hover:text-[#115e56] transition-colors shrink-0"
+                        className="w-[78px] h-[78px] rounded-xl border border-dashed border-[#bdd0ca] hover:border-[#157a6e] bg-white hover:bg-[#f0f7f5] flex flex-col items-center justify-center gap-0.5 text-[#5c7470] hover:text-[#115e56] transition-colors shrink-0 cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span className="text-[10.5px] font-medium">Add image</span>
@@ -3133,8 +3363,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
+                          onMouseDown={e => e.preventDefault()}
                           onClick={() => setSelectedSummarySpecimen('all')}
-                          className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
+                          className={`px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
                             selectedSummarySpecimen === 'all'
                               ? 'bg-[#157a6e] text-white'
                               : 'bg-white text-[#5c7470] border border-[#dce6e3]'
@@ -3146,8 +3377,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           <>
                             <button
                               type="button"
+                              onMouseDown={e => e.preventDefault()}
                               onClick={() => setSelectedSummarySpecimen('left')}
-                              className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
+                              className={`px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
                                 selectedSummarySpecimen === 'left'
                                   ? 'bg-[#157a6e] text-white'
                                   : 'bg-white text-[#5c7470] border border-[#dce6e3]'
@@ -3157,8 +3389,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             </button>
                             <button
                               type="button"
+                              onMouseDown={e => e.preventDefault()}
                               onClick={() => setSelectedSummarySpecimen('right')}
-                              className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
+                              className={`px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
                                 selectedSummarySpecimen === 'right'
                                   ? 'bg-[#157a6e] text-white'
                                   : 'bg-white text-[#5c7470] border border-[#dce6e3]'
@@ -3222,6 +3455,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                       <button
                         type="button"
+                        onMouseDown={e => e.preventDefault()}
                         onClick={() => {
                           if (images.length > 0) {
                             handleRunSummaryAIAnalysis(undefined, { openOverlayModal: false });
@@ -3238,7 +3472,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             });
                           }
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#e8f5f2] text-[#115e56] border border-[#bdd6d0] text-[10.5px] font-bold transition-colors shrink-0 shadow-2xs"
+                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#e8f5f2] text-[#115e56] border border-[#bdd6d0] text-[10.5px] font-bold transition-colors shrink-0 shadow-2xs cursor-pointer"
                         title="Sync AI Image Summary Result to all morphology fields below"
                       >
                         Apply AI Result to Fields
@@ -3513,6 +3747,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
+                          onMouseDown={e => e.preventDefault()}
                           onClick={() => {
                             markDoctorEdited('derm.aiObservation');
                             setDermMorphology(prev => ({
@@ -3520,7 +3755,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                               aiObservation: aiImageSummaryResult.narrative
                             }));
                           }}
-                          className="px-2 py-0.5 rounded bg-white hover:bg-[#e3f2ef] text-[#115e56] border border-[#bdd6d0] text-[10px] font-semibold transition-colors"
+                          className="px-2 py-0.5 rounded bg-white hover:bg-[#e3f2ef] text-[#115e56] border border-[#bdd6d0] text-[10px] font-semibold transition-colors cursor-pointer"
                           title="Copy AI Image Summary Result into Visual / Dermoscopic Observations"
                         >
                           ← Sync to Observations
@@ -3581,10 +3816,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <input
                         type="text"
                         value={
-                          inlineMedSummary ||
-                          prescriptions
-                            .map(p => `${p.medicineName} ${p.dosage} · ${p.frequency} · ${p.duration}`)
-                            .join('; ')
+                          doctorEditedFieldsRef.current.has('summary.medications')
+                            ? inlineMedSummary
+                            : inlineMedSummary ||
+                              prescriptions
+                                .map(p => `${p.medicineName} ${p.dosage} · ${p.frequency} · ${p.duration}`)
+                                .join('; ')
                         }
                         onChange={e => {
                           markDoctorEdited('summary.medications');
@@ -3596,10 +3833,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <div className="absolute right-1.5">
                         <VoiceDictationButton
                           value={
-                            inlineMedSummary ||
-                            prescriptions
-                              .map(p => `${p.medicineName} ${p.dosage} · ${p.frequency} · ${p.duration}`)
-                              .join('; ')
+                            doctorEditedFieldsRef.current.has('summary.medications')
+                              ? inlineMedSummary
+                              : inlineMedSummary ||
+                                prescriptions
+                                  .map(p => `${p.medicineName} ${p.dosage} · ${p.frequency} · ${p.duration}`)
+                                  .join('; ')
                           }
                           onChange={val => {
                             markDoctorEdited('summary.medications');
@@ -3730,16 +3969,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
               type="button"
+              onMouseDown={e => e.preventDefault()}
               onClick={onClose}
-              className="px-4 py-2 bg-white border border-[#cfdeda] text-[#0f2926] hover:bg-[#f2f6f5] rounded-xl text-xs font-semibold transition-colors"
+              className="px-4 py-2 bg-white border border-[#cfdeda] text-[#0f2926] hover:bg-[#f2f6f5] rounded-xl text-xs font-semibold transition-colors cursor-pointer"
             >
               Cancel
             </button>
 
             <button
               type="button"
+              onMouseDown={e => e.preventDefault()}
               onClick={() => setShowWhatsApp(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1fae51] hover:bg-[#199945] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1fae51] hover:bg-[#199945] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer"
               title="Share consultation summary and prescription to patient's WhatsApp"
             >
               <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
@@ -3747,9 +3988,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             </button>
             <button
               type="button"
+              onMouseDown={e => e.preventDefault()}
               onClick={handleSignAndFinish}
               disabled={isSigning}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold bg-[#157a6e] hover:bg-[#11645a] text-white shadow-xs transition-all disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold bg-[#157a6e] hover:bg-[#11645a] text-white shadow-xs transition-all disabled:opacity-50 cursor-pointer"
             >
               <Check className="w-3.5 h-3.5" />
               <span>{isSigning ? 'Signing & Saving...' : 'Sign & finish'}</span>
@@ -3775,11 +4017,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               </div>
               <button
                 type="button"
+                onMouseDown={e => e.preventDefault()}
                 onClick={() => {
                   setActiveImageAnalysis(null);
                   setIsAnalyzingImage(false);
                 }}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3926,10 +4169,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => {
                     setActiveImageAnalysis(null);
                   }}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200/60"
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200/60 cursor-pointer"
                 >
                   Close
                 </button>
@@ -3938,16 +4182,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
+                        onMouseDown={e => e.preventDefault()}
                         onClick={handleApplyPlanFromAI}
-                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 shadow-2xs"
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 shadow-2xs cursor-pointer"
                       >
                         <FileText className="w-3.5 h-3.5 text-teal-700" />
                         Apply Plan to Notes
                       </button>
                       <button
                         type="button"
+                        onMouseDown={e => e.preventDefault()}
                         onClick={handleApplyDiagnosesFromAI}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white flex items-center gap-1.5 shadow-sm"
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white flex items-center gap-1.5 shadow-sm cursor-pointer"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         Apply Diagnoses

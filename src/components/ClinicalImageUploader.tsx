@@ -254,9 +254,10 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
             {patientId && (
               <button
                 type="button"
+                onMouseDown={e => e.preventDefault()}
                 onClick={startMobileQrSession}
                 disabled={isUploading}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 border border-teal-300 rounded-lg text-xs font-bold text-teal-900 shadow-2xs transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 border border-teal-300 rounded-lg text-xs font-bold text-teal-900 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
               >
                 <QrCode className="w-3.5 h-3.5 text-teal-700" />
                 <span>Scan QR from Mobile</span>
@@ -264,18 +265,20 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
             )}
             <button
               type="button"
+              onMouseDown={e => e.preventDefault()}
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 shadow-sm transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
             >
               <Upload className="w-3.5 h-3.5 text-slate-500" />
               Upload file
             </button>
             <button
               type="button"
+              onMouseDown={e => e.preventDefault()}
               onClick={startCamera}
               disabled={isUploading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
             >
               <Camera className="w-3.5 h-3.5" />
               Upload / Take photo
@@ -307,8 +310,9 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
           </div>
           <button
             type="button"
+            onMouseDown={e => e.preventDefault()}
             onClick={startMobileQrSession}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0 self-end sm:self-center"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0 self-end sm:self-center cursor-pointer"
           >
             <QrCode className="w-4 h-4 text-teal-200" />
             <span>Generate QR Code</span>
@@ -319,7 +323,14 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
       {errorMsg && (
         <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center justify-between">
           <span>{errorMsg}</span>
-          <button type="button" onClick={() => setErrorMsg(null)}><X className="w-4 h-4" /></button>
+          <button
+            type="button"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => setErrorMsg(null)}
+            className="cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -349,8 +360,9 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
               </div>
               <button
                 type="button"
+                onMouseDown={e => e.preventDefault()}
                 onClick={() => setShowQrModal(false)}
-                className="text-teal-200 hover:text-white p-1 rounded-lg"
+                className="text-teal-200 hover:text-white p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -365,6 +377,7 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
               ) : qrDataUrl ? (
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => setIsQrExpanded(prev => !prev)}
                   title={isQrExpanded ? 'Click to shrink QR code' : 'Click to expand QR code'}
                   className="group p-3 bg-white rounded-2xl border-2 border-teal-600/30 hover:border-teal-600 shadow-md transition-all duration-150 ease-out cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-600/25"
@@ -402,8 +415,9 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
                   </span>
                   <button
                     type="button"
+                    onMouseDown={e => e.preventDefault()}
                     onClick={() => setShowQrModal(false)}
-                    className="text-xs font-bold text-teal-800 underline"
+                    className="text-xs font-bold text-teal-800 underline cursor-pointer"
                   >
                     View Images
                   </button>
@@ -414,8 +428,9 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
               <div className="w-full pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={handleCopyMobileUrl}
-                  className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                  className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
                 >
                   {copiedLink ? (
                     <>
@@ -431,9 +446,10 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
                 </button>
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={startMobileQrSession}
                   disabled={isGeneratingQr}
-                  className="py-2 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                  className="py-2 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
                   title="Generate a fresh QR code"
                 >
                   <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
@@ -441,8 +457,9 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
                 </button>
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => setShowQrModal(false)}
-                  className="py-2 px-4 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold transition"
+                  className="py-2 px-4 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold transition cursor-pointer"
                 >
                   Done
                 </button>
@@ -462,8 +479,9 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
               </span>
               <button
                 type="button"
+                onMouseDown={e => e.preventDefault()}
                 onClick={stopCamera}
-                className="text-slate-400 hover:text-white p-1"
+                className="text-slate-400 hover:text-white p-1 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -483,16 +501,18 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
             <div className="flex gap-3 w-full mt-4">
               <button
                 type="button"
+                onMouseDown={e => e.preventDefault()}
                 onClick={stopCamera}
-                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold"
+                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold cursor-pointer"
               >
                 Cancel
               </button>
               {!cameraError && (
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={capturePhoto}
-                  className="flex-1 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 shadow-lg"
+                  className="flex-1 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 shadow-lg cursor-pointer"
                 >
                   <Camera className="w-4 h-4" />
                   Capture Photo
@@ -517,11 +537,11 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
           {images.map(img => (
             <div
               key={img.id}
-              className="group relative bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow transition-all"
+              className="group relative bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow transition-all flex flex-col"
             >
               <div
                 onClick={() => setPreviewImage(img)}
-                className="aspect-square bg-slate-100 cursor-pointer overflow-hidden flex items-center justify-center"
+                className="aspect-square bg-slate-100 cursor-pointer overflow-hidden flex items-center justify-center relative"
               >
                 <img
                   src={img.url}
@@ -530,41 +550,66 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
                 />
               </div>
 
-              <div className="p-2">
-                <p className="text-[11px] font-medium text-slate-700 truncate">
-                  {img.caption || img.filename}
-                </p>
-                <p className="text-[10px] text-slate-400">
-                  {new Date(img.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-
-              {/* Hover actions */}
-              <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 rounded-md p-1 backdrop-blur-xs">
+              <div className="p-2 flex-1 flex flex-col justify-between gap-1.5">
+                <div>
+                  <p className="text-[11px] font-medium text-slate-700 truncate">
+                    {img.caption || img.filename}
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {new Date(img.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
                 {onAnalyzeWithAI && (
                   <button
                     type="button"
+                    onMouseDown={e => e.preventDefault()}
                     onClick={() => onAnalyzeWithAI(img)}
+                    className="w-full py-1 px-2 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-[10.5px] font-bold inline-flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3 text-teal-600" />
+                    <span>Analyze with AI</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Always-visible top-right action buttons (single-click friendly on touch & desktop) */}
+              <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-black/65 rounded-md p-1 backdrop-blur-xs">
+                {onAnalyzeWithAI && (
+                  <button
+                    type="button"
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={e => {
+                      e.stopPropagation();
+                      onAnalyzeWithAI(img);
+                    }}
                     title="Analyze with AI"
-                    className="text-amber-300 hover:text-amber-200 p-0.5"
+                    className="text-amber-300 hover:text-amber-200 p-0.5 cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                   </button>
                 )}
                 <button
                   type="button"
-                  onClick={() => setPreviewImage(img)}
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={e => {
+                    e.stopPropagation();
+                    setPreviewImage(img);
+                  }}
                   title="View full size"
-                  className="text-white hover:text-teal-300 p-0.5"
+                  className="text-white hover:text-teal-300 p-0.5 cursor-pointer"
                 >
                   <Eye className="w-3.5 h-3.5" />
                 </button>
                 {!readOnly && onDelete && (
                   <button
                     type="button"
-                    onClick={() => onDelete(img.id)}
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={e => {
+                      e.stopPropagation();
+                      onDelete(img.id);
+                    }}
                     title="Delete image"
-                    className="text-white hover:text-red-400 p-0.5"
+                    className="text-white hover:text-red-400 p-0.5 cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -596,12 +641,13 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
                 {onAnalyzeWithAI && (
                   <button
                     type="button"
+                    onMouseDown={e => e.preventDefault()}
                     onClick={() => {
                       const target = previewImage;
                       setPreviewImage(null);
                       onAnalyzeWithAI(target);
                     }}
-                    className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                    className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-teal-600" />
                     <span>Analyze with AI</span>
@@ -609,8 +655,9 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
                 )}
                 <button
                   type="button"
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => setPreviewImage(null)}
-                  className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-md cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
