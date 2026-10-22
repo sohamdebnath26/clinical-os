@@ -61,8 +61,8 @@ const QUICK_REPORT_PROMPTS = [
     icon: FileText
   },
   {
-    label: 'Severity & Visual Metrics',
-    prompt: 'What is the clinical severity grade and what do the quantitative visual metrics (erythema, pigmentation, border) show?',
+    label: 'Severity & Biological Presentation',
+    prompt: 'What is the clinical severity grade and what biological inferences (vascular erythema, melanin distribution, epidermal morphology) are indicated?',
     icon: Activity
   },
   {
@@ -117,10 +117,10 @@ export const ImageReportChatbot: React.FC<ImageReportChatbotProps> = ({
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             isAiPowered: true,
             content:
-              `Hello Doctor! I'm your interactive **Clinical Dermatology GPT**${
+              `Hello Doctor! I'm your interactive **Clinical Dermatology Decision Support**${
                 patient ? ` (currently linked to **${patient.fullName}**, ${patient.age}y/${patient.gender})` : ''
               }.\n\n` +
-              `You can ask me **any clinical question right now**—such as differential diagnoses, medication dosing, pediatric/pregnancy safety, or treatment protocols—or click **"Analyze Clinical Image with AI"** above so I can ground our conversation directly in the lesion scan.`
+              `You can ask me **any clinical question right now**—such as differential diagnoses, pathophysiology, medication dosing, pediatric/pregnancy safety, or treatment protocols—or click **"Analyze Clinical Image"** above to ground our consultation directly in the lesion specimen.`
           }
         ];
       });
@@ -310,11 +310,11 @@ export const ImageReportChatbot: React.FC<ImageReportChatbotProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm font-bold text-white tracking-tight">
-                AI Clinical Dermatology GPT
+                Clinical Dermatology Decision Support
               </h3>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-200 border border-teal-400/30">
                 <Sparkles className="w-2.5 h-2.5 text-teal-300" />
-                {report ? `Grounded in ${report.primaryImpression}` : 'Interactive GPT Ready'}
+                {report ? `Grounded in ${report.primaryImpression}` : 'Consultation Ready'}
               </span>
             </div>
             <p className="text-xs text-slate-300 mt-0.5">

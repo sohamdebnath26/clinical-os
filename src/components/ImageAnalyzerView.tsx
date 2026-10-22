@@ -328,7 +328,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
 
     setIsAnalyzing(true);
     setErrorMsg(null);
-    setAnalysisStep('Preprocessing visual image morphology...');
+    setAnalysisStep('Evaluating cutaneous morphology & vascular presentation...');
 
     const timer1 = setTimeout(() => {
       setAnalysisStep('Correlating patient longitudinal timeline & prescriptions...');
@@ -980,11 +980,11 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
               }`}>
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-slate-700">
-                    Image Pre-Scan &amp; Quality Gatekeeper
+                    Clinical Specimen &amp; Illumination Assessment
                   </span>
                   <span className="text-slate-500 font-medium capitalize">
                     {visualMetrics.isSkinSpecimen === false
-                      ? 'Non-Skin Specimen'
+                      ? 'Non-Cutaneous Field'
                       : visualMetrics.morphologyCategory.replace(/_/g, ' ')}
                     {visualMetrics.isSkinSpecimen !== false && visualMetrics.fitzpatrickType ? ` · Fitzpatrick ${visualMetrics.fitzpatrickType}` : ''}
                   </span>
@@ -998,10 +998,10 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                       : 'bg-emerald-50 border-emerald-200 text-emerald-800'
                   }`}>
                     <span>
-                      {visualMetrics.isSkinSpecimen === false ? '⚠ Non-Skin / Object' : '✓ Human Skin Verified'}
+                      {visualMetrics.isSkinSpecimen === false ? '⚠ Non-Cutaneous Field' : '✓ Cutaneous Specimen Confirmed'}
                     </span>
-                    <span className="font-mono font-bold">
-                      {visualMetrics.skinPixelRatio ?? 85}% skin
+                    <span className="font-semibold">
+                      {visualMetrics.isSkinSpecimen === false ? 'Tissue Not Detected' : 'Diagnostic Quality'}
                     </span>
                   </div>
 
@@ -1012,11 +1012,11 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   }`}>
                     <span>
                       {!visualMetrics.lightingStatus || visualMetrics.lightingStatus === 'Optimal'
-                        ? '✓ Lighting: Optimal'
+                        ? '✓ Clinical Illumination: Optimal'
                         : `⚠ ${visualMetrics.lightingStatus}`}
                     </span>
-                    <span className="font-mono font-bold">
-                      {visualMetrics.meanLuminance ?? 140}/255
+                    <span className="font-semibold">
+                      {!visualMetrics.lightingStatus || visualMetrics.lightingStatus === 'Optimal' ? 'Uniform' : 'Review Lighting'}
                     </span>
                   </div>
                 </div>
@@ -1039,20 +1039,26 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
 
                 <div className="grid grid-cols-4 gap-2 text-center bg-white rounded-lg p-2 border border-slate-200/80 text-xs">
                   <div>
-                    <div className="text-[10px] text-slate-400">Redness</div>
-                    <div className="font-bold text-rose-600 font-mono">{visualMetrics.erythemaIndex}/100</div>
+                    <div className="text-[10px] text-slate-400">Vascular Erythema</div>
+                    <div className="font-bold text-rose-600">
+                      {visualMetrics.erythemaIndex > 65 ? 'Marked' : visualMetrics.erythemaIndex > 40 ? 'Moderate' : 'Mild'}
+                    </div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-slate-400">Pigment</div>
-                    <div className="font-bold text-amber-700 font-mono">{visualMetrics.pigmentationIndex}/100</div>
+                    <div className="text-[10px] text-slate-400">Melanin Pigment</div>
+                    <div className="font-bold text-amber-700">
+                      {visualMetrics.pigmentationIndex > 60 ? 'Dense' : visualMetrics.pigmentationIndex > 30 ? 'Focal' : 'Minimal'}
+                    </div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-slate-400">Border</div>
-                    <div className="font-bold text-slate-800 font-mono">{visualMetrics.borderIrregularity}/100</div>
+                    <div className="text-[10px] text-slate-400">Border Margin</div>
+                    <div className="font-bold text-slate-800">
+                      {visualMetrics.borderIrregularity > 55 ? 'Scalloped' : visualMetrics.borderIrregularity > 30 ? 'Discrete' : 'Circumscribed'}
+                    </div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-slate-400">Est. Size</div>
-                    <div className="font-bold text-slate-800 font-mono">~{visualMetrics.estimatedDiameterMm || 5.0}mm</div>
+                    <div className="text-[10px] text-slate-400">Estimated Caliber</div>
+                    <div className="font-bold text-slate-800">~{visualMetrics.estimatedDiameterMm || 5.0} mm</div>
                   </div>
                 </div>
               </div>
@@ -1151,8 +1157,8 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   <>
                     <Sparkles className="w-4 h-4 text-teal-200" />
                     <span>
-                      Analyze Clinical Image with AI
-                      {subscription ? ` (${subscription.aiScansRemaining} Credits Left)` : ''}
+                      Analyze Clinical Specimen
+                      {subscription ? ` (${subscription.aiScansRemaining} Scans Available)` : ''}
                     </span>
                   </>
                 )}
@@ -1219,16 +1225,15 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                           : 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200'
                       }`}>
                         {analysisResult.isValidSkinSpecimen === false || analysisResult.visualMetrics?.isSkinSpecimen === false
-                          ? `⚠ Non-Skin / Invalid Specimen (${analysisResult.visualMetrics?.skinPixelRatio ?? 0}% skin)`
-                          : `✓ Cutaneous Specimen Verified (${analysisResult.visualMetrics?.skinPixelRatio ?? 85}% skin)`}
+                          ? '⚠ Non-Cutaneous Field (Human Skin Tissue Not Detected)'
+                          : '✓ Cutaneous Specimen Verified'}
                       </span>
                       <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
                         (analysisResult.lightingQuality || analysisResult.visualMetrics?.lightingStatus || 'Optimal') === 'Optimal'
                           ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
                           : 'bg-amber-500/20 border-amber-400/50 text-amber-200'
                       }`}>
-                        Lighting: {analysisResult.lightingQuality || analysisResult.visualMetrics?.lightingStatus || 'Optimal'}
-                        {analysisResult.visualMetrics?.meanLuminance !== undefined ? ` (${analysisResult.visualMetrics.meanLuminance}/255)` : ''}
+                        Illumination: {analysisResult.lightingQuality || analysisResult.visualMetrics?.lightingStatus || 'Optimal'}
                       </span>
                     </div>
                   </div>
@@ -1263,7 +1268,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                     className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
                   >
                     <Bot className="w-3.5 h-3.5 text-teal-100" />
-                    <span>Ask AI About Report</span>
+                    <span>Clinical Report Chat</span>
                   </button>
 
                   <button
@@ -1428,7 +1433,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   {analysisResult.visualMetrics && (
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
                       <div>
-                        <span className="text-slate-500 block text-[11px]">Pattern</span>
+                        <span className="text-slate-500 block text-[11px]">Morphology Pattern</span>
                         <strong className="text-slate-900 capitalize">
                           {analysisResult.visualMetrics.morphologyCategory.replace(/_/g, ' ')}
                         </strong>
@@ -1440,21 +1445,21 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                         </strong>
                       </div>
                       <div>
-                        <span className="text-slate-500 block text-[11px]">Redness (Erythema)</span>
-                        <strong className="text-rose-600 font-mono">
-                          {analysisResult.visualMetrics.erythemaIndex}/100
+                        <span className="text-slate-500 block text-[11px]">Vascular Erythema</span>
+                        <strong className="text-rose-600 font-semibold">
+                          {analysisResult.visualMetrics.erythemaIndex > 65 ? 'Marked Hyperemia' : analysisResult.visualMetrics.erythemaIndex > 40 ? 'Moderate Erythema' : 'Mild / Blanchable'}
                         </strong>
                       </div>
                       <div>
-                        <span className="text-slate-500 block text-[11px]">Pigmentation</span>
-                        <strong className="text-amber-700 font-mono">
-                          {analysisResult.visualMetrics.pigmentationIndex}/100
+                        <span className="text-slate-500 block text-[11px]">Melanin Deposition</span>
+                        <strong className="text-amber-700 font-semibold">
+                          {analysisResult.visualMetrics.pigmentationIndex > 60 ? 'Dense Hyperpigmentation' : analysisResult.visualMetrics.pigmentationIndex > 30 ? 'Focal Pigment' : 'Hypopigmented / Amelanotic'}
                         </strong>
                       </div>
                       <div>
-                        <span className="text-slate-500 block text-[11px]">Asymmetry / Border</span>
-                        <strong className="text-slate-900 font-mono">
-                          {analysisResult.visualMetrics.asymmetryScore} / {analysisResult.visualMetrics.borderIrregularity}
+                        <span className="text-slate-500 block text-[11px]">Morphological Symmetry</span>
+                        <strong className="text-slate-900 font-semibold">
+                          {analysisResult.visualMetrics.asymmetryScore > 50 ? 'Asymmetric Poles' : 'Symmetric Contours'}
                         </strong>
                       </div>
                     </div>

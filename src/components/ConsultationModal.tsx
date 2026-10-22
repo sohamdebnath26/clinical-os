@@ -4675,11 +4675,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         >
                           {activeImageAnalysis.isValidSkinSpecimen === false ||
                           activeImageAnalysis.visualMetrics?.isSkinSpecimen === false
-                            ? `⚠ Non-Skin / Invalid Specimen (${activeImageAnalysis.visualMetrics?.skinPixelRatio ?? 0}% skin)`
-                            : `✓ Human Skin Verified (${activeImageAnalysis.visualMetrics?.skinPixelRatio ?? 85}% skin)`}
+                            ? '⚠ Non-Cutaneous Field (Human Skin Tissue Not Detected)'
+                            : '✓ Cutaneous Specimen Confirmed'}
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-white/10 border-white/20 text-white">
-                          Lighting: {activeImageAnalysis.lightingQuality || activeImageAnalysis.visualMetrics?.lightingStatus || 'Optimal'}
+                          Illumination: {activeImageAnalysis.lightingQuality || activeImageAnalysis.visualMetrics?.lightingStatus || 'Optimal'}
                         </span>
                       </div>
                     </div>

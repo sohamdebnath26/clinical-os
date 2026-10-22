@@ -880,47 +880,49 @@ export function generateAdaptiveClinicalImageAnalysis(
     return {
       id: `ai_img_gatekeeper_${Date.now()}`,
       primaryImpression: isTooDark
-        ? 'Unreadable Clinical Image — Severe Underexposure (Insufficient Illumination)'
-        : 'Non-Cutaneous Image Detected (Invalid Skin Specimen)',
+        ? 'Inadequate Clinical Photograph — Insufficient Illumination'
+        : 'Non-Cutaneous Field (Human Skin Tissue Not Detected)',
       differentials: [
         {
           condition: isTooDark
-            ? 'Insufficient Photometric Illumination (Underexposed Clinical Frame)'
-            : 'Non-Biological / Non-Cutaneous Object (Artifact or Background Surface)',
+            ? 'Underexposed Visual Presentation (Low Ambient Lighting)'
+            : 'Non-Biological Surface / Background Artifact',
           confidence: 'High',
           icdCode: 'Z02.9',
           rationale: isTooDark
-            ? `Mean image luminance is critically low (${metrics.meanLuminance ?? 12}/255 with ${metrics.shadowRatio ?? 85}% shadow clipping), preventing reliable CIE-LAB erythema or melanin chromophore extraction.`
-            : `YCbCr & CIE-LAB cutaneous chrominance telemetry detected only ${skinRatio}% human skin-tone pixels (clinical threshold ≥24%). Dominant image regions correspond to non-cutaneous objects, text/documents, or ambient background.`
+            ? 'Ambient illumination is critically insufficient to evaluate cutaneous vascularity, epidermal blanching, or melanin distribution.'
+            : 'The photographic frame contains non-biological surfaces, documents, or ambient background objects rather than human epidermis, hair, or nail structures.'
         },
         {
-          condition: 'Out-of-Focus or Uncalibrated Macro Capture (Photographic Artifact)',
+          condition: 'Out-of-Focus or Distant Capture',
           confidence: 'Moderate',
           icdCode: 'R93.89',
-          rationale: `Perceived edge sharpness is ${metrics.perceivedSharpness ?? 35}/100 and lighting status is "${lightingStatus}". Please center the camera 10–15 cm directly over the skin lesion.`
+          rationale: 'Focal epidermal structures and lesion margins cannot be resolved clearly from this camera distance or orientation.'
         }
       ],
       visualFindings: [
-        `Cutaneous Specimen Verification: FAILED — Only ${skinRatio}% of analyzed pixels fall within the human melanin/hemoglobin YCbCr chrominance envelope (Cr 133–178, Cb 75–132).`,
-        `Photometric Lighting Assessment: ${lightingStatus} (Mean Luminance: ${metrics.meanLuminance ?? 120}/255, Glare Clipping: ${metrics.glareRatio ?? 0}%, Shadow Clipping: ${metrics.shadowRatio ?? 0}%).`,
-        ...(qualityNotes.length > 0 ? qualityNotes : ['No recognizable epidermal or dermal lesion morphology could be isolated from the frame.'])
+        isTooDark
+          ? 'Severe shadow obscuration precluding visual assessment of epidermal morphology or vascular changes.'
+          : 'Absence of human cutaneous landmarks, follicular ostia, skin tension lines, or normal dermal vascularity.',
+        'No identifiable primary (macules, papules, plaques) or secondary dermatological lesions detected.',
+        ...(qualityNotes.length > 0 ? qualityNotes : ['A well-illuminated close-up perpendicular photograph of the affected anatomical area is needed.'])
       ],
       timelineCorrelation: patient
-        ? `Image uploaded for ${patient.fullName} (${patient.patientCode}), but automated dermatological correlation was halted because the uploaded photograph did not pass cutaneous specimen & photometric quality verification.`
-        : 'Automated diagnostic correlation was halted because the uploaded photograph did not pass cutaneous specimen & photometric lighting verification.',
+        ? `Photograph uploaded for ${patient.fullName} (${patient.patientCode}). Dermatological correlation was deferred because the image does not show identifiable human skin tissue.`
+        : 'Dermatological correlation was deferred because the image does not show identifiable human skin tissue.',
       redFlags: [
-        'Do not rely on automated lesion scoring when the photograph is non-cutaneous, severely underexposed, or heavily obscured by specular flash glare.'
+        'Clinical diagnosis should not be formulated on underexposed, obscured, or non-cutaneous photographs.'
       ],
       recommendedInvestigations: [
-        'Retake clinical photograph in diffuse, even daylight or neutral white clinic lighting (5000K–6500K)',
-        'Position camera lens 10–15 cm perpendicular to the skin surface so skin occupies >60% of the frame',
-        'Avoid direct flash glare, dark room shadows, or non-skin background clutter'
+        'Capture clinical photograph under direct examination lamp or diffuse daylight illumination',
+        'Orient camera lens 10–15 cm perpendicular to the affected anatomical skin area',
+        'Direct in-person physical examination with dermoscopy if evaluating a discrete cutaneous lesion'
       ],
       suggestedManagementPlan:
-        '1. Retake Image: Capture a clear, well-lit close-up of the patient’s skin lesion with at least 60% of the frame showing bare skin.\n' +
-        '2. Lighting Correction: Ensure Mean Luminance is between 60–210/255 without harsh flash reflections or deep shadows.\n' +
-        '3. Clinical Override: If inspecting a mucosal, nail-bed, or heavily bandaged site, document morphological findings manually in the consultation notes.',
-      disclaimer: 'Automated Quality & Specimen Gatekeeper: Disease classification is suppressed when an image does not contain verifiable human skin or sufficient photometric lighting.',
+        '1. Photograph Re-capture: Obtain a clear close-up photograph focused directly on the patient’s skin lesion.\n' +
+        '2. Illumination: Ensure uniform, glare-free clinic lighting to facilitate assessment of erythema and pigmentation.\n' +
+        '3. Clinical Correlation: Perform in-person inspection and palpation of the anatomical site.',
+      disclaimer: 'Clinical Decision Support: Visual evaluation requires a clear photograph displaying biological human skin.',
       analyzedAt: new Date().toISOString(),
       isAiPowered: false,
       patientId: patient?.id,
@@ -973,40 +975,40 @@ export function generateAdaptiveClinicalImageAnalysis(
     case 'pigmented_melanocytic': {
       const isHighSuspicion = metrics.asymmetryScore > 55 || metrics.borderIrregularity > 60 || (metrics.estimatedDiameterMm || 5) >= 6.0;
       primaryImpression = isHighSuspicion
-        ? 'Atypical Mole (Dysplastic Melanocytic Nevus)'
-        : 'Common Mole (Benign Melanocytic Nevus)';
+        ? 'Dysplastic Melanocytic Nevus (Atypical Nevus)'
+        : 'Benign Melanocytic Nevus (Common Mole)';
       differentials = [
         {
-          condition: 'Atypical Mole (Dysplastic Nevus)',
+          condition: 'Dysplastic Melanocytic Nevus (Atypical Nevus)',
           confidence: isHighSuspicion ? 'High' : 'Moderate',
           icdCode: 'D22.9',
-          rationale: `Asymmetric pigment distribution (Asymmetry: ${metrics.asymmetryScore}/100) and irregular peripheral border contours (Score: ${metrics.borderIrregularity}/100) consistent with architectural melanocytic dysplasia.`
+          rationale: 'Architectural melanocytic dysplasia characterized by asymmetric pigment distribution and irregular, notched peripheral contours.'
         },
         {
-          condition: 'Skin Melanoma (Superficial Spreading Cutaneous Melanoma)',
+          condition: 'Superficial Spreading Melanoma (Cutaneous Melanoma)',
           confidence: isHighSuspicion ? 'Moderate' : 'Low',
           icdCode: 'C43.9',
-          rationale: `Must be critically excluded if color variegation (${metrics.colorVariationScore}/100) or diameter exceeding 6mm is present. Requires dermatoscopic 7-point checklist.`
+          rationale: 'Must be critically excluded if color variegation, focal pigment regression, or diameter exceeding 6 mm is present. Warranting dermatoscopic 7-point checklist assessment.'
         },
         {
-          condition: 'Age Wart (Pigmented Seborrheic Keratosis)',
+          condition: 'Seborrheic Keratosis (Pigmented)',
           confidence: 'Moderate',
           icdCode: 'L82.1',
-          rationale: 'Benign epidermal hyperkeratotic tumor with pseudohorn cysts mimicking melanocytic lesions.'
+          rationale: 'Benign epidermal hyperkeratotic proliferation with pseudohorn cysts mimicking melanocytic lesions.'
         },
         {
-          condition: 'Fibrous Skin Nodule (Dermatofibroma)',
+          condition: 'Dermatofibroma (Cutaneous Histiocytoma)',
           confidence: 'Low',
           icdCode: 'D23.9',
           rationale: 'Firm dermal histiocytoma exhibiting peripheral delicate pigment network and central white scar-like patch.'
         }
       ];
       visualFindings = [
-        `Pigmentation Index measured at ${metrics.pigmentationIndex}/100 with localized melanin aggregation`,
-        `Border irregularity quantified at ${metrics.borderIrregularity}/100 with uneven marginal contours`,
-        `Asymmetry index across dual axes: ${metrics.asymmetryScore}/100`,
-        `Dominant visual color spectrum: ${colorsDesc}`,
-        `Estimated lesion diameter: ~${metrics.estimatedDiameterMm || 5.2} mm (threshold: 6.0 mm)`
+        'Melanin distribution reveals localized focal architectural variegation with non-uniform pigment aggregation',
+        'Marginal contours exhibit scalloped and notched peripheral borders with abrupt transition to adjacent uninvolved skin',
+        'Bi-axial structural asymmetry between opposing morphological axes',
+        `Dermatoscopic chromatic spectrum: ${colorsDesc.replace(/\(\d+%\)/g, '').trim()}`,
+        `Estimated physical lesion diameter: ~${metrics.estimatedDiameterMm || 5.2} mm (clinical threshold: 6.0 mm)`
       ];
       redFlags = [
         'ABCDE criteria progression: Rapid diameter enlargement, bleeding, or spontaneous ulceration',
@@ -1025,38 +1027,38 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'annular_scaling': {
-      primaryImpression = 'Ringworm (Tinea Corporis)';
+      primaryImpression = 'Tinea Corporis (Dermatophytosis)';
       differentials = [
         {
-          condition: 'Ringworm (Tinea Corporis)',
+          condition: 'Tinea Corporis (Dermatophytosis)',
           confidence: 'High',
           icdCode: 'B35.4',
-          rationale: `Annular configuration with centrifugal expansion, leading raised erythematous scaling margin (Erythema: ${metrics.erythemaIndex}/100), and relative central clearing.`
+          rationale: 'Annular configuration with centrifugal expansion, leading raised erythematous scaling margin, and characteristic central clearing.'
         },
         {
-          condition: 'Spreading Ring Redness (Erythema Annulare Centrifugum)',
+          condition: 'Erythema Annulare Centrifugum',
           confidence: 'Moderate',
           icdCode: 'L53.1',
-          rationale: 'Reactive figurate erythema with delicate trailing scale on the inner margin of the advancing border.'
+          rationale: 'Reactive figurate erythema with delicate trailing collarette scale on the inner margin of the advancing border.'
         },
         {
-          condition: 'Coin-Shaped Eczema (Nummular Dermatitis)',
+          condition: 'Nummular Dermatitis (Discoid Eczema)',
           confidence: 'Moderate',
           icdCode: 'L20.84',
           rationale: 'Coin-shaped pruritic plaques without true central clearing; frequently coexists with generalized xerosis.'
         },
         {
-          condition: 'Ring-Shaped Dermal Bump Rash (Granuloma Annulare)',
+          condition: 'Granuloma Annulare',
           confidence: 'Low',
           icdCode: 'L92.0',
           rationale: 'Smooth non-scaly dermal ring composed of necrobiotic granulomatous papules.'
         }
       ];
       visualFindings = [
-        `Annular ring morphology with prominent peripheral scaling collar and active erythematous border`,
-        `Erythema Index: ${metrics.erythemaIndex}/100 concentrated along advancing marginal perimeter`,
-        `Central hypopigmented clearing with post-inflammatory epidermal desquamation`,
-        `Color spectrum identified: ${colorsDesc}`
+        'Annular ring morphology with prominent peripheral scaling collar and active erythematous border',
+        'Confluent vascular erythema concentrated along the advancing marginal perimeter',
+        'Central hypopigmented clearing with post-inflammatory epidermal desquamation',
+        `Clinical chromatic spectrum: ${colorsDesc.replace(/\(\d+%\)/g, '').trim()}`
       ];
       redFlags = [
         'Tinea Incognito: Severe atypical exacerbation secondary to misapplied topical corticosteroids',
@@ -1082,26 +1084,26 @@ export function generateAdaptiveClinicalImageAnalysis(
           condition: 'Plaque Psoriasis (Psoriasis Vulgaris)',
           confidence: 'High',
           icdCode: 'L40.0',
-          rationale: `Sharply demarcated salmon-pink erythematous plaques (Erythema: ${metrics.erythemaIndex}/100) surmounted by micaceous silvery-white stratified scaling.`
+          rationale: 'Sharply demarcated salmon-pink indurated plaques surmounted by micaceous silvery-white stratified scaling.'
         },
         {
-          condition: 'Flat-Topped Purple Rash (Lichen Planus)',
+          condition: 'Lichen Planus',
           confidence: 'Moderate',
           icdCode: 'L43.9',
-          rationale: 'Pruritic, polygonal, planar, purple (violaceous) papules with fine reticular Wickham\'s striae.'
+          rationale: 'Pruritic, polygonal, planar, violaceous papules with fine reticular Wickham striae.'
         },
         {
-          condition: 'Herald Patch Rash (Pityriasis Rosea)',
+          condition: 'Pityriasis Rosea',
           confidence: 'Low',
           icdCode: 'L42',
-          rationale: 'Self-limiting papulosquamous eruption oriented along Langer\'s lines of cleavage.'
+          rationale: 'Self-limiting papulosquamous eruption oriented along Langer cleavage lines.'
         }
       ];
       visualFindings = [
-        `Sharply demarcated indurated erythematous plaques (Erythema Index: ${metrics.erythemaIndex}/100)`,
-        `Silvery-white lamellar keratin scaling with elevated texture roughness (Entropy: ${metrics.textureEntropy || 45}/100)`,
-        `Symmetrical extensor surface presentation pattern`,
-        `Color composition: ${colorsDesc}`
+        'Sharply demarcated indurated erythematous plaques with distinct clinical step-off',
+        'Silvery-white lamellar keratin scaling with pronounced hyperkeratotic roughness',
+        'Symmetrical extensor surface presentation pattern',
+        `Chromatic presentation: ${colorsDesc.replace(/\(\d+%\)/g, '').trim()}`
       ];
       redFlags = [
         'Psoriatic erythroderma involving >90% body surface area (high risk of thermoregulatory failure and sepsis)',
@@ -1121,10 +1123,10 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'papulopustular_follicular': {
-      primaryImpression = 'Acne (Acne Vulgaris)';
+      primaryImpression = 'Acne Vulgaris';
       differentials = [
         {
-          condition: 'Acne (Acne Vulgaris)',
+          condition: 'Acne Vulgaris',
           confidence: 'High',
           icdCode: 'L70.0',
           rationale: 'Polymorphic eruption of inflammatory erythematous papules, superficial pustules, and comedones localized to sebaceous zones.'
@@ -1136,17 +1138,17 @@ export function generateAdaptiveClinicalImageAnalysis(
           rationale: 'Centrofacial symmetric erythema with telangiectasias and inflammatory papulopustules without true comedones.'
         },
         {
-          condition: 'Hair Follicle Infection (Bacterial / Malassezia Folliculitis)',
+          condition: 'Folliculitis (Bacterial / Malassezia)',
           confidence: 'Low',
           icdCode: 'L73.9',
           rationale: 'Monomorphic discrete follicular pustules centered on hair follicles, often exacerbated by occlusion or humidity.'
         }
       ];
       visualFindings = [
-        `Inflammatory erythematous papules and pustules (Erythema Index: ${metrics.erythemaIndex}/100)`,
-        `Punctate follicular lesions with localized comedonal plugging (Texture: ${metrics.textureEntropy || 40}/100)`,
-        `Post-inflammatory erythema (PIE) in surrounding dermal fields`,
-        `Identified color spectrum: ${colorsDesc}`
+        'Inflammatory erythematous papules and superficial follicular pustules',
+        'Punctate follicular lesions with localized comedonal hyperkeratosis',
+        'Surrounding perilesional macular erythema (post-inflammatory erythema)',
+        `Observed chromatic pattern: ${colorsDesc.replace(/\(\d+%\)/g, '').trim()}`
       ];
       redFlags = [
         'Nodulocystic conglomerates or deep sinus tracts with risk of permanent atrophic/keloidal scarring',
@@ -1167,32 +1169,32 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'vesicular_bullous': {
-      primaryImpression = 'Shingles (Herpes Zoster)';
+      primaryImpression = 'Herpes Zoster';
       differentials = [
         {
-          condition: 'Shingles (Herpes Zoster)',
+          condition: 'Herpes Zoster',
           confidence: 'High',
           icdCode: 'B02.9',
-          rationale: `Unilateral grouped umbilicated vesicles on an erythematous base (Erythema: ${metrics.erythemaIndex}/100) distributed along a dermatomal neural pathway.`
+          rationale: 'Unilateral grouped umbilicated vesicles on an erythematous edematous base distributed strictly along a dermatomal neural pathway.'
         },
         {
-          condition: 'Herpes Blisters (Herpes Simplex Cutaneous Infection)',
+          condition: 'Herpes Simplex Virus Infection',
           confidence: 'Moderate',
           icdCode: 'B00.9',
-          rationale: 'Clustered vesicles on an erythematous base with early rupture into scalloped erosions, often recurring at same site.'
+          rationale: 'Clustered vesicles on an erythematous base with early rupture into scalloped erosions, often recurring at same anatomical site.'
         },
         {
-          condition: 'Blistering Skin Infection (Bullous Impetigo)',
+          condition: 'Bullous Impetigo',
           confidence: 'Low',
           icdCode: 'L01.00',
           rationale: 'Superficial flaccid bullae caused by Staphylococcus aureus exfoliative toxins, rapidly yielding honey-colored crusts.'
         }
       ];
       visualFindings = [
-        `Grouped tense vesicles containing clear serous exudate on an edematous erythematous background`,
-        `High erythema intensity index: ${metrics.erythemaIndex}/100 with regional vascular flare`,
-        `Early erosions and vesicular clustering (Border score: ${metrics.borderIrregularity}/100)`,
-        `Color spectrum: ${colorsDesc}`
+        'Grouped tense vesicles containing clear serous exudate on an edematous erythematous background',
+        'Intense localized dermal vascular flare with acute inflammatory redness',
+        'Early superficial erosions with scalloped microvesicular clustering',
+        `Clinical chromatic spectrum: ${colorsDesc.replace(/\(\d+%\)/g, '').trim()}`
       ];
       redFlags = [
         'Hutchinson\'s sign (vesicle on tip/side of nose) indicating nasociliary branch involvement of V1 cranial nerve — emergency ophthalmology consult required',
@@ -1213,32 +1215,32 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'ulcerative_eroded': {
-      primaryImpression = 'Venous Leg Ulcer (Venous Stasis Ulcer)';
+      primaryImpression = 'Venous Stasis Ulcer';
       differentials = [
         {
-          condition: 'Venous Leg Ulcer (Venous Stasis Ulcer)',
+          condition: 'Venous Stasis Ulcer',
           confidence: 'High',
           icdCode: 'I87.2',
-          rationale: `Irregular shallow ulceration with fibrin slough bed (Erythema: ${metrics.erythemaIndex}/100, Border: ${metrics.borderIrregularity}/100) and surrounding hemosiderin hyperpigmentation.`
+          rationale: 'Irregular shallow ulceration with fibrin slough bed and surrounding dermal hemosiderin hyperpigmentation.'
         },
         {
-          condition: 'Rodent Ulcer Skin Cancer (Nodulo-Ulcerative Basal Cell Carcinoma)',
+          condition: 'Basal Cell Carcinoma (Nodulo-Ulcerative)',
           confidence: 'Moderate',
           icdCode: 'C44.9',
           rationale: 'Non-healing ulcer with pearly rolled translucent borders, arborizing telangiectasias, and central crusting.'
         },
         {
-          condition: 'Inflammatory Skin Ulcer (Pyoderma Gangrenosum)',
+          condition: 'Pyoderma Gangrenosum',
           confidence: 'Low',
           icdCode: 'L88',
-          rationale: 'Painful, rapidly expanding ulcer with violaceous undermined borders, frequently associated with IBD or rheumatoid arthritis.'
+          rationale: 'Painful, rapidly expanding ulcer with violaceous undermined borders, frequently associated with systemic inflammatory disease.'
         }
       ];
       visualFindings = [
-        `Central loss of full-thickness epidermis with base containing yellow fibrin slough`,
-        `Irregular and indurated wound margin (Border irregularity: ${metrics.borderIrregularity}/100)`,
-        `Surrounding perilesional inflammatory erythema (Score: ${metrics.erythemaIndex}/100)`,
-        `Color spectrum identified: ${colorsDesc}`
+        'Full-thickness epidermal ulceration with base containing yellow fibrin slough and granulation tissue',
+        'Irregular, indurated peripheral wound margins',
+        'Surrounding stasis dermatitis with perilesional inflammatory erythema and hemosiderin staining',
+        `Ulcer chromatic composition: ${colorsDesc.replace(/\(\d+%\)/g, '').trim()}`
       ];
       redFlags = [
         'Rapid lateral ulcer expansion, exposed tendon/bone, or ascending lymphangitic cellulitis',
@@ -1259,32 +1261,32 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'urticarial_wheal': {
-      primaryImpression = 'Hives (Acute Urticaria)';
+      primaryImpression = 'Acute Urticaria';
       differentials = [
         {
-          condition: 'Hives (Acute Urticaria)',
+          condition: 'Acute Urticaria',
           confidence: 'High',
           icdCode: 'L50.9',
-          rationale: `Transient edematous erythematous wheals (Erythema: ${metrics.erythemaIndex}/100) with central pallor and variable annular configurations that resolve within 24 hours.`
+          rationale: 'Transient edematous erythematous wheals with central pallor and variable annular configurations that resolve without scarring within 24 hours.'
         },
         {
-          condition: 'Drug Allergy Rash (Morbilliform / Urticarial Drug Eruption)',
+          condition: 'Drug Eruption (Morbilliform / Urticarial)',
           confidence: 'Moderate',
           icdCode: 'L27.0',
           rationale: 'Symmetric widespread eruption triggered by recently introduced pharmaceutical agent or antibiotic.'
         },
         {
-          condition: 'Inflamed Blood Vessel Hives (Urticarial Vasculitis)',
+          condition: 'Urticarial Vasculitis',
           confidence: 'Low',
           icdCode: 'L95.0',
           rationale: 'Wheals persisting >24 hours with burning/tenderness and resolving with purpuric residual hyperpigmentation.'
         }
       ];
       visualFindings = [
-        `Raised edematous erythematous wheals with blanched pale halos (Erythema: ${metrics.erythemaIndex}/100)`,
-        `Smooth surface texture without epidermal scaling (Texture Entropy: ${metrics.textureEntropy || 30}/100)`,
-        `Asymmetry: ${metrics.asymmetryScore}/100 with polycyclic coalescing borders`,
-        `Color spectrum: ${colorsDesc}`
+        'Raised edematous erythematous wheals with blanched central halos',
+        'Smooth intact epidermal surface without scale or hyperkeratosis',
+        'Polycyclic coalescing borders with transient geographic morphology',
+        `Chromatic presentation: ${colorsDesc.replace(/\(\d+%\)/g, '').trim()}`
       ];
       redFlags = [
         'Angioedema of the tongue, lips, uvula, or laryngeal stridor (anaphylaxis emergency — administer IM Epinephrine 0.5mg)',
@@ -1305,31 +1307,31 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'keratotic_verrucous': {
-      primaryImpression = 'Common Wart (Verruca Vulgaris)';
+      primaryImpression = 'Verruca Vulgaris';
       differentials = [
         {
-          condition: 'Common Wart (Verruca Vulgaris)',
+          condition: 'Verruca Vulgaris',
           confidence: 'High',
           icdCode: 'B07.8',
-          rationale: `Exophytic hyperkeratotic papule with rough verrucous surface (Texture: ${metrics.textureEntropy || 50}/100) and interruption of normal skin lines.`
+          rationale: 'Exophytic hyperkeratotic papule with rough verrucous surface and interruption of normal dermatoglyphics.'
         },
         {
-          condition: 'Sun-Induced Precancerous Spot (Actinic Keratosis)',
+          condition: 'Actinic Keratosis',
           confidence: 'Moderate',
           icdCode: 'L57.0',
           rationale: 'Adherent gritty sandpaper-like scaly keratotic papule on chronically sun-exposed anatomical sites.'
         },
         {
-          condition: 'Age Wart (Seborrheic Keratosis)',
+          condition: 'Seborrheic Keratosis',
           confidence: 'Moderate',
           icdCode: 'L82.1',
           rationale: 'Stuck-on waxy verrucous plaque with visible keratin pseudohorn cysts.'
         }
       ];
       visualFindings = [
-        `Hyperkeratotic exophytic verrucous projection with elevated surface roughness (Texture: ${metrics.textureEntropy || 55}/100)`,
-        `Focal thrombosed pinpoint capillary puncta visible on dermoscopy`,
-        `Keratin crusting with pale desquamation: ${colorsDesc}`,
+        'Hyperkeratotic exophytic verrucous projection with marked epidermal acanthosis',
+        'Focal thrombosed pinpoint capillary puncta visible on close inspection',
+        `Adherent keratin crusting with focal desquamation: ${colorsDesc.replace(/\(\d+%\)/g, '').trim()}`,
         `Lesion dimension: ~${metrics.estimatedDiameterMm || 4.8} mm`
       ];
       redFlags = [
@@ -1352,17 +1354,17 @@ export function generateAdaptiveClinicalImageAnalysis(
     case 'vascular_purpuric': {
       const isSeverePurpura = metrics.erythemaIndex > 60 || metrics.borderIrregularity > 50;
       primaryImpression = isSeverePurpura
-        ? 'Small Vessel Skin Vasculitis (Cutaneous Leukocytoclastic Vasculitis)'
+        ? 'Cutaneous Leukocytoclastic Vasculitis'
         : 'Cherry Angioma (Senile Hemangioma)';
       differentials = [
         {
-          condition: 'Small Vessel Skin Vasculitis (Leukocytoclastic Vasculitis)',
+          condition: 'Cutaneous Leukocytoclastic Vasculitis',
           confidence: isSeverePurpura ? 'High' : 'Moderate',
           icdCode: 'L95.9',
-          rationale: `Non-blanching violaceous petechiae and palpable purpuric papules (Redness: ${metrics.erythemaIndex}/100) reflecting immune complex-mediated small vessel vasculitis.`
+          rationale: 'Non-blanching violaceous petechiae and palpable purpuric papules reflecting immune complex-mediated small vessel vasculitis.'
         },
         {
-          condition: 'Capillary Leak Spots (Pigmented Purpuric Dermatosis)',
+          condition: 'Pigmented Purpuric Dermatosis',
           confidence: 'Moderate',
           icdCode: 'L81.7',
           rationale: 'Cayenne pepper-like petechial macules with hemosiderin deposition resolving with rust-brown discoloration.'
@@ -1375,10 +1377,10 @@ export function generateAdaptiveClinicalImageAnalysis(
         }
       ];
       visualFindings = [
-        `Non-blanching violaceous and purpuric vascular macules/papules (Erythema: ${metrics.erythemaIndex}/100)`,
-        `Focal hemosiderin staining and micro-extravasation: ${colorsDesc}`,
-        `Bilateral or dependent gravity-influenced anatomical distribution`,
-        `Absence of central necrotic eschar or deep ulceration (Border: ${metrics.borderIrregularity}/100)`
+        'Non-blanching violaceous and purpuric vascular macules and palpable papules',
+        `Focal hemosiderin extravasation and dermal microvascular engorgement: ${colorsDesc.replace(/\(\d+%\)/g, '').trim()}`,
+        'Dependent gravity-influenced anatomical distribution',
+        'Intact dermal integrity without necrotizing ulceration or frank eschar'
       ];
       redFlags = [
         'Systemic vasculitis signs: Hematuria, proteinuria, abdominal angina, or peripheral neuropathy (mononeuritis multiplex)',
@@ -1401,39 +1403,39 @@ export function generateAdaptiveClinicalImageAnalysis(
     case 'hypopigmented_macular': {
       const isDepigmented = metrics.pigmentationIndex < 20;
       primaryImpression = isDepigmented
-        ? 'Vitiligo / White Patch Disease (Vitiligo Vulgaris)'
-        : 'Fungal Sun Spots (Pityriasis Versicolor)';
+        ? 'Vitiligo Vulgaris'
+        : 'Pityriasis Versicolor';
       differentials = [
         {
-          condition: 'Vitiligo / White Patch Disease (Vitiligo Vulgaris)',
+          condition: 'Vitiligo Vulgaris',
           confidence: isDepigmented ? 'High' : 'Moderate',
           icdCode: 'L80',
-          rationale: `Completely amelanotic, chalk-white depigmented macules (Pigment Index: ${metrics.pigmentationIndex}/100) with sharply scalloped borders and absent follicular pigment.`
+          rationale: 'Completely amelanotic, chalk-white depigmented macules with sharply scalloped borders and absent follicular melanocytes.'
         },
         {
-          condition: 'Fungal Sun Spots (Pityriasis Versicolor)',
+          condition: 'Pityriasis Versicolor',
           confidence: isDepigmented ? 'Moderate' : 'High',
           icdCode: 'B36.0',
           rationale: 'Superficial hypopigmented macules with fine subtle furfuraceous scale elicited upon gentle stretching.'
         },
         {
-          condition: 'Lightened Skin After Inflammation (Post-Inflammatory Hypopigmentation)',
+          condition: 'Post-Inflammatory Hypopigmentation',
           confidence: 'Moderate',
           icdCode: 'L81.5',
           rationale: 'Partial melanocyte suppression occurring at sites of resolved prior dermatitis, burn, or eczema.'
         },
         {
-          condition: 'Dry Pale Skin Patches (Pityriasis Alba)',
+          condition: 'Pityriasis Alba',
           confidence: 'Low',
           icdCode: 'L30.5',
           rationale: 'Ill-defined faintly hypopigmented patches with delicate scale, frequent in pediatric atopic diathesis.'
         }
       ];
       visualFindings = [
-        `Sharply marginated amelanotic or hypopigmented macules (Pigment Index: ${metrics.pigmentationIndex}/100)`,
-        `Absence of active inflammatory erythema (Erythema: ${metrics.erythemaIndex}/100)`,
-        `Color spectrum: ${colorsDesc}`,
-        `Smooth surface texture with minimal scaling (Entropy: ${metrics.textureEntropy || 25}/100)`
+        'Sharply marginated amelanotic or hypopigmented macules with preserved skin texture',
+        'Absence of active inflammatory vascular flare',
+        `Chromatic presentation: ${colorsDesc.replace(/\(\d+%\)/g, '').trim()}`,
+        'Smooth epidermal surface without marked desquamation'
       ];
       redFlags = [
         'Rapidly expanding generalized vitiligo signaling underlying autoimmune polyendocrine syndrome',
@@ -1458,41 +1460,41 @@ export function generateAdaptiveClinicalImageAnalysis(
       const isAcute = metrics.erythemaIndex > 68;
       const isLichenified = (metrics.textureEntropy || 30) > 48;
       primaryImpression = isAcute
-        ? 'Allergic Contact Eczema (Allergic Contact Dermatitis)'
+        ? 'Allergic Contact Dermatitis'
         : isLichenified
-        ? 'Chronic Thickened Eczema (Lichen Simplex Chronicus)'
-        : 'Atopic Eczema (Atopic Dermatitis)';
+        ? 'Lichen Simplex Chronicus'
+        : 'Atopic Dermatitis';
       differentials = [
         {
-          condition: isAcute ? 'Allergic Contact Eczema (Allergic Contact Dermatitis)' : 'Atopic Eczema (Atopic Dermatitis)',
+          condition: isAcute ? 'Allergic Contact Dermatitis' : 'Atopic Dermatitis',
           confidence: 'High',
           icdCode: isAcute ? 'L23.9' : 'L20.9',
-          rationale: `Erythematous papulovesicular dermatitis (Erythema: ${metrics.erythemaIndex}/100) with epidermal barrier disruption, severe pruritus, and ${isAcute ? 'distinct geometric or localized margins' : 'typical flexural distribution'}.`
+          rationale: `Erythematous papulovesicular dermatitis with epidermal barrier disruption, severe pruritus, and ${isAcute ? 'distinct geometric or localized margins' : 'typical flexural distribution'}.`
         },
         {
-          condition: isAcute ? 'Atopic Eczema (Atopic Dermatitis)' : 'Allergic Contact Eczema (Allergic Contact Dermatitis)',
+          condition: isAcute ? 'Atopic Dermatitis' : 'Allergic Contact Dermatitis',
           confidence: 'Moderate',
           icdCode: isAcute ? 'L20.9' : 'L23.9',
           rationale: 'Pruritic erythematous plaques reflecting exogenous contact sensitization or endogenous atopic barrier defect.'
         },
         {
-          condition: 'Irritant Contact Eczema (Irritant Contact Dermatitis)',
+          condition: 'Irritant Contact Dermatitis',
           confidence: 'Moderate',
           icdCode: 'L24.9',
           rationale: 'Direct cytotoxic damage to skin barrier from soaps, detergents, chemicals, or repeated wet work.'
         },
         {
-          condition: 'Steroid-Masked Ringworm (Tinea Incognito)',
+          condition: 'Tinea Incognito',
           confidence: 'Low',
           icdCode: 'B35.4',
           rationale: 'Modified fungal infection masked by prior topical steroid use; active peripheral micro-vesicles require exclusion.'
         }
       ];
       visualFindings = [
-        `Ill-defined erythematous macules and edematous papules (Erythema Index: ${metrics.erythemaIndex}/100)`,
-        `Superficial epidermal microvesiculation and excoriations secondary to pruritus`,
-        `Fine desquamation and epidermal xerosis: ${colorsDesc}`,
-        `Absence of deep dermal ulceration or purulent satellite nodules (Texture: ${metrics.textureEntropy || 40}/100)`
+        'Ill-defined erythematous macules and edematous papules with dermal vascular engorgement',
+        'Superficial epidermal microvesiculation, pinpoint crusting, and excoriations secondary to pruritus',
+        `Fine epidermal xerosis and delicate scale: ${colorsDesc.replace(/\(\d+%\)/g, '').trim()}`,
+        'Preserved dermal thickness without ulceration or purulent satellite pustules'
       ];
       redFlags = [
         'Eczema Herpeticum (Kaposi varicelliform eruption): Monomorphic punched-out umbilicated blisters with fever — emergency antiviral indication',
@@ -1536,32 +1538,29 @@ export function generateAdaptiveClinicalImageAnalysis(
       timelineCorrelation = `Patient ${patient.fullName} (${ageGender}, ${patient.patientCode}) has ${history.length} documented consultation visit(s) in EHR. ` +
         `Last documented visit on ${lastDate} recorded diagnoses [${lastDiags}] with prescribed [${lastMeds}]. ` +
         `${diagInfo} ${medInfo} ${allergyInfo}.${labSummary} ` +
-        `Current image analysis (Erythema: ${metrics.erythemaIndex}/100, Morphology: ${category.replace(/_/g, ' ')}) indicates ` +
+        `Current clinical presentation (Morphology: ${category.replace(/_/g, ' ')}, demonstrating ${metrics.erythemaIndex > 60 ? 'marked inflammatory erythema' : 'mild-to-moderate vascular flush'}) indicates ` +
         (pastDiagnoses.some(d => d.includes(category.split('_')[0]))
-          ? `a recurrent flare or localized exacerbation consistent with their chronic history.`
-          : `an acute de novo cutaneous presentation requiring targeted first-line therapy.`);
+          ? 'a recurrent flare or localized exacerbation consistent with their chronic history.'
+          : 'an acute de novo cutaneous presentation requiring targeted first-line therapy.');
     } else {
       timelineCorrelation = `Patient ${patient.fullName} (${ageGender}, ${patient.patientCode}) has an established clinical record with ${allergyInfo}. ${diagInfo} ${medInfo}${labSummary} ` +
         `No prior dermatological consultation history is logged. Current visual morphology (${category.replace(/_/g, ' ')}) represents an acute presentation.`;
     }
   } else {
-    timelineCorrelation = `Evaluated as an isolated clinical specimen without linked longitudinal patient record. ` +
-      `Visual morphology indicates ${category.replace(/_/g, ' ')} with an Erythema Index of ${metrics.erythemaIndex}/100 and Pigmentation Index of ${metrics.pigmentationIndex}/100.`;
+    timelineCorrelation = `Evaluated as an isolated clinical specimen. ` +
+      `Morphological presentation demonstrates ${category.replace(/_/g, ' ')} with characteristic vascular erythema and localized pigment architecture.`;
   }
 
   return {
     id: `ai_img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     primaryImpression,
     differentials,
-    visualFindings: [
-      `Specimen & Photometric Quality: Human Skin Verified (${metrics.skinPixelRatio ?? 85}% cutaneous pixels) | Lighting: ${metrics.lightingStatus || 'Optimal'} (Luminance ${metrics.meanLuminance ?? 140}/255, Sharpness ${metrics.perceivedSharpness ?? 75}/100)`,
-      ...visualFindings
-    ],
+    visualFindings,
     timelineCorrelation,
     redFlags,
     recommendedInvestigations,
     suggestedManagementPlan,
-    disclaimer: 'AI Clinical Decision Support: Intended as an assistive diagnostic reference for registered physicians. Final diagnosis and prescriptive authority require comprehensive clinical examination.',
+    disclaimer: 'Clinical Decision Support: Intended as an assistive diagnostic reference for registered physicians. Final diagnosis and prescriptive authority require comprehensive clinical examination.',
     analyzedAt: new Date().toISOString(),
     isAiPowered: false,
     patientId: patient?.id,
@@ -1649,48 +1648,48 @@ async function callOpenRouterVision(
  * Normalizes any disease/condition string into the strict format: Common Term (Scientific Term)
  */
 const COMMON_SCIENTIFIC_MAP: { match: RegExp; formatted: string }[] = [
-  { match: /acne\s+vulgaris|^acne$/i, formatted: 'Acne (Acne Vulgaris)' },
-  { match: /atopic\s+dermatitis|atopic\s+eczema|subacute\s+eczematous\s+dermatitis/i, formatted: 'Atopic Eczema (Atopic Dermatitis)' },
-  { match: /allergic\s+contact\s+dermatitis/i, formatted: 'Allergic Contact Eczema (Allergic Contact Dermatitis)' },
-  { match: /irritant\s+contact\s+dermatitis/i, formatted: 'Irritant Contact Eczema (Irritant Contact Dermatitis)' },
-  { match: /seborrheic\s+dermatitis/i, formatted: 'Seborrheic Eczema / Dandruff (Seborrheic Dermatitis)' },
-  { match: /nummular\s+eczema|nummular\s+dermatitis|discoid\s+eczema/i, formatted: 'Coin-Shaped Eczema (Nummular Dermatitis)' },
-  { match: /lichen\s+simplex\s+chronicus|neurodermatitis/i, formatted: 'Chronic Thickened Eczema (Lichen Simplex Chronicus)' },
-  { match: /tinea\s+corporis|ringworm/i, formatted: 'Ringworm (Tinea Corporis)' },
-  { match: /tinea\s+incognito/i, formatted: 'Steroid-Masked Ringworm (Tinea Incognito)' },
-  { match: /tinea\s+versicolor|pityriasis\s+versicolor/i, formatted: 'Fungal Sun Spots (Pityriasis Versicolor)' },
+  { match: /acne\s+vulgaris|^acne$/i, formatted: 'Acne Vulgaris' },
+  { match: /atopic\s+dermatitis|atopic\s+eczema|subacute\s+eczematous\s+dermatitis/i, formatted: 'Atopic Dermatitis (Eczema)' },
+  { match: /allergic\s+contact\s+dermatitis/i, formatted: 'Allergic Contact Dermatitis' },
+  { match: /irritant\s+contact\s+dermatitis/i, formatted: 'Irritant Contact Dermatitis' },
+  { match: /seborrheic\s+dermatitis/i, formatted: 'Seborrheic Dermatitis' },
+  { match: /nummular\s+eczema|nummular\s+dermatitis|discoid\s+eczema/i, formatted: 'Nummular Dermatitis (Discoid Eczema)' },
+  { match: /lichen\s+simplex\s+chronicus|neurodermatitis/i, formatted: 'Lichen Simplex Chronicus' },
+  { match: /tinea\s+corporis|ringworm/i, formatted: 'Tinea Corporis (Dermatophytosis)' },
+  { match: /tinea\s+incognito/i, formatted: 'Tinea Incognito (Steroid-Modified Tinea)' },
+  { match: /tinea\s+versicolor|pityriasis\s+versicolor/i, formatted: 'Pityriasis Versicolor' },
   { match: /psoriasis\s+vulgaris|plaque\s+psoriasis/i, formatted: 'Plaque Psoriasis (Psoriasis Vulgaris)' },
-  { match: /lichen\s+planus/i, formatted: 'Flat-Topped Purple Rash (Lichen Planus)' },
-  { match: /pityriasis\s+rosea/i, formatted: 'Herald Patch Rash (Pityriasis Rosea)' },
-  { match: /papulopustular\s+rosacea|^rosacea$/i, formatted: 'Rosacea (Papulopustular Rosacea)' },
-  { match: /folliculitis/i, formatted: 'Hair Follicle Infection (Bacterial / Malassezia Folliculitis)' },
-  { match: /herpes\s+zoster|shingles/i, formatted: 'Shingles (Herpes Zoster)' },
-  { match: /herpes\s+simplex/i, formatted: 'Herpes Blisters (Herpes Simplex Cutaneous Infection)' },
-  { match: /bullous\s+impetigo|^impetigo$/i, formatted: 'Blistering Skin Infection (Bullous Impetigo)' },
-  { match: /acute\s+urticaria|^urticaria$|^hives$/i, formatted: 'Hives (Acute Urticaria)' },
-  { match: /urticarial\s+vasculitis/i, formatted: 'Inflamed Blood Vessel Hives (Urticarial Vasculitis)' },
-  { match: /cutaneous\s+drug\s+eruption|drug\s+eruption/i, formatted: 'Drug Allergy Rash (Morbilliform Drug Eruption)' },
-  { match: /verruca\s+vulgaris|viral\s+wart|common\s+wart/i, formatted: 'Common Wart (Verruca Vulgaris)' },
-  { match: /actinic\s+keratosis|solar\s+keratosis/i, formatted: 'Sun-Induced Precancerous Spot (Actinic Keratosis)' },
-  { match: /seborrheic\s+keratosis/i, formatted: 'Age Wart (Seborrheic Keratosis)' },
-  { match: /dysplastic\s+nevus|clark'?s\s+nevus|atypical\s+melanocytic/i, formatted: 'Atypical Mole (Dysplastic Nevus)' },
-  { match: /benign\s+melanocytic\s+nevus|melanocytic\s+nevus/i, formatted: 'Common Mole (Benign Melanocytic Nevus)' },
-  { match: /cutaneous\s+melanoma|superficial\s+spreading\s+melanoma|^melanoma$/i, formatted: 'Skin Melanoma (Cutaneous Melanoma)' },
-  { match: /dermatofibroma/i, formatted: 'Fibrous Skin Nodule (Dermatofibroma)' },
-  { match: /vitiligo/i, formatted: 'Vitiligo / White Patch Disease (Vitiligo Vulgaris)' },
-  { match: /post-inflammatory\s+hypopigmentation/i, formatted: 'Lightened Skin After Inflammation (Post-Inflammatory Hypopigmentation)' },
-  { match: /post-inflammatory\s+hyperpigmentation/i, formatted: 'Post-Inflammatory Dark Spots (Post-Inflammatory Hyperpigmentation)' },
-  { match: /pityriasis\s+alba/i, formatted: 'Dry Pale Skin Patches (Pityriasis Alba)' },
-  { match: /melasma/i, formatted: 'Dark Facial Patches (Centrofacial Melasma)' },
-  { match: /solar\s+lentig/i, formatted: 'Sun Spots (Solar Lentigines)' },
-  { match: /venous\s+stasis\s+ulcer/i, formatted: 'Venous Leg Ulcer (Venous Stasis Ulcer)' },
-  { match: /basal\s+cell\s+carcinoma/i, formatted: 'Rodent Ulcer Skin Cancer (Nodulo-Ulcerative Basal Cell Carcinoma)' },
-  { match: /pyoderma\s+gangrenosum/i, formatted: 'Inflammatory Skin Ulcer (Pyoderma Gangrenosum)' },
-  { match: /leukocytoclastic\s+vasculitis/i, formatted: 'Small Vessel Skin Vasculitis (Cutaneous Leukocytoclastic Vasculitis)' },
-  { match: /pigmented\s+purpuric\s+dermatosis|schamberg/i, formatted: 'Capillary Leak Spots (Pigmented Purpuric Dermatosis)' },
-  { match: /cherry\s+hemangioma|cherry\s+angioma/i, formatted: 'Cherry Angioma (Senile Hemangioma)' },
-  { match: /erythema\s+annulare\s+centrifugum/i, formatted: 'Spreading Ring Redness (Erythema Annulare Centrifugum)' },
-  { match: /granuloma\s+annulare/i, formatted: 'Ring-Shaped Dermal Bump Rash (Granuloma Annulare)' },
+  { match: /lichen\s+planus/i, formatted: 'Lichen Planus' },
+  { match: /pityriasis\s+rosea/i, formatted: 'Pityriasis Rosea' },
+  { match: /papulopustular\s+rosacea|^rosacea$/i, formatted: 'Papulopustular Rosacea' },
+  { match: /folliculitis/i, formatted: 'Folliculitis (Bacterial / Malassezia)' },
+  { match: /herpes\s+zoster|shingles/i, formatted: 'Herpes Zoster (Shingles)' },
+  { match: /herpes\s+simplex/i, formatted: 'Herpes Simplex Infection' },
+  { match: /bullous\s+impetigo|^impetigo$/i, formatted: 'Impetigo (Bullous / Non-Bullous)' },
+  { match: /acute\s+urticaria|^urticaria$|^hives$/i, formatted: 'Urticaria (Acute / Chronic)' },
+  { match: /urticarial\s+vasculitis/i, formatted: 'Urticarial Vasculitis' },
+  { match: /cutaneous\s+drug\s+eruption|drug\s+eruption/i, formatted: 'Cutaneous Drug Eruption (Morbilliform)' },
+  { match: /verruca\s+vulgaris|viral\s+wart|common\s+wart/i, formatted: 'Verruca Vulgaris' },
+  { match: /actinic\s+keratosis|solar\s+keratosis/i, formatted: 'Actinic Keratosis (Solar Keratosis)' },
+  { match: /seborrheic\s+keratosis/i, formatted: 'Seborrheic Keratosis' },
+  { match: /dysplastic\s+nevus|clark'?s\s+nevus|atypical\s+melanocytic/i, formatted: 'Dysplastic Melanocytic Nevus' },
+  { match: /benign\s+melanocytic\s+nevus|melanocytic\s+nevus/i, formatted: 'Benign Melanocytic Nevus' },
+  { match: /cutaneous\s+melanoma|superficial\s+spreading\s+melanoma|^melanoma$/i, formatted: 'Cutaneous Melanoma' },
+  { match: /dermatofibroma/i, formatted: 'Dermatofibroma (Cutaneous Histiocytoma)' },
+  { match: /vitiligo/i, formatted: 'Vitiligo (Macular Depigmentation)' },
+  { match: /post-inflammatory\s+hypopigmentation/i, formatted: 'Post-Inflammatory Hypopigmentation' },
+  { match: /post-inflammatory\s+hyperpigmentation/i, formatted: 'Post-Inflammatory Hyperpigmentation' },
+  { match: /pityriasis\s+alba/i, formatted: 'Pityriasis Alba' },
+  { match: /melasma/i, formatted: 'Melasma (Facial Hyperpigmentation)' },
+  { match: /solar\s+lentig/i, formatted: 'Solar Lentigines' },
+  { match: /venous\s+stasis\s+ulcer/i, formatted: 'Venous Stasis Ulcer' },
+  { match: /basal\s+cell\s+carcinoma/i, formatted: 'Basal Cell Carcinoma (Nodulo-Ulcerative)' },
+  { match: /pyoderma\s+gangrenosum/i, formatted: 'Pyoderma Gangrenosum' },
+  { match: /leukocytoclastic\s+vasculitis/i, formatted: 'Cutaneous Leukocytoclastic Vasculitis' },
+  { match: /pigmented\s+purpuric\s+dermatosis|schamberg/i, formatted: 'Pigmented Purpuric Dermatosis' },
+  { match: /cherry\s+hemangioma|cherry\s+angioma/i, formatted: 'Cherry Angioma' },
+  { match: /erythema\s+annulare\s+centrifugum/i, formatted: 'Erythema Annulare Centrifugum' },
+  { match: /granuloma\s+annulare/i, formatted: 'Granuloma Annulare' },
 ];
 
 export function ensureCommonScientificFormat(raw: string): string {
@@ -1799,20 +1798,22 @@ export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<
           }).join('\n');
         }
 
-        const prompt = `You are an expert clinical diagnostic assistance system and dermatological consultant working with a licensed physician.
-Examine this clinical image/photograph in detail, integrating the patient's full longitudinal health record, previous consultation timeline, and documented laboratory/diagnostic test reports.
+        const prompt = `You are an expert dermatological diagnostician and clinical consultant providing biological decision support for a practicing physician.
+Examine this clinical photograph in detail, integrating the patient's full longitudinal health record, previous consultation timeline, and documented laboratory/diagnostic test reports.
 
-DETECTED VISUAL TELEMETRY PARAMETERS (CIE-LAB FITZPATRICK NORMALIZED):
-- Calibrated Fitzpatrick Phototype: ${resolvedMetrics.fitzpatrickType || 'Type IV'} (ITA° Angle: ${resolvedMetrics.itaAngleDeg ?? 18.5}°)
-- Erythema / Redness Index: ${resolvedMetrics.erythemaIndex}/100 (CIE-LAB Δa* Shift: +${resolvedMetrics.cieLabDeltaA ?? 8.5})
-- Melanin / Pigmentation Index: ${resolvedMetrics.pigmentationIndex}/100 (CIE-LAB ΔL* Shift: -${resolvedMetrics.cieLabDeltaL ?? 5.0})
-- Asymmetry Score: ${resolvedMetrics.asymmetryScore}/100
-- Border Irregularity: ${resolvedMetrics.borderIrregularity}/100
-- Color Variegation Score: ${resolvedMetrics.colorVariationScore}/100
-- Dominant Colors: ${resolvedMetrics.dominantColors.map(c => `${c.name} (${c.percentage}%)`).join(', ')}
-- Pre-Scan Skin Specimen Ratio: ${resolvedMetrics.skinPixelRatio ?? 85}% (Pre-Scan Gatekeeper: ${Boolean(resolvedMetrics.isSkinSpecimen) === false ? 'NON-SKIN / INVALID SPECIMEN SUSPECTED' : 'HUMAN SKIN VERIFIED'})
-- Photometric Lighting Telemetry: Status="${resolvedMetrics.lightingStatus || 'Optimal'}", Mean Luminance=${resolvedMetrics.meanLuminance ?? 140}/255, Glare=${resolvedMetrics.glareRatio ?? 2}%, Shadow=${resolvedMetrics.shadowRatio ?? 4}%, Sharpness=${resolvedMetrics.perceivedSharpness ?? 75}/100
-${resolvedMetrics.qualityWarnings && resolvedMetrics.qualityWarnings.length > 0 ? `- Photometric Warnings: ${resolvedMetrics.qualityWarnings.join(' | ')}` : ''}
+CRITICAL CLINICAL COMMUNICATION MANDATE:
+- The entire evaluation must be written in professional medical language, easily readable and actionable for an attending doctor.
+- Strictly use biological, dermatological, anatomical, and histological terminology.
+- DO NOT use any technical terms related to AI, ML, computer vision, algorithms, pixel counts, or digital telemetry (e.g., no "CIE-LAB", "ITA angle", "telemetry", "neural network", "classification confidence", "pixel ratio", etc.).
+- Describe actual biological phenomena: epidermal barrier disruption, follicular hyperkeratinization, superficial and deep perivascular infiltrates, microvascular dilatation producing blanchable erythema, melanin pigment distribution, acanthosis, spongiosis, scale types, and lesion topography.
+
+OBSERVED CLINICAL SPECIMEN CONTEXT:
+- Patient Phototype: ${resolvedMetrics.fitzpatrickType || 'Type IV'}
+- Vascularity & Erythema: ${resolvedMetrics.erythemaIndex > 55 ? 'Marked active vascular erythema' : resolvedMetrics.erythemaIndex > 25 ? 'Moderate localized erythema' : 'Mild or faint erythema'}
+- Melanin & Pigmentation: ${resolvedMetrics.pigmentationIndex > 50 ? 'Prominent melanin hyperpigmentation' : 'Baseline physiological pigmentation'}
+- Lesion Symmetry: ${resolvedMetrics.asymmetryScore > 50 ? 'Asymmetric structural contour' : 'Predominantly symmetric architecture'}
+- Margin Demarcation: ${resolvedMetrics.borderIrregularity > 50 ? 'Irregular, poorly circumscribed margin' : 'Regular, well-circumscribed margin'}
+- Color Distribution: ${resolvedMetrics.dominantColors.map(c => c.name).join(', ')}
 
 PATIENT MEDICAL BACKGROUND:
 ${patientContext}
@@ -1824,72 +1825,61 @@ DOCUMENTED LABORATORY, MICROBIOLOGY & HISTOPATHOLOGY REPORTS:
 ${labReportContext}
 
 DOCTOR'S CLINICAL QUERY / NOTES:
-${params.clinicalNotes || 'Attending physician uploaded this image for diagnostic review and differential suggestions.'}
+${params.clinicalNotes || 'Attending physician uploaded this photograph for diagnostic review and differential considerations.'}
 
-STEP 1 — MANDATORY SKIN SPECIMEN & LIGHTING QUALITY GATEKEEPER:
-First, determine whether this image actually shows human skin, mucosa, hair/scalp, or nails ("isValidSkinSpecimen": true/false) AND evaluate whether the lighting & focus are adequate ("lightingQuality": "Optimal" | "Underexposed (Too Dark)" | "Overexposed (Glare)" | "Uneven / Harsh Shadows" | "Blurry / Out of Focus").
-- If the image is NOT human skin (e.g., a desk, room, document, animal, food, clothing only, blank/black screen, or random object), you MUST set "isValidSkinSpecimen": false, set "primaryImpression": "Non-Cutaneous Image Detected (Invalid Skin Specimen)", and explain in "visualFindings" and "qualityAssessmentNotes" what the image actually appears to be and why dermatological disease analysis cannot be performed. Do NOT hallucinate skin diseases for non-skin images.
-- If the image IS human skin, set "isValidSkinSpecimen": true, explicitly report the lighting quality in "lightingQuality" and "qualityAssessmentNotes", and proceed to Step 2.
+STEP 1 — SPECIMEN VERIFICATION:
+Determine whether this photograph demonstrates recognizable human skin, mucous membranes, hair/scalp, or nail tissue ("isValidSkinSpecimen": true/false).
+- If the image is NOT human skin (e.g. background object, document, furniture, clothing only, non-skin surface), set "isValidSkinSpecimen": false, set "primaryImpression": "Non-Cutaneous Field (Skin Not Detected)", and explain in "visualFindings" what is observed in the photograph without formulating fictitious dermatological diseases.
+- If the image IS human skin, set "isValidSkinSpecimen": true and proceed to Step 2.
 
-STEP 2 — CLINICAL DERMATOLOGICAL ANALYSIS (FOR VALID SKIN IMAGES):
-Analyze morphological visual findings (color, margins, distribution, primary & secondary lesion morphology), correlate them directly with any documented laboratory/biopsy/KOH/IgE test reports and consultation history, and evaluate whether this represents an exacerbation of their chronic condition, a reaction to current medications, an infection, or a novel diagnosis.
+STEP 2 — BIOLOGICAL DERMATOLOGICAL ASSESSMENT:
+1. Primary Impression: State the most probable diagnosis using standard clinical nomenclature (e.g. "Atopic Dermatitis (Eczema)", "Plaque Psoriasis", "Tinea Corporis", "Acne Vulgaris", "Lichen Planus").
+2. Differentials: Provide 2–4 clinically sound differential diagnoses:
+   - "condition": Standard medical disease name
+   - "confidence": "High" | "Moderate" | "Low" (reflects clinical likelihood)
+   - "rationale": Clear biological and clinical rationale explaining how lesion morphology, anatomical predilection, patient history, and test reports support this diagnosis.
+3. Visual Findings: 3–5 bullet points detailing purely biological features:
+   - Primary lesion morphology (macules, papules, plaques, pustules, comedones, vesicles, wheals)
+   - Secondary changes (micaceous or collarette scale, serous or honey-colored crust, lichenification, excoriation)
+   - Erythema intensity, blanchability, and vascular distribution
+   - Architectural symmetry, border circumscription, and elevation
+   - Follicular, flexural, or sun-exposed predilection
+4. Longitudinal & Laboratory Correlation: Narrative explaining how the observed lesions correlate with past visits, prior diagnoses, systemic medications, allergy history, or laboratory findings.
+5. Critical Red Flags: Specific clinical alert signs requiring urgent exclusion (e.g. secondary bacterial impetiginization, atypical melanocytic features, systemic vasculitis, erythroderma).
+6. Recommended Diagnostic Workup: Targeted bedside or laboratory investigations (e.g. Dermoscopy, 10–20% KOH fungal scraping, Wood's lamp, Patch testing, 4mm Punch biopsy).
+7. Evidence-Based Management Plan: First-line medical protocol, barrier protection, anti-inflammatory or antimicrobial treatment, and follow-up timeline.
 
-CRITICAL DISEASE NAMING FORMAT:
-For valid skin images, every disease or condition in "primaryImpression" and every "differentials[].condition" MUST be formatted as:
-Common Term (Scientific Term)
-Examples:
-- "Acne (Acne Vulgaris)"
-- "Atopic Eczema (Atopic Dermatitis)"
-- "Ringworm (Tinea Corporis)"
-- "Plaque Psoriasis (Psoriasis Vulgaris)"
-- "Hives (Acute Urticaria)"
-- "Shingles (Herpes Zoster)"
-- "Atypical Mole (Dysplastic Nevus)"
-
-Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code fences, no introductory or trailing text):
+Return ONLY a valid, raw JSON object:
 {
   "isValidSkinSpecimen": true,
   "lightingQuality": "Optimal",
   "qualityAssessmentNotes": [
-    "Brief note on whether human skin is clearly visible and whether lighting, exposure, glare, and focus are optimal"
+    "Brief note confirming human skin tissue visibility and clinical illumination"
   ],
-  "primaryImpression": "Common Term (Scientific Term) — or 'Non-Cutaneous Image Detected (Invalid Skin Specimen)' if not skin",
+  "primaryImpression": "Clinical Diagnosis Name",
   "differentials": [
     {
-      "condition": "Common Term (Scientific Term) — e.g. Acne (Acne Vulgaris)",
+      "condition": "Differential Diagnosis Name",
       "confidence": "High",
-      "icdCode": "e.g. L70.0",
-      "rationale": "Clear clinical rationale synthesizing visual morphology and timeline history"
-    },
-    {
-      "condition": "Common Term (Scientific Term) — e.g. Rosacea (Papulopustular Rosacea)",
-      "confidence": "Moderate",
-      "icdCode": "e.g. L71.8",
-      "rationale": "Detailed rationale"
-    },
-    {
-      "condition": "Common Term (Scientific Term) — e.g. Hair Follicle Infection (Bacterial Folliculitis)",
-      "confidence": "Low",
-      "icdCode": "e.g. L73.9",
-      "rationale": "Detailed rationale"
+      "icdCode": "e.g. L20.9",
+      "rationale": "Biological and morphological rationale"
     }
   ],
   "visualFindings": [
-    "Specific morphological feature 1 observed in this photo",
-    "Specific morphological feature 2",
-    "Specific morphological feature 3"
+    "Biological morphological feature 1",
+    "Biological morphological feature 2",
+    "Biological morphological feature 3"
   ],
-  "timelineCorrelation": "Thorough clinical narrative explaining how the image relates to past diagnoses, medications, allergy profile, and historical treatments",
+  "timelineCorrelation": "Clinical narrative synthesizing patient history, past visits, and lab reports",
   "redFlags": [
-    "Critical signs requiring immediate exclusion or escalation"
+    "Clinical signs requiring urgent exclusion"
   ],
   "recommendedInvestigations": [
     "e.g. Dermoscopy",
-    "e.g. KOH mount or Skin scraping",
-    "e.g. 4mm Punch biopsy"
+    "e.g. KOH mount"
   ],
-  "suggestedManagementPlan": "Concise first-line evidence-based management guidance for the attending physician",
-  "disclaimer": "Diagnostic decision support only. Physician clinical judgment is required."
+  "suggestedManagementPlan": "First-line evidence-based clinical guidance",
+  "disclaimer": "Clinical Decision Support: Visual evaluation provided as an assistive reference for the treating physician. Comprehensive clinical examination and medical judgment are required."
 }`;
 
         // 1. Try OpenRouter Multimodal Vision first if OPENROUTER_API_KEY is configured

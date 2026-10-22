@@ -64,7 +64,7 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-teal-50 text-teal-900 border border-teal-200">
               <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-              AI Clinical Diagnostic Report
+              Clinical Diagnostic Report
             </span>
             <span className="text-xs text-slate-500 font-mono">
               REF: {analysis.id || `REP-${Date.now()}`}
@@ -80,10 +80,10 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
                   ? 'bg-teal-700 text-white'
                   : 'bg-white border border-teal-200 text-teal-900 hover:bg-teal-50'
               }`}
-              title="Communicate with AI Chatbot about this report"
+              title="Open interactive clinical consultation chat for this report"
             >
               <Bot className="w-4 h-4" />
-              <span>{showReportChat ? 'Hide AI Report Chat' : 'Ask AI About Report'}</span>
+              <span>{showReportChat ? 'Hide Report Chat' : 'Clinical Report Chat'}</span>
             </button>
             <button
               type="button"
@@ -210,7 +210,7 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
                   />
                   <div className="absolute bottom-1.5 left-1.5 right-1.5 bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium px-2 py-0.5 rounded flex items-center justify-between">
                     <span>Clinical Specimen</span>
-                    {analysis.isAiPowered && <span className="text-teal-300 font-bold">Multimodal AI Verified</span>}
+                    {analysis.isAiPowered && <span className="text-teal-300 font-bold">Cutaneous Specimen Verified</span>}
                   </div>
                 </div>
               </div>
