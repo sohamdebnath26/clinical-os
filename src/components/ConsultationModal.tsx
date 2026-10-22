@@ -2653,7 +2653,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       title="Upload a PDF/CSV medication file or add medicines to your personal library"
                     >
                       <Upload className="w-3 h-3" />
-                      <span>Upload PDF / Add to Library</span>
+                      <span>Upload CSV / PDF Library</span>
                     </button>
                   </div>
                 </div>

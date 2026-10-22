@@ -900,47 +900,38 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
   }
 
   // Case B: Full RFC-4180 CSV / TSV / Semicolon / Pipe table parsing on rawTextFallback
-  const cleanedText = rawTextFallback.replace(/^\uFEFF/, '').trim();
+  const cleanedText = rawTextFallback
+    .replace(/^\uFEFF/, '')
+    .replace(/\0/g, '')
+    .replace(/^sep=.+\r?\n/i, '')
+    .trim();
+
   if (cleanedText) {
-    const firstNonEmptyLine = cleanedText.split(/\r?\n/).find(l => l.trim().length > 0) || '';
-    const delimiter = firstNonEmptyLine.includes('\t')
-      ? '\t'
-      : firstNonEmptyLine.includes('|')
-      ? '|'
-      : firstNonEmptyLine.split(';').length > firstNonEmptyLine.split(',').length && firstNonEmptyLine.includes(';')
-      ? ';'
-      : firstNonEmptyLine.includes(',')
-      ? ','
-      : null;
+    const sampleLines = cleanedText
+      .split(/\r\n|\n|\r/)
+      .map(l => l.trim())
+      .filter(Boolean)
+      .slice(0, 10);
+
+    let delimiter: string | null = null;
+    if (sampleLines.some(l => l.includes('\t'))) {
+      delimiter = '\t';
+    } else if (sampleLines.some(l => l.includes('|'))) {
+      delimiter = '|';
+    } else if (
+      sampleLines.some(l => l.includes(';')) &&
+      sampleLines.reduce((acc, l) => acc + (l.split(';').length - 1), 0) >
+        sampleLines.reduce((acc, l) => acc + (l.split(',').length - 1), 0)
+    ) {
+      delimiter = ';';
+    } else if (sampleLines.some(l => l.includes(','))) {
+      delimiter = ',';
+    }
 
     if (delimiter) {
       const grid = parseCsvOrDelimitedGrid(cleanedText, delimiter);
       if (grid.length > 0) {
-        const headerCandidate = grid[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-        const isHeaderRow = headerCandidate.some(h =>
-          [
-            'medicine',
-            'medicinename',
-            'medication',
-            'medicationname',
-            'drug',
-            'drugname',
-            'brand',
-            'brandname',
-            'generic',
-            'genericname',
-            'name',
-            'dosage',
-            'dose',
-            'strength',
-            'requireddosage',
-            'frequency',
-            'duration',
-            'instructions',
-            'route'
-          ].includes(h)
-        );
-
+        let headerRowIndex = -1;
         let nameIdx = -1;
         let dosageIdx = -1;
         let routeIdx = -1;
@@ -948,33 +939,110 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
         let durIdx = -1;
         let instrIdx = -1;
 
-        if (isHeaderRow) {
-          headerCandidate.forEach((h, idx) => {
-            if (nameIdx === -1 && ['medicine', 'medicinename', 'medication', 'medicationname', 'drug', 'drugname', 'brand', 'brandname', 'generic', 'genericname', 'name', 'item', 'product'].includes(h)) {
-              nameIdx = idx;
-            } else if (dosageIdx === -1 && ['dosage', 'dose', 'strength', 'requireddosage', 'posology', 'regimen', 'mg', 'concentration'].includes(h)) {
-              dosageIdx = idx;
-            } else if (routeIdx === -1 && ['route', 'form', 'dosageform', 'mode', 'type'].includes(h)) {
-              routeIdx = idx;
-            } else if (freqIdx === -1 && ['frequency', 'freq', 'schedule', 'timing', 'timings'].includes(h)) {
-              freqIdx = idx;
-            } else if (durIdx === -1 && ['duration', 'days', 'course', 'period'].includes(h)) {
-              durIdx = idx;
-            } else if (instrIdx === -1 && ['instructions', 'instruction', 'notes', 'note', 'remarks', 'directions', 'sig', 'advice'].includes(h)) {
-              instrIdx = idx;
+        for (let r = 0; r < Math.min(3, grid.length); r++) {
+          const headerCandidate = grid[r].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+          const isHeaderRow = headerCandidate.some(
+            h =>
+              h.includes('medicin') ||
+              h.includes('medicat') ||
+              h.includes('drug') ||
+              h.includes('brand') ||
+              h.includes('generic') ||
+              h === 'name' ||
+              h.includes('itemname') ||
+              h.includes('product') ||
+              h.includes('dosage') ||
+              h.includes('dose') ||
+              h.includes('strength') ||
+              h.includes('posology') ||
+              h.includes('regimen') ||
+              h.includes('frequency')
+          );
+
+          if (isHeaderRow) {
+            headerRowIndex = r;
+            headerCandidate.forEach((h, idx) => {
+              if (
+                nameIdx === -1 &&
+                (h.includes('medicin') ||
+                  h.includes('medicat') ||
+                  h.includes('drug') ||
+                  h.includes('brand') ||
+                  h.includes('generic') ||
+                  h === 'name' ||
+                  h.includes('nameof') ||
+                  h.includes('item') ||
+                  h.includes('product') ||
+                  h === 'rx')
+              ) {
+                nameIdx = idx;
+              } else if (
+                dosageIdx === -1 &&
+                (h.includes('dosage') ||
+                  h.includes('dose') ||
+                  h.includes('strength') ||
+                  h.includes('posology') ||
+                  h.includes('regimen') ||
+                  h === 'mg' ||
+                  h.includes('conc'))
+              ) {
+                dosageIdx = idx;
+              } else if (
+                routeIdx === -1 &&
+                (h.includes('route') || h.includes('form') || h.includes('mode') || h === 'type')
+              ) {
+                routeIdx = idx;
+              } else if (
+                freqIdx === -1 &&
+                (h.includes('freq') || h.includes('schedule') || h.includes('timing'))
+              ) {
+                freqIdx = idx;
+              } else if (
+                durIdx === -1 &&
+                (h.includes('durat') || h === 'days' || h.includes('course') || h.includes('period'))
+              ) {
+                durIdx = idx;
+              } else if (
+                instrIdx === -1 &&
+                (h.includes('instruct') ||
+                  h.includes('note') ||
+                  h.includes('remark') ||
+                  h.includes('direct') ||
+                  h === 'sig' ||
+                  h.includes('advice'))
+              ) {
+                instrIdx = idx;
+              }
+            });
+
+            if (nameIdx === -1) {
+              const firstNonIndex = headerCandidate.findIndex(
+                (h, idx) =>
+                  idx !== dosageIdx &&
+                  idx !== routeIdx &&
+                  idx !== freqIdx &&
+                  idx !== durIdx &&
+                  idx !== instrIdx &&
+                  !/^(no|sno|srno|id|index|row)$/.test(h)
+              );
+              if (firstNonIndex !== -1) nameIdx = firstNonIndex;
             }
-          });
+            break;
+          }
         }
 
-        const startRow = isHeaderRow ? 1 : 0;
+        const startRow = headerRowIndex !== -1 ? headerRowIndex + 1 : 0;
         for (let r = startRow; r < grid.length; r++) {
           const rawRow = grid[r].map(c => c.replace(/^["']|["']$/g, '').trim());
           if (rawRow.every(c => !c)) continue;
 
-          if (isHeaderRow && nameIdx !== -1) {
+          if (headerRowIndex !== -1 && nameIdx !== -1) {
             const medName = rawRow[nameIdx] || '';
             if (!medName || medName.length < 2) continue;
-            const medDose = dosageIdx !== -1 ? rawRow[dosageIdx] || '' : '';
+            const medDose =
+              dosageIdx !== -1
+                ? rawRow[dosageIdx] || ''
+                : rawRow.find((_, idx) => idx !== nameIdx && idx > nameIdx) || '';
             const routeVal = routeIdx !== -1 ? rawRow[routeIdx] || '' : '';
             const freqVal = freqIdx !== -1 ? rawRow[freqIdx] || '' : '';
             const durVal = durIdx !== -1 ? rawRow[durIdx] || '' : '';
@@ -982,7 +1050,7 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
             results.push(inferFieldsFromDosage(medName, medDose, instrVal, routeVal, freqVal, durVal));
           } else {
             // Positional CSV row (strip leading row index like "1", "2.")
-            const cols = /^\d{1,4}\.?$/.test(rawRow[0]) && rawRow.length > 1 ? rawRow.slice(1) : rawRow;
+            const cols = /^\d{1,5}\.?$/.test(rawRow[0]) && rawRow.length > 1 ? rawRow.slice(1) : rawRow;
             const firstCol = cols[0] || '';
             if (!firstCol || firstCol.length < 2) continue;
             if (/^(no\.?|#|s\.?no|medicine\s*name|drug\s*name|medication|medicine|name)$/i.test(firstCol)) continue;
@@ -1009,8 +1077,8 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
 
   // Case C: Fallback line-by-line parsing for PDF cells or plain text lines ("1. Medicine - Dosage" or single lines)
   if (results.length === 0) {
-    const combinedLines = [...cells, ...cleanedText.split(/\r?\n/)]
-      .map(l => l.replace(/^\uFEFF/, '').trim())
+    const combinedLines = [...cells, ...cleanedText.split(/\r\n|\n|\r/)]
+      .map(l => l.replace(/^\uFEFF/, '').replace(/\0/g, '').trim())
       .filter(Boolean);
 
     for (const line of combinedLines) {
@@ -1094,13 +1162,13 @@ app.post('/api/formulary/import', authMiddleware, async (req: AuthenticatedReque
         frequency: String(it.frequency || '1-0-1'),
         duration: String(it.duration || '5 days'),
         instructions: String(it.instructions || ''),
-        source: it.source || 'manual'
+        source: it.source || 'csv_upload'
       }));
     }
 
     const lowerFilename = typeof filename === 'string' ? filename.toLowerCase().trim() : '';
 
-    if (fileDataUrl && typeof fileDataUrl === 'string') {
+    if (parsedMedications.length === 0 && fileDataUrl && typeof fileDataUrl === 'string') {
       let fileBuffer: Buffer | null = null;
       let mimeType = '';
 
@@ -1125,8 +1193,18 @@ app.post('/api/formulary/import', authMiddleware, async (req: AuthenticatedReque
             ...fromPdf.map(m => ({ ...m, source: 'pdf_upload' as const }))
           );
         } else {
-          // CSV, TSV, JSON, or TXT file
-          const textContent = fileBuffer.toString('utf8');
+          // Decode UTF-16LE / UTF-16BE / UTF-8 CSV, TSV, JSON, or TXT file
+          let textContent = '';
+          if (fileBuffer.length >= 2 && fileBuffer[0] === 0xff && fileBuffer[1] === 0xfe) {
+            textContent = fileBuffer.subarray(2).toString('utf16le');
+          } else if (fileBuffer.length >= 2 && fileBuffer[0] === 0xfe && fileBuffer[1] === 0xff) {
+            const swapped = Buffer.from(fileBuffer.subarray(2));
+            swapped.swap16();
+            textContent = swapped.toString('utf16le');
+          } else {
+            textContent = fileBuffer.toString('utf8').replace(/\0/g, '');
+          }
+
           if (mimeType.includes('json') || lowerFilename.endsWith('.json')) {
             try {
               const jsonArr = JSON.parse(textContent);

@@ -158,7 +158,7 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
                 className="px-3.5 py-2 rounded-xl bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
               >
                 <Upload className="w-3.5 h-3.5" />
-                <span>Upload PDF / CSV Library</span>
+                <span>Upload CSV / PDF Library</span>
               </button>
               <button
                 type="button"
