@@ -39,6 +39,9 @@ function getAIClient(): GoogleGenAI | null {
     process.env.CUSTOM_GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
     process.env.GEMINI_API_KEY ||
+    process.env.FREE_GEMINI_API_KEY ||
+    process.env.NEW_GEMINI_API_KEY ||
+    process.env.AISTUDIO_API_KEY ||
     process.env.API_KEY ||
     process.env.GEMINI_KEY ||
     process.env.VITE_GEMINI_API_KEY ||
@@ -1569,6 +1572,80 @@ export function generateAdaptiveClinicalImageAnalysis(
   };
 }
 
+const GROQ_VISION_CHAIN = [
+  process.env.GROQ_VISION_MODEL || 'llama-3.2-90b-vision-preview',
+  'llama-3.2-11b-vision-preview'
+];
+
+async function callGroqVision(
+  prompt: string,
+  images: { mimeType: string; base64: string }[]
+): Promise<string | null> {
+  const groqKey = (
+    process.env.GROQ_API_KEY ||
+    process.env.GROQ_KEY ||
+    process.env.VITE_GROQ_API_KEY ||
+    ''
+  ).trim();
+  if (!groqKey || groqKey.length < 8) {
+    return null;
+  }
+
+  for (const model of GROQ_VISION_CHAIN) {
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.1,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'user',
+              content: [
+                ...images.map(img => ({
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${img.mimeType};base64,${img.base64}`
+                  }
+                })),
+                {
+                  type: 'text',
+                  text: prompt
+                }
+              ]
+            }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        console.warn(`Groq Vision model ${model} returned ${response.status}: ${errBody.substring(0, 140)}`);
+        if (response.status === 401 || response.status === 403) {
+          break;
+        }
+        continue;
+      }
+
+      const data = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const text = data.choices?.[0]?.message?.content?.trim();
+      if (text) {
+        return text;
+      }
+    } catch (err) {
+      console.warn(`Groq Vision request failed for ${model}:`, err instanceof Error ? err.message : err);
+    }
+  }
+  return null;
+}
+
 const OPENROUTER_VISION_CHAIN = [
   process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.5-pro',
   'google/gemini-2.5-flash',
@@ -1720,6 +1797,7 @@ function normalizeAnalysisResultTerms(result: AIImageAnalysisResult): AIImageAna
 
 export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<AIImageAnalysisResult> {
   const ai = getAIClient();
+  const hasGroq = Boolean((process.env.GROQ_API_KEY || process.env.GROQ_KEY || process.env.VITE_GROQ_API_KEY || '').trim());
   const hasOpenRouter = Boolean((process.env.OPENROUTER_API_KEY || '').trim());
 
   // Resolve visual morphology metrics: either passed from client canvas or extracted from image buffer
@@ -1750,7 +1828,7 @@ export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<
       };
     }
 
-    if (hasOpenRouter || ai) {
+    if (hasGroq || hasOpenRouter || ai) {
       try {
         let cleanBase64 = params.imageBase64;
         let resolvedMimeType = params.mimeType || 'image/jpeg';
@@ -1881,7 +1959,78 @@ Return ONLY a valid, raw JSON object:
   "disclaimer": "Clinical Decision Support: Visual evaluation provided as an assistive reference for the treating physician. Comprehensive clinical examination and medical judgment are required."
 }`;
 
-        // 1. Try OpenRouter Multimodal Vision first if OPENROUTER_API_KEY is configured
+        // 1. Try Groq Multimodal Vision (Ultra-fast, 100% free tier: llama-3.2-90b/11b-vision)
+        if (hasGroq) {
+          const groqText = await callGroqVision(prompt, [
+            { mimeType: resolvedMimeType, base64: cleanBase64 }
+          ]);
+          if (groqText) {
+            try {
+              const cleaned = groqText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+              const parsed = JSON.parse(cleaned);
+              const isValidSkin = typeof parsed.isValidSkinSpecimen === 'boolean'
+                ? parsed.isValidSkinSpecimen
+                : Boolean(resolvedMetrics.isSkinSpecimen ?? true);
+
+              if (!isValidSkin) {
+                return generateAdaptiveClinicalImageAnalysis(params, {
+                  ...resolvedMetrics,
+                  isSkinSpecimen: false,
+                  morphologyCategory: 'non_skin_specimen',
+                  rejectionReason:
+                    parsed.qualityAssessmentNotes?.[0] ||
+                    parsed.visualFindings?.[0] ||
+                    resolvedMetrics.rejectionReason ||
+                    'Multimodal Vision Gatekeeper confirmed this image is not a biological human skin specimen.'
+                });
+              }
+
+              const lightingQual = parsed.lightingQuality || resolvedMetrics.lightingStatus || 'Optimal';
+              const qualityNotes = Array.isArray(parsed.qualityAssessmentNotes)
+                ? parsed.qualityAssessmentNotes
+                : (resolvedMetrics.qualityWarnings || []);
+
+              const finalResult = normalizeAnalysisResultTerms({
+                id: `ai_img_${Date.now()}`,
+                primaryImpression: parsed.primaryImpression || 'Skin Lesion Under Clinical Evaluation',
+                differentials: Array.isArray(parsed.differentials) ? parsed.differentials : [],
+                visualFindings: Array.isArray(parsed.visualFindings) ? parsed.visualFindings : [],
+                timelineCorrelation: parsed.timelineCorrelation || 'Correlated with patient longitudinal record.',
+                redFlags: Array.isArray(parsed.redFlags) ? parsed.redFlags : [],
+                recommendedInvestigations: Array.isArray(parsed.recommendedInvestigations) ? parsed.recommendedInvestigations : [],
+                suggestedManagementPlan: parsed.suggestedManagementPlan || 'Continue standard clinical management and monitoring.',
+                disclaimer: parsed.disclaimer || 'AI diagnostic decision support tool. Final clinical judgment rests with the treating physician.',
+                analyzedAt: new Date().toISOString(),
+                isAiPowered: true,
+                patientId: params.patient?.id,
+                imageUrl: params.imageUrl,
+                visualMetrics: {
+                  ...resolvedMetrics,
+                  isSkinSpecimen: isValidSkin,
+                  lightingStatus: lightingQual
+                },
+                isValidSkinSpecimen: isValidSkin,
+                lightingQuality: lightingQual,
+                qualityAssessmentNotes: qualityNotes
+              });
+
+              if (imageAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
+                const oldestKey = imageAnalysisCache.keys().next().value;
+                if (oldestKey) imageAnalysisCache.delete(oldestKey);
+              }
+              imageAnalysisCache.set(cacheKey, {
+                result: finalResult,
+                expiresAt: Date.now() + IMAGE_CACHE_TTL_MS
+              });
+
+              return finalResult;
+            } catch (parseErr) {
+              console.warn('Groq Vision JSON parse warning, falling back to next provider:', parseErr);
+            }
+          }
+        }
+
+        // 2. Try OpenRouter Multimodal Vision if OPENROUTER_API_KEY is configured
         if (hasOpenRouter) {
           const openRouterText = await callOpenRouterVision(prompt, [
             { mimeType: resolvedMimeType, base64: cleanBase64 }
@@ -2131,9 +2280,10 @@ export function generateProgressionFallback(params: CompareImagesParams): Progre
 
 export async function compareClinicalImages(params: CompareImagesParams): Promise<ProgressionAnalysisResult> {
   const ai = getAIClient();
+  const hasGroq = Boolean((process.env.GROQ_API_KEY || process.env.GROQ_KEY || process.env.VITE_GROQ_API_KEY || '').trim());
   const hasOpenRouter = Boolean((process.env.OPENROUTER_API_KEY || '').trim());
 
-  if ((hasOpenRouter || ai) && params.imageA?.base64 && params.imageB?.base64) {
+  if ((hasGroq || hasOpenRouter || ai) && params.imageA?.base64 && params.imageB?.base64) {
     try {
       const cleanA = params.imageA.base64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
       const mimeA = params.imageA.mimeType || 'image/jpeg';
@@ -2169,6 +2319,32 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
   ],
   "disclaimer": "Diagnostic progression decision support only. Physician clinical judgment is required."
 }`;
+
+      if (hasGroq) {
+        const groqText = await callGroqVision(prompt, [
+          { mimeType: mimeA, base64: cleanA },
+          { mimeType: mimeB, base64: cleanB }
+        ]);
+        if (groqText) {
+          try {
+            const cleaned = groqText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+            const parsed = JSON.parse(cleaned);
+            return {
+              id: `prog_${Date.now()}`,
+              overallProgression: parsed.overallProgression || 'Moderate Improvement',
+              progressionScore: typeof parsed.progressionScore === 'number' ? parsed.progressionScore : 50,
+              visualComparisonObservations: Array.isArray(parsed.visualComparisonObservations) ? parsed.visualComparisonObservations : [],
+              treatmentResponseSummary: parsed.treatmentResponseSummary || 'Progressing in accordance with therapeutic course.',
+              recommendedAdjustments: Array.isArray(parsed.recommendedAdjustments) ? parsed.recommendedAdjustments : [],
+              disclaimer: parsed.disclaimer || 'AI progression estimation. Final evaluation by attending physician is required.',
+              isAiPowered: true,
+              analyzedAt: new Date().toISOString()
+            };
+          } catch (parseErr) {
+            console.warn('Groq progression JSON parse warning:', parseErr);
+          }
+        }
+      }
 
       if (hasOpenRouter) {
         const openRouterText = await callOpenRouterVision(prompt, [
@@ -2364,6 +2540,8 @@ export function generateABCDEFallback(params: AssessABCDEParams): ABCDEScoreResu
 
 export async function assessABCDEAnalysis(params: AssessABCDEParams): Promise<ABCDEScoreResult> {
   const ai = getAIClient();
+  const hasGroq = Boolean((process.env.GROQ_API_KEY || process.env.GROQ_KEY || process.env.VITE_GROQ_API_KEY || '').trim());
+  const hasOpenRouter = Boolean((process.env.OPENROUTER_API_KEY || '').trim());
 
   if (params.imageBase64) {
     const abcdeCacheKey = computeImageContextHash('abcde_analysis', params.imageBase64, [
@@ -2377,7 +2555,7 @@ export async function assessABCDEAnalysis(params: AssessABCDEParams): Promise<AB
       return cachedAbcde.result;
     }
 
-    if (ai) {
+    if (hasGroq || hasOpenRouter || ai) {
       try {
         let cleanBase64 = params.imageBase64;
         let resolvedMimeType = params.mimeType || 'image/jpeg';
@@ -2427,7 +2605,126 @@ Return ONLY a raw JSON object (strictly no markdown, no code fences):
   "disclaimer": "Clinical decision support only. Definitive diagnosis requires in-person dermoscopy and histopathology when indicated."
 }`;
 
-      for (const model of VISION_MODEL_CHAIN) {
+      if (hasGroq) {
+        const groqText = await callGroqVision(prompt, [
+          { mimeType: resolvedMimeType, base64: cleanBase64 }
+        ]);
+        if (groqText) {
+          try {
+            const cleaned = groqText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+            const parsed = JSON.parse(cleaned);
+            const aScore = typeof parsed.asymmetryScore === 'number' ? parsed.asymmetryScore : 0;
+            const bScore = typeof parsed.borderScore === 'number' ? parsed.borderScore : 0;
+            const cScore = typeof parsed.colorScore === 'number' ? parsed.colorScore : 0;
+            const dScore = typeof parsed.diameterScore === 'number' ? parsed.diameterScore : 0;
+            const eScore = typeof parsed.evolutionScore === 'number' ? parsed.evolutionScore : 0;
+            const total = aScore + bScore + cScore + dScore + eScore;
+
+            let risk = parsed.riskLevel;
+            if (!risk) {
+              if (total >= 5) risk = 'High Suspicion / Urgent Dermoscopy or Biopsy';
+              else if (total >= 3) risk = 'Moderate Risk / Dysplastic / Follow-up Needed';
+              else risk = 'Low Risk / Benign Characteristics';
+            }
+
+            const abcdeResult: ABCDEScoreResult = {
+              id: `abcde_${Date.now()}`,
+              asymmetryScore: aScore,
+              asymmetryNotes: parsed.asymmetryNotes || 'Symmetry evaluated across primary axes.',
+              borderScore: bScore,
+              borderNotes: parsed.borderNotes || 'Border demarcation and edge transition assessed.',
+              colorScore: cScore,
+              colorNotes: parsed.colorNotes || 'Chromic distribution and variegation analyzed.',
+              diameterMm: typeof parsed.diameterMm === 'number' ? parsed.diameterMm : (params.estimatedDiameterMm || 5.0),
+              diameterScore: dScore,
+              diameterNotes: parsed.diameterNotes || 'Diameter evaluation.',
+              evolutionScore: eScore,
+              evolutionNotes: parsed.evolutionNotes || 'Assessment of morphology changes.',
+              totalScore: total,
+              riskLevel: risk,
+              recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : ['Routine clinical surveillance'],
+              disclaimer: parsed.disclaimer || 'Dermoscopy assistive evaluation. Clinical correlation required.',
+              isAiPowered: true,
+              analyzedAt: new Date().toISOString()
+            };
+
+            if (abcdeAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
+              const oldestKey = abcdeAnalysisCache.keys().next().value;
+              if (oldestKey) abcdeAnalysisCache.delete(oldestKey);
+            }
+            abcdeAnalysisCache.set(abcdeCacheKey, {
+              result: abcdeResult,
+              expiresAt: Date.now() + IMAGE_CACHE_TTL_MS
+            });
+
+            return abcdeResult;
+          } catch (parseErr) {
+            console.warn('Groq ABCDE JSON parse warning:', parseErr);
+          }
+        }
+      }
+
+      if (hasOpenRouter) {
+        const openRouterText = await callOpenRouterVision(prompt, [
+          { mimeType: resolvedMimeType, base64: cleanBase64 }
+        ]);
+        if (openRouterText) {
+          try {
+            const cleaned = openRouterText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+            const parsed = JSON.parse(cleaned);
+            const aScore = typeof parsed.asymmetryScore === 'number' ? parsed.asymmetryScore : 0;
+            const bScore = typeof parsed.borderScore === 'number' ? parsed.borderScore : 0;
+            const cScore = typeof parsed.colorScore === 'number' ? parsed.colorScore : 0;
+            const dScore = typeof parsed.diameterScore === 'number' ? parsed.diameterScore : 0;
+            const eScore = typeof parsed.evolutionScore === 'number' ? parsed.evolutionScore : 0;
+            const total = aScore + bScore + cScore + dScore + eScore;
+
+            let risk = parsed.riskLevel;
+            if (!risk) {
+              if (total >= 5) risk = 'High Suspicion / Urgent Dermoscopy or Biopsy';
+              else if (total >= 3) risk = 'Moderate Risk / Dysplastic / Follow-up Needed';
+              else risk = 'Low Risk / Benign Characteristics';
+            }
+
+            const abcdeResult: ABCDEScoreResult = {
+              id: `abcde_${Date.now()}`,
+              asymmetryScore: aScore,
+              asymmetryNotes: parsed.asymmetryNotes || 'Symmetry evaluated across primary axes.',
+              borderScore: bScore,
+              borderNotes: parsed.borderNotes || 'Border demarcation and edge transition assessed.',
+              colorScore: cScore,
+              colorNotes: parsed.colorNotes || 'Chromic distribution and variegation analyzed.',
+              diameterMm: typeof parsed.diameterMm === 'number' ? parsed.diameterMm : (params.estimatedDiameterMm || 5.0),
+              diameterScore: dScore,
+              diameterNotes: parsed.diameterNotes || 'Diameter evaluation.',
+              evolutionScore: eScore,
+              evolutionNotes: parsed.evolutionNotes || 'Assessment of morphology changes.',
+              totalScore: total,
+              riskLevel: risk,
+              recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : ['Routine clinical surveillance'],
+              disclaimer: parsed.disclaimer || 'Dermoscopy assistive evaluation. Clinical correlation required.',
+              isAiPowered: true,
+              analyzedAt: new Date().toISOString()
+            };
+
+            if (abcdeAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
+              const oldestKey = abcdeAnalysisCache.keys().next().value;
+              if (oldestKey) abcdeAnalysisCache.delete(oldestKey);
+            }
+            abcdeAnalysisCache.set(abcdeCacheKey, {
+              result: abcdeResult,
+              expiresAt: Date.now() + IMAGE_CACHE_TTL_MS
+            });
+
+            return abcdeResult;
+          } catch (parseErr) {
+            console.warn('OpenRouter ABCDE JSON parse warning:', parseErr);
+          }
+        }
+      }
+
+      if (ai) {
+        for (const model of VISION_MODEL_CHAIN) {
         try {
           const response = await ai.models.generateContent({
             model,
@@ -2540,10 +2837,11 @@ Return ONLY a raw JSON object (strictly no markdown, no code fences):
           console.warn(`Gemini ABCDE model ${model} failed, trying next:`, err);
         }
       }
-      } catch (err) {
-        console.error('Gemini ABCDE analysis pipeline error:', err);
-      }
     }
+  } catch (err) {
+    console.error('Multimodal ABCDE analysis pipeline error:', err);
+  }
+}
   }
 
   return generateABCDEFallback(params);

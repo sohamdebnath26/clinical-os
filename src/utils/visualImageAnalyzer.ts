@@ -505,9 +505,9 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           (depigmentRatio > 0.35 && erythemaIndex < 30);
 
         // Acne / Papulopustular Follicular presentation:
-        // Characterized by discrete inflammatory papules, pustule tips, or comedonal follicular plugs
+        // Must demonstrate significant clustered pustules or comedonal plugs, not just mild surface texture
         const isAcneOrPapulopustular =
-          (follicularPustuleCount > 15 || (discretePapuleCount > 35 && erythemaIndex >= 22) || (follicularComedoneCount > 12 && erythemaIndex >= 18)) &&
+          ((follicularPustuleCount > 25 && discretePapuleCount > 40) || (follicularComedoneCount > 20 && discretePapuleCount > 40)) &&
           darkRatio < 0.20 &&
           !isAnnular;
 
@@ -526,11 +526,12 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
         } else if (yellowRatio > 0.065) {
           morphologyCategory = 'ulcerative_eroded';
         } else {
-          // Multi-dimensional feature affinity scoring for real-world clinical photographs
+          // Multi-dimensional feature affinity scoring across all dermatological archetypes
+          const papuleWeight = Math.min(35, discretePapuleCount * 0.4);
           const categoryScores: { category: VisualMorphologyMetrics['morphologyCategory']; score: number }[] = [
             {
               category: 'papulopustular_follicular',
-              score: (erythemaIndex * 0.95) + (discretePapuleCount * 1.6) + (follicularPustuleCount * 2.8) + (follicularComedoneCount * 2.2) + (yellowRatio * 180) + ((1 - Math.min(1, lesionRatio * 1.6)) * 42) + (borderIrregularity * 0.6)
+              score: (erythemaIndex * 0.75) + papuleWeight + (follicularPustuleCount * 2.2) + (follicularComedoneCount * 1.8) + (yellowRatio * 150)
             },
             {
               category: 'pigmented_melanocytic',
