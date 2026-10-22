@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Consultation, Patient, ProcedureItem, BodyMarker, ClinicalImage, PrescriptionItem, AIImageAnalysisResult } from '../types';
+import { Consultation, Patient, ProcedureItem, BodyMarker, ClinicalImage, PrescriptionItem, AIImageAnalysisResult, DoctorFormularyItem } from '../types';
 import { PREDEFINED_DIAGNOSES, PREDEFINED_TESTS, PREDEFINED_PROCEDURES, COMMON_MEDICATIONS } from '../data/clinicalCatalogues';
 import { BodyMap } from './BodyMap';
 import { ClinicalImageUploader } from './ClinicalImageUploader';
@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { analyzeImageVisualFeatures } from '../utils/visualImageAnalyzer';
 import { parseClinicalNoteToStructuredSummary, ParsedClinicalNoteSummary } from '../utils/clinicalNoteAutoFill';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
+import { FormularyUploadModal } from './FormularyUploadModal';
 import { VoiceDictationButton } from './VoiceDictationButton';
 import confetti from 'canvas-confetti';
 import {
@@ -32,7 +33,9 @@ import {
   ArrowRight,
   ArrowLeft,
   Mic,
-  Search
+  Search,
+  Upload,
+  BookOpen
 } from 'lucide-react';
 
 interface ConsultationModalProps {
@@ -495,6 +498,66 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [medQtyManual, setMedQtyManual] = useState(false);
   const [medInstructions, setMedInstructions] = useState('After meals');
   const [isMedDropdownOpen, setIsMedDropdownOpen] = useState(false);
+
+  // Personalized Doctor Medical Library state
+  const [doctorFormulary, setDoctorFormulary] = useState<DoctorFormularyItem[]>([]);
+  const [autoSaveToLibrary, setAutoSaveToLibrary] = useState(true);
+  const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
+  const [libraryModalMode, setLibraryModalMode] = useState<'upload' | 'paste' | 'single'>('upload');
+  const [librarySavedToast, setLibrarySavedToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.formulary
+      .list()
+      .then(res => setDoctorFormulary(res.items || []))
+      .catch(() => {});
+  }, []);
+
+  const personalNamesMap = new Set(doctorFormulary.map(m => m.name.toLowerCase()));
+  const allDoctorMedications = [
+    ...doctorFormulary.map(m => ({
+      name: m.name,
+      dosage: m.dosage,
+      route: m.route,
+      frequency: m.frequency,
+      duration: m.duration,
+      instructions: m.instructions,
+      isPersonal: true
+    })),
+    ...COMMON_MEDICATIONS.filter(m => !personalNamesMap.has(m.name.toLowerCase())).map(m => ({
+      name: m.name,
+      dosage: m.dosage,
+      route: undefined as string | undefined,
+      frequency: m.frequency,
+      duration: m.duration,
+      instructions: m.instructions,
+      isPersonal: false
+    }))
+  ];
+
+  const handleSaveCurrentMedToLibrary = async (customName?: string) => {
+    const targetName = (customName ?? medName).trim();
+    if (!targetName) return;
+    try {
+      const res = await api.formulary.upsert({
+        name: targetName,
+        dosage: medDosage.trim() || '500 mg',
+        route: medRoute || 'Oral',
+        frequency: normalizeFrequencyInput(medFrequency) || '1-0-1',
+        duration: normalizeDurationInput(medDuration) || '5 days',
+        instructions: medInstructions.trim() || 'After meals',
+        source: 'rx_learned'
+      });
+      setDoctorFormulary(prev => [
+        res.item,
+        ...prev.filter(i => i.id !== res.item.id && i.name.toLowerCase() !== res.item.name.toLowerCase())
+      ]);
+      setLibrarySavedToast(`Saved "${res.item.name}" (${res.item.dosage}) to ${doctor?.name || 'your'}'s Medical Library`);
+      setTimeout(() => setLibrarySavedToast(null), 4000);
+    } catch {
+      // ignore background error
+    }
+  };
 
   // Close Drug Catalogue dropdown cleanly when clicking outside
   useEffect(() => {
@@ -1353,11 +1416,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       .filter(Boolean)
       .join(' · ');
 
+    const cleanMedName = medName.trim();
     const item: PrescriptionItem = {
       id: `rx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       patientId: patient.id,
       consultationId: consultation.id,
-      medicineName: medName.trim(),
+      medicineName: cleanMedName,
       dosage: doseDisplay,
       frequency: normalizedFreq,
       duration: normalizedDur,
@@ -1367,6 +1431,20 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     };
     markDoctorEdited('summary.medications');
     setPrescriptions(prev => [...prev, item]);
+
+    // Auto-save newly typed or customized medicines into the doctor's personal library
+    const existsInStandard = COMMON_MEDICATIONS.some(
+      m => m.name.toLowerCase() === cleanMedName.toLowerCase() && m.dosage.toLowerCase() === (medDosage.trim() || '500 mg').toLowerCase()
+    );
+    const existsInPersonal = doctorFormulary.some(
+      m => m.name.toLowerCase() === cleanMedName.toLowerCase() && m.dosage.toLowerCase() === (medDosage.trim() || '500 mg').toLowerCase()
+    );
+    if (autoSaveToLibrary && (!existsInStandard || !existsInPersonal)) {
+      if (!existsInStandard && !existsInPersonal) {
+        void handleSaveCurrentMedToLibrary(cleanMedName);
+      }
+    }
+
     setMedName('');
     setMedQtyManual(false);
     setIsMedDropdownOpen(false);
@@ -2535,24 +2613,70 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               {/* Prescriptions inside consultation */}
               <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
                 {/* Header bar */}
-                <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
-                  <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-blue-600 text-white text-[10px] font-serif font-bold">
-                      ℞
-                    </span>
-                    <span>PRESCRIPTION</span>
-                    {prescriptions.length > 0 && (
-                      <span className="ml-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                        {prescriptions.length}
+                <div className="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 bg-slate-50/50">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-blue-600 text-white text-[10px] font-serif font-bold">
+                        ℞
                       </span>
-                    )}
-                  </h4>
-                  <span className="text-[11px] text-slate-400">Saved to patient medical record</span>
+                      <span>PRESCRIPTION</span>
+                      {prescriptions.length > 0 && (
+                        <span className="ml-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                          {prescriptions.length}
+                        </span>
+                      )}
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-[10px] font-bold">
+                      {doctor?.name || 'Doctor'}'s Library ({doctorFormulary.length} custom + {COMMON_MEDICATIONS.length} std)
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={autoSaveToLibrary}
+                        onChange={e => setAutoSaveToLibrary(e.target.checked)}
+                        className="rounded border-slate-300 text-teal-700 focus:ring-teal-500"
+                      />
+                      <span>Auto-save new medicines to My Library</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => {
+                        setLibraryModalMode('upload');
+                        setIsLibraryModalOpen(true);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-teal-800 hover:bg-teal-900 text-white text-[11px] font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                      title="Upload a PDF/CSV medication file or add medicines to your personal library"
+                    >
+                      <Upload className="w-3 h-3" />
+                      <span>Upload PDF / Add to Library</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Inner Prescription Builder Box */}
                 <div className="p-4 space-y-4">
                   <div className="p-4 bg-[#f8fafc] border border-slate-200/90 rounded-xl space-y-3.5">
+                    {librarySavedToast && (
+                      <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>{librarySavedToast}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => setLibrarySavedToast(null)}
+                          className="text-emerald-600 hover:text-emerald-900"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                     {rxFeedbackHint && (
                       <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium flex items-center justify-between">
                         <span>{rxFeedbackHint}</span>
@@ -2571,22 +2695,36 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
                       {/* DRUG NAME */}
                       <div ref={medDropdownContainerRef} className="sm:col-span-4 relative">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                          DRUG NAME
-                        </label>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                            DRUG NAME <span className="font-normal lowercase text-teal-700">(auto-lookup)</span>
+                          </label>
+                          {medName.trim() && (
+                            <button
+                              type="button"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => handleSaveCurrentMedToLibrary()}
+                              className="text-[10px] font-bold text-teal-700 hover:text-teal-900 flex items-center gap-0.5 cursor-pointer"
+                              title="Save or update this drug and dosage in your personal library"
+                            >
+                              <Plus className="w-2.5 h-2.5" />
+                              <span>Save to My Library</span>
+                            </button>
+                          )}
+                        </div>
                         <div className="relative flex items-center bg-white border border-slate-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-600 transition-all">
                           <Search className="w-3.5 h-3.5 text-slate-400 ml-3 shrink-0" />
                           <input
                             ref={medNameInputRef}
                             type="text"
-                            placeholder="Search drug..."
+                            placeholder="Type to auto-lookup or add new..."
                             value={medName}
                             onChange={e => {
                               const val = e.target.value;
                               setMedName(val);
                               setIsMedDropdownOpen(true);
                               if (rxFeedbackHint) setRxFeedbackHint(null);
-                              const exactMatch = COMMON_MEDICATIONS.find(
+                              const exactMatch = allDoctorMedications.find(
                                 m => m.name.toLowerCase() === val.trim().toLowerCase()
                               );
                               if (exactMatch) {
@@ -2595,7 +2733,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                 const isIVIM = /\b(iv|im|iv\/im|infusion)\b/i.test(combinedText);
                                 const isDrops = /\b(ophthalmic|drops)\b/i.test(combinedText);
                                 setMedDosage(exactMatch.dosage);
-                                setMedRoute(isTopical ? 'Topical' : isIVIM ? 'IV / IM' : isDrops ? 'Nasal / Drops' : 'Oral');
+                                setMedRoute(
+                                  exactMatch.route ||
+                                    (isTopical ? 'Topical' : isIVIM ? 'IV / IM' : isDrops ? 'Nasal / Drops' : 'Oral')
+                                );
                                 setMedFrequency(
                                   exactMatch.frequency.includes('1-0-1') || /^twice daily$/i.test(exactMatch.frequency.trim())
                                     ? '1-0-1'
@@ -2658,9 +2799,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-64 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
                             <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between sticky top-0 z-10 border-b border-slate-100">
                               <span>
-                                Drug Catalogue (
+                                {doctor?.name || 'Doctor'}'s Library (
                                 {
-                                  COMMON_MEDICATIONS.filter(m => {
+                                  allDoctorMedications.filter(m => {
                                     const q = medName.toLowerCase().trim();
                                     return (
                                       !q ||
@@ -2681,7 +2822,26 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                 <X className="w-3 h-3" />
                               </button>
                             </div>
-                            {COMMON_MEDICATIONS.filter(m => {
+
+                            {/* Instant "+ Save to My Personal Library" action when typing a custom or uncatalogued drug */}
+                            {medName.trim().length >= 2 && (
+                              <div className="p-2 bg-teal-50/70 border-b border-teal-100 flex items-center justify-between gap-2">
+                                <div className="text-[11px] text-teal-900 truncate">
+                                  <span className="font-bold">"{medName.trim()}"</span> · {medDosage} · {medFrequency}
+                                </div>
+                                <button
+                                  type="button"
+                                  onMouseDown={e => e.preventDefault()}
+                                  onClick={() => handleSaveCurrentMedToLibrary()}
+                                  className="px-2.5 py-1 rounded-lg bg-teal-800 hover:bg-teal-900 text-white text-[10px] font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  <span>Save to My Library</span>
+                                </button>
+                              </div>
+                            )}
+
+                            {allDoctorMedications.filter(m => {
                               const q = medName.toLowerCase().trim();
                               return (
                                 !q ||
@@ -2705,13 +2865,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                     setMedName(med.name);
                                     setMedDosage(med.dosage);
                                     setMedRoute(
-                                      isTopical
-                                        ? 'Topical'
-                                        : isIVIM
-                                        ? 'IV / IM'
-                                        : isDrops
-                                        ? 'Nasal / Drops'
-                                        : 'Oral'
+                                      med.route ||
+                                        (isTopical
+                                          ? 'Topical'
+                                          : isIVIM
+                                          ? 'IV / IM'
+                                          : isDrops
+                                          ? 'Nasal / Drops'
+                                          : 'Oral')
                                     );
                                     setMedFrequency(
                                       med.frequency.includes('1-0-1') || /^twice daily$/i.test(med.frequency.trim())
@@ -2735,7 +2896,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                   className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50/60 flex flex-col text-slate-800 transition-colors cursor-pointer"
                                 >
                                   <div className="flex items-center justify-between gap-2">
-                                    <span className="font-semibold text-slate-900">{med.name}</span>
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="font-semibold text-slate-900 truncate">{med.name}</span>
+                                      {med.isPersonal && (
+                                        <span className="px-1.5 py-0.2 rounded bg-amber-50 border border-amber-200 text-amber-800 text-[9px] font-bold shrink-0">
+                                          My Library
+                                        </span>
+                                      )}
+                                    </div>
                                     <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">
                                       {med.dosage}
                                     </span>
@@ -4571,6 +4739,27 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           }}
         />
       )}
+
+      {/* Doctor's Personalized Medical Library Upload / Add Modal */}
+      <FormularyUploadModal
+        isOpen={isLibraryModalOpen}
+        onClose={() => setIsLibraryModalOpen(false)}
+        doctorName={doctor?.name || 'Doctor'}
+        initialMode={libraryModalMode}
+        initialMedName={medName.trim()}
+        initialDosage={medDosage}
+        initialRoute={medRoute}
+        initialFrequency={medFrequency}
+        initialDuration={medDuration}
+        initialInstructions={medInstructions}
+        onUpdated={(items, msg) => {
+          setDoctorFormulary(items);
+          if (msg) {
+            setLibrarySavedToast(msg);
+            setTimeout(() => setLibrarySavedToast(null), 5000);
+          }
+        }}
+      />
     </div>
   );
 };

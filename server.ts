@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
+import zlib from 'zlib';
 import { db } from './server/db.js';
 import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI, askImageReportAssistant } from './server/ai.js';
 import dotenv from 'dotenv';
@@ -629,6 +630,396 @@ app.post('/api/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) 
   );
 
   res.status(201).json({ prescription: rx });
+});
+
+// ==========================================
+// DOCTOR PERSONALIZED MEDICAL LIBRARY (FORMULARY) ROUTES
+// ==========================================
+function extractTextRowsFromPdfBuffer(pdfBuffer: Buffer): string[] {
+  const rawBinary = pdfBuffer.toString('latin1');
+  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  const decompressedStreams: string[] = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = streamRegex.exec(rawBinary)) !== null) {
+    const chunkBuf = Buffer.from(match[1], 'latin1');
+    try {
+      const inflated = zlib.inflateSync(chunkBuf);
+      decompressedStreams.push(inflated.toString('latin1'));
+    } catch {
+      try {
+        const inflatedRaw = zlib.inflateRawSync(chunkBuf);
+        decompressedStreams.push(inflatedRaw.toString('latin1'));
+      } catch {
+        // Not a zlib stream
+      }
+    }
+  }
+
+  // Build ToUnicode CMap dictionary across streams
+  const cidToChar = new Map<number, string>();
+  for (const s of decompressedStreams) {
+    if (s.includes('beginbfchar')) {
+      const bfCharRegex = /<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g;
+      let cm: RegExpExecArray | null;
+      while ((cm = bfCharRegex.exec(s)) !== null) {
+        const cid = parseInt(cm[1], 16);
+        const uniHex = cm[2];
+        let chars = '';
+        for (let i = 0; i < uniHex.length; i += 4) {
+          const code = parseInt(uniHex.slice(i, i + 4), 16);
+          if (!isNaN(code)) chars += String.fromCharCode(code);
+        }
+        if (chars) cidToChar.set(cid, chars);
+      }
+    }
+    if (s.includes('beginbfrange')) {
+      const bfRangeRegex = /<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g;
+      let rm: RegExpExecArray | null;
+      while ((rm = bfRangeRegex.exec(s)) !== null) {
+        const startCid = parseInt(rm[1], 16);
+        const endCid = parseInt(rm[2], 16);
+        const startUni = parseInt(rm[3], 16);
+        for (let c = startCid; c <= endCid && c - startCid < 512; c++) {
+          cidToChar.set(c, String.fromCharCode(startUni + (c - startCid)));
+        }
+      }
+    }
+  }
+
+  const extractedCells: string[] = [];
+  for (const s of decompressedStreams) {
+    if (s.includes('beginbfchar') || s.includes('beginbfrange')) continue;
+
+    // 1. Decode hex TJ arrays (<0014...> Tj/TJ)
+    const btBlocks = s.match(/BT[\s\S]*?ET/g) || [s];
+    for (const block of btBlocks) {
+      const hexParts = block.match(/<([0-9A-Fa-f]+)>/g);
+      if (hexParts && hexParts.length > 0 && cidToChar.size > 0) {
+        let cellText = '';
+        for (const hp of hexParts) {
+          const hex = hp.slice(1, -1);
+          for (let i = 0; i < hex.length; i += 4) {
+            const cid = parseInt(hex.slice(i, i + 4), 16);
+            cellText += cidToChar.get(cid) || '';
+          }
+        }
+        if (cellText.trim()) extractedCells.push(cellText.trim());
+      }
+
+      // 2. Also decode standard PDF literal strings: (Amoxicillin) Tj or [(Amoxicillin) -10 (500 mg)] TJ
+      const litParts = block.match(/\((?:\\.|[^\\()])*\)/g);
+      if (litParts && litParts.length > 0) {
+        const litText = litParts
+          .map(lp =>
+            lp
+              .slice(1, -1)
+              .replace(/\\n/g, '\n')
+              .replace(/\\r/g, ' ')
+              .replace(/\\t/g, ' ')
+              .replace(/\\\(/g, '(')
+              .replace(/\\\)/g, ')')
+              .replace(/\\\\/g, '\\')
+          )
+          .join('');
+        if (litText.trim()) extractedCells.push(litText.trim());
+      }
+    }
+  }
+
+  return extractedCells;
+}
+
+function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''): Array<{
+  name: string;
+  dosage: string;
+  route?: string;
+  frequency: string;
+  duration: string;
+  instructions: string;
+}> {
+  const results: Array<{
+    name: string;
+    dosage: string;
+    route?: string;
+    frequency: string;
+    duration: string;
+    instructions: string;
+  }> = [];
+
+  const inferFieldsFromDosage = (name: string, rawDosage: string, extraInstructions = '') => {
+    const dLower = `${name} ${rawDosage} ${extraInstructions}`.toLowerCase();
+    let frequency = '1-0-1';
+    if (dLower.includes('every 6 hours') || dLower.includes('4 times daily') || dLower.includes('qid')) {
+      frequency = '1-1-1-1';
+    } else if (dLower.includes('every 8 hours') || dLower.includes('3 times daily') || dLower.includes('three times daily') || dLower.includes('tid') || dLower.includes('tds')) {
+      frequency = '1-1-1';
+    } else if (dLower.includes('every 12 hours') || dLower.includes('twice daily') || dLower.includes('bid') || dLower.includes('bd')) {
+      frequency = '1-0-1';
+    } else if (dLower.includes('bedtime') || dLower.includes('at night') || dLower.includes('hs')) {
+      frequency = '0-0-1';
+    } else if (dLower.includes('once daily') || dLower.includes('every 24 hours') || dLower.includes('od')) {
+      frequency = '1-0-0';
+    } else if (dLower.includes('weekly') || dLower.includes('once a week')) {
+      frequency = 'Once weekly';
+    } else if (dLower.includes('single dose')) {
+      frequency = 'Single stat dose';
+    }
+
+    let duration = '5 days';
+    const dayMatch = dLower.match(/for\s+(\d+(?:[–-]\d+)?\s*(?:days?|weeks?|months?))/i);
+    if (dayMatch) {
+      duration = dayMatch[1];
+    } else if (dLower.includes('single dose')) {
+      duration = '1 day';
+    } else if (/topical|cream|gel|ointment|lotion|shampoo|drops/i.test(dLower)) {
+      duration = '14 days';
+    } else if (/antifungal|terbinafine|itraconazole|fluconazole|griseofulvin/i.test(dLower)) {
+      duration = '14 days';
+    } else if (/antiviral|acyclovir|valacyclovir|oseltamivir|tenofovir|entecavir/i.test(dLower)) {
+      duration = '7 days';
+    }
+
+    const route = /cream|gel|ointment|lotion|shampoo|solution|spf|sunscreen|topical/i.test(dLower)
+      ? 'Topical'
+      : /\b(iv|im|iv\/im|infusion|injection)\b/i.test(dLower)
+      ? 'IV / IM'
+      : /\b(ophthalmic|drops|eye|ear|nasal)\b/i.test(dLower)
+      ? 'Nasal / Drops'
+      : 'Oral';
+
+    const instructions = extraInstructions.trim() || `Standard regimen: ${rawDosage}`;
+    return {
+      name: name.trim(),
+      dosage: rawDosage.trim() || 'Standard dose',
+      route,
+      frequency,
+      duration,
+      instructions
+    };
+  };
+
+  // Case A: Table triplets from PDF (e.g., ["1", "Amoxicillin", "250 mg to 500 mg every 8 hours..."])
+  if (cells.length >= 3) {
+    let i = 0;
+    while (i < cells.length) {
+      const c = cells[i].trim();
+      if (/^\d{1,4}\.?$/.test(c) && i + 2 < cells.length) {
+        const medName = cells[i + 1].trim();
+        const dosageCol = cells[i + 2].trim();
+        if (
+          medName &&
+          !/^(no\.?|medicine|medication|drug|name)$/i.test(medName) &&
+          dosageCol &&
+          !/^(dosage|dose|strength)$/i.test(dosageCol)
+        ) {
+          results.push(inferFieldsFromDosage(medName, dosageCol));
+          i += 3;
+          continue;
+        }
+      }
+      i++;
+    }
+  }
+
+  // Case B: Line-by-line text / CSV / TSV / Pipe / Dash parsing
+  const combinedLines = [
+    ...(results.length === 0 ? cells : []),
+    ...rawTextFallback.split(/\r?\n/)
+  ]
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  for (const line of combinedLines) {
+    if (/^(no\.?|#|s\.?no|medicine\s*name|drug\s*name|medication)\b/i.test(line) && /dosage|dose|frequency/i.test(line)) {
+      continue; // Skip header row
+    }
+
+    // Check CSV / Pipe / Tab separated: Name | Dosage | Frequency | Duration | Instructions
+    const delimiter = line.includes('|')
+      ? '|'
+      : line.includes('\t')
+      ? '\t'
+      : line.split(',').length >= 2
+      ? ','
+      : null;
+
+    if (delimiter) {
+      const rawCols = line.split(delimiter).map(s => s.trim().replace(/^["']|["']$/g, ''));
+      const cols = /^\d{1,4}\.?$/.test(rawCols[0]) ? rawCols.slice(1) : rawCols;
+      if (cols.length >= 2 && cols[0].length >= 2) {
+        const [medName, medDose, freqCol, durCol, instrCol] = cols;
+        const base = inferFieldsFromDosage(medName, medDose, instrCol || '');
+        results.push({
+          ...base,
+          frequency: freqCol || base.frequency,
+          duration: durCol || base.duration,
+          instructions: instrCol || base.instructions
+        });
+        continue;
+      }
+    }
+
+    // Check "1. Medicine Name - Dosage" or "Medicine Name : Dosage"
+    const cleanLine = line.replace(/^\d{1,4}[.)]\s*/, '');
+    const dashMatch = cleanLine.match(/^([A-Za-z0-9\s()/+-]{2,60}?)\s*(?:[-–—:]|\s{2,})\s*(.+)$/);
+    if (dashMatch) {
+      const [, medName, medDose] = dashMatch;
+      if (!/^(page|table|section|chapter)\b/i.test(medName.trim())) {
+        results.push(inferFieldsFromDosage(medName, medDose));
+      }
+    }
+  }
+
+  return results;
+}
+
+app.get('/api/formulary', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const doctor = req.doctor!;
+  const items = db.getDoctorFormulary(doctor.id);
+  res.json({ items });
+});
+
+app.post('/api/formulary', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const doctor = req.doctor!;
+  const { name, dosage, route, frequency, duration, instructions, category, source } = req.body;
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({ error: 'Medicine name is required' });
+  }
+
+  const item = db.upsertFormularyItem(
+    doctor.id,
+    {
+      name: String(name).trim(),
+      dosage: String(dosage || 'Standard dose').trim(),
+      route: route ? String(route).trim() : undefined,
+      frequency: frequency ? String(frequency).trim() : undefined,
+      duration: duration ? String(duration).trim() : undefined,
+      instructions: instructions ? String(instructions).trim() : undefined,
+      category: category ? String(category).trim() : 'Personal Library',
+      source: source || 'manual'
+    },
+    { id: doctor.id, name: doctor.name }
+  );
+
+  res.status(201).json({ item });
+});
+
+app.post('/api/formulary/import', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const doctor = req.doctor!;
+  const { fileDataUrl, filename, rawText, items: directItems } = req.body;
+
+  try {
+    let parsedMedications: Array<{
+      name: string;
+      dosage: string;
+      route?: string;
+      frequency: string;
+      duration: string;
+      instructions: string;
+      source?: 'manual' | 'pdf_upload' | 'csv_upload' | 'rx_learned';
+    }> = [];
+
+    if (Array.isArray(directItems) && directItems.length > 0) {
+      parsedMedications = directItems.map(it => ({
+        name: String(it.name || '').trim(),
+        dosage: String(it.dosage || 'Standard dose').trim(),
+        route: it.route,
+        frequency: String(it.frequency || '1-0-1'),
+        duration: String(it.duration || '5 days'),
+        instructions: String(it.instructions || ''),
+        source: it.source || 'manual'
+      }));
+    }
+
+    if (fileDataUrl && typeof fileDataUrl === 'string') {
+      const dataUrlMatch = fileDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (dataUrlMatch) {
+        const mimeType = dataUrlMatch[1].toLowerCase();
+        const base64Data = dataUrlMatch[2];
+        const fileBuffer = Buffer.from(base64Data, 'base64');
+
+        if (mimeType.includes('pdf') || (filename && filename.toLowerCase().endsWith('.pdf'))) {
+          const pdfCells = extractTextRowsFromPdfBuffer(fileBuffer);
+          const fromPdf = parseMedicationsFromCellsOrText(pdfCells);
+          parsedMedications.push(
+            ...fromPdf.map(m => ({ ...m, source: 'pdf_upload' as const }))
+          );
+        } else {
+          // CSV, TSV, JSON, or TXT file
+          const textContent = fileBuffer.toString('utf8');
+          if (mimeType.includes('json') || (filename && filename.toLowerCase().endsWith('.json'))) {
+            try {
+              const jsonArr = JSON.parse(textContent);
+              if (Array.isArray(jsonArr)) {
+                parsedMedications.push(
+                  ...jsonArr.map(it => ({
+                    name: String(it.name || it.medicineName || it.drug || '').trim(),
+                    dosage: String(it.dosage || it.dose || 'Standard dose').trim(),
+                    route: it.route,
+                    frequency: String(it.frequency || '1-0-1'),
+                    duration: String(it.duration || '5 days'),
+                    instructions: String(it.instructions || ''),
+                    source: 'csv_upload' as const
+                  }))
+                );
+              }
+            } catch {
+              // fallback to line parser
+            }
+          }
+          if (parsedMedications.length === 0) {
+            const fromText = parseMedicationsFromCellsOrText([], textContent);
+            parsedMedications.push(
+              ...fromText.map(m => ({ ...m, source: 'csv_upload' as const }))
+            );
+          }
+        }
+      }
+    }
+
+    if (rawText && typeof rawText === 'string' && rawText.trim()) {
+      const fromRaw = parseMedicationsFromCellsOrText([], rawText);
+      parsedMedications.push(
+        ...fromRaw.map(m => ({ ...m, source: 'csv_upload' as const }))
+      );
+    }
+
+    const validMedications = parsedMedications.filter(m => m.name && m.name.trim().length >= 2);
+    if (validMedications.length === 0) {
+      return res.status(400).json({
+        error:
+          'Could not detect valid medication rows. Ensure your PDF/CSV/Text has Medicine Name and Dosage columns or "Medicine Name - Dosage" lines.'
+      });
+    }
+
+    const result = db.bulkImportFormularyItems(doctor.id, validMedications, {
+      id: doctor.id,
+      name: doctor.name
+    });
+
+    res.json({
+      importedCount: result.importedCount,
+      updatedCount: result.updatedCount,
+      totalProcessed: validMedications.length,
+      items: result.items
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to import medication file';
+    res.status(500).json({ error: message });
+  }
+});
+
+app.delete('/api/formulary/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const doctor = req.doctor!;
+  const deleted = db.deleteFormularyItem(doctor.id, req.params.id, {
+    id: doctor.id,
+    name: doctor.name
+  });
+  if (!deleted) {
+    return res.status(404).json({ error: 'Medication item not found in your personal library' });
+  }
+  res.json({ success: true });
 });
 
 // ==========================================

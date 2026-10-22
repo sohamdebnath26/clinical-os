@@ -467,4 +467,19 @@ export interface ClinicSubscriptionState {
   updatedAt: string;
 }
 
+export interface DoctorFormularyItem {
+  id: string;
+  doctorId: string;
+  name: string;
+  dosage: string;
+  route?: string;
+  frequency: string;
+  duration: string;
+  instructions: string;
+  category?: string;
+  source?: 'manual' | 'pdf_upload' | 'csv_upload' | 'rx_learned';
+  createdAt: string;
+  updatedAt: string;
+}
+
 

@@ -11,7 +11,8 @@ import {
   AIImageAnalysisResult,
   ProgressionAnalysisResult,
   ABCDEScoreResult,
-  PatientTestReport
+  PatientTestReport,
+  DoctorFormularyItem
 } from '../types/index';
 
 const TOKEN_KEY = 'clinical_os_token';
@@ -208,6 +209,44 @@ export const api = {
       fetchWithAuth<{ prescription: PrescriptionItem }>('/api/prescriptions', {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+  },
+
+  formulary: {
+    list: () =>
+      fetchWithAuth<{ items: DoctorFormularyItem[] }>('/api/formulary'),
+    upsert: (data: {
+      name: string;
+      dosage: string;
+      route?: string;
+      frequency?: string;
+      duration?: string;
+      instructions?: string;
+      category?: string;
+      source?: DoctorFormularyItem['source'];
+    }) =>
+      fetchWithAuth<{ item: DoctorFormularyItem }>('/api/formulary', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    importData: (data: {
+      fileDataUrl?: string;
+      filename?: string;
+      rawText?: string;
+      items?: Array<Partial<DoctorFormularyItem>>;
+    }) =>
+      fetchWithAuth<{
+        importedCount: number;
+        updatedCount: number;
+        totalProcessed: number;
+        items: DoctorFormularyItem[];
+      }>('/api/formulary/import', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      fetchWithAuth<{ success: boolean }>(`/api/formulary/${id}`, {
+        method: 'DELETE',
       }),
   },
 

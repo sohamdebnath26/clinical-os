@@ -17,7 +17,8 @@ import {
   MonthlyRevenuePoint,
   PatientTestReport,
   TestReportCategory,
-  ClinicSubscriptionState
+  ClinicSubscriptionState,
+  DoctorFormularyItem
 } from '../src/types/index.js';
 
 interface DatabaseSchema {
@@ -30,6 +31,7 @@ interface DatabaseSchema {
   bodyMarkers: BodyMarker[];
   clinicalImages: ClinicalImage[];
   testReports?: PatientTestReport[];
+  formularyItems?: DoctorFormularyItem[];
   subscription?: ClinicSubscriptionState;
   auditLogs: AuditLog[];
   meta: {
@@ -1611,7 +1613,208 @@ class DatabaseService {
     this.persist();
     return sub;
   }
+
+  // --- Personalized Doctor Medical Library (Formulary) ---
+  public getDoctorFormulary(doctorId: string): DoctorFormularyItem[] {
+    if (!this.data.formularyItems) {
+      this.data.formularyItems = [];
+    }
+    return this.data.formularyItems
+      .filter(item => item.doctorId === doctorId || item.doctorId === 'shared')
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }
+
+  public upsertFormularyItem(
+    doctorId: string,
+    payload: {
+      name: string;
+      dosage: string;
+      route?: string;
+      frequency?: string;
+      duration?: string;
+      instructions?: string;
+      category?: string;
+      source?: DoctorFormularyItem['source'];
+    },
+    actor?: { id: string; name: string }
+  ): DoctorFormularyItem {
+    if (!this.data.formularyItems) {
+      this.data.formularyItems = [];
+    }
+    const cleanName = payload.name.trim();
+    const cleanDosage = (payload.dosage || 'As directed').trim();
+    const now = new Date().toISOString();
+
+    const existing = this.data.formularyItems.find(
+      item =>
+        item.doctorId === doctorId &&
+        item.name.toLowerCase() === cleanName.toLowerCase()
+    );
+
+    if (existing) {
+      existing.name = cleanName;
+      existing.dosage = cleanDosage;
+      if (payload.route !== undefined) existing.route = payload.route;
+      if (payload.frequency !== undefined) existing.frequency = payload.frequency || existing.frequency;
+      if (payload.duration !== undefined) existing.duration = payload.duration || existing.duration;
+      if (payload.instructions !== undefined) existing.instructions = payload.instructions;
+      if (payload.category !== undefined) existing.category = payload.category;
+      if (payload.source !== undefined) existing.source = payload.source;
+      existing.updatedAt = now;
+      this.persist();
+      return existing;
+    }
+
+    const newItem: DoctorFormularyItem = {
+      id: `med-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`,
+      doctorId,
+      name: cleanName,
+      dosage: cleanDosage,
+      route: payload.route || 'Oral',
+      frequency: payload.frequency || '1-0-1',
+      duration: payload.duration || '5 days',
+      instructions: payload.instructions || 'After meals',
+      category: payload.category || 'Personal Library',
+      source: payload.source || 'manual',
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.data.formularyItems.unshift(newItem);
+    if (actor) {
+      this.logAudit({
+        actorId: actor.id,
+        actorName: actor.name,
+        action: 'formulary_item_added',
+        resourceType: 'formulary',
+        resourceId: newItem.id,
+        metadata: { name: newItem.name, dosage: newItem.dosage, source: newItem.source }
+      });
+    } else {
+      this.persist();
+    }
+    return newItem;
+  }
+
+  public bulkImportFormularyItems(
+    doctorId: string,
+    items: Array<{
+      name: string;
+      dosage?: string;
+      route?: string;
+      frequency?: string;
+      duration?: string;
+      instructions?: string;
+      category?: string;
+      source?: DoctorFormularyItem['source'];
+    }>,
+    actor?: { id: string; name: string }
+  ): { importedCount: number; updatedCount: number; items: DoctorFormularyItem[] } {
+    if (!this.data.formularyItems) {
+      this.data.formularyItems = [];
+    }
+    let importedCount = 0;
+    let updatedCount = 0;
+    const now = new Date().toISOString();
+
+    for (const raw of items) {
+      const cleanName = (raw.name || '').trim();
+      if (!cleanName || cleanName.length < 2) continue;
+      const cleanDosage = (raw.dosage || 'Standard clinical dose').trim();
+
+      const existing = this.data.formularyItems.find(
+        item =>
+          item.doctorId === doctorId &&
+          item.name.toLowerCase() === cleanName.toLowerCase()
+      );
+
+      if (existing) {
+        existing.dosage = cleanDosage || existing.dosage;
+        if (raw.route) existing.route = raw.route;
+        if (raw.frequency) existing.frequency = raw.frequency;
+        if (raw.duration) existing.duration = raw.duration;
+        if (raw.instructions) existing.instructions = raw.instructions;
+        if (raw.category) existing.category = raw.category;
+        if (raw.source) existing.source = raw.source;
+        existing.updatedAt = now;
+        updatedCount++;
+      } else {
+        const combinedText = `${cleanName} ${cleanDosage} ${raw.frequency || ''} ${raw.instructions || ''}`;
+        const inferredRoute =
+          raw.route ||
+          (/cream|gel|ointment|lotion|shampoo|solution|spf|sunscreen|topical/i.test(combinedText)
+            ? 'Topical'
+            : /\b(iv|im|iv\/im|infusion|injection)\b/i.test(combinedText)
+            ? 'IV / IM'
+            : /\b(ophthalmic|drops|eye|ear|nasal)\b/i.test(combinedText)
+            ? 'Nasal / Drops'
+            : 'Oral');
+
+        this.data.formularyItems.unshift({
+          id: `med-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}-${importedCount}`,
+          doctorId,
+          name: cleanName,
+          dosage: cleanDosage,
+          route: inferredRoute,
+          frequency: raw.frequency || '1-0-1',
+          duration: raw.duration || '5 days',
+          instructions: raw.instructions || 'Take as directed by physician',
+          category: raw.category || 'Uploaded Library',
+          source: raw.source || 'pdf_upload',
+          createdAt: now,
+          updatedAt: now
+        });
+        importedCount++;
+      }
+    }
+
+    if (actor) {
+      this.logAudit({
+        actorId: actor.id,
+        actorName: actor.name,
+        action: 'formulary_bulk_import',
+        resourceType: 'formulary',
+        resourceId: doctorId,
+        metadata: { importedCount, updatedCount }
+      });
+    } else {
+      this.persist();
+    }
+
+    return {
+      importedCount,
+      updatedCount,
+      items: this.getDoctorFormulary(doctorId)
+    };
+  }
+
+  public deleteFormularyItem(
+    doctorId: string,
+    id: string,
+    actor?: { id: string; name: string }
+  ): boolean {
+    if (!this.data.formularyItems) return false;
+    const idx = this.data.formularyItems.findIndex(
+      item => item.id === id && item.doctorId === doctorId
+    );
+    if (idx === -1) return false;
+    const [removed] = this.data.formularyItems.splice(idx, 1);
+    if (actor) {
+      this.logAudit({
+        actorId: actor.id,
+        actorName: actor.name,
+        action: 'formulary_item_deleted',
+        resourceType: 'formulary',
+        resourceId: id,
+        metadata: { name: removed.name }
+      });
+    } else {
+      this.persist();
+    }
+    return true;
+  }
 }
 
 export const db = new DatabaseService();
+
 
