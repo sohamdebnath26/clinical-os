@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { DoctorFormularyItem } from '../types';
 import { api } from '../lib/api';
+import { UPLOADED_ANTIMICROBIAL_MEDICATIONS } from '../data/clinicalCatalogues';
 import {
   X,
   Upload,
@@ -467,6 +468,27 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const buildAntimicrobialCsvString = () => {
+    const header = 'No.,Medicine Name,Dose,Frequency,Instructions';
+    const escapeCsvCell = (val: string | number) => {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const rows = UPLOADED_ANTIMICROBIAL_MEDICATIONS.map(m =>
+      [
+        escapeCsvCell(m.no),
+        escapeCsvCell(m.name),
+        escapeCsvCell(m.dosage),
+        escapeCsvCell(m.frequency),
+        escapeCsvCell(m.instructions)
+      ].join(',')
+    );
+    return [header, ...rows].join('\n');
+  };
+
   useEffect(() => {
     if (isOpen) {
       setMode(initialMode);
@@ -476,6 +498,23 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
       if (initialFrequency) setSingleFrequency(initialFrequency);
       if (initialDuration) setSingleDuration(initialDuration);
       if (initialInstructions) setSingleInstructions(initialInstructions);
+
+      if (initialMode === 'upload' && !selectedFile) {
+        const csvText = buildAntimicrobialCsvString();
+        const csvGrid = detectDelimiterAndParseGrid(csvText);
+        const parsedRows = parseCsvOrTextClient(csvText);
+        const base64 = btoa(unescape(encodeURIComponent(csvText)));
+        setSelectedFile({
+          name: 'Antimicrobial_and_Anti-infective_Medications.csv',
+          dataUrl: `data:text/csv;base64,${base64}`,
+          textContent: csvText,
+          csvGrid,
+          parsedRows,
+          isPdf: false,
+          size: csvText.length
+        });
+        setPreviewTab('spreadsheet');
+      }
     }
   }, [
     isOpen,
@@ -577,19 +616,12 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
 
   const handleDownloadSampleCsv = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const sampleCsv = [
-      'Medicine Name,Required Dosage,Route,Frequency,Duration,Instructions',
-      '"Amoxicillin","500 mg every 8 hours","Oral","1-1-1","5 days","After meals"',
-      '"Azithromycin","500 mg on Day 1, then 250 mg once daily","Oral","1-0-0","5 days","1 hour before or 2 hours after food"',
-      '"Doxycycline","100 mg every 12 hours","Oral","1-0-1","7 days","Take with a full glass of water"',
-      '"Mupirocin 2% Ointment","Apply thin film 3 times daily","Topical","1-1-1","10 days","Apply on affected lesion"',
-      '"Terbinafine","250 mg once daily","Oral","1-0-0","14 days","After meal"'
-    ].join('\n');
+    const sampleCsv = buildAntimicrobialCsvString();
     const blob = new Blob([sampleCsv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'sample_doctor_formulary.csv';
+    link.download = 'Antimicrobial_and_Anti-infective_Medications.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -598,19 +630,12 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
 
   const handleLoadSampleIntoPreview = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const sampleCsv = [
-      'Medicine Name,Required Dosage,Route,Frequency,Duration,Instructions',
-      '"Amoxicillin","500 mg every 8 hours","Oral","1-1-1","5 days","After meals"',
-      '"Azithromycin","500 mg on Day 1, then 250 mg once daily","Oral","1-0-0","5 days","1 hour before or 2 hours after food"',
-      '"Doxycycline","100 mg every 12 hours","Oral","1-0-1","7 days","Take with a full glass of water"',
-      '"Mupirocin 2% Ointment","Apply thin film 3 times daily","Topical","1-1-1","10 days","Apply on affected lesion"',
-      '"Terbinafine","250 mg once daily","Oral","1-0-0","14 days","After meal"'
-    ].join('\n');
+    const sampleCsv = buildAntimicrobialCsvString();
     const csvGrid = detectDelimiterAndParseGrid(sampleCsv);
     const parsedRows = parseCsvOrTextClient(sampleCsv);
     const base64 = btoa(unescape(encodeURIComponent(sampleCsv)));
     setSelectedFile({
-      name: 'sample_doctor_formulary.csv',
+      name: 'Antimicrobial_and_Anti-infective_Medications.csv',
       dataUrl: `data:text/csv;base64,${base64}`,
       textContent: sampleCsv,
       csvGrid,

@@ -20,6 +20,7 @@ import {
   ClinicSubscriptionState,
   DoctorFormularyItem
 } from '../src/types/index.js';
+import { UPLOADED_ANTIMICROBIAL_MEDICATIONS } from '../src/data/clinicalCatalogues.js';
 
 interface DatabaseSchema {
   doctors: Doctor[];
@@ -53,6 +54,7 @@ class DatabaseService {
     this.data = this.loadDatabase();
     this.ensureDefaultDoctor();
     this.ensureDefaultSubscription();
+    this.ensureDefaultFormulary();
     this.syncAppointmentsFromFollowUps();
     this.syncTestReportsFromConsultations();
   }
@@ -1615,6 +1617,69 @@ class DatabaseService {
   }
 
   // --- Personalized Doctor Medical Library (Formulary) ---
+  private ensureDefaultFormulary() {
+    if (!this.data.formularyItems) {
+      this.data.formularyItems = [];
+    }
+    let changed = false;
+    const baseTime = new Date('2026-01-01T00:00:00.000Z').getTime();
+
+    for (const med of UPLOADED_ANTIMICROBIAL_MEDICATIONS) {
+      const seedId = `csv-antimicrobial-${med.no}`;
+      const combinedText = `${med.name} ${med.dosage} ${med.frequency} ${med.instructions}`;
+      const inferredRoute = /\b(iv|im|iv\/im|infusion|injection)\b/i.test(combinedText)
+        ? 'IV / IM'
+        : /cream|gel|ointment|lotion|shampoo|solution|topical/i.test(combinedText)
+        ? 'Topical'
+        : 'Oral';
+
+      // Descending timestamp by `no` so item #1 sorts first among the 96 seeded CSV medications
+      const itemTimestamp = new Date(baseTime + (1000 - med.no) * 1000).toISOString();
+
+      const existing = this.data.formularyItems.find(
+        item =>
+          item.id === seedId ||
+          item.name.toLowerCase() === med.name.toLowerCase()
+      );
+
+      if (!existing) {
+        this.data.formularyItems.push({
+          id: seedId,
+          doctorId: 'shared',
+          name: med.name,
+          dosage: med.dosage,
+          route: inferredRoute,
+          frequency: med.frequency,
+          duration: med.duration,
+          instructions: med.instructions,
+          category: 'Antimicrobial & Anti-infective CSV',
+          source: 'csv_upload',
+          createdAt: itemTimestamp,
+          updatedAt: itemTimestamp
+        });
+        changed = true;
+      } else if (existing.id === seedId) {
+        if (
+          existing.dosage !== med.dosage ||
+          existing.frequency !== med.frequency ||
+          existing.instructions !== med.instructions
+        ) {
+          existing.dosage = med.dosage;
+          existing.route = inferredRoute;
+          existing.frequency = med.frequency;
+          existing.duration = med.duration;
+          existing.instructions = med.instructions;
+          existing.source = 'csv_upload';
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      this.persist();
+    }
+  }
+
   public getDoctorFormulary(doctorId: string): DoctorFormularyItem[] {
     if (!this.data.formularyItems) {
       this.data.formularyItems = [];
@@ -1647,7 +1712,7 @@ class DatabaseService {
 
     const existing = this.data.formularyItems.find(
       item =>
-        item.doctorId === doctorId &&
+        (item.doctorId === doctorId || item.doctorId === 'shared') &&
         item.name.toLowerCase() === cleanName.toLowerCase()
     );
 
@@ -1724,7 +1789,7 @@ class DatabaseService {
 
       const existing = this.data.formularyItems.find(
         item =>
-          item.doctorId === doctorId &&
+          (item.doctorId === doctorId || item.doctorId === 'shared') &&
           item.name.toLowerCase() === cleanName.toLowerCase()
       );
 
@@ -1795,7 +1860,7 @@ class DatabaseService {
   ): boolean {
     if (!this.data.formularyItems) return false;
     const idx = this.data.formularyItems.findIndex(
-      item => item.id === id && item.doctorId === doctorId
+      item => item.id === id && (item.doctorId === doctorId || item.doctorId === 'shared')
     );
     if (idx === -1) return false;
     const [removed] = this.data.formularyItems.splice(idx, 1);
