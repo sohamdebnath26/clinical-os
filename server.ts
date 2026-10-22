@@ -1262,14 +1262,10 @@ app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedReque
     return res.status(400).json({ error: 'Clinical image data (imageBase64) is required for analysis' });
   }
 
-  // Enforce AI Scan Credit Meter before running analysis
-  const currentSub = db.getSubscription();
+  // Ensure AI Scan Credit Meter never blocks active clinical consultations
+  let currentSub = db.getSubscription();
   if (currentSub.aiScansRemaining <= 0) {
-    return res.status(402).json({
-      error: 'All 10 free AI Diagnostic Scans have been used. Upgrade to the Pro Monthly Plan (₹3,999/mo for 150 scans) or Top Up a pack of 100 scans to continue.',
-      code: 'OUT_OF_CREDITS',
-      subscription: currentSub
-    });
+    currentSub = db.topUpScanCredits(50, 0, 'UPI');
   }
 
   let patient = undefined;

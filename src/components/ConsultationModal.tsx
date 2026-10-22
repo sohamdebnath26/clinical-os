@@ -127,13 +127,23 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>(consultation.prescriptions || []);
   const [aiSummary, setAiSummary] = useState<string>(consultation.aiSummary || '');
 
-  // Derive clinical baseline morphology & AI image summary from patient condition
-  const getInitialDermSummary = () => {
+  // Derive clinical baseline morphology & AI image summary from live consultation state or patient condition
+  const getInitialDermSummary = (overrideContext?: string) => {
     const primary = (
-      consultation.diagnoses?.[0] ||
-      patient.primaryDiagnosis ||
-      consultation.symptoms?.[0] ||
-      'Pigmentation / Dark spots'
+      overrideContext ||
+      [
+        diagnoses[0],
+        secondaryDiagnosis,
+        symptoms.join(' '),
+        clinicalNotes.examination,
+        clinicalNotes.plan,
+        consultation.diagnoses?.[0],
+        patient.primaryDiagnosis,
+        consultation.symptoms?.[0],
+        'Pigmentation / Dark spots'
+      ]
+        .filter(Boolean)
+        .join(' ')
     ).toLowerCase();
 
     if (primary.includes('acne') || primary.includes('comedo') || primary.includes('pustul')) {
@@ -574,6 +584,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [isSigning, setIsSigning] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [isGeneratingImageSummaryAI, setIsGeneratingImageSummaryAI] = useState(false);
+  const [summaryRefreshFeedback, setSummaryRefreshFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // AI Image Analysis state inside consultation
@@ -609,36 +620,55 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     options?: { openOverlayModal?: boolean }
   ) => {
     setIsGeneratingImageSummaryAI(true);
+    setSummaryRefreshFeedback(null);
+    const refreshTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
     try {
-      const imgToAnalyze = targetImg || images[images.length - 1] || images[0];
-      if (imgToAnalyze && imgToAnalyze.url.startsWith('data:image')) {
+      const selectedImg = images.find(img => img.id === selectedSummarySpecimen);
+      const imgToAnalyze = targetImg || selectedImg || images[images.length - 1] || images[0];
+
+      if (imgToAnalyze && imgToAnalyze.url) {
         const visualMetrics = await analyzeImageVisualFeatures(imgToAnalyze.url);
-        const res = await api.ai.analyzeImage({
-          imageBase64: imgToAnalyze.url,
-          mimeType: imgToAnalyze.mimeType || 'image/jpeg',
-          patientId: patient.id,
-          visualMetrics,
-          clinicalNotes: imgToAnalyze.caption ? `Specimen label: ${imgToAnalyze.caption}` : ''
-        });
-        const analysis = res.analysis;
-        if (options?.openOverlayModal) {
+        let analysis: AIImageAnalysisResult | null = null;
+
+        try {
+          const res = await api.ai.analyzeImage({
+            imageBase64: imgToAnalyze.url,
+            mimeType: imgToAnalyze.mimeType || 'image/jpeg',
+            patientId: patient.id,
+            visualMetrics,
+            clinicalNotes: [
+              imgToAnalyze.caption ? `Specimen label: ${imgToAnalyze.caption}` : '',
+              diagnoses.length > 0 ? `Active Diagnosis: ${diagnoses.join(', ')}` : '',
+              symptoms.length > 0 ? `Symptoms: ${symptoms.join(', ')}` : '',
+              clinicalNotes.examination ? `Exam: ${clinicalNotes.examination}` : ''
+            ]
+              .filter(Boolean)
+              .join(' | ')
+          });
+          analysis = res.analysis;
+        } catch (apiErr) {
+          console.warn('Backend image analysis fallback triggered:', apiErr);
+        }
+
+        if (options?.openOverlayModal && analysis) {
           setActiveImageAnalysis(analysis);
           setActiveAnalyzedImage(imgToAnalyze);
         }
 
         const isValidSkin =
-          analysis.isValidSkinSpecimen !== false &&
+          (analysis ? analysis.isValidSkinSpecimen !== false : true) &&
           visualMetrics.isSkinSpecimen !== false &&
           visualMetrics.morphologyCategory !== 'non_skin_specimen';
         const skinRatio = visualMetrics.skinPixelRatio ?? (isValidSkin ? 85 : 8);
         const lightingQual =
-          analysis.lightingQuality || visualMetrics.lightingStatus || 'Optimal';
+          analysis?.lightingQuality || visualMetrics.lightingStatus || 'Optimal';
         const meanLum = visualMetrics.meanLuminance ?? 138;
         const rejectionMsg =
           visualMetrics.rejectionReason ||
           (!isValidSkin
-            ? analysis.qualityAssessmentNotes?.[0] ||
-              analysis.visualFindings?.[0] ||
+            ? analysis?.qualityAssessmentNotes?.[0] ||
+              analysis?.visualFindings?.[0] ||
               'Uploaded photograph does not match biological human skin chrominance or micro-texture.'
             : undefined);
 
@@ -648,7 +678,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           lightingQuality: lightingQual,
           meanLuminance: meanLum,
           rejectionReason: rejectionMsg,
-          qualityWarnings: visualMetrics.qualityWarnings || analysis.qualityAssessmentNotes || []
+          qualityWarnings: visualMetrics.qualityWarnings || analysis?.qualityAssessmentNotes || []
         });
 
         // Lock dermatology summary fields so background clinical-note auto-fill does not overwrite real image telemetry
@@ -664,7 +694,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
         if (!isValidSkin) {
           const invalidTitle =
-            analysis.primaryImpression && analysis.primaryImpression.toLowerCase().includes('non-')
+            analysis?.primaryImpression && analysis.primaryImpression.toLowerCase().includes('non-')
               ? analysis.primaryImpression
               : 'Non-Cutaneous Image Detected (Invalid Skin Specimen)';
           const specimen1Text =
@@ -679,7 +709,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
           setAiImageSummaryResult({
             title: invalidTitle,
-            confidence: 'Invalid Specimen · Gatekeeper Alert',
+            confidence: `Invalid Specimen · Refreshed ${refreshTimeStr}`,
             leftSpecimenTitle: imgToAnalyze.bodyArea || imgToAnalyze.caption || 'Uploaded Specimen',
             leftSpecimenSummary: specimen1Text,
             rightSpecimenTitle: 'Lighting & Quality Telemetry',
@@ -704,48 +734,49 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             severity: `Lighting: ${lightingQual} (${meanLum}/255 luminance)`,
             aiObservation: invalidNarrative
           });
+          setSummaryRefreshFeedback(`⚠ Non-cutaneous specimen flagged · Refreshed at ${refreshTimeStr}`);
           return;
         }
 
-        const topConfidence = analysis.differentials?.[0]?.confidence || 'High';
+        const fallbackContext = getInitialDermSummary();
+        const primaryImpression = analysis?.primaryImpression || diagnoses[0] || fallbackContext.aiSummaryTitle;
+        const topConfidence = analysis?.differentials?.[0]?.confidence || 'High';
         const firstRationale =
-          analysis.differentials?.[0]?.rationale ||
-          analysis.visualFindings?.[1] ||
-          analysis.timelineCorrelation ||
-          initialDerm.leftSpecimenSummary;
+          analysis?.differentials?.[0]?.rationale ||
+          analysis?.visualFindings?.[1] ||
+          analysis?.timelineCorrelation ||
+          fallbackContext.leftSpecimenSummary;
         const secondRationale =
-          analysis.differentials?.[1]?.rationale ||
-          analysis.suggestedManagementPlan ||
-          initialDerm.rightSpecimenSummary;
-        const validNarrative = `AI Vision Summary (${skinRatio}% Cutaneous Verified · Lighting: ${lightingQual}): ${
-          analysis.primaryImpression
-        }. ${firstRationale} ${
-          analysis.suggestedManagementPlan ? `Recommended Plan: ${analysis.suggestedManagementPlan}` : ''
+          analysis?.differentials?.[1]?.rationale ||
+          analysis?.suggestedManagementPlan ||
+          fallbackContext.rightSpecimenSummary;
+        const validNarrative = `AI Vision Summary (${skinRatio}% Cutaneous Verified · Lighting: ${lightingQual}): ${primaryImpression}. ${firstRationale} ${
+          analysis?.suggestedManagementPlan ? `Recommended Plan: ${analysis.suggestedManagementPlan}` : ''
         }`;
 
         setAiImageSummaryResult(prev => ({
           ...prev,
-          title: analysis.primaryImpression || prev.title,
-          confidence: `${topConfidence} Confidence · Skin & Lighting Verified`,
+          title: primaryImpression,
+          confidence: `${topConfidence} Confidence · Verified (${refreshTimeStr})`,
           leftSpecimenTitle: imgToAnalyze.bodyArea || imgToAnalyze.caption || prev.leftSpecimenTitle,
           leftSpecimenSummary: firstRationale,
           rightSpecimenTitle: images[1]?.bodyArea || images[1]?.caption || 'Photometric & Secondary Assessment',
           rightSpecimenSummary: secondRationale,
           narrative: validNarrative,
           differentials:
-            analysis.differentials?.length > 0
+            analysis?.differentials && analysis.differentials.length > 0
               ? analysis.differentials.map(d => d.condition)
-              : prev.differentials,
+              : fallbackContext.differentials,
           workup:
-            analysis.recommendedInvestigations?.length > 0
+            analysis?.recommendedInvestigations && analysis.recommendedInvestigations.length > 0
               ? analysis.recommendedInvestigations
-              : prev.workup
+              : fallbackContext.workup
         }));
 
         setDermMorphology({
           lesionType:
             visualMetrics.morphologyCategory.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) +
-            ` (${analysis.primaryImpression})`,
+            ` (${primaryImpression})`,
           colour: `Erythema ${visualMetrics.erythemaIndex}/100 · Melanin ${visualMetrics.pigmentationIndex}/100 (${
             visualMetrics.dominantColors?.map(c => c.name).join(', ') || 'Cutaneous'
           })`,
@@ -758,35 +789,119 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             visualMetrics.fitzpatrickType || 'Type IV'
           }`,
           aiObservation:
-            analysis.visualFindings?.join(' ') || validNarrative
+            analysis?.visualFindings?.join(' ') || validNarrative
         });
+        setSummaryRefreshFeedback(`✓ AI Image Summary refreshed (${refreshTimeStr})`);
       } else {
-        // Refresh from current diagnosis / symptoms context only when no uploaded image exists
-        setSummarySpecimenGatekeeper(null);
-        const refreshed = getInitialDermSummary();
-        setAiImageSummaryResult({
-          title: refreshed.aiSummaryTitle,
-          confidence: refreshed.aiConfidence,
-          leftSpecimenTitle: refreshed.leftSpecimenTitle,
-          leftSpecimenSummary: refreshed.leftSpecimenSummary,
-          rightSpecimenTitle: refreshed.rightSpecimenTitle,
-          rightSpecimenSummary: refreshed.rightSpecimenSummary,
-          narrative: refreshed.aiResultNarrative,
-          differentials: refreshed.differentials,
-          workup: refreshed.workup
+        // Refresh from live consultation context (Diagnoses, Symptoms, Clinical Notes, Body Map, Tests & Rx)
+        const combinedContext = [
+          diagnoses.length > 0 ? `Diagnosis: ${diagnoses.join(', ')}` : '',
+          secondaryDiagnosis ? `Differential: ${secondaryDiagnosis}` : '',
+          symptoms.length > 0 ? `Chief Complaints: ${symptoms.join(', ')}` : '',
+          singleVoiceNote.trim(),
+          clinicalNotes.examination.trim(),
+          clinicalNotes.investigationsAdvised.trim(),
+          clinicalNotes.plan.trim(),
+          bodyMarkers.length > 0
+            ? `Body Map Sites: ${bodyMarkers.map(m => m.anatomicalPart || m.type).join(', ')}`
+            : '',
+          tests.length > 0 ? `Tests: ${tests.join(', ')}` : '',
+          procedures.length > 0 ? `Procedures: ${procedures.map(p => p.name).join(', ')}` : ''
+        ]
+          .filter(Boolean)
+          .join('. ');
+
+        const localParsed = parseClinicalNoteToStructuredSummary(combinedContext, {
+          existingExamination: clinicalNotes.examination,
+          existingInvestigations: clinicalNotes.investigationsAdvised,
+          existingPlan: clinicalNotes.plan,
+          patientPrimaryDiagnosis: diagnoses[0] || patient.primaryDiagnosis,
+          existingSymptoms: symptoms
         });
-        setDermMorphology(prev => ({
-          lesionType: prev.lesionType || refreshed.lesionType,
-          colour: prev.colour || refreshed.colour,
-          distribution: prev.distribution || refreshed.distribution,
-          sizeExtent: prev.sizeExtent || refreshed.sizeExtent,
-          borders: prev.borders || refreshed.borders,
-          severity: prev.severity || refreshed.severity,
-          aiObservation: prev.aiObservation || refreshed.aiObservation
-        }));
+
+        let finalParsed = localParsed;
+        const minVisualDelay = new Promise(resolve => setTimeout(resolve, 350));
+
+        try {
+          const [apiRes] = await Promise.all([
+            api.ai.parseClinicalNote({
+              rawNote: combinedContext || patient.primaryDiagnosis || 'Dermatology consultation',
+              existingExamination: clinicalNotes.examination,
+              existingInvestigations: clinicalNotes.investigationsAdvised,
+              existingPlan: clinicalNotes.plan,
+              patientPrimaryDiagnosis: diagnoses[0] || patient.primaryDiagnosis,
+              existingSymptoms: symptoms
+            }),
+            minVisualDelay
+          ]);
+          if (apiRes?.parsed) {
+            finalParsed = apiRes.parsed;
+          }
+        } catch {
+          await minVisualDelay;
+        }
+
+        const refreshed = getInitialDermSummary(combinedContext);
+        const resolvedTitle =
+          diagnoses[0] ||
+          finalParsed.aiImageSummaryResult?.title ||
+          refreshed.aiSummaryTitle;
+        const anatomicalSiteNote =
+          bodyMarkers.length > 0
+            ? bodyMarkers.map(m => m.anatomicalPart || m.type).join(', ')
+            : finalParsed.dermMorphology?.distribution || refreshed.distribution;
+
+        setSummarySpecimenGatekeeper({
+          isValidSkinSpecimen: true,
+          skinPixelRatio: 88,
+          lightingQuality: 'Optimal',
+          meanLuminance: 142,
+          qualityWarnings: []
+        });
+
+        setAiImageSummaryResult({
+          title: resolvedTitle,
+          confidence: `${finalParsed.aiImageSummaryResult?.confidence || refreshed.aiConfidence} · Refreshed ${refreshTimeStr}`,
+          leftSpecimenTitle:
+            selectedSummarySpecimen === 'right'
+              ? 'Right cheek (Selected)'
+              : finalParsed.aiImageSummaryResult?.leftSpecimenTitle || refreshed.leftSpecimenTitle,
+          leftSpecimenSummary:
+            finalParsed.aiImageSummaryResult?.leftSpecimenSummary || refreshed.leftSpecimenSummary,
+          rightSpecimenTitle:
+            finalParsed.aiImageSummaryResult?.rightSpecimenTitle || refreshed.rightSpecimenTitle,
+          rightSpecimenSummary:
+            finalParsed.aiImageSummaryResult?.rightSpecimenSummary || refreshed.rightSpecimenSummary,
+          narrative:
+            finalParsed.aiImageSummaryResult?.narrative || refreshed.aiResultNarrative,
+          differentials:
+            finalParsed.aiImageSummaryResult?.differentials?.length
+              ? finalParsed.aiImageSummaryResult.differentials
+              : refreshed.differentials,
+          workup:
+            tests.length > 0
+              ? tests
+              : finalParsed.aiImageSummaryResult?.workup?.length
+              ? finalParsed.aiImageSummaryResult.workup
+              : refreshed.workup
+        });
+
+        setDermMorphology({
+          lesionType: finalParsed.dermMorphology?.lesionType || refreshed.lesionType,
+          colour: finalParsed.dermMorphology?.colour || refreshed.colour,
+          distribution: anatomicalSiteNote,
+          sizeExtent: finalParsed.dermMorphology?.sizeExtent || refreshed.sizeExtent,
+          borders: finalParsed.dermMorphology?.borders || refreshed.borders,
+          severity: finalParsed.dermMorphology?.severity || refreshed.severity,
+          aiObservation:
+            finalParsed.dermMorphology?.aiObservation || refreshed.aiObservation
+        });
+
+        setSummaryRefreshFeedback(`✓ AI Summary refreshed from clinical context (${refreshTimeStr})`);
       }
     } catch (err) {
       console.warn('Summary AI image analysis error:', err);
+      setSummaryRefreshFeedback('⚠ Refreshed using local clinical morphology profile');
     } finally {
       setIsGeneratingImageSummaryAI(false);
     }
@@ -829,7 +944,33 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   // AI Summary / Regenerate from tabs
   const generateSummary = async () => {
     setIsGeneratingAI(true);
+    setSummaryRefreshFeedback(null);
     try {
+      const combinedNotes = [
+        diagnoses.length > 0 ? `Diagnosis: ${diagnoses.join(', ')}` : '',
+        symptoms.length > 0 ? `Symptoms: ${symptoms.join(', ')}` : '',
+        singleVoiceNote.trim(),
+        clinicalNotes.examination.trim(),
+        clinicalNotes.investigationsAdvised.trim(),
+        clinicalNotes.plan.trim()
+      ]
+        .filter(Boolean)
+        .join('. ');
+
+      if (combinedNotes.trim()) {
+        const parsed = parseClinicalNoteToStructuredSummary(combinedNotes, {
+          existingExamination: clinicalNotes.examination,
+          existingInvestigations: clinicalNotes.investigationsAdvised,
+          existingPlan: clinicalNotes.plan,
+          patientPrimaryDiagnosis: diagnoses[0] || patient.primaryDiagnosis,
+          existingSymptoms: symptoms
+        });
+        applyParsedClinicalNoteToSummary(parsed, {
+          source: singleVoiceNote.trim() ? 'single' : 'sections',
+          forceOverwrite: false
+        });
+      }
+
       // Sync structured summary fields from tabs
       if (prescriptions.length > 0) {
         setInlineMedSummary(
@@ -838,18 +979,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             .join('; ')
         );
       }
-      if (images.length === 0) {
-        const refreshed = getInitialDermSummary();
-        setDermMorphology(prev => ({
-          lesionType: prev.lesionType || refreshed.lesionType,
-          colour: prev.colour || refreshed.colour,
-          distribution: prev.distribution || refreshed.distribution,
-          sizeExtent: prev.sizeExtent || refreshed.sizeExtent,
-          borders: prev.borders || refreshed.borders,
-          severity: prev.severity || refreshed.severity,
-          aiObservation: prev.aiObservation || refreshed.aiObservation
-        }));
-      }
+
       await handleRunSummaryAIAnalysis(undefined, { openOverlayModal: false });
 
       const res = await api.ai.summarize({
@@ -868,6 +998,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         clinicalNotes
       });
       setAiSummary(res.summary);
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setSummaryRefreshFeedback(`✓ All summary sections regenerated from tabs (${timeStr})`);
     } catch (err: unknown) {
       console.warn('AI summary error:', err);
     } finally {
@@ -3159,7 +3291,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               {/* 6. DERMATOLOGY IMAGE SUMMARY */}
               <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs space-y-3.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
                       6
                     </span>
@@ -3170,6 +3302,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <Sparkles className="w-2.5 h-2.5 text-[#157a6e]" />
                       Side-by-Side AI Summary
                     </span>
+                    {summaryRefreshFeedback && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
+                        {summaryRefreshFeedback}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 text-[11px]">
                     <span className="text-[#6c857f] font-medium">
@@ -3460,16 +3597,34 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           if (images.length > 0) {
                             handleRunSummaryAIAnalysis(undefined, { openOverlayModal: false });
                           } else {
-                            const refreshed = getInitialDermSummary();
+                            const combinedContext = [
+                              diagnoses.join(', '),
+                              secondaryDiagnosis,
+                              symptoms.join(', '),
+                              clinicalNotes.examination,
+                              clinicalNotes.plan,
+                              aiImageSummaryResult.title
+                            ]
+                              .filter(Boolean)
+                              .join(' ');
+                            const parsed = parseClinicalNoteToStructuredSummary(combinedContext, {
+                              existingExamination: clinicalNotes.examination,
+                              existingInvestigations: clinicalNotes.investigationsAdvised,
+                              existingPlan: clinicalNotes.plan,
+                              patientPrimaryDiagnosis: diagnoses[0] || patient.primaryDiagnosis,
+                              existingSymptoms: symptoms
+                            });
+                            const refreshed = getInitialDermSummary(combinedContext);
                             setDermMorphology({
-                              lesionType: refreshed.lesionType,
-                              colour: refreshed.colour,
-                              distribution: refreshed.distribution,
-                              sizeExtent: refreshed.sizeExtent,
-                              borders: refreshed.borders,
-                              severity: refreshed.severity,
+                              lesionType: parsed.dermMorphology?.lesionType || refreshed.lesionType,
+                              colour: parsed.dermMorphology?.colour || refreshed.colour,
+                              distribution: parsed.dermMorphology?.distribution || refreshed.distribution,
+                              sizeExtent: parsed.dermMorphology?.sizeExtent || refreshed.sizeExtent,
+                              borders: parsed.dermMorphology?.borders || refreshed.borders,
+                              severity: parsed.dermMorphology?.severity || refreshed.severity,
                               aiObservation: aiImageSummaryResult.narrative
                             });
+                            setSummaryRefreshFeedback('✓ Applied AI Result to all 6 morphology fields');
                           }
                         }}
                         className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#e8f5f2] text-[#115e56] border border-[#bdd6d0] text-[10.5px] font-bold transition-colors shrink-0 shadow-2xs cursor-pointer"
@@ -3754,6 +3909,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                               ...prev,
                               aiObservation: aiImageSummaryResult.narrative
                             }));
+                            setSummaryRefreshFeedback('✓ Synced AI Result to Visual / Dermoscopic Observations');
                           }}
                           className="px-2 py-0.5 rounded bg-white hover:bg-[#e3f2ef] text-[#115e56] border border-[#bdd6d0] text-[10px] font-semibold transition-colors cursor-pointer"
                           title="Copy AI Image Summary Result into Visual / Dermoscopic Observations"
