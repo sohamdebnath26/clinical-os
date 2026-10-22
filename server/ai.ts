@@ -559,29 +559,29 @@ export function generateAdaptiveClinicalImageAnalysis(
     case 'pigmented_melanocytic': {
       const isHighSuspicion = metrics.asymmetryScore > 55 || metrics.borderIrregularity > 60 || (metrics.estimatedDiameterMm || 5) >= 6.0;
       primaryImpression = isHighSuspicion
-        ? 'Atypical Melanocytic Lesion (Dysplastic Nevus vs Early Cutaneous Melanoma)'
-        : 'Benign Melanocytic Nevus (Compound / Intradermal Type)';
+        ? 'Atypical Mole (Dysplastic Melanocytic Nevus)'
+        : 'Common Mole (Benign Melanocytic Nevus)';
       differentials = [
         {
-          condition: 'Dysplastic Nevus (Clark\'s Nevus)',
+          condition: 'Atypical Mole (Dysplastic Nevus)',
           confidence: isHighSuspicion ? 'High' : 'Moderate',
           icdCode: 'D22.9',
           rationale: `Asymmetric pigment distribution (Asymmetry: ${metrics.asymmetryScore}/100) and irregular peripheral border contours (Score: ${metrics.borderIrregularity}/100) consistent with architectural melanocytic dysplasia.`
         },
         {
-          condition: 'Cutaneous Melanoma (Superficial Spreading - Early)',
+          condition: 'Skin Melanoma (Superficial Spreading Cutaneous Melanoma)',
           confidence: isHighSuspicion ? 'Moderate' : 'Low',
           icdCode: 'C43.9',
           rationale: `Must be critically excluded if color variegation (${metrics.colorVariationScore}/100) or diameter exceeding 6mm is present. Requires dermatoscopic 7-point checklist.`
         },
         {
-          condition: 'Pigmented Seborrheic Keratosis',
+          condition: 'Age Wart (Pigmented Seborrheic Keratosis)',
           confidence: 'Moderate',
           icdCode: 'L82.1',
           rationale: 'Benign epidermal hyperkeratotic tumor with pseudohorn cysts mimicking melanocytic lesions.'
         },
         {
-          condition: 'Dermatofibroma',
+          condition: 'Fibrous Skin Nodule (Dermatofibroma)',
           confidence: 'Low',
           icdCode: 'D23.9',
           rationale: 'Firm dermal histiocytoma exhibiting peripheral delicate pigment network and central white scar-like patch.'
@@ -611,28 +611,28 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'annular_scaling': {
-      primaryImpression = 'Tinea Corporis (Superficial Dermatophytosis / Ringworm)';
+      primaryImpression = 'Ringworm (Tinea Corporis)';
       differentials = [
         {
-          condition: 'Tinea Corporis (Trichophyton rubrum / mentagrophytes)',
+          condition: 'Ringworm (Tinea Corporis)',
           confidence: 'High',
           icdCode: 'B35.4',
           rationale: `Annular configuration with centrifugal expansion, leading raised erythematous scaling margin (Erythema: ${metrics.erythemaIndex}/100), and relative central clearing.`
         },
         {
-          condition: 'Erythema Annulare Centrifugum',
+          condition: 'Spreading Ring Redness (Erythema Annulare Centrifugum)',
           confidence: 'Moderate',
           icdCode: 'L53.1',
           rationale: 'Reactive figurate erythema with delicate trailing scale on the inner margin of the advancing border.'
         },
         {
-          condition: 'Nummular Eczema (Discoid Eczema)',
+          condition: 'Coin-Shaped Eczema (Nummular Dermatitis)',
           confidence: 'Moderate',
           icdCode: 'L20.84',
           rationale: 'Coin-shaped pruritic plaques without true central clearing; frequently coexists with generalized xerosis.'
         },
         {
-          condition: 'Granuloma Annulare',
+          condition: 'Ring-Shaped Dermal Bump Rash (Granuloma Annulare)',
           confidence: 'Low',
           icdCode: 'L92.0',
           rationale: 'Smooth non-scaly dermal ring composed of necrobiotic granulomatous papules.'
@@ -662,7 +662,7 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'inflammatory_plaque': {
-      primaryImpression = 'Chronic Plaque Psoriasis (Psoriasis Vulgaris)';
+      primaryImpression = 'Plaque Psoriasis (Psoriasis Vulgaris)';
       differentials = [
         {
           condition: 'Plaque Psoriasis (Psoriasis Vulgaris)',
@@ -671,13 +671,13 @@ export function generateAdaptiveClinicalImageAnalysis(
           rationale: `Sharply demarcated salmon-pink erythematous plaques (Erythema: ${metrics.erythemaIndex}/100) surmounted by micaceous silvery-white stratified scaling.`
         },
         {
-          condition: 'Lichen Planus',
+          condition: 'Flat-Topped Purple Rash (Lichen Planus)',
           confidence: 'Moderate',
           icdCode: 'L43.9',
           rationale: 'Pruritic, polygonal, planar, purple (violaceous) papules with fine reticular Wickham\'s striae.'
         },
         {
-          condition: 'Pityriasis Rosea (Secondary Plaque Phase)',
+          condition: 'Herald Patch Rash (Pityriasis Rosea)',
           confidence: 'Low',
           icdCode: 'L42',
           rationale: 'Self-limiting papulosquamous eruption oriented along Langer\'s lines of cleavage.'
@@ -707,22 +707,22 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'papulopustular_follicular': {
-      primaryImpression = 'Acne Vulgaris (Grade II/III Inflammatory Presentation) vs Papulopustular Rosacea';
+      primaryImpression = 'Acne (Acne Vulgaris)';
       differentials = [
         {
-          condition: 'Acne Vulgaris',
+          condition: 'Acne (Acne Vulgaris)',
           confidence: 'High',
           icdCode: 'L70.0',
           rationale: 'Polymorphic eruption of inflammatory erythematous papules, superficial pustules, and comedones localized to sebaceous zones.'
         },
         {
-          condition: 'Papulopustular Rosacea',
+          condition: 'Rosacea (Papulopustular Rosacea)',
           confidence: 'Moderate',
           icdCode: 'L71.8',
           rationale: 'Centrofacial symmetric erythema with telangiectasias and inflammatory papulopustules without true comedones.'
         },
         {
-          condition: 'Folliculitis (Bacterial / Malassezia)',
+          condition: 'Hair Follicle Infection (Bacterial / Malassezia Folliculitis)',
           confidence: 'Low',
           icdCode: 'L73.9',
           rationale: 'Monomorphic discrete follicular pustules centered on hair follicles, often exacerbated by occlusion or humidity.'
@@ -753,22 +753,22 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'vesicular_bullous': {
-      primaryImpression = 'Acute Vesiculobullous Eruption (Herpes Zoster / Shingles vs Cutaneous HSV)';
+      primaryImpression = 'Shingles (Herpes Zoster)';
       differentials = [
         {
-          condition: 'Herpes Zoster (Shingles - VZV Reactivation)',
+          condition: 'Shingles (Herpes Zoster)',
           confidence: 'High',
           icdCode: 'B02.9',
           rationale: `Unilateral grouped umbilicated vesicles on an erythematous base (Erythema: ${metrics.erythemaIndex}/100) distributed along a dermatomal neural pathway.`
         },
         {
-          condition: 'Herpes Simplex Virus Cutaneous Infection (HSV-1 / HSV-2)',
+          condition: 'Herpes Blisters (Herpes Simplex Cutaneous Infection)',
           confidence: 'Moderate',
           icdCode: 'B00.9',
           rationale: 'Clustered vesicles on an erythematous base with early rupture into scalloped erosions, often recurring at same site.'
         },
         {
-          condition: 'Bullous Impetigo',
+          condition: 'Blistering Skin Infection (Bullous Impetigo)',
           confidence: 'Low',
           icdCode: 'L01.00',
           rationale: 'Superficial flaccid bullae caused by Staphylococcus aureus exfoliative toxins, rapidly yielding honey-colored crusts.'
@@ -799,22 +799,22 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'ulcerative_eroded': {
-      primaryImpression = 'Chronic Cutaneous Ulceration (Venous Stasis vs Nodulo-Ulcerative Basal Cell Carcinoma)';
+      primaryImpression = 'Venous Leg Ulcer (Venous Stasis Ulcer)';
       differentials = [
         {
-          condition: 'Venous Stasis Ulcer',
+          condition: 'Venous Leg Ulcer (Venous Stasis Ulcer)',
           confidence: 'High',
           icdCode: 'I87.2',
           rationale: `Irregular shallow ulceration with fibrin slough bed (Erythema: ${metrics.erythemaIndex}/100, Border: ${metrics.borderIrregularity}/100) and surrounding hemosiderin hyperpigmentation.`
         },
         {
-          condition: 'Basal Cell Carcinoma (Nodulo-ulcerative / Rodent Ulcer)',
+          condition: 'Rodent Ulcer Skin Cancer (Nodulo-Ulcerative Basal Cell Carcinoma)',
           confidence: 'Moderate',
           icdCode: 'C44.9',
           rationale: 'Non-healing ulcer with pearly rolled translucent borders, arborizing telangiectasias, and central crusting.'
         },
         {
-          condition: 'Pyoderma Gangrenosum',
+          condition: 'Inflammatory Skin Ulcer (Pyoderma Gangrenosum)',
           confidence: 'Low',
           icdCode: 'L88',
           rationale: 'Painful, rapidly expanding ulcer with violaceous undermined borders, frequently associated with IBD or rheumatoid arthritis.'
@@ -845,22 +845,22 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'urticarial_wheal': {
-      primaryImpression = 'Acute Urticaria (Wheal & Flare Presentation) vs Cutaneous Drug Eruption';
+      primaryImpression = 'Hives (Acute Urticaria)';
       differentials = [
         {
-          condition: 'Acute Urticaria',
+          condition: 'Hives (Acute Urticaria)',
           confidence: 'High',
           icdCode: 'L50.9',
           rationale: `Transient edematous erythematous wheals (Erythema: ${metrics.erythemaIndex}/100) with central pallor and variable annular configurations that resolve within 24 hours.`
         },
         {
-          condition: 'Cutaneous Drug Eruption (Morbilliform / Urticarial)',
+          condition: 'Drug Allergy Rash (Morbilliform / Urticarial Drug Eruption)',
           confidence: 'Moderate',
           icdCode: 'L27.0',
           rationale: 'Symmetric widespread eruption triggered by recently introduced pharmaceutical agent or antibiotic.'
         },
         {
-          condition: 'Urticarial Vasculitis',
+          condition: 'Inflamed Blood Vessel Hives (Urticarial Vasculitis)',
           confidence: 'Low',
           icdCode: 'L95.0',
           rationale: 'Wheals persisting >24 hours with burning/tenderness and resolving with purpuric residual hyperpigmentation.'
@@ -891,22 +891,22 @@ export function generateAdaptiveClinicalImageAnalysis(
     }
 
     case 'keratotic_verrucous': {
-      primaryImpression = 'Hyperkeratotic Verrucous Lesion (Verruca Vulgaris vs Actinic Keratosis)';
+      primaryImpression = 'Common Wart (Verruca Vulgaris)';
       differentials = [
         {
-          condition: 'Verruca Vulgaris (Common Viral Wart)',
+          condition: 'Common Wart (Verruca Vulgaris)',
           confidence: 'High',
           icdCode: 'B07.8',
           rationale: `Exophytic hyperkeratotic papule with rough verrucous surface (Texture: ${metrics.textureEntropy || 50}/100) and interruption of normal skin lines.`
         },
         {
-          condition: 'Actinic Keratosis (Hypertrophic type)',
+          condition: 'Sun-Induced Precancerous Spot (Actinic Keratosis)',
           confidence: 'Moderate',
           icdCode: 'L57.0',
           rationale: 'Adherent gritty sandpaper-like scaly keratotic papule on chronically sun-exposed anatomical sites.'
         },
         {
-          condition: 'Seborrheic Keratosis (Hyperkeratotic variant)',
+          condition: 'Age Wart (Seborrheic Keratosis)',
           confidence: 'Moderate',
           icdCode: 'L82.1',
           rationale: 'Stuck-on waxy verrucous plaque with visible keratin pseudohorn cysts.'
@@ -938,23 +938,23 @@ export function generateAdaptiveClinicalImageAnalysis(
     case 'vascular_purpuric': {
       const isSeverePurpura = metrics.erythemaIndex > 60 || metrics.borderIrregularity > 50;
       primaryImpression = isSeverePurpura
-        ? 'Cutaneous Leukocytoclastic Vasculitis (Palpable Purpura presentation)'
-        : 'Benign Cutaneous Vascular Eruption (Cherry Angioma vs Pigmented Purpuric Dermatosis)';
+        ? 'Small Vessel Skin Vasculitis (Cutaneous Leukocytoclastic Vasculitis)'
+        : 'Cherry Angioma (Senile Hemangioma)';
       differentials = [
         {
-          condition: 'Leukocytoclastic Vasculitis (Hypersensitivity Angiitis)',
+          condition: 'Small Vessel Skin Vasculitis (Leukocytoclastic Vasculitis)',
           confidence: isSeverePurpura ? 'High' : 'Moderate',
           icdCode: 'L95.9',
           rationale: `Non-blanching violaceous petechiae and palpable purpuric papules (Redness: ${metrics.erythemaIndex}/100) reflecting immune complex-mediated small vessel vasculitis.`
         },
         {
-          condition: 'Pigmented Purpuric Dermatosis (Schamberg Disease)',
+          condition: 'Capillary Leak Spots (Pigmented Purpuric Dermatosis)',
           confidence: 'Moderate',
           icdCode: 'L81.7',
           rationale: 'Cayenne pepper-like petechial macules with hemosiderin deposition resolving with rust-brown discoloration.'
         },
         {
-          condition: 'Cherry Hemangioma (Campbell de Morgan spot)',
+          condition: 'Cherry Angioma (Senile Hemangioma)',
           confidence: isSeverePurpura ? 'Low' : 'High',
           icdCode: 'D18.01',
           rationale: 'Discrete, dome-shaped benign capillary proliferation exhibiting characteristic violaceous or ruby-red lacunae on dermoscopy.'
@@ -987,29 +987,29 @@ export function generateAdaptiveClinicalImageAnalysis(
     case 'hypopigmented_macular': {
       const isDepigmented = metrics.pigmentationIndex < 20;
       primaryImpression = isDepigmented
-        ? 'Vitiligo (Progressive Depigmentation / Melanocyte Loss)'
-        : 'Pityriasis Versicolor (Tinea Versicolor - Hypopigmented Phase)';
+        ? 'Vitiligo / White Patch Disease (Vitiligo Vulgaris)'
+        : 'Fungal Sun Spots (Pityriasis Versicolor)';
       differentials = [
         {
-          condition: 'Vitiligo Vulgaris',
+          condition: 'Vitiligo / White Patch Disease (Vitiligo Vulgaris)',
           confidence: isDepigmented ? 'High' : 'Moderate',
           icdCode: 'L80',
           rationale: `Completely amelanotic, chalk-white depigmented macules (Pigment Index: ${metrics.pigmentationIndex}/100) with sharply scalloped borders and absent follicular pigment.`
         },
         {
-          condition: 'Pityriasis Versicolor (Malassezia globosa / furfur)',
+          condition: 'Fungal Sun Spots (Pityriasis Versicolor)',
           confidence: isDepigmented ? 'Moderate' : 'High',
           icdCode: 'B36.0',
           rationale: 'Superficial hypopigmented macules with fine subtle furfuraceous scale elicited upon gentle stretching.'
         },
         {
-          condition: 'Post-Inflammatory Hypopigmentation',
+          condition: 'Lightened Skin After Inflammation (Post-Inflammatory Hypopigmentation)',
           confidence: 'Moderate',
           icdCode: 'L81.5',
           rationale: 'Partial melanocyte suppression occurring at sites of resolved prior dermatitis, burn, or eczema.'
         },
         {
-          condition: 'Pityriasis Alba',
+          condition: 'Dry Pale Skin Patches (Pityriasis Alba)',
           confidence: 'Low',
           icdCode: 'L30.5',
           rationale: 'Ill-defined faintly hypopigmented patches with delicate scale, frequent in pediatric atopic diathesis.'
@@ -1044,31 +1044,31 @@ export function generateAdaptiveClinicalImageAnalysis(
       const isAcute = metrics.erythemaIndex > 68;
       const isLichenified = (metrics.textureEntropy || 30) > 48;
       primaryImpression = isAcute
-        ? 'Acute Exudative Eczematous Flare (Allergic Contact Dermatitis vs Atopic Exacerbation)'
+        ? 'Allergic Contact Eczema (Allergic Contact Dermatitis)'
         : isLichenified
-        ? 'Chronic Lichenified Eczematous Dermatitis (Neurodermatitis / Prurigo Nodularis)'
-        : 'Subacute Eczematous Dermatitis (Atopic Eczema flare vs Irritant Dermatitis)';
+        ? 'Chronic Thickened Eczema (Lichen Simplex Chronicus)'
+        : 'Atopic Eczema (Atopic Dermatitis)';
       differentials = [
         {
-          condition: isAcute ? 'Allergic Contact Dermatitis' : 'Atopic Dermatitis (Subacute Exacerbation)',
+          condition: isAcute ? 'Allergic Contact Eczema (Allergic Contact Dermatitis)' : 'Atopic Eczema (Atopic Dermatitis)',
           confidence: 'High',
           icdCode: isAcute ? 'L23.9' : 'L20.9',
           rationale: `Erythematous papulovesicular dermatitis (Erythema: ${metrics.erythemaIndex}/100) with epidermal barrier disruption, severe pruritus, and ${isAcute ? 'distinct geometric or localized margins' : 'typical flexural distribution'}.`
         },
         {
-          condition: isAcute ? 'Atopic Dermatitis (Acute Flare)' : 'Allergic Contact Dermatitis',
+          condition: isAcute ? 'Atopic Eczema (Atopic Dermatitis)' : 'Allergic Contact Eczema (Allergic Contact Dermatitis)',
           confidence: 'Moderate',
           icdCode: isAcute ? 'L20.9' : 'L23.9',
           rationale: 'Pruritic erythematous plaques reflecting exogenous contact sensitization or endogenous atopic barrier defect.'
         },
         {
-          condition: 'Irritant Contact Dermatitis',
+          condition: 'Irritant Contact Eczema (Irritant Contact Dermatitis)',
           confidence: 'Moderate',
           icdCode: 'L24.9',
           rationale: 'Direct cytotoxic damage to skin barrier from soaps, detergents, chemicals, or repeated wet work.'
         },
         {
-          condition: 'Superficial Tinea Incognito',
+          condition: 'Steroid-Masked Ringworm (Tinea Incognito)',
           confidence: 'Low',
           icdCode: 'B35.4',
           rationale: 'Modified fungal infection masked by prior topical steroid use; active peripheral micro-vesicles require exclusion.'
@@ -1225,6 +1225,83 @@ async function callOpenRouterVision(
   return null;
 }
 
+/**
+ * Normalizes any disease/condition string into the strict format: Common Term (Scientific Term)
+ */
+const COMMON_SCIENTIFIC_MAP: { match: RegExp; formatted: string }[] = [
+  { match: /acne\s+vulgaris|^acne$/i, formatted: 'Acne (Acne Vulgaris)' },
+  { match: /atopic\s+dermatitis|atopic\s+eczema|subacute\s+eczematous\s+dermatitis/i, formatted: 'Atopic Eczema (Atopic Dermatitis)' },
+  { match: /allergic\s+contact\s+dermatitis/i, formatted: 'Allergic Contact Eczema (Allergic Contact Dermatitis)' },
+  { match: /irritant\s+contact\s+dermatitis/i, formatted: 'Irritant Contact Eczema (Irritant Contact Dermatitis)' },
+  { match: /seborrheic\s+dermatitis/i, formatted: 'Seborrheic Eczema / Dandruff (Seborrheic Dermatitis)' },
+  { match: /nummular\s+eczema|nummular\s+dermatitis|discoid\s+eczema/i, formatted: 'Coin-Shaped Eczema (Nummular Dermatitis)' },
+  { match: /lichen\s+simplex\s+chronicus|neurodermatitis/i, formatted: 'Chronic Thickened Eczema (Lichen Simplex Chronicus)' },
+  { match: /tinea\s+corporis|ringworm/i, formatted: 'Ringworm (Tinea Corporis)' },
+  { match: /tinea\s+incognito/i, formatted: 'Steroid-Masked Ringworm (Tinea Incognito)' },
+  { match: /tinea\s+versicolor|pityriasis\s+versicolor/i, formatted: 'Fungal Sun Spots (Pityriasis Versicolor)' },
+  { match: /psoriasis\s+vulgaris|plaque\s+psoriasis/i, formatted: 'Plaque Psoriasis (Psoriasis Vulgaris)' },
+  { match: /lichen\s+planus/i, formatted: 'Flat-Topped Purple Rash (Lichen Planus)' },
+  { match: /pityriasis\s+rosea/i, formatted: 'Herald Patch Rash (Pityriasis Rosea)' },
+  { match: /papulopustular\s+rosacea|^rosacea$/i, formatted: 'Rosacea (Papulopustular Rosacea)' },
+  { match: /folliculitis/i, formatted: 'Hair Follicle Infection (Bacterial / Malassezia Folliculitis)' },
+  { match: /herpes\s+zoster|shingles/i, formatted: 'Shingles (Herpes Zoster)' },
+  { match: /herpes\s+simplex/i, formatted: 'Herpes Blisters (Herpes Simplex Cutaneous Infection)' },
+  { match: /bullous\s+impetigo|^impetigo$/i, formatted: 'Blistering Skin Infection (Bullous Impetigo)' },
+  { match: /acute\s+urticaria|^urticaria$|^hives$/i, formatted: 'Hives (Acute Urticaria)' },
+  { match: /urticarial\s+vasculitis/i, formatted: 'Inflamed Blood Vessel Hives (Urticarial Vasculitis)' },
+  { match: /cutaneous\s+drug\s+eruption|drug\s+eruption/i, formatted: 'Drug Allergy Rash (Morbilliform Drug Eruption)' },
+  { match: /verruca\s+vulgaris|viral\s+wart|common\s+wart/i, formatted: 'Common Wart (Verruca Vulgaris)' },
+  { match: /actinic\s+keratosis|solar\s+keratosis/i, formatted: 'Sun-Induced Precancerous Spot (Actinic Keratosis)' },
+  { match: /seborrheic\s+keratosis/i, formatted: 'Age Wart (Seborrheic Keratosis)' },
+  { match: /dysplastic\s+nevus|clark'?s\s+nevus|atypical\s+melanocytic/i, formatted: 'Atypical Mole (Dysplastic Nevus)' },
+  { match: /benign\s+melanocytic\s+nevus|melanocytic\s+nevus/i, formatted: 'Common Mole (Benign Melanocytic Nevus)' },
+  { match: /cutaneous\s+melanoma|superficial\s+spreading\s+melanoma|^melanoma$/i, formatted: 'Skin Melanoma (Cutaneous Melanoma)' },
+  { match: /dermatofibroma/i, formatted: 'Fibrous Skin Nodule (Dermatofibroma)' },
+  { match: /vitiligo/i, formatted: 'Vitiligo / White Patch Disease (Vitiligo Vulgaris)' },
+  { match: /post-inflammatory\s+hypopigmentation/i, formatted: 'Lightened Skin After Inflammation (Post-Inflammatory Hypopigmentation)' },
+  { match: /post-inflammatory\s+hyperpigmentation/i, formatted: 'Post-Inflammatory Dark Spots (Post-Inflammatory Hyperpigmentation)' },
+  { match: /pityriasis\s+alba/i, formatted: 'Dry Pale Skin Patches (Pityriasis Alba)' },
+  { match: /melasma/i, formatted: 'Dark Facial Patches (Centrofacial Melasma)' },
+  { match: /solar\s+lentig/i, formatted: 'Sun Spots (Solar Lentigines)' },
+  { match: /venous\s+stasis\s+ulcer/i, formatted: 'Venous Leg Ulcer (Venous Stasis Ulcer)' },
+  { match: /basal\s+cell\s+carcinoma/i, formatted: 'Rodent Ulcer Skin Cancer (Nodulo-Ulcerative Basal Cell Carcinoma)' },
+  { match: /pyoderma\s+gangrenosum/i, formatted: 'Inflammatory Skin Ulcer (Pyoderma Gangrenosum)' },
+  { match: /leukocytoclastic\s+vasculitis/i, formatted: 'Small Vessel Skin Vasculitis (Cutaneous Leukocytoclastic Vasculitis)' },
+  { match: /pigmented\s+purpuric\s+dermatosis|schamberg/i, formatted: 'Capillary Leak Spots (Pigmented Purpuric Dermatosis)' },
+  { match: /cherry\s+hemangioma|cherry\s+angioma/i, formatted: 'Cherry Angioma (Senile Hemangioma)' },
+  { match: /erythema\s+annulare\s+centrifugum/i, formatted: 'Spreading Ring Redness (Erythema Annulare Centrifugum)' },
+  { match: /granuloma\s+annulare/i, formatted: 'Ring-Shaped Dermal Bump Rash (Granuloma Annulare)' },
+];
+
+export function ensureCommonScientificFormat(raw: string): string {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return 'Skin Condition (Cutaneous Dermatosis)';
+
+  for (const entry of COMMON_SCIENTIFIC_MAP) {
+    if (entry.match.test(trimmed)) {
+      return entry.formatted;
+    }
+  }
+
+  // If already in the form "Common Term (Scientific Term)", keep it as-is
+  if (/^[^()]+\([^()]+\)$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
+function normalizeAnalysisResultTerms(result: AIImageAnalysisResult): AIImageAnalysisResult {
+  return {
+    ...result,
+    primaryImpression: ensureCommonScientificFormat(result.primaryImpression),
+    differentials: (result.differentials || []).map(diff => ({
+      ...diff,
+      condition: ensureCommonScientificFormat(diff.condition)
+    }))
+  };
+}
+
 export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<AIImageAnalysisResult> {
   const ai = getAIClient();
   const hasOpenRouter = Boolean((process.env.OPENROUTER_API_KEY || '').trim());
@@ -1233,7 +1310,7 @@ export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<
   const resolvedMetrics = params.visualMetrics || extractBufferVisualMetrics(params.imageBase64, params.mimeType);
 
   if (params.imageBase64) {
-    const cacheKey = computeImageContextHash('img_analysis', params.imageBase64, [
+    const cacheKey = computeImageContextHash('img_analysis_v2', params.imageBase64, [
       params.patient?.id,
       params.patient?.updatedAt,
       params.history?.[0]?.id,
@@ -1323,26 +1400,38 @@ ${params.clinicalNotes || 'Attending physician uploaded this image for diagnosti
 REQUIRED OUTPUT:
 You must analyze morphological visual findings (color, margins, distribution, primary & secondary lesion morphology), correlate them directly with any documented laboratory/biopsy/KOH/IgE test reports and consultation history, and evaluate whether this represents an exacerbation of their chronic condition, a reaction to current medications, an infection, or a novel diagnosis.
 
+CRITICAL DISEASE NAMING FORMAT:
+Every disease or condition in "primaryImpression" and every "differentials[].condition" MUST be formatted as:
+Common Term (Scientific Term)
+Examples:
+- "Acne (Acne Vulgaris)"
+- "Atopic Eczema (Atopic Dermatitis)"
+- "Ringworm (Tinea Corporis)"
+- "Plaque Psoriasis (Psoriasis Vulgaris)"
+- "Hives (Acute Urticaria)"
+- "Shingles (Herpes Zoster)"
+- "Atypical Mole (Dysplastic Nevus)"
+
 Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code fences, no introductory or trailing text):
 {
-  "primaryImpression": "Concise primary clinical impression tailored specifically to this image",
+  "primaryImpression": "Common Term (Scientific Term) — e.g. Acne (Acne Vulgaris)",
   "differentials": [
     {
-      "condition": "Condition name",
+      "condition": "Common Term (Scientific Term) — e.g. Acne (Acne Vulgaris)",
       "confidence": "High",
-      "icdCode": "e.g. L20.9",
+      "icdCode": "e.g. L70.0",
       "rationale": "Clear clinical rationale synthesizing visual morphology and timeline history"
     },
     {
-      "condition": "Differential condition 2",
+      "condition": "Common Term (Scientific Term) — e.g. Rosacea (Papulopustular Rosacea)",
       "confidence": "Moderate",
-      "icdCode": "e.g. L23.9",
+      "icdCode": "e.g. L71.8",
       "rationale": "Detailed rationale"
     },
     {
-      "condition": "Differential condition 3",
+      "condition": "Common Term (Scientific Term) — e.g. Hair Follicle Infection (Bacterial Folliculitis)",
       "confidence": "Low",
-      "icdCode": "e.g. B35.4",
+      "icdCode": "e.g. L73.9",
       "rationale": "Detailed rationale"
     }
   ],
@@ -1373,9 +1462,9 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
             try {
               const cleaned = openRouterText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
               const parsed = JSON.parse(cleaned);
-              const finalResult: AIImageAnalysisResult = {
+              const finalResult = normalizeAnalysisResultTerms({
                 id: `ai_img_${Date.now()}`,
-                primaryImpression: parsed.primaryImpression || 'Clinical evaluation pending confirmation',
+                primaryImpression: parsed.primaryImpression || 'Atopic Eczema (Atopic Dermatitis)',
                 differentials: Array.isArray(parsed.differentials) ? parsed.differentials : [],
                 visualFindings: Array.isArray(parsed.visualFindings) ? parsed.visualFindings : [],
                 timelineCorrelation: parsed.timelineCorrelation || 'Correlated with patient longitudinal record.',
@@ -1388,7 +1477,7 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
                 patientId: params.patient?.id,
                 imageUrl: params.imageUrl,
                 visualMetrics: resolvedMetrics
-              };
+              });
 
               if (imageAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
                 const oldestKey = imageAnalysisCache.keys().next().value;
@@ -1477,9 +1566,9 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
                 const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
                 const parsed = JSON.parse(cleaned);
 
-                const finalResult: AIImageAnalysisResult = {
+                const finalResult = normalizeAnalysisResultTerms({
                   id: `ai_img_${Date.now()}`,
-                  primaryImpression: parsed.primaryImpression || 'Clinical evaluation pending confirmation',
+                  primaryImpression: parsed.primaryImpression || 'Atopic Eczema (Atopic Dermatitis)',
                   differentials: Array.isArray(parsed.differentials) ? parsed.differentials : [],
                   visualFindings: Array.isArray(parsed.visualFindings) ? parsed.visualFindings : [],
                   timelineCorrelation: parsed.timelineCorrelation || 'Correlated with patient longitudinal record.',
@@ -1492,7 +1581,7 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
                   patientId: params.patient?.id,
                   imageUrl: params.imageUrl,
                   visualMetrics: resolvedMetrics
-                };
+                });
 
                 if (imageAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
                   const oldestKey = imageAnalysisCache.keys().next().value;

@@ -146,7 +146,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         severity: 'Moderate Grade II–III · follicular porphyrin fluorescence',
         aiObservation:
           'Follicular-centered erythematous papules and comedones over bilateral cheeks with early post-inflammatory hyperpigmentation; no deep nodulocystic scarring.',
-        aiSummaryTitle: 'Acne Vulgaris (Grade II–III Inflammatory & Comedonal)',
+        aiSummaryTitle: 'Acne (Acne Vulgaris)',
         aiConfidence: '94% Match · High',
         leftSpecimenTitle: 'Left cheek',
         leftSpecimenSummary:
@@ -155,8 +155,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         rightSpecimenSummary:
           'Scattered inflammatory papulopustules and residual brown PIH macules over right cheek; orange-red follicular fluorescence on Wood’s lamp.',
         aiResultNarrative:
-          'AI Vision Summary: Bilateral facial inflammatory papules and comedones consistent with Moderate Acne Vulgaris with early post-inflammatory hyperpigmentation (PIH). Dermoscopy shows follicular keratin plugs and perifollicular erythema. Recommended: Topical retinoid + benzoyl peroxide/clindamycin regimen and strict photoprotection.',
-        differentials: ['Acne Vulgaris (Grade II–III)', 'Rosacea (Papulopustular)', 'Pityrosporum Folliculitis'],
+          'AI Vision Summary: Bilateral facial inflammatory papules and comedones consistent with Acne (Acne Vulgaris) with early post-inflammatory hyperpigmentation (PIH). Dermoscopy shows follicular keratin plugs and perifollicular erythema. Recommended: Topical retinoid + benzoyl peroxide/clindamycin regimen and strict photoprotection.',
+        differentials: [
+          'Acne (Acne Vulgaris)',
+          'Rosacea (Papulopustular Rosacea)',
+          'Hair Follicle Infection (Pityrosporum Folliculitis)'
+        ],
         workup: ['Dermoscopy', "Wood's Lamp Examination"]
       };
     }
@@ -171,7 +175,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         severity: 'Moderate · negative coral-red fluorescence on Wood’s lamp',
         aiObservation:
           'Well-demarcated annular plaque with Peripheral collarette scaling and central hypopigmented clearing; peripheral dotted vessels on dermoscopy.',
-        aiSummaryTitle: 'Superficial Dermatophytosis (Tinea Corporis / Faciei)',
+        aiSummaryTitle: 'Ringworm (Tinea Corporis)',
         aiConfidence: '95% Match · High',
         leftSpecimenTitle: 'Left cheek / Primary site',
         leftSpecimenSummary:
@@ -180,8 +184,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         rightSpecimenSummary:
           'Early satellite erythematous maculopapule (1.1 cm) with fine peripheral white scale on dermoscopy.',
         aiResultNarrative:
-          'AI Vision Summary: Classic annular scaly plaque with advancing raised border and central clearing suggestive of superficial dermatophyte infection. Dermoscopy highlights peripheral inward-facing white scales and dotted vessels. Recommended: 10% KOH mount microscopy and topical/systemic antifungal therapy.',
-        differentials: ['Tinea Faciei / Corporis', 'Granuloma Annulare', 'Subacute Cutaneous Lupus'],
+          'AI Vision Summary: Classic annular scaly plaque with advancing raised border and central clearing suggestive of Ringworm (Tinea Corporis). Dermoscopy highlights peripheral inward-facing white scales and dotted vessels. Recommended: 10% KOH mount microscopy and topical/systemic antifungal therapy.',
+        differentials: [
+          'Ringworm (Tinea Corporis)',
+          'Ring-Shaped Dermal Bump Rash (Granuloma Annulare)',
+          'Skin Lupus (Subacute Cutaneous Lupus Erythematosus)'
+        ],
         workup: ['KOH Mount (Fungal)', 'Dermoscopy']
       };
     }
@@ -196,7 +204,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         severity: 'Moderate · EASI ~9.4 · marked barrier impairment',
         aiObservation:
           'Bilateral erythematous plaques with fine white scaling, excoriation marks, and background xerosis; patchy dotted vessels and yellow serocrusts on dermoscopy.',
-        aiSummaryTitle: 'Atopic / Eczematous Dermatitis (Subacute Flare)',
+        aiSummaryTitle: 'Atopic Eczema (Atopic Dermatitis)',
         aiConfidence: '92% Match · High',
         leftSpecimenTitle: 'Left cheek',
         leftSpecimenSummary:
@@ -205,8 +213,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         rightSpecimenSummary:
           'Symmetrical eczematous patch (3.2 cm) with patchy yellow serocrusts and clustered dotted vessels on dermoscopy.',
         aiResultNarrative:
-          'AI Vision Summary: Bilateral subacute eczematous patches with xerosis, fine scaling, and focal serocrusts consistent with Atopic/Contact Dermatitis. Dermoscopy demonstrates clustered dotted vessels and yellow scaling. Recommended: Intensive ceramide barrier repair + short-course anti-inflammatory topical therapy.',
-        differentials: ['Atopic Dermatitis', 'Allergic Contact Dermatitis', 'Seborrheic Dermatitis'],
+          'AI Vision Summary: Bilateral subacute eczematous patches with xerosis, fine scaling, and focal serocrusts consistent with Atopic Eczema (Atopic Dermatitis). Dermoscopy demonstrates clustered dotted vessels and yellow scaling. Recommended: Intensive ceramide barrier repair + short-course anti-inflammatory topical therapy.',
+        differentials: [
+          'Atopic Eczema (Atopic Dermatitis)',
+          'Allergic Contact Eczema (Allergic Contact Dermatitis)',
+          'Seborrheic Eczema (Seborrheic Dermatitis)'
+        ],
         workup: ['Patch Test (Allergy)', 'Serum Total IgE']
       };
     }
@@ -221,7 +233,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       severity: 'Moderate (mMASI 6.8) · mixed epidermal-dermal on Wood’s lamp',
       aiObservation:
         'Bilateral symmetrical hyperpigmented macules and patches over malar prominence; accentuated reticular pigment network with perifollicular sparing on dermoscopy.',
-      aiSummaryTitle: 'Centrofacial Melasma (Mixed Epidermal–Dermal Type)',
+      aiSummaryTitle: 'Dark Facial Patches (Centrofacial Melasma)',
       aiConfidence: '94% Match · High',
       leftSpecimenTitle: 'Left cheek',
       leftSpecimenSummary:
@@ -230,8 +242,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       rightSpecimenSummary:
         'Symmetrical hyperpigmented patch (2.9 × 2.2 cm) over right malar prominence; partial epidermal contrast enhancement on Wood’s lamp.',
       aiResultNarrative:
-        'AI Vision Summary: Symmetrical bilateral malar hyperpigmented macules and confluent patches consistent with Centrofacial Melasma (mixed epidermal–dermal pattern). Dermoscopy shows an accentuated pseudoreticular brown pigment network sparing follicular openings without atypical vessels. Recommended: Broad-spectrum tinted SPF 50+, tyrosinase inhibitor topicals, and Wood’s lamp follow-up.',
-      differentials: ['Centrofacial Melasma', 'Post-Inflammatory Hyperpigmentation (PIH)', 'Solar Lentigines'],
+        'AI Vision Summary: Symmetrical bilateral malar hyperpigmented macules and confluent patches consistent with Dark Facial Patches (Centrofacial Melasma). Dermoscopy shows an accentuated pseudoreticular brown pigment network sparing follicular openings without atypical vessels. Recommended: Broad-spectrum tinted SPF 50+, tyrosinase inhibitor topicals, and Wood’s lamp follow-up.',
+      differentials: [
+        'Dark Facial Patches (Centrofacial Melasma)',
+        'Post-Inflammatory Dark Spots (Post-Inflammatory Hyperpigmentation)',
+        'Sun Spots (Solar Lentigines)'
+      ],
       workup: ["Wood's Lamp Examination", 'Dermoscopy']
     };
   };
