@@ -876,9 +876,10 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
     };
   };
 
-  // Case A: Table triplets from PDF (e.g., ["1", "Amoxicillin", "250 mg to 500 mg every 8 hours..."])
+  // Case A: Table triplets from PDF (e.g., ["1", "Metformin", "500–2000 mg/day", ...])
   if (cells.length >= 3) {
     let i = 0;
+    let lastTripletIdx = -1;
     while (i < cells.length) {
       const c = cells[i].trim();
       if (/^\d{1,4}\.?$/.test(c) && i + 2 < cells.length) {
@@ -891,11 +892,40 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
           !/^(dosage|dose|strength)$/i.test(dosageCol)
         ) {
           results.push(inferFieldsFromDosage(medName, dosageCol));
+          lastTripletIdx = i + 2;
           i += 3;
           continue;
         }
       }
       i++;
+    }
+
+    // If the PDF split Frequency and Instructions onto subsequent pages (e.g. pages 3-4 = Frequency, pages 5-6 = Instructions), stitch them by row index
+    if (results.length > 0 && lastTripletIdx !== -1 && lastTripletIdx + 1 < cells.length) {
+      const trailingCells = cells
+        .slice(lastTripletIdx + 1)
+        .map(c => c.trim())
+        .filter(Boolean);
+      const freqHeaderIdx = trailingCells.findIndex(c => /^frequency$/i.test(c));
+      const instrHeaderIdx = trailingCells.findIndex(c => /^instructions?$/i.test(c));
+
+      if (freqHeaderIdx !== -1 && instrHeaderIdx !== -1 && instrHeaderIdx > freqHeaderIdx) {
+        const freqSlice = trailingCells.slice(freqHeaderIdx + 1, instrHeaderIdx);
+        const instrSlice = trailingCells.slice(instrHeaderIdx + 1);
+        results.forEach((item, idx) => {
+          const explicitFreq = freqSlice[idx] || '';
+          const explicitInstr = instrSlice[idx] || '';
+          const updated = inferFieldsFromDosage(
+            item.name,
+            item.dosage,
+            explicitInstr,
+            item.route || '',
+            explicitFreq,
+            item.duration
+          );
+          Object.assign(item, updated);
+        });
+      }
     }
   }
 
@@ -1186,9 +1216,81 @@ app.post('/api/formulary/import', authMiddleware, async (req: AuthenticatedReque
             ...fromPdf.map(m => ({ ...m, source: 'pdf_upload' as const }))
           );
         } else {
-          // Decode UTF-16LE / UTF-16BE / UTF-8 CSV, TSV, JSON, or TXT file
+          // Decode OpenXML .xlsx ZIP (starts with PK\x03\x04) or UTF-16LE / UTF-16BE / UTF-8 CSV, TSV, JSON, or TXT file
           let textContent = '';
-          if (fileBuffer.length >= 2 && fileBuffer[0] === 0xff && fileBuffer[1] === 0xfe) {
+          if (
+            fileBuffer.length >= 4 &&
+            fileBuffer[0] === 0x50 &&
+            fileBuffer[1] === 0x4b &&
+            fileBuffer[2] === 0x03 &&
+            fileBuffer[3] === 0x04
+          ) {
+            try {
+              const zipEntries: Record<string, string> = {};
+              let offset = 0;
+              while (offset + 30 <= fileBuffer.length) {
+                const sig = fileBuffer.readUInt32LE(offset);
+                if (sig !== 0x04034b50) break;
+                const compression = fileBuffer.readUInt16LE(offset + 8);
+                const compSize = fileBuffer.readUInt32LE(offset + 18);
+                const nameLen = fileBuffer.readUInt16LE(offset + 26);
+                const extraLen = fileBuffer.readUInt16LE(offset + 28);
+                const entryName = fileBuffer.subarray(offset + 30, offset + 30 + nameLen).toString('utf8');
+                const dataStart = offset + 30 + nameLen + extraLen;
+                const compData = fileBuffer.subarray(dataStart, dataStart + compSize);
+                if (entryName === 'xl/worksheets/sheet1.xml' || entryName === 'xl/sharedStrings.xml') {
+                  if (compression === 0) {
+                    zipEntries[entryName] = compData.toString('utf8');
+                  } else if (compression === 8) {
+                    zipEntries[entryName] = zlib.inflateRawSync(compData).toString('utf8');
+                  }
+                }
+                offset = dataStart + compSize;
+              }
+              const sheetXml = zipEntries['xl/worksheets/sheet1.xml'];
+              if (sheetXml) {
+                const sharedStrings: string[] = [];
+                const sstXml = zipEntries['xl/sharedStrings.xml'] || '';
+                if (sstXml) {
+                  for (const sim of sstXml.matchAll(/<si[^>]*>([\s\S]*?)<\/si>/g)) {
+                    const tParts = [...sim[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(tm => tm[1]);
+                    sharedStrings.push(tParts.join(''));
+                  }
+                }
+                const decodeEnt = (s: string) =>
+                  s
+                    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+                    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&apos;/g, "'");
+                const csvRows: string[] = [];
+                for (const rm of sheetXml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
+                  const rowCells = [...rm[1].matchAll(/<c([^>]*)>([\s\S]*?)<\/c>/g)].map(cm => {
+                    const isShared = /t=["']s["']/.test(cm[1] || '');
+                    const inner = cm[2] || '';
+                    const tMatch = inner.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+                    const vMatch = inner.match(/<v[^>]*>([\s\S]*?)<\/v>/);
+                    let val = tMatch ? tMatch[1] : vMatch ? vMatch[1] : '';
+                    if (isShared && vMatch) {
+                      const idx = parseInt(vMatch[1], 10);
+                      if (!isNaN(idx) && sharedStrings[idx] !== undefined) val = sharedStrings[idx];
+                    }
+                    const clean = decodeEnt(val).trim();
+                    return clean.includes(',') || clean.includes('"') || clean.includes('\n')
+                      ? `"${clean.replace(/"/g, '""')}"`
+                      : clean;
+                  });
+                  if (rowCells.some(Boolean)) csvRows.push(rowCells.join(','));
+                }
+                textContent = csvRows.join('\n');
+              }
+            } catch {
+              // fallback below
+            }
+          } else if (fileBuffer.length >= 2 && fileBuffer[0] === 0xff && fileBuffer[1] === 0xfe) {
             textContent = fileBuffer.subarray(2).toString('utf16le');
           } else if (fileBuffer.length >= 2 && fileBuffer[0] === 0xfe && fileBuffer[1] === 0xff) {
             const swapped = Buffer.from(fileBuffer.subarray(2));

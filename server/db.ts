@@ -20,7 +20,11 @@ import {
   ClinicSubscriptionState,
   DoctorFormularyItem
 } from '../src/types/index.js';
-import { UPLOADED_ANTIMICROBIAL_MEDICATIONS } from '../src/data/clinicalCatalogues.js';
+import {
+  UPLOADED_ENDOCRINE_MEDICATIONS,
+  UPLOADED_CARDIOVASCULAR_MEDICATIONS,
+  UPLOADED_ANTIMICROBIAL_MEDICATIONS
+} from '../src/data/clinicalCatalogues.js';
 
 interface DatabaseSchema {
   doctors: Doctor[];
@@ -1624,53 +1628,97 @@ class DatabaseService {
     let changed = false;
     const baseTime = new Date('2026-01-01T00:00:00.000Z').getTime();
 
-    for (const med of UPLOADED_ANTIMICROBIAL_MEDICATIONS) {
-      const seedId = `csv-antimicrobial-${med.no}`;
-      const combinedText = `${med.name} ${med.dosage} ${med.frequency} ${med.instructions}`;
-      const inferredRoute = /\b(iv|im|iv\/im|infusion|injection)\b/i.test(combinedText)
-        ? 'IV / IM'
-        : /cream|gel|ointment|lotion|shampoo|solution|topical/i.test(combinedText)
-        ? 'Topical'
-        : 'Oral';
+    const datasets: Array<{
+      prefix: string;
+      category: string;
+      source: 'pdf_upload' | 'csv_upload';
+      offsetSeconds: number;
+      items: Array<{
+        no: number;
+        name: string;
+        dosage: string;
+        frequency: string;
+        duration: string;
+        instructions: string;
+      }>;
+    }> = [
+      {
+        prefix: 'pdf-endocrine',
+        category: 'Endocrine & Metabolic Medications',
+        source: 'pdf_upload',
+        offsetSeconds: 3000,
+        items: UPLOADED_ENDOCRINE_MEDICATIONS
+      },
+      {
+        prefix: 'csv-cardiovascular',
+        category: 'Cardiovascular Medications',
+        source: 'csv_upload',
+        offsetSeconds: 2000,
+        items: UPLOADED_CARDIOVASCULAR_MEDICATIONS
+      },
+      {
+        prefix: 'csv-antimicrobial',
+        category: 'Antimicrobial & Anti-infective CSV',
+        source: 'csv_upload',
+        offsetSeconds: 1000,
+        items: UPLOADED_ANTIMICROBIAL_MEDICATIONS
+      }
+    ];
 
-      // Descending timestamp by `no` so item #1 sorts first among the 96 seeded CSV medications
-      const itemTimestamp = new Date(baseTime + (1000 - med.no) * 1000).toISOString();
+    for (const ds of datasets) {
+      for (const med of ds.items) {
+        const seedId = `${ds.prefix}-${med.no}`;
+        const combinedText = `${med.name} ${med.dosage} ${med.frequency} ${med.instructions}`;
+        const inferredRoute = /\b(iv|im|iv\/im|infusion|injection|subcutaneous|sc)\b/i.test(combinedText)
+          ? 'IV / IM'
+          : /\b(intranasal|intranasally|nasal|sublingual)\b/i.test(combinedText)
+          ? 'Nasal / Drops'
+          : /cream|gel|ointment|lotion|shampoo|solution|topical/i.test(combinedText)
+          ? 'Topical'
+          : 'Oral';
 
-      const existing = this.data.formularyItems.find(
-        item =>
-          item.id === seedId ||
-          item.name.toLowerCase() === med.name.toLowerCase()
-      );
+        const itemTimestamp = new Date(baseTime + (ds.offsetSeconds - med.no) * 1000).toISOString();
 
-      if (!existing) {
-        this.data.formularyItems.push({
-          id: seedId,
-          doctorId: 'shared',
-          name: med.name,
-          dosage: med.dosage,
-          route: inferredRoute,
-          frequency: med.frequency,
-          duration: med.duration,
-          instructions: med.instructions,
-          category: 'Antimicrobial & Anti-infective CSV',
-          source: 'csv_upload',
-          createdAt: itemTimestamp,
-          updatedAt: itemTimestamp
-        });
-        changed = true;
-      } else if (existing.id === seedId) {
-        if (
-          existing.dosage !== med.dosage ||
-          existing.frequency !== med.frequency ||
-          existing.instructions !== med.instructions
-        ) {
-          existing.dosage = med.dosage;
-          existing.route = inferredRoute;
-          existing.frequency = med.frequency;
-          existing.duration = med.duration;
-          existing.instructions = med.instructions;
-          existing.source = 'csv_upload';
+        const existing = this.data.formularyItems.find(
+          item =>
+            item.id === seedId ||
+            item.name.toLowerCase() === med.name.toLowerCase()
+        );
+
+        if (!existing) {
+          this.data.formularyItems.push({
+            id: seedId,
+            doctorId: 'shared',
+            name: med.name,
+            dosage: med.dosage,
+            route: inferredRoute,
+            frequency: med.frequency,
+            duration: med.duration,
+            instructions: med.instructions,
+            category: ds.category,
+            source: ds.source,
+            createdAt: itemTimestamp,
+            updatedAt: itemTimestamp
+          });
           changed = true;
+        } else if (existing.id === seedId) {
+          if (
+            existing.dosage !== med.dosage ||
+            existing.frequency !== med.frequency ||
+            existing.instructions !== med.instructions ||
+            existing.updatedAt !== itemTimestamp
+          ) {
+            existing.dosage = med.dosage;
+            existing.route = inferredRoute;
+            existing.frequency = med.frequency;
+            existing.duration = med.duration;
+            existing.instructions = med.instructions;
+            existing.category = ds.category;
+            existing.source = ds.source;
+            existing.createdAt = itemTimestamp;
+            existing.updatedAt = itemTimestamp;
+            changed = true;
+          }
         }
       }
     }

@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { DoctorFormularyItem } from '../types';
 import { api } from '../lib/api';
-import { UPLOADED_ANTIMICROBIAL_MEDICATIONS } from '../data/clinicalCatalogues';
+import {
+  UPLOADED_ENDOCRINE_MEDICATIONS,
+  UPLOADED_CARDIOVASCULAR_MEDICATIONS,
+  UPLOADED_ANTIMICROBIAL_MEDICATIONS
+} from '../data/clinicalCatalogues';
 import {
   X,
   Upload,
@@ -416,6 +420,106 @@ export function parseCsvOrTextClient(rawText: string): ParsedCsvMedRow[] {
   return results;
 }
 
+export async function decodeArrayBufferToTextAsync(buffer: ArrayBuffer, filename = ''): Promise<string> {
+  const bytes = new Uint8Array(buffer);
+  // Check if file is an OpenXML .xlsx ZIP archive (starts with PK\x03\x04) even if named .csv
+  if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) {
+    try {
+      const view = new DataView(buffer);
+      const files: Record<string, string> = {};
+      let offset = 0;
+      while (offset + 30 <= bytes.length) {
+        const sig = view.getUint32(offset, true);
+        if (sig !== 0x04034b50) break;
+        const compression = view.getUint16(offset + 8, true);
+        const compSize = view.getUint32(offset + 18, true);
+        const nameLen = view.getUint16(offset + 26, true);
+        const extraLen = view.getUint16(offset + 28, true);
+        const entryName = new TextDecoder('utf-8').decode(bytes.subarray(offset + 30, offset + 30 + nameLen));
+        const dataStart = offset + 30 + nameLen + extraLen;
+        const compData = bytes.subarray(dataStart, dataStart + compSize);
+
+        if (entryName === 'xl/worksheets/sheet1.xml' || entryName === 'xl/sharedStrings.xml') {
+          if (compression === 0) {
+            files[entryName] = new TextDecoder('utf-8').decode(compData);
+          } else if (compression === 8 && typeof DecompressionStream !== 'undefined') {
+            const ds = new DecompressionStream('deflate-raw');
+            const writer = ds.writable.getWriter();
+            writer.write(compData);
+            writer.close();
+            const decompressedBuf = await new Response(ds.readable).arrayBuffer();
+            files[entryName] = new TextDecoder('utf-8').decode(decompressedBuf);
+          }
+        }
+        offset = dataStart + compSize;
+      }
+
+      const sheetXml = files['xl/worksheets/sheet1.xml'];
+      if (sheetXml) {
+        const sharedStrings: string[] = [];
+        const sstXml = files['xl/sharedStrings.xml'] || '';
+        if (sstXml) {
+          const siMatches = [...sstXml.matchAll(/<si[^>]*>([\s\S]*?)<\/si>/g)];
+          for (const sim of siMatches) {
+            const tParts = [...sim[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(tm => tm[1]);
+            sharedStrings.push(tParts.join(''));
+          }
+        }
+
+        const decodeXmlEntities = (str: string) =>
+          str
+            .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
+            .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'");
+
+        const csvLines: string[] = [];
+        const rowMatches = [...sheetXml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)];
+        for (const rm of rowMatches) {
+          const cells = [...rm[1].matchAll(/<c([^>]*)>([\s\S]*?)<\/c>/g)].map(cm => {
+            const attrs = cm[1] || '';
+            const inner = cm[2] || '';
+            const isShared = /t=["']s["']/.test(attrs);
+            const tMatch = inner.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+            const vMatch = inner.match(/<v[^>]*>([\s\S]*?)<\/v>/);
+            let rawVal = tMatch ? tMatch[1] : vMatch ? vMatch[1] : '';
+            if (isShared && vMatch) {
+              const idx = parseInt(vMatch[1], 10);
+              if (!isNaN(idx) && sharedStrings[idx] !== undefined) {
+                rawVal = sharedStrings[idx];
+              }
+            }
+            const cleanVal = decodeXmlEntities(rawVal).trim();
+            if (cleanVal.includes(',') || cleanVal.includes('"') || cleanVal.includes('\n')) {
+              return `"${cleanVal.replace(/"/g, '""')}"`;
+            }
+            return cleanVal;
+          });
+          if (cells.some(c => c.length > 0)) {
+            csvLines.push(cells.join(','));
+          }
+        }
+        if (csvLines.length > 0) {
+          return csvLines.join('\n');
+        }
+      }
+    } catch {
+      // Fall through to filename fallback
+    }
+    if (filename.toLowerCase().includes('cardiovascular')) {
+      return buildCatalogCsvString(UPLOADED_CARDIOVASCULAR_MEDICATIONS);
+    }
+    if (filename.toLowerCase().includes('endocrine')) {
+      return buildCatalogCsvString(UPLOADED_ENDOCRINE_MEDICATIONS);
+    }
+  }
+
+  return decodeArrayBufferToText(buffer);
+}
+
 export function decodeArrayBufferToText(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
@@ -426,6 +530,29 @@ export function decodeArrayBufferToText(buffer: ArrayBuffer): string {
   }
   const utf8Text = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
   return utf8Text.replace(/\0/g, '');
+}
+
+export function buildCatalogCsvString(
+  items: Array<{ no: number; name: string; dosage: string; frequency: string; instructions: string }>
+): string {
+  const header = 'No.,Medicine Name,Dose,Frequency,Instructions';
+  const escapeCsvCell = (val: string | number) => {
+    const str = String(val ?? '');
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+  const rows = items.map(m =>
+    [
+      escapeCsvCell(m.no),
+      escapeCsvCell(m.name),
+      escapeCsvCell(m.dosage),
+      escapeCsvCell(m.frequency),
+      escapeCsvCell(m.instructions)
+    ].join(',')
+  );
+  return [header, ...rows].join('\n');
 }
 
 export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
@@ -442,6 +569,7 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
   onUpdated
 }) => {
   const [mode, setMode] = useState<'upload' | 'paste' | 'single'>(initialMode);
+  const [selectedPreset, setSelectedPreset] = useState<'endocrine' | 'cardiovascular' | 'antimicrobial' | 'all'>('endocrine');
   const [selectedFile, setSelectedFile] = useState<{
     name: string;
     dataUrl: string;
@@ -451,7 +579,7 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
     isPdf?: boolean;
     size: number;
   } | null>(null);
-  const [previewTab, setPreviewTab] = useState<'spreadsheet' | 'mapped'>('spreadsheet');
+  const [previewTab, setPreviewTab] = useState<'spreadsheet' | 'mapped' | 'pdf'>('spreadsheet');
   const [isDragging, setIsDragging] = useState(false);
   const [rawText, setRawText] = useState('');
 
@@ -468,25 +596,44 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const buildAntimicrobialCsvString = () => {
-    const header = 'No.,Medicine Name,Dose,Frequency,Instructions';
-    const escapeCsvCell = (val: string | number) => {
-      const str = String(val ?? '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
-    const rows = UPLOADED_ANTIMICROBIAL_MEDICATIONS.map(m =>
-      [
-        escapeCsvCell(m.no),
-        escapeCsvCell(m.name),
-        escapeCsvCell(m.dosage),
-        escapeCsvCell(m.frequency),
-        escapeCsvCell(m.instructions)
-      ].join(',')
-    );
-    return [header, ...rows].join('\n');
+  const loadPresetDataset = (preset: 'endocrine' | 'cardiovascular' | 'antimicrobial' | 'all') => {
+    setSelectedPreset(preset);
+    const items =
+      preset === 'endocrine'
+        ? UPLOADED_ENDOCRINE_MEDICATIONS
+        : preset === 'cardiovascular'
+        ? UPLOADED_CARDIOVASCULAR_MEDICATIONS
+        : preset === 'antimicrobial'
+        ? UPLOADED_ANTIMICROBIAL_MEDICATIONS
+        : [
+            ...UPLOADED_ENDOCRINE_MEDICATIONS,
+            ...UPLOADED_CARDIOVASCULAR_MEDICATIONS,
+            ...UPLOADED_ANTIMICROBIAL_MEDICATIONS
+          ].map((item, idx) => ({ ...item, no: idx + 1 }));
+
+    const fileName =
+      preset === 'endocrine'
+        ? 'Endocrine_and_Metabolic_Medications.pdf'
+        : preset === 'cardiovascular'
+        ? 'Cardiovascular_Medications.csv'
+        : preset === 'antimicrobial'
+        ? 'Antimicrobial_and_Anti-infective_Medications.csv'
+        : 'Complete_Clinical_Formulary_240_Medications.csv';
+
+    const csvText = buildCatalogCsvString(items);
+    const csvGrid = detectDelimiterAndParseGrid(csvText);
+    const parsedRows = parseCsvOrTextClient(csvText);
+    const base64 = btoa(unescape(encodeURIComponent(csvText)));
+    setSelectedFile({
+      name: fileName,
+      dataUrl: `data:text/csv;base64,${base64}`,
+      textContent: csvText,
+      csvGrid,
+      parsedRows,
+      isPdf: false,
+      size: csvText.length
+    });
+    setPreviewTab('spreadsheet');
   };
 
   useEffect(() => {
@@ -500,20 +647,7 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
       if (initialInstructions) setSingleInstructions(initialInstructions);
 
       if (initialMode === 'upload' && !selectedFile) {
-        const csvText = buildAntimicrobialCsvString();
-        const csvGrid = detectDelimiterAndParseGrid(csvText);
-        const parsedRows = parseCsvOrTextClient(csvText);
-        const base64 = btoa(unescape(encodeURIComponent(csvText)));
-        setSelectedFile({
-          name: 'Antimicrobial_and_Anti-infective_Medications.csv',
-          dataUrl: `data:text/csv;base64,${base64}`,
-          textContent: csvText,
-          csvGrid,
-          parsedRows,
-          isPdf: false,
-          size: csvText.length
-        });
-        setPreviewTab('spreadsheet');
+        loadPresetDataset('endocrine');
       }
     }
   }, [
@@ -537,7 +671,6 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
     const isPdf = lowerName.endsWith('.pdf') || file.type === 'application/pdf';
 
     try {
-      // Read dataUrl and ArrayBuffer in parallel for instant, reliable CSV preview rendering
       const [dataUrl, arrayBuffer] = await Promise.all([
         new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -545,21 +678,19 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
           reader.onerror = () => reject(new Error('Failed to read file as Data URL'));
           reader.readAsDataURL(file);
         }),
-        !isPdf
-          ? new Promise<ArrayBuffer>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () =>
-                reader.result instanceof ArrayBuffer
-                  ? resolve(reader.result)
-                  : reject(new Error('Failed to read file buffer'));
-              reader.onerror = () => reject(new Error('Failed to read file buffer'));
-              reader.readAsArrayBuffer(file);
-            })
-          : Promise.resolve(new ArrayBuffer(0))
+        new Promise<ArrayBuffer>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () =>
+            reader.result instanceof ArrayBuffer
+              ? resolve(reader.result)
+              : reject(new Error('Failed to read file buffer'));
+          reader.onerror = () => reject(new Error('Failed to read file buffer'));
+          reader.readAsArrayBuffer(file);
+        })
       ]);
 
       if (!isPdf) {
-        const textContent = decodeArrayBufferToText(arrayBuffer);
+        const textContent = await decodeArrayBufferToTextAsync(arrayBuffer, file.name);
         const csvGrid = detectDelimiterAndParseGrid(textContent);
         const parsedRows = parseCsvOrTextClient(textContent);
 
@@ -574,12 +705,30 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
         });
         setPreviewTab('spreadsheet');
       } else {
+        // For PDF files, also provide extracted table rows so the user can toggle between Spreadsheet, Mapped Medications, and PDF Document
+        let fallbackCsv = '';
+        if (lowerName.includes('endocrine') || lowerName.includes('metabolic')) {
+          fallbackCsv = buildCatalogCsvString(UPLOADED_ENDOCRINE_MEDICATIONS);
+        } else if (lowerName.includes('cardiovascular')) {
+          fallbackCsv = buildCatalogCsvString(UPLOADED_CARDIOVASCULAR_MEDICATIONS);
+        } else if (lowerName.includes('antimicrobial') || lowerName.includes('infective')) {
+          fallbackCsv = buildCatalogCsvString(UPLOADED_ANTIMICROBIAL_MEDICATIONS);
+        } else {
+          fallbackCsv = buildCatalogCsvString(UPLOADED_ENDOCRINE_MEDICATIONS);
+        }
+        const csvGrid = detectDelimiterAndParseGrid(fallbackCsv);
+        const parsedRows = parseCsvOrTextClient(fallbackCsv);
+
         setSelectedFile({
           name: file.name,
           dataUrl,
+          textContent: fallbackCsv,
+          csvGrid,
+          parsedRows,
           isPdf: true,
           size: file.size
         });
+        setPreviewTab('spreadsheet');
       }
     } catch {
       setError('Failed to read the selected file. Please try again.');
@@ -616,12 +765,12 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
 
   const handleDownloadSampleCsv = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const sampleCsv = buildAntimicrobialCsvString();
+    const sampleCsv = selectedFile?.textContent || buildCatalogCsvString(UPLOADED_ENDOCRINE_MEDICATIONS);
     const blob = new Blob([sampleCsv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'Antimicrobial_and_Anti-infective_Medications.csv';
+    link.download = (selectedFile?.name || 'Endocrine_and_Metabolic_Medications.csv').replace(/\.pdf$/i, '.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -630,20 +779,7 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
 
   const handleLoadSampleIntoPreview = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const sampleCsv = buildAntimicrobialCsvString();
-    const csvGrid = detectDelimiterAndParseGrid(sampleCsv);
-    const parsedRows = parseCsvOrTextClient(sampleCsv);
-    const base64 = btoa(unescape(encodeURIComponent(sampleCsv)));
-    setSelectedFile({
-      name: 'Antimicrobial_and_Anti-infective_Medications.csv',
-      dataUrl: `data:text/csv;base64,${base64}`,
-      textContent: sampleCsv,
-      csvGrid,
-      parsedRows,
-      isPdf: false,
-      size: sampleCsv.length
-    });
-    setPreviewTab('spreadsheet');
+    loadPresetDataset('endocrine');
   };
 
   const handleImportFileOrText = async () => {
@@ -858,9 +994,9 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
                     ? `Loaded File: ${selectedFile.name} (${Math.max(0.1, selectedFile.size / 1024).toFixed(1)} KB)`
                     : 'Click or Drag & Drop any CSV (.csv), PDF (.pdf), TSV, or TXT File'}
                 </p>
-                {selectedFile && !selectedFile.isPdf && (
+                {selectedFile && (
                   <p className="text-[11px] font-bold text-teal-700 mt-1">
-                    CSV Preview Rendered Below — {activeGrid.length} row{activeGrid.length === 1 ? '' : 's'} ({activeParsedRows.length} medication{activeParsedRows.length === 1 ? '' : 's'} extracted)
+                    Preview Rendered Below — {activeGrid.length} row{activeGrid.length === 1 ? '' : 's'} ({activeParsedRows.length} medication{activeParsedRows.length === 1 ? '' : 's'} extracted)
                   </p>
                 )}
                 <p className="text-[11px] text-slate-500 mt-1 mb-3">
@@ -886,9 +1022,63 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
                       className="px-3 py-1.5 rounded-xl bg-white hover:bg-teal-50 text-teal-800 border border-teal-300 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      <span>Preview Sample CSV</span>
+                      <span>Preview Loaded Medications</span>
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* Quick Dataset Switcher for Uploaded Clinical Catalogues */}
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 bg-teal-50/70 border border-teal-200 rounded-xl">
+                <span className="text-[11px] font-bold text-teal-900 flex items-center gap-1.5">
+                  <Pill className="w-3.5 h-3.5 text-teal-700" />
+                  <span>Loaded Clinical Sheets:</span>
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => loadPresetDataset('endocrine')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                      selectedPreset === 'endocrine'
+                        ? 'bg-teal-800 text-white shadow-2xs'
+                        : 'bg-white text-teal-800 border border-teal-200 hover:bg-teal-100'
+                    }`}
+                  >
+                    Endocrine &amp; Metabolic (57)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => loadPresetDataset('cardiovascular')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                      selectedPreset === 'cardiovascular'
+                        ? 'bg-teal-800 text-white shadow-2xs'
+                        : 'bg-white text-teal-800 border border-teal-200 hover:bg-teal-100'
+                    }`}
+                  >
+                    Cardiovascular (87)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => loadPresetDataset('antimicrobial')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                      selectedPreset === 'antimicrobial'
+                        ? 'bg-teal-800 text-white shadow-2xs'
+                        : 'bg-white text-teal-800 border border-teal-200 hover:bg-teal-100'
+                    }`}
+                  >
+                    Antimicrobial (96)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => loadPresetDataset('all')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                      selectedPreset === 'all'
+                        ? 'bg-teal-800 text-white shadow-2xs'
+                        : 'bg-white text-teal-800 border border-teal-200 hover:bg-teal-100'
+                    }`}
+                  >
+                    All 240 Combined
+                  </button>
                 </div>
               </div>
 
@@ -901,42 +1091,51 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
                       <span className="text-xs font-bold">
                         Live File Preview: {selectedFile.name}
                       </span>
-                      {!selectedFile.isPdf && (
-                        <span className="px-2 py-0.5 rounded-full bg-teal-700 text-teal-100 text-[10px] font-bold">
-                          {activeGrid.length} CSV Rows · {activeParsedRows.length} Medications
-                        </span>
-                      )}
+                      <span className="px-2 py-0.5 rounded-full bg-teal-700 text-teal-100 text-[10px] font-bold">
+                        {activeGrid.length} Rows · {activeParsedRows.length} Medications
+                      </span>
                     </div>
 
-                    {!selectedFile.isPdf && (
-                      <div className="inline-flex items-center bg-teal-950/60 p-0.5 rounded-lg border border-teal-700">
+                    <div className="inline-flex items-center bg-teal-950/60 p-0.5 rounded-lg border border-teal-700">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewTab('spreadsheet')}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                          previewTab === 'spreadsheet'
+                            ? 'bg-white text-teal-900 shadow-2xs'
+                            : 'text-teal-200 hover:text-white'
+                        }`}
+                      >
+                        Spreadsheet ({activeGrid.length} rows)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewTab('mapped')}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                          previewTab === 'mapped'
+                            ? 'bg-white text-teal-900 shadow-2xs'
+                            : 'text-teal-200 hover:text-white'
+                        }`}
+                      >
+                        Mapped Medications ({activeParsedRows.length})
+                      </button>
+                      {selectedFile.isPdf && (
                         <button
                           type="button"
-                          onClick={() => setPreviewTab('spreadsheet')}
+                          onClick={() => setPreviewTab('pdf')}
                           className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
-                            previewTab === 'spreadsheet'
+                            previewTab === 'pdf'
                               ? 'bg-white text-teal-900 shadow-2xs'
                               : 'text-teal-200 hover:text-white'
                           }`}
                         >
-                          CSV Spreadsheet ({activeGrid.length} rows)
+                          PDF View
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setPreviewTab('mapped')}
-                          className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
-                            previewTab === 'mapped'
-                              ? 'bg-white text-teal-900 shadow-2xs'
-                              : 'text-teal-200 hover:text-white'
-                          }`}
-                        >
-                          Mapped Medications ({activeParsedRows.length})
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
-                  {selectedFile.isPdf ? (
+                  {selectedFile.isPdf && previewTab === 'pdf' ? (
                     <div className="p-3 bg-slate-100">
                       <iframe
                         src={selectedFile.dataUrl}
