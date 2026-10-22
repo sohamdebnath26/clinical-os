@@ -730,6 +730,57 @@ function extractTextRowsFromPdfBuffer(pdfBuffer: Buffer): string[] {
   return extractedCells;
 }
 
+function parseCsvOrDelimitedGrid(text: string, delimiter: string): string[][] {
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentCell = '';
+  let inQuotes = false;
+
+  const cleanText = text.replace(/^\uFEFF/, '');
+  for (let i = 0; i < cleanText.length; i++) {
+    const ch = cleanText[i];
+    const nextCh = cleanText[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && nextCh === '"') {
+        currentCell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && ch === delimiter) {
+      currentRow.push(currentCell.trim());
+      currentCell = '';
+      continue;
+    }
+
+    if (!inQuotes && (ch === '\n' || ch === '\r')) {
+      if (ch === '\r' && nextCh === '\n') {
+        i++;
+      }
+      currentRow.push(currentCell.trim());
+      if (currentRow.some(cell => cell.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentCell = '';
+      continue;
+    }
+
+    currentCell += ch;
+  }
+
+  currentRow.push(currentCell.trim());
+  if (currentRow.some(cell => cell.length > 0)) {
+    rows.push(currentRow);
+  }
+
+  return rows;
+}
+
 function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''): Array<{
   name: string;
   dosage: string;
@@ -747,51 +798,77 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
     instructions: string;
   }> = [];
 
-  const inferFieldsFromDosage = (name: string, rawDosage: string, extraInstructions = '') => {
-    const dLower = `${name} ${rawDosage} ${extraInstructions}`.toLowerCase();
-    let frequency = '1-0-1';
-    if (dLower.includes('every 6 hours') || dLower.includes('4 times daily') || dLower.includes('qid')) {
-      frequency = '1-1-1-1';
-    } else if (dLower.includes('every 8 hours') || dLower.includes('3 times daily') || dLower.includes('three times daily') || dLower.includes('tid') || dLower.includes('tds')) {
-      frequency = '1-1-1';
-    } else if (dLower.includes('every 12 hours') || dLower.includes('twice daily') || dLower.includes('bid') || dLower.includes('bd')) {
-      frequency = '1-0-1';
-    } else if (dLower.includes('bedtime') || dLower.includes('at night') || dLower.includes('hs')) {
-      frequency = '0-0-1';
-    } else if (dLower.includes('once daily') || dLower.includes('every 24 hours') || dLower.includes('od')) {
-      frequency = '1-0-0';
-    } else if (dLower.includes('weekly') || dLower.includes('once a week')) {
-      frequency = 'Once weekly';
-    } else if (dLower.includes('single dose')) {
-      frequency = 'Single stat dose';
+  const inferFieldsFromDosage = (
+    name: string,
+    rawDosage: string,
+    extraInstructions = '',
+    explicitRoute = '',
+    explicitFrequency = '',
+    explicitDuration = ''
+  ) => {
+    let cleanName = name.replace(/^["']|["']$/g, '').trim();
+    let cleanDosage = rawDosage.replace(/^["']|["']$/g, '').trim();
+
+    // If dosage is empty, check if strength is embedded in medicine name (e.g. "Amoxicillin 500 mg")
+    if (!cleanDosage) {
+      const embeddedMatch = cleanName.match(/^(.+?)\s+(\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|iu|%)(?:\/[\d.]+\s*(?:mg|mcg|g|ml))?.*)$/i);
+      if (embeddedMatch) {
+        cleanName = embeddedMatch[1].trim();
+        cleanDosage = embeddedMatch[2].trim();
+      }
     }
 
-    let duration = '5 days';
-    const dayMatch = dLower.match(/for\s+(\d+(?:[–-]\d+)?\s*(?:days?|weeks?|months?))/i);
-    if (dayMatch) {
-      duration = dayMatch[1];
-    } else if (dLower.includes('single dose')) {
-      duration = '1 day';
-    } else if (/topical|cream|gel|ointment|lotion|shampoo|drops/i.test(dLower)) {
-      duration = '14 days';
-    } else if (/antifungal|terbinafine|itraconazole|fluconazole|griseofulvin/i.test(dLower)) {
-      duration = '14 days';
-    } else if (/antiviral|acyclovir|valacyclovir|oseltamivir|tenofovir|entecavir/i.test(dLower)) {
-      duration = '7 days';
+    const dLower = `${cleanName} ${cleanDosage} ${extraInstructions} ${explicitRoute} ${explicitFrequency} ${explicitDuration}`.toLowerCase();
+    let frequency = explicitFrequency.trim() || '1-0-1';
+    if (!explicitFrequency.trim()) {
+      if (dLower.includes('every 6 hours') || dLower.includes('4 times daily') || dLower.includes('qid')) {
+        frequency = '1-1-1-1';
+      } else if (dLower.includes('every 8 hours') || dLower.includes('3 times daily') || dLower.includes('three times daily') || dLower.includes('tid') || dLower.includes('tds')) {
+        frequency = '1-1-1';
+      } else if (dLower.includes('every 12 hours') || dLower.includes('twice daily') || dLower.includes('bid') || dLower.includes('bd')) {
+        frequency = '1-0-1';
+      } else if (dLower.includes('bedtime') || dLower.includes('at night') || dLower.includes('hs')) {
+        frequency = '0-0-1';
+      } else if (dLower.includes('once daily') || dLower.includes('every 24 hours') || dLower.includes('od')) {
+        frequency = '1-0-0';
+      } else if (dLower.includes('weekly') || dLower.includes('once a week')) {
+        frequency = 'Once weekly';
+      } else if (dLower.includes('single dose')) {
+        frequency = 'Single stat dose';
+      }
     }
 
-    const route = /cream|gel|ointment|lotion|shampoo|solution|spf|sunscreen|topical/i.test(dLower)
-      ? 'Topical'
-      : /\b(iv|im|iv\/im|infusion|injection)\b/i.test(dLower)
-      ? 'IV / IM'
-      : /\b(ophthalmic|drops|eye|ear|nasal)\b/i.test(dLower)
-      ? 'Nasal / Drops'
-      : 'Oral';
+    let duration = explicitDuration.trim() || '5 days';
+    if (!explicitDuration.trim()) {
+      const dayMatch = dLower.match(/for\s+(\d+(?:[–-]\d+)?\s*(?:days?|weeks?|months?))/i);
+      if (dayMatch) {
+        duration = dayMatch[1];
+      } else if (dLower.includes('single dose')) {
+        duration = '1 day';
+      } else if (/topical|cream|gel|ointment|lotion|shampoo|drops/i.test(dLower)) {
+        duration = '14 days';
+      } else if (/antifungal|terbinafine|itraconazole|fluconazole|griseofulvin/i.test(dLower)) {
+        duration = '14 days';
+      } else if (/antiviral|acyclovir|valacyclovir|oseltamivir|tenofovir|entecavir/i.test(dLower)) {
+        duration = '7 days';
+      }
+    }
 
-    const instructions = extraInstructions.trim() || `Standard regimen: ${rawDosage}`;
+    const route =
+      explicitRoute.trim() ||
+      (/cream|gel|ointment|lotion|shampoo|solution|spf|sunscreen|topical/i.test(dLower)
+        ? 'Topical'
+        : /\b(iv|im|iv\/im|infusion|injection)\b/i.test(dLower)
+        ? 'IV / IM'
+        : /\b(ophthalmic|drops|eye|ear|nasal)\b/i.test(dLower)
+        ? 'Nasal / Drops'
+        : 'Oral');
+
+    const finalDosage = cleanDosage || 'Standard dose';
+    const instructions = extraInstructions.trim() || `Standard regimen: ${finalDosage}`;
     return {
-      name: name.trim(),
-      dosage: rawDosage.trim() || 'Standard dose',
+      name: cleanName,
+      dosage: finalDosage,
       route,
       frequency,
       duration,
@@ -822,51 +899,140 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
     }
   }
 
-  // Case B: Line-by-line text / CSV / TSV / Pipe / Dash parsing
-  const combinedLines = [
-    ...(results.length === 0 ? cells : []),
-    ...rawTextFallback.split(/\r?\n/)
-  ]
-    .map(l => l.trim())
-    .filter(Boolean);
-
-  for (const line of combinedLines) {
-    if (/^(no\.?|#|s\.?no|medicine\s*name|drug\s*name|medication)\b/i.test(line) && /dosage|dose|frequency/i.test(line)) {
-      continue; // Skip header row
-    }
-
-    // Check CSV / Pipe / Tab separated: Name | Dosage | Frequency | Duration | Instructions
-    const delimiter = line.includes('|')
-      ? '|'
-      : line.includes('\t')
+  // Case B: Full RFC-4180 CSV / TSV / Semicolon / Pipe table parsing on rawTextFallback
+  const cleanedText = rawTextFallback.replace(/^\uFEFF/, '').trim();
+  if (cleanedText) {
+    const firstNonEmptyLine = cleanedText.split(/\r?\n/).find(l => l.trim().length > 0) || '';
+    const delimiter = firstNonEmptyLine.includes('\t')
       ? '\t'
-      : line.split(',').length >= 2
+      : firstNonEmptyLine.includes('|')
+      ? '|'
+      : firstNonEmptyLine.split(';').length > firstNonEmptyLine.split(',').length && firstNonEmptyLine.includes(';')
+      ? ';'
+      : firstNonEmptyLine.includes(',')
       ? ','
       : null;
 
     if (delimiter) {
-      const rawCols = line.split(delimiter).map(s => s.trim().replace(/^["']|["']$/g, ''));
-      const cols = /^\d{1,4}\.?$/.test(rawCols[0]) ? rawCols.slice(1) : rawCols;
-      if (cols.length >= 2 && cols[0].length >= 2) {
-        const [medName, medDose, freqCol, durCol, instrCol] = cols;
-        const base = inferFieldsFromDosage(medName, medDose, instrCol || '');
-        results.push({
-          ...base,
-          frequency: freqCol || base.frequency,
-          duration: durCol || base.duration,
-          instructions: instrCol || base.instructions
-        });
-        continue;
+      const grid = parseCsvOrDelimitedGrid(cleanedText, delimiter);
+      if (grid.length > 0) {
+        const headerCandidate = grid[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+        const isHeaderRow = headerCandidate.some(h =>
+          [
+            'medicine',
+            'medicinename',
+            'medication',
+            'medicationname',
+            'drug',
+            'drugname',
+            'brand',
+            'brandname',
+            'generic',
+            'genericname',
+            'name',
+            'dosage',
+            'dose',
+            'strength',
+            'requireddosage',
+            'frequency',
+            'duration',
+            'instructions',
+            'route'
+          ].includes(h)
+        );
+
+        let nameIdx = -1;
+        let dosageIdx = -1;
+        let routeIdx = -1;
+        let freqIdx = -1;
+        let durIdx = -1;
+        let instrIdx = -1;
+
+        if (isHeaderRow) {
+          headerCandidate.forEach((h, idx) => {
+            if (nameIdx === -1 && ['medicine', 'medicinename', 'medication', 'medicationname', 'drug', 'drugname', 'brand', 'brandname', 'generic', 'genericname', 'name', 'item', 'product'].includes(h)) {
+              nameIdx = idx;
+            } else if (dosageIdx === -1 && ['dosage', 'dose', 'strength', 'requireddosage', 'posology', 'regimen', 'mg', 'concentration'].includes(h)) {
+              dosageIdx = idx;
+            } else if (routeIdx === -1 && ['route', 'form', 'dosageform', 'mode', 'type'].includes(h)) {
+              routeIdx = idx;
+            } else if (freqIdx === -1 && ['frequency', 'freq', 'schedule', 'timing', 'timings'].includes(h)) {
+              freqIdx = idx;
+            } else if (durIdx === -1 && ['duration', 'days', 'course', 'period'].includes(h)) {
+              durIdx = idx;
+            } else if (instrIdx === -1 && ['instructions', 'instruction', 'notes', 'note', 'remarks', 'directions', 'sig', 'advice'].includes(h)) {
+              instrIdx = idx;
+            }
+          });
+        }
+
+        const startRow = isHeaderRow ? 1 : 0;
+        for (let r = startRow; r < grid.length; r++) {
+          const rawRow = grid[r].map(c => c.replace(/^["']|["']$/g, '').trim());
+          if (rawRow.every(c => !c)) continue;
+
+          if (isHeaderRow && nameIdx !== -1) {
+            const medName = rawRow[nameIdx] || '';
+            if (!medName || medName.length < 2) continue;
+            const medDose = dosageIdx !== -1 ? rawRow[dosageIdx] || '' : '';
+            const routeVal = routeIdx !== -1 ? rawRow[routeIdx] || '' : '';
+            const freqVal = freqIdx !== -1 ? rawRow[freqIdx] || '' : '';
+            const durVal = durIdx !== -1 ? rawRow[durIdx] || '' : '';
+            const instrVal = instrIdx !== -1 ? rawRow[instrIdx] || '' : '';
+            results.push(inferFieldsFromDosage(medName, medDose, instrVal, routeVal, freqVal, durVal));
+          } else {
+            // Positional CSV row (strip leading row index like "1", "2.")
+            const cols = /^\d{1,4}\.?$/.test(rawRow[0]) && rawRow.length > 1 ? rawRow.slice(1) : rawRow;
+            const firstCol = cols[0] || '';
+            if (!firstCol || firstCol.length < 2) continue;
+            if (/^(no\.?|#|s\.?no|medicine\s*name|drug\s*name|medication|medicine|name)$/i.test(firstCol)) continue;
+
+            if (cols.length >= 2) {
+              const [medName, medDose, freqCol, durCol, instrCol] = cols;
+              results.push(
+                inferFieldsFromDosage(medName, medDose || '', instrCol || '', '', freqCol || '', durCol || '')
+              );
+            } else if (cols.length === 1) {
+              // Single-column CSV row: check "Medicine - Dosage" or embedded strength
+              const dashMatch = firstCol.match(/^([A-Za-z0-9\s()/+-]{2,60}?)\s*(?:[-–—:]|\s{2,})\s*(.+)$/);
+              if (dashMatch) {
+                results.push(inferFieldsFromDosage(dashMatch[1], dashMatch[2]));
+              } else {
+                results.push(inferFieldsFromDosage(firstCol, ''));
+              }
+            }
+          }
+        }
       }
     }
+  }
 
-    // Check "1. Medicine Name - Dosage" or "Medicine Name : Dosage"
-    const cleanLine = line.replace(/^\d{1,4}[.)]\s*/, '');
-    const dashMatch = cleanLine.match(/^([A-Za-z0-9\s()/+-]{2,60}?)\s*(?:[-–—:]|\s{2,})\s*(.+)$/);
-    if (dashMatch) {
-      const [, medName, medDose] = dashMatch;
-      if (!/^(page|table|section|chapter)\b/i.test(medName.trim())) {
-        results.push(inferFieldsFromDosage(medName, medDose));
+  // Case C: Fallback line-by-line parsing for PDF cells or plain text lines ("1. Medicine - Dosage" or single lines)
+  if (results.length === 0) {
+    const combinedLines = [...cells, ...cleanedText.split(/\r?\n/)]
+      .map(l => l.replace(/^\uFEFF/, '').trim())
+      .filter(Boolean);
+
+    for (const line of combinedLines) {
+      if (/^(no\.?|#|s\.?no|medicine\s*name|drug\s*name|medication|medicine|name)\b/i.test(line) && /dosage|dose|strength|frequency/i.test(line)) {
+        continue;
+      }
+
+      const cleanLine = line.replace(/^\d{1,4}[.)]\s*/, '').trim();
+      if (!cleanLine || cleanLine.length < 2) continue;
+
+      const dashMatch = cleanLine.match(/^([A-Za-z0-9\s()/+-]{2,60}?)\s*(?:[-–—:]|\s{2,})\s*(.+)$/);
+      if (dashMatch) {
+        const [, medName, medDose] = dashMatch;
+        if (!/^(page|table|section|chapter)\b/i.test(medName.trim())) {
+          results.push(inferFieldsFromDosage(medName, medDose));
+          continue;
+        }
+      }
+
+      // Single medicine line fallback (e.g., "Amoxicillin 500 mg" or "Doxycycline")
+      if (/^[A-Za-z][A-Za-z0-9\s()/%+-]{1,65}$/.test(cleanLine) && !/^(page|table|section|chapter)\b/i.test(cleanLine)) {
+        results.push(inferFieldsFromDosage(cleanLine, ''));
       }
     }
   }
@@ -932,14 +1098,27 @@ app.post('/api/formulary/import', authMiddleware, async (req: AuthenticatedReque
       }));
     }
 
-    if (fileDataUrl && typeof fileDataUrl === 'string') {
-      const dataUrlMatch = fileDataUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (dataUrlMatch) {
-        const mimeType = dataUrlMatch[1].toLowerCase();
-        const base64Data = dataUrlMatch[2];
-        const fileBuffer = Buffer.from(base64Data, 'base64');
+    const lowerFilename = typeof filename === 'string' ? filename.toLowerCase().trim() : '';
 
-        if (mimeType.includes('pdf') || (filename && filename.toLowerCase().endsWith('.pdf'))) {
+    if (fileDataUrl && typeof fileDataUrl === 'string') {
+      let fileBuffer: Buffer | null = null;
+      let mimeType = '';
+
+      const base64Marker = ';base64,';
+      const base64Idx = fileDataUrl.indexOf(base64Marker);
+      if (fileDataUrl.startsWith('data:') && base64Idx !== -1) {
+        mimeType = fileDataUrl.slice(5, base64Idx).toLowerCase();
+        const base64Data = fileDataUrl.slice(base64Idx + base64Marker.length).trim();
+        fileBuffer = Buffer.from(base64Data, 'base64');
+      } else if (fileDataUrl.startsWith('data:') && fileDataUrl.includes(',')) {
+        const commaIdx = fileDataUrl.indexOf(',');
+        mimeType = fileDataUrl.slice(5, commaIdx).toLowerCase();
+        const decodedText = decodeURIComponent(fileDataUrl.slice(commaIdx + 1));
+        fileBuffer = Buffer.from(decodedText, 'utf8');
+      }
+
+      if (fileBuffer) {
+        if (mimeType.includes('pdf') || lowerFilename.endsWith('.pdf')) {
           const pdfCells = extractTextRowsFromPdfBuffer(fileBuffer);
           const fromPdf = parseMedicationsFromCellsOrText(pdfCells);
           parsedMedications.push(
@@ -948,7 +1127,7 @@ app.post('/api/formulary/import', authMiddleware, async (req: AuthenticatedReque
         } else {
           // CSV, TSV, JSON, or TXT file
           const textContent = fileBuffer.toString('utf8');
-          if (mimeType.includes('json') || (filename && filename.toLowerCase().endsWith('.json'))) {
+          if (mimeType.includes('json') || lowerFilename.endsWith('.json')) {
             try {
               const jsonArr = JSON.parse(textContent);
               if (Array.isArray(jsonArr)) {
@@ -965,7 +1144,7 @@ app.post('/api/formulary/import', authMiddleware, async (req: AuthenticatedReque
                 );
               }
             } catch {
-              // fallback to line parser
+              // fallback to CSV/text parser
             }
           }
           if (parsedMedications.length === 0) {
@@ -978,7 +1157,8 @@ app.post('/api/formulary/import', authMiddleware, async (req: AuthenticatedReque
       }
     }
 
-    if (rawText && typeof rawText === 'string' && rawText.trim()) {
+    // If rawText is provided (either from Paste mode OR client-side CSV text reader), parse if not already populated
+    if (rawText && typeof rawText === 'string' && rawText.trim() && parsedMedications.length === 0) {
       const fromRaw = parseMedicationsFromCellsOrText([], rawText);
       parsedMedications.push(
         ...fromRaw.map(m => ({ ...m, source: 'csv_upload' as const }))
@@ -989,7 +1169,7 @@ app.post('/api/formulary/import', authMiddleware, async (req: AuthenticatedReque
     if (validMedications.length === 0) {
       return res.status(400).json({
         error:
-          'Could not detect valid medication rows. Ensure your PDF/CSV/Text has Medicine Name and Dosage columns or "Medicine Name - Dosage" lines.'
+          'Could not detect valid medication rows. Ensure your CSV/PDF/Text has Medicine Name and Dosage columns or "Medicine Name - Dosage" lines.'
       });
     }
 

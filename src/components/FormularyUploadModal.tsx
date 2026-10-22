@@ -31,7 +31,14 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
   onUpdated
 }) => {
   const [mode, setMode] = useState<'upload' | 'paste' | 'single'>(initialMode);
-  const [selectedFile, setSelectedFile] = useState<{ name: string; dataUrl: string; size: number } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{
+    name: string;
+    dataUrl: string;
+    textContent?: string;
+    detectedRows?: number;
+    size: number;
+  } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [rawText, setRawText] = useState('');
 
   // Single medicine form state
@@ -49,26 +56,115 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processSelectedFile = (file: File) => {
     setError(null);
     setSuccessMsg(null);
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
+    const lowerName = file.name.toLowerCase();
+    const isTextLike =
+      lowerName.endsWith('.csv') ||
+      lowerName.endsWith('.tsv') ||
+      lowerName.endsWith('.txt') ||
+      lowerName.endsWith('.json') ||
+      file.type.includes('csv') ||
+      file.type.includes('text') ||
+      file.type.includes('excel') ||
+      file.type.includes('json');
+
+    const dataUrlReader = new FileReader();
+    dataUrlReader.onload = () => {
+      const dataUrl = typeof dataUrlReader.result === 'string' ? dataUrlReader.result : '';
+      if (isTextLike) {
+        const textReader = new FileReader();
+        textReader.onload = () => {
+          const textContent = typeof textReader.result === 'string' ? textReader.result : '';
+          const nonEmptyLines = textContent
+            .replace(/^\uFEFF/, '')
+            .split(/\r?\n/)
+            .map(l => l.trim())
+            .filter(Boolean);
+          const hasHeader =
+            nonEmptyLines.length > 1 &&
+            /medicine|medication|drug|name|dosage|dose|strength/i.test(nonEmptyLines[0]);
+          const detectedRows = Math.max(0, nonEmptyLines.length - (hasHeader ? 1 : 0));
+
+          setSelectedFile({
+            name: file.name,
+            dataUrl,
+            textContent,
+            detectedRows,
+            size: file.size
+          });
+        };
+        textReader.onerror = () => {
+          setSelectedFile({
+            name: file.name,
+            dataUrl,
+            size: file.size
+          });
+        };
+        textReader.readAsText(file, 'UTF-8');
+      } else {
         setSelectedFile({
           name: file.name,
-          dataUrl: reader.result,
+          dataUrl,
           size: file.size
         });
       }
     };
-    reader.onerror = () => {
+    dataUrlReader.onerror = () => {
       setError('Failed to read selected file');
     };
-    reader.readAsDataURL(file);
+    dataUrlReader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processSelectedFile(file);
+    e.target.value = '';
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    processSelectedFile(file);
+  };
+
+  const handleDownloadSampleCsv = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const sampleCsv = [
+      'Medicine Name,Required Dosage,Route,Frequency,Duration,Instructions',
+      '"Amoxicillin","500 mg every 8 hours","Oral","1-1-1","5 days","After meals"',
+      '"Azithromycin","500 mg on Day 1, then 250 mg once daily","Oral","1-0-0","5 days","1 hour before or 2 hours after food"',
+      '"Doxycycline","100 mg every 12 hours","Oral","1-0-1","7 days","Take with a full glass of water"',
+      '"Mupirocin 2% Ointment","Apply thin film 3 times daily","Topical","1-1-1","10 days","Apply on affected lesion"',
+      '"Terbinafine","250 mg once daily","Oral","1-0-0","14 days","After meal"'
+    ].join('\n');
+    const blob = new Blob([sampleCsv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'sample_doctor_formulary.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleImportFileOrText = async () => {
@@ -76,7 +172,7 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
     setSuccessMsg(null);
 
     if (mode === 'upload' && !selectedFile) {
-      setError('Please select a PDF, CSV, TXT, or JSON medication file first.');
+      setError('Please select or drop a CSV, PDF, TXT, or JSON medication file first.');
       return;
     }
     if (mode === 'paste' && !rawText.trim()) {
@@ -89,7 +185,7 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
       const res = await api.formulary.importData({
         fileDataUrl: mode === 'upload' ? selectedFile?.dataUrl : undefined,
         filename: mode === 'upload' ? selectedFile?.name : undefined,
-        rawText: mode === 'paste' ? rawText : undefined
+        rawText: mode === 'paste' ? rawText : selectedFile?.textContent
       });
       const msg = `Imported ${res.importedCount} new and updated ${res.updatedCount} medicines in ${doctorName}'s personal library (${res.totalProcessed} total parsed).`;
       setSuccessMsg(msg);
@@ -181,7 +277,7 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
             }`}
           >
             <Upload className="w-3.5 h-3.5" />
-            <span>Upload PDF / CSV File</span>
+            <span>Upload CSV / PDF File</span>
           </button>
           <button
             type="button"
@@ -233,12 +329,20 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
             <div className="space-y-4">
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-teal-300 hover:border-teal-500 bg-teal-50/40 hover:bg-teal-50/70 rounded-2xl p-6 text-center cursor-pointer transition-all"
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
+                  isDragging
+                    ? 'border-teal-600 bg-teal-100/70 scale-[1.01]'
+                    : 'border-teal-300 hover:border-teal-500 bg-teal-50/40 hover:bg-teal-50/70'
+                }`}
               >
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.csv,.tsv,.txt,.json"
+                  accept=".csv,.tsv,.txt,.pdf,.json,text/csv,application/csv,application/vnd.ms-excel,text/comma-separated-values,text/plain,application/pdf,application/json"
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -248,20 +352,34 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
                 <p className="text-xs font-bold text-slate-800">
                   {selectedFile
                     ? `Selected: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)`
-                    : 'Click to upload PDF, CSV, TXT, or JSON Medication File'}
+                    : 'Click or Drag & Drop CSV, PDF, TXT, or JSON Medication File'}
                 </p>
+                {selectedFile && typeof selectedFile.detectedRows === 'number' && selectedFile.detectedRows > 0 && (
+                  <p className="text-[11px] font-bold text-teal-700 mt-1">
+                    Ready to import — {selectedFile.detectedRows} medication row{selectedFile.detectedRows === 1 ? '' : 's'} detected in file
+                  </p>
+                )}
                 <p className="text-[11px] text-slate-500 mt-1">
                   Automatically extracts Medicine Name, Required Dosage, Route, Frequency & Instructions into your personal library
                 </p>
               </div>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-600 space-y-1">
-                <p className="font-bold text-slate-700 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                  Supported PDF & Data Formats:
-                </p>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-600 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-bold text-slate-700 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                    Supported CSV & PDF Formats:
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleDownloadSampleCsv}
+                    className="text-[11px] font-bold text-teal-700 hover:text-teal-900 underline cursor-pointer"
+                  >
+                    Download Sample CSV Template
+                  </button>
+                </div>
+                <p>• Any CSV / Excel export (e.g. Medicine Name, Dosage, Route, Frequency, Duration, Instructions)</p>
                 <p>• Standard 2-column or 3-column PDF tables (e.g. No. | Medicine | Dosage)</p>
-                <p>• CSV / Excel exports (Medicine Name, Dosage, Frequency, Duration, Instructions)</p>
                 <p>• Text lists with "Medicine Name - Dosage" or "Medicine Name | Dosage"</p>
               </div>
 
