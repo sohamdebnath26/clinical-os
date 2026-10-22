@@ -1,7 +1,19 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { DoctorFormularyItem } from '../types';
 import { api } from '../lib/api';
-import { X, Upload, FileText, Plus, CheckCircle2, Pill, Sparkles, BookOpen, FileSpreadsheet } from 'lucide-react';
+import {
+  X,
+  Upload,
+  FileText,
+  Plus,
+  CheckCircle2,
+  Pill,
+  Sparkles,
+  BookOpen,
+  FileSpreadsheet,
+  Table as TableIcon,
+  Eye
+} from 'lucide-react';
 
 interface FormularyUploadModalProps {
   isOpen: boolean;
@@ -17,7 +29,7 @@ interface FormularyUploadModalProps {
   onUpdated: (items: DoctorFormularyItem[], message?: string) => void;
 }
 
-interface ParsedCsvMedRow {
+export interface ParsedCsvMedRow {
   name: string;
   dosage: string;
   route: string;
@@ -27,13 +39,17 @@ interface ParsedCsvMedRow {
   source: 'csv_upload' | 'pdf_upload' | 'manual';
 }
 
-function parseDelimitedGridClient(text: string, delimiter: string): string[][] {
+export function parseDelimitedGridClient(text: string, delimiter: string): string[][] {
   const rows: string[][] = [];
   let currentRow: string[] = [];
   let currentCell = '';
   let inQuotes = false;
 
-  const cleanText = text.replace(/^\uFEFF/, '').replace(/\0/g, '');
+  const cleanText = text
+    .replace(/^\uFEFF/, '')
+    .replace(/\0/g, '')
+    .replace(/^sep=.+\r?\n/i, '');
+
   for (let i = 0; i < cleanText.length; i++) {
     const ch = cleanText[i];
     const nextCh = cleanText[i + 1];
@@ -78,6 +94,37 @@ function parseDelimitedGridClient(text: string, delimiter: string): string[][] {
   return rows;
 }
 
+export function detectDelimiterAndParseGrid(rawText: string): string[][] {
+  const cleanedText = rawText
+    .replace(/^\uFEFF/, '')
+    .replace(/\0/g, '')
+    .replace(/^sep=.+\r?\n/i, '')
+    .trim();
+
+  if (!cleanedText) return [];
+
+  const lines = cleanedText
+    .split(/\r\n|\n|\r/)
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  const sampleLines = lines.slice(0, 15);
+  let delimiter = ',';
+  if (sampleLines.some(l => l.includes('\t'))) {
+    delimiter = '\t';
+  } else if (sampleLines.some(l => l.includes('|'))) {
+    delimiter = '|';
+  } else if (
+    sampleLines.some(l => l.includes(';')) &&
+    sampleLines.reduce((acc, l) => acc + (l.split(';').length - 1), 0) >
+      sampleLines.reduce((acc, l) => acc + (l.split(',').length - 1), 0)
+  ) {
+    delimiter = ';';
+  }
+
+  return parseDelimitedGridClient(cleanedText, delimiter);
+}
+
 function inferMedRowClient(
   rawName: string,
   rawDosage = '',
@@ -90,8 +137,9 @@ function inferMedRowClient(
   let cleanName = rawName.replace(/^["']|["']$/g, '').trim();
   let cleanDosage = rawDosage.replace(/^["']|["']$/g, '').trim();
 
-  if (!cleanName || cleanName.length < 2) return null;
-  if (/^(no\.?|#|s\.?no\.?|sr\.?\s*no\.?|index|id|row)$/i.test(cleanName)) return null;
+  if (!cleanName || cleanName.length < 1) return null;
+  if (/^(no\.?|#|s\.?no\.?|sr\.?\s*no\.?|sl\.?\s*no\.?|index|id|row)$/i.test(cleanName)) return null;
+  if (/^\d{1,5}\.?$/.test(cleanName) && !cleanDosage) return null;
 
   if (!cleanDosage) {
     const embeddedMatch = cleanName.match(
@@ -178,7 +226,20 @@ function inferMedRowClient(
   };
 }
 
-function parseCsvOrTextClient(rawText: string): ParsedCsvMedRow[] {
+function isLikelyHeaderRow(row: string[]): boolean {
+  const normalized = row.map(c => c.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  // A header row should not have long sentences or standalone dosage values like "500mg"
+  const hasDosageDigits = row.some(c => /\b\d+\s*(mg|mcg|g|ml|iu|%)\b/i.test(c));
+  if (hasDosageDigits) return false;
+
+  return normalized.some(h =>
+    /^(medicine|medicinename|medication|medicationname|drug|drugname|brand|brandname|generic|genericname|name|item|itemname|product|productname|particulars|tablet|capsule|formulation|rx|dosage|requireddosage|dose|strength|posology|regimen|frequency|route|duration|instructions|notes|remarks|sig)$/.test(
+      h
+    )
+  );
+}
+
+export function parseCsvOrTextClient(rawText: string): ParsedCsvMedRow[] {
   const results: ParsedCsvMedRow[] = [];
   const cleanedText = rawText
     .replace(/^\uFEFF/, '')
@@ -212,213 +273,140 @@ function parseCsvOrTextClient(rawText: string): ParsedCsvMedRow[] {
     }
   }
 
-  const lines = cleanedText
-    .split(/\r\n|\n|\r/)
-    .map(l => l.trim())
-    .filter(Boolean);
+  const grid = detectDelimiterAndParseGrid(cleanedText);
+  if (grid.length > 0) {
+    let headerRowIndex = -1;
+    let nameIdx = -1;
+    let dosageIdx = -1;
+    let routeIdx = -1;
+    let freqIdx = -1;
+    let durIdx = -1;
+    let instrIdx = -1;
 
-  // Inspect first 10 non-empty lines to detect best delimiter
-  const sampleLines = lines.slice(0, 10);
-  let delimiter: string | null = null;
-  if (sampleLines.some(l => l.includes('\t'))) {
-    delimiter = '\t';
-  } else if (sampleLines.some(l => l.includes('|'))) {
-    delimiter = '|';
-  } else if (
-    sampleLines.some(l => l.includes(';')) &&
-    sampleLines.reduce((acc, l) => acc + (l.split(';').length - 1), 0) >
-      sampleLines.reduce((acc, l) => acc + (l.split(',').length - 1), 0)
-  ) {
-    delimiter = ';';
-  } else if (sampleLines.some(l => l.includes(','))) {
-    delimiter = ',';
-  }
-
-  if (delimiter) {
-    const grid = parseDelimitedGridClient(cleanedText, delimiter);
-    if (grid.length > 0) {
-      // Find header row within the first 3 rows (in case row 0 is a document title)
-      let headerRowIndex = -1;
-      let nameIdx = -1;
-      let dosageIdx = -1;
-      let routeIdx = -1;
-      let freqIdx = -1;
-      let durIdx = -1;
-      let instrIdx = -1;
-
-      for (let r = 0; r < Math.min(3, grid.length); r++) {
+    for (let r = 0; r < Math.min(2, grid.length); r++) {
+      if (isLikelyHeaderRow(grid[r])) {
+        headerRowIndex = r;
         const candidate = grid[r].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-        const hasHeaderKeyword = candidate.some(
-          h =>
-            h.includes('medicin') ||
-            h.includes('medicat') ||
-            h.includes('drug') ||
-            h.includes('brand') ||
-            h.includes('generic') ||
-            h === 'name' ||
-            h.includes('itemname') ||
-            h.includes('product') ||
-            h.includes('dosage') ||
-            h.includes('dose') ||
-            h.includes('strength') ||
-            h.includes('posology') ||
-            h.includes('regimen') ||
-            h.includes('frequency')
-        );
-        if (hasHeaderKeyword) {
-          headerRowIndex = r;
-          candidate.forEach((h, idx) => {
-            if (
-              nameIdx === -1 &&
-              (h.includes('medicin') ||
-                h.includes('medicat') ||
-                h.includes('drug') ||
-                h.includes('brand') ||
-                h.includes('generic') ||
-                h === 'name' ||
-                h.includes('nameof') ||
-                h.includes('item') ||
-                h.includes('product') ||
-                h === 'rx')
-            ) {
-              nameIdx = idx;
-            } else if (
-              dosageIdx === -1 &&
-              (h.includes('dosage') ||
-                h.includes('dose') ||
-                h.includes('strength') ||
-                h.includes('posology') ||
-                h.includes('regimen') ||
-                h === 'mg' ||
-                h.includes('conc'))
-            ) {
-              dosageIdx = idx;
-            } else if (
-              routeIdx === -1 &&
-              (h.includes('route') || h.includes('form') || h.includes('mode') || h === 'type')
-            ) {
-              routeIdx = idx;
-            } else if (
-              freqIdx === -1 &&
-              (h.includes('freq') || h.includes('schedule') || h.includes('timing'))
-            ) {
-              freqIdx = idx;
-            } else if (
-              durIdx === -1 &&
-              (h.includes('durat') || h === 'days' || h.includes('course') || h.includes('period'))
-            ) {
-              durIdx = idx;
-            } else if (
-              instrIdx === -1 &&
-              (h.includes('instruct') ||
-                h.includes('note') ||
-                h.includes('remark') ||
-                h.includes('direct') ||
-                h === 'sig' ||
-                h.includes('advice'))
-            ) {
-              instrIdx = idx;
-            }
-          });
-
-          // If header row was detected (e.g. via "Dosage") but nameIdx wasn't matched, pick first non-index column
-          if (nameIdx === -1) {
-            const firstNonIndex = candidate.findIndex(
-              (h, idx) =>
-                idx !== dosageIdx &&
-                idx !== routeIdx &&
-                idx !== freqIdx &&
-                idx !== durIdx &&
-                idx !== instrIdx &&
-                !/^(no|sno|srno|id|index|row)$/.test(h)
-            );
-            if (firstNonIndex !== -1) nameIdx = firstNonIndex;
+        candidate.forEach((h, idx) => {
+          if (
+            nameIdx === -1 &&
+            /^(medicine|medicinename|medication|medicationname|drug|drugname|brand|brandname|generic|genericname|name|nameofmedicine|item|itemname|product|productname|particulars|tablet|capsule|formulation|rx)$/.test(
+              h
+            )
+          ) {
+            nameIdx = idx;
+          } else if (
+            dosageIdx === -1 &&
+            /^(dosage|requireddosage|dose|strength|posology|regimen|concentration|mg)$/.test(h)
+          ) {
+            dosageIdx = idx;
+          } else if (routeIdx === -1 && /^(route|form|mode|type|administration)$/.test(h)) {
+            routeIdx = idx;
+          } else if (freqIdx === -1 && /^(frequency|freq|schedule|timing)$/.test(h)) {
+            freqIdx = idx;
+          } else if (durIdx === -1 && /^(duration|days|course|period)$/.test(h)) {
+            durIdx = idx;
+          } else if (
+            instrIdx === -1 &&
+            /^(instructions|instruction|notes|note|remarks|remark|directions|sig|advice)$/.test(h)
+          ) {
+            instrIdx = idx;
           }
-          break;
+        });
+
+        if (nameIdx === -1) {
+          const firstNonIndex = candidate.findIndex(
+            (h, idx) =>
+              idx !== dosageIdx &&
+              idx !== routeIdx &&
+              idx !== freqIdx &&
+              idx !== durIdx &&
+              idx !== instrIdx &&
+              !/^(no|sno|srno|slno|id|index|row)$/.test(h) &&
+              !/^\d+$/.test(h)
+          );
+          if (firstNonIndex !== -1) nameIdx = firstNonIndex;
         }
+        break;
       }
+    }
 
-      const startRow = headerRowIndex !== -1 ? headerRowIndex + 1 : 0;
-      for (let r = startRow; r < grid.length; r++) {
-        const rawRow = grid[r].map(c => c.replace(/^["']|["']$/g, '').trim());
-        if (rawRow.every(c => !c)) continue;
+    const startRow = headerRowIndex !== -1 ? headerRowIndex + 1 : 0;
+    for (let r = startRow; r < grid.length; r++) {
+      const rawRow = grid[r].map(c => c.replace(/^["']|["']$/g, '').trim());
+      if (rawRow.every(c => !c)) continue;
 
-        if (headerRowIndex !== -1 && nameIdx !== -1) {
-          const medName = rawRow[nameIdx] || '';
-          const medDose =
-            dosageIdx !== -1
-              ? rawRow[dosageIdx] || ''
-              : rawRow.find((_, idx) => idx !== nameIdx && idx > nameIdx) || '';
-          const routeVal = routeIdx !== -1 ? rawRow[routeIdx] || '' : '';
-          const freqVal = freqIdx !== -1 ? rawRow[freqIdx] || '' : '';
-          const durVal = durIdx !== -1 ? rawRow[durIdx] || '' : '';
-          const instrVal = instrIdx !== -1 ? rawRow[instrIdx] || '' : '';
+      if (headerRowIndex !== -1 && nameIdx !== -1) {
+        const medName = rawRow[nameIdx] || '';
+        const medDose =
+          dosageIdx !== -1
+            ? rawRow[dosageIdx] || ''
+            : rawRow.find((val, idx) => idx !== nameIdx && idx > nameIdx && Boolean(val)) || '';
+        const routeVal = routeIdx !== -1 ? rawRow[routeIdx] || '' : '';
+        const freqVal = freqIdx !== -1 ? rawRow[freqIdx] || '' : '';
+        const durVal = durIdx !== -1 ? rawRow[durIdx] || '' : '';
+        const instrVal = instrIdx !== -1 ? rawRow[instrIdx] || '' : '';
+        const inferred = inferMedRowClient(
+          medName,
+          medDose,
+          instrVal,
+          routeVal,
+          freqVal,
+          durVal,
+          'csv_upload'
+        );
+        if (inferred) results.push(inferred);
+      } else {
+        // Positional CSV row (strip leading row number like "1" or "1.")
+        const cols =
+          /^\d{1,5}\.?$/.test(rawRow[0]) && rawRow.length > 1 ? rawRow.slice(1) : rawRow;
+        const firstCol = cols[0] || '';
+        if (!firstCol) continue;
+        if (
+          /^(no\.?|#|s\.?no|sl\.?no|medicine\s*name|drug\s*name|medication|medicine|name)$/i.test(
+            firstCol
+          ) &&
+          cols.length > 1 &&
+          /dosage|dose|strength|frequency/i.test(cols[1] || '')
+        ) {
+          continue;
+        }
+
+        if (cols.length >= 2) {
+          const [medName, medDose, freqCol, durCol, instrCol] = cols;
           const inferred = inferMedRowClient(
             medName,
-            medDose,
-            instrVal,
-            routeVal,
-            freqVal,
-            durVal,
+            medDose || '',
+            instrCol || '',
+            '',
+            freqCol || '',
+            durCol || '',
             'csv_upload'
           );
           if (inferred) results.push(inferred);
-        } else {
-          // Positional CSV row (strip leading row number like "1" or "1.")
-          const cols =
-            /^\d{1,5}\.?$/.test(rawRow[0]) && rawRow.length > 1 ? rawRow.slice(1) : rawRow;
-          const firstCol = cols[0] || '';
-          if (!firstCol || firstCol.length < 2) continue;
-          if (/^(no\.?|#|s\.?no|medicine\s*name|drug\s*name|medication|medicine|name)$/i.test(firstCol)) {
-            continue;
-          }
-
-          if (cols.length >= 2) {
-            const [medName, medDose, freqCol, durCol, instrCol] = cols;
-            const inferred = inferMedRowClient(
-              medName,
-              medDose || '',
-              instrCol || '',
-              '',
-              freqCol || '',
-              durCol || '',
-              'csv_upload'
-            );
-            if (inferred) results.push(inferred);
-          } else if (cols.length === 1) {
-            const dashMatch = firstCol.match(
-              /^([A-Za-z0-9\s()/+-]{2,65}?)\s*(?:[-–—:]|\s{2,})\s*(.+)$/
-            );
-            const inferred = dashMatch
-              ? inferMedRowClient(dashMatch[1], dashMatch[2], '', '', '', '', 'csv_upload')
-              : inferMedRowClient(firstCol, '', '', '', '', '', 'csv_upload');
-            if (inferred) results.push(inferred);
-          }
+        } else if (cols.length === 1) {
+          const dashMatch = firstCol.match(
+            /^([A-Za-z0-9\s()/+-]{2,65}?)\s*(?:[-–—:]|\s{2,})\s*(.+)$/
+          );
+          const inferred = dashMatch
+            ? inferMedRowClient(dashMatch[1], dashMatch[2], '', '', '', '', 'csv_upload')
+            : inferMedRowClient(firstCol, '', '', '', '', '', 'csv_upload');
+          if (inferred) results.push(inferred);
         }
       }
     }
-  }
 
-  // Fallback line-by-line parser if delimiter parser yielded 0 rows
-  if (results.length === 0) {
-    for (const line of lines) {
-      if (
-        /^(no\.?|#|s\.?no|medicine\s*name|drug\s*name|medication|medicine|name)\b/i.test(line) &&
-        /dosage|dose|strength|frequency/i.test(line)
-      ) {
-        continue;
-      }
-      const cleanLine = line.replace(/^\d{1,5}[.)]\s*/, '').trim();
-      if (!cleanLine || cleanLine.length < 2) continue;
-
-      const dashMatch = cleanLine.match(
-        /^([A-Za-z0-9\s()/+-]{2,65}?)\s*(?:[-–—:]|\s{2,})\s*(.+)$/
-      );
-      if (dashMatch) {
-        const inferred = inferMedRowClient(dashMatch[1], dashMatch[2], '', '', '', '', 'csv_upload');
-        if (inferred) results.push(inferred);
-      } else {
-        const inferred = inferMedRowClient(cleanLine, '', '', '', '', '', 'csv_upload');
+    // Guaranteed fallback: if grid had rows (e.g., 1-row CSV or custom headers) and results is still 0, map every non-empty row directly
+    if (results.length === 0 && grid.length > 0) {
+      for (const row of grid) {
+        const nonEmpty = row.map(c => c.replace(/^["']|["']$/g, '').trim()).filter(Boolean);
+        if (nonEmpty.length === 0) continue;
+        const cols =
+          /^\d{1,5}\.?$/.test(nonEmpty[0]) && nonEmpty.length > 1 ? nonEmpty.slice(1) : nonEmpty;
+        const nameVal = cols[0] || nonEmpty[0];
+        const doseVal = cols[1] || 'Standard dose';
+        const extraVal = cols.slice(2).join(' · ');
+        const inferred = inferMedRowClient(nameVal, doseVal, extraVal, '', '', '', 'csv_upload');
         if (inferred) results.push(inferred);
       }
     }
@@ -427,7 +415,7 @@ function parseCsvOrTextClient(rawText: string): ParsedCsvMedRow[] {
   return results;
 }
 
-function decodeArrayBufferToText(buffer: ArrayBuffer): string {
+export function decodeArrayBufferToText(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
     return new TextDecoder('utf-16le').decode(buffer);
@@ -457,9 +445,12 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
     name: string;
     dataUrl: string;
     textContent?: string;
+    csvGrid?: string[][];
     parsedRows?: ParsedCsvMedRow[];
+    isPdf?: boolean;
     size: number;
   } | null>(null);
+  const [previewTab, setPreviewTab] = useState<'spreadsheet' | 'mapped'>('spreadsheet');
   const [isDragging, setIsDragging] = useState(false);
   const [rawText, setRawText] = useState('');
 
@@ -476,56 +467,84 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+      if (initialMedName) setSingleName(initialMedName);
+      if (initialDosage) setSingleDosage(initialDosage);
+      if (initialRoute) setSingleRoute(initialRoute);
+      if (initialFrequency) setSingleFrequency(initialFrequency);
+      if (initialDuration) setSingleDuration(initialDuration);
+      if (initialInstructions) setSingleInstructions(initialInstructions);
+    }
+  }, [
+    isOpen,
+    initialMode,
+    initialMedName,
+    initialDosage,
+    initialRoute,
+    initialFrequency,
+    initialDuration,
+    initialInstructions
+  ]);
+
   if (!isOpen) return null;
 
-  const processSelectedFile = (file: File) => {
+  const processSelectedFile = async (file: File) => {
     setError(null);
     setSuccessMsg(null);
 
     const lowerName = file.name.toLowerCase();
     const isPdf = lowerName.endsWith('.pdf') || file.type === 'application/pdf';
 
-    const dataUrlReader = new FileReader();
-    dataUrlReader.onload = () => {
-      const dataUrl = typeof dataUrlReader.result === 'string' ? dataUrlReader.result : '';
-      if (!isPdf) {
-        // Read any non-PDF file (CSV, TSV, TXT, JSON, Excel text export, even unknown MIME types) as ArrayBuffer
-        const bufferReader = new FileReader();
-        bufferReader.onload = () => {
-          const textContent =
-            bufferReader.result instanceof ArrayBuffer
-              ? decodeArrayBufferToText(bufferReader.result)
-              : '';
-          const parsedRows = parseCsvOrTextClient(textContent);
+    try {
+      // Read dataUrl and ArrayBuffer in parallel for instant, reliable CSV preview rendering
+      const [dataUrl, arrayBuffer] = await Promise.all([
+        new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+          reader.onerror = () => reject(new Error('Failed to read file as Data URL'));
+          reader.readAsDataURL(file);
+        }),
+        !isPdf
+          ? new Promise<ArrayBuffer>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () =>
+                reader.result instanceof ArrayBuffer
+                  ? resolve(reader.result)
+                  : reject(new Error('Failed to read file buffer'));
+              reader.onerror = () => reject(new Error('Failed to read file buffer'));
+              reader.readAsArrayBuffer(file);
+            })
+          : Promise.resolve(new ArrayBuffer(0))
+      ]);
 
-          setSelectedFile({
-            name: file.name,
-            dataUrl,
-            textContent,
-            parsedRows,
-            size: file.size
-          });
-        };
-        bufferReader.onerror = () => {
-          setSelectedFile({
-            name: file.name,
-            dataUrl,
-            size: file.size
-          });
-        };
-        bufferReader.readAsArrayBuffer(file);
+      if (!isPdf) {
+        const textContent = decodeArrayBufferToText(arrayBuffer);
+        const csvGrid = detectDelimiterAndParseGrid(textContent);
+        const parsedRows = parseCsvOrTextClient(textContent);
+
+        setSelectedFile({
+          name: file.name,
+          dataUrl,
+          textContent,
+          csvGrid,
+          parsedRows,
+          isPdf: false,
+          size: file.size
+        });
+        setPreviewTab('spreadsheet');
       } else {
         setSelectedFile({
           name: file.name,
           dataUrl,
+          isPdf: true,
           size: file.size
         });
       }
-    };
-    dataUrlReader.onerror = () => {
-      setError('Failed to read selected file');
-    };
-    dataUrlReader.readAsDataURL(file);
+    } catch {
+      setError('Failed to read the selected file. Please try again.');
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -577,6 +596,31 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleLoadSampleIntoPreview = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const sampleCsv = [
+      'Medicine Name,Required Dosage,Route,Frequency,Duration,Instructions',
+      '"Amoxicillin","500 mg every 8 hours","Oral","1-1-1","5 days","After meals"',
+      '"Azithromycin","500 mg on Day 1, then 250 mg once daily","Oral","1-0-0","5 days","1 hour before or 2 hours after food"',
+      '"Doxycycline","100 mg every 12 hours","Oral","1-0-1","7 days","Take with a full glass of water"',
+      '"Mupirocin 2% Ointment","Apply thin film 3 times daily","Topical","1-1-1","10 days","Apply on affected lesion"',
+      '"Terbinafine","250 mg once daily","Oral","1-0-0","14 days","After meal"'
+    ].join('\n');
+    const csvGrid = detectDelimiterAndParseGrid(sampleCsv);
+    const parsedRows = parseCsvOrTextClient(sampleCsv);
+    const base64 = btoa(unescape(encodeURIComponent(sampleCsv)));
+    setSelectedFile({
+      name: 'sample_doctor_formulary.csv',
+      dataUrl: `data:text/csv;base64,${base64}`,
+      textContent: sampleCsv,
+      csvGrid,
+      parsedRows,
+      isPdf: false,
+      size: sampleCsv.length
+    });
+    setPreviewTab('spreadsheet');
+  };
+
   const handleImportFileOrText = async () => {
     setError(null);
     setSuccessMsg(null);
@@ -608,9 +652,6 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
       const msg = `Imported ${res.importedCount} new and updated ${res.updatedCount} medicines in ${doctorName}'s personal library (${res.totalProcessed} total parsed).`;
       setSuccessMsg(msg);
       onUpdated(res.items, msg);
-      setTimeout(() => {
-        onClose();
-      }, 900);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to import medications');
     } finally {
@@ -653,21 +694,30 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
     }
   };
 
+  // Live preview for Paste mode as well
+  const pastePreviewGrid = mode === 'paste' && rawText.trim() ? detectDelimiterAndParseGrid(rawText) : [];
+  const pastePreviewRows = mode === 'paste' && rawText.trim() ? parseCsvOrTextClient(rawText) : [];
+
+  const activeGrid = mode === 'upload' ? selectedFile?.csvGrid || [] : pastePreviewGrid;
+  const activeParsedRows = mode === 'upload' ? selectedFile?.parsedRows || [] : pastePreviewRows;
+  const maxCols = activeGrid.reduce((max, r) => Math.max(max, r.length), 0);
+  const firstRowIsHeader = activeGrid.length > 1 && isLikelyHeaderRow(activeGrid[0]);
+
   return (
-    <div className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+      <div className="bg-white w-full max-w-3xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
         {/* Header */}
-        <div className="px-5 py-4 bg-gradient-to-r from-teal-900 to-teal-800 text-white flex items-center justify-between">
+        <div className="px-5 py-3.5 bg-gradient-to-r from-teal-900 to-teal-800 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
               <BookOpen className="w-4 h-4 text-teal-200" />
             </div>
             <div>
               <h3 className="text-sm font-bold tracking-tight">
-                Personal Medical Library — {doctorName}
+                Personal Medical Library &amp; CSV Preview — {doctorName}
               </h3>
               <p className="text-[11px] text-teal-100/90">
-                Upload CSV/PDF drug formularies or add custom medicines for instant auto-lookup while typing
+                Upload any CSV / PDF medication sheet, preview the spreadsheet rows &amp; columns live, and save to your library
               </p>
             </div>
           </div>
@@ -681,7 +731,7 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
         </div>
 
         {/* Mode Tabs */}
-        <div className="px-5 pt-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+        <div className="px-5 pt-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => {
@@ -710,7 +760,7 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Paste Medicine Data</span>
+            <span>Paste CSV / Medicine Data</span>
           </button>
           <button
             type="button"
@@ -729,33 +779,44 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-5 space-y-4">
+        {/* Scrollable Body */}
+        <div className="p-5 space-y-4 overflow-y-auto flex-1">
           {error && (
             <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-medium">
               {error}
             </div>
           )}
           {successMsg && (
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-semibold flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>{successMsg}</span>
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-semibold flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{successMsg}</span>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold shrink-0 cursor-pointer"
+              >
+                Done
+              </button>
             </div>
           )}
 
           {mode === 'upload' && (
             <div className="space-y-4">
-              {/* Native label + unrestricted file input so no OS file dialog ever greys out .csv files */}
+              {/* Dropzone */}
               <div
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={handleDragOver}
                 onDragEnter={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
+                className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all ${
                   isDragging
                     ? 'border-teal-600 bg-teal-100/70 scale-[1.01]'
-                    : 'border-teal-300 hover:border-teal-500 bg-teal-50/40 hover:bg-teal-50/70'
+                    : selectedFile
+                    ? 'border-teal-500 bg-teal-50/50'
+                    : 'border-teal-300 hover:border-teal-500 bg-teal-50/30 hover:bg-teal-50/60'
                 }`}
               >
                 <input
@@ -764,23 +825,23 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
                   onChange={handleFileChange}
                   className="hidden"
                 />
-                <div className="w-11 h-11 rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center mx-auto mb-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center mx-auto mb-2.5">
                   <FileSpreadsheet className="w-5 h-5" />
                 </div>
                 <p className="text-xs font-bold text-slate-800">
                   {selectedFile
-                    ? `Selected: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)`
-                    : 'Click or Drag & Drop any CSV (.csv), PDF (.pdf), TXT, or JSON File'}
+                    ? `Loaded File: ${selectedFile.name} (${Math.max(0.1, selectedFile.size / 1024).toFixed(1)} KB)`
+                    : 'Click or Drag & Drop any CSV (.csv), PDF (.pdf), TSV, or TXT File'}
                 </p>
-                {selectedFile && selectedFile.parsedRows && selectedFile.parsedRows.length > 0 && (
+                {selectedFile && !selectedFile.isPdf && (
                   <p className="text-[11px] font-bold text-teal-700 mt-1">
-                    Ready to import — {selectedFile.parsedRows.length} medication{selectedFile.parsedRows.length === 1 ? '' : 's'} parsed from CSV/text file
+                    CSV Preview Rendered Below — {activeGrid.length} row{activeGrid.length === 1 ? '' : 's'} ({activeParsedRows.length} medication{activeParsedRows.length === 1 ? '' : 's'} extracted)
                   </p>
                 )}
                 <p className="text-[11px] text-slate-500 mt-1 mb-3">
-                  All CSV files (.csv), PDF tables (.pdf), TSV, and text lists are supported without file-picker restrictions
+                  Supports all CSV spreadsheets, Excel CSV exports, TSV, and PDF tables
                 </p>
-                <div className="flex items-center justify-center gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   <button
                     type="button"
                     onClick={e => {
@@ -792,55 +853,192 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
                     <Upload className="w-3.5 h-3.5" />
                     <span>{selectedFile ? 'Choose Another CSV / PDF File' : 'Browse CSV / PDF File'}</span>
                   </button>
+
+                  {!selectedFile && (
+                    <button
+                      type="button"
+                      onClick={handleLoadSampleIntoPreview}
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-teal-50 text-teal-800 border border-teal-300 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Preview Sample CSV</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Instant Preview of Parsed CSV Medications */}
-              {selectedFile && selectedFile.parsedRows && selectedFile.parsedRows.length > 0 && (
-                <div className="border border-teal-200 bg-teal-50/30 rounded-xl overflow-hidden">
-                  <div className="px-3 py-2 bg-teal-100/60 border-b border-teal-200 flex items-center justify-between text-[11px] font-bold text-teal-900">
-                    <span>Preview ({selectedFile.parsedRows.length} medications ready to import)</span>
-                    <span className="text-[10px] font-semibold text-teal-700">Auto-mapped columns</span>
-                  </div>
-                  <div className="max-h-36 overflow-y-auto divide-y divide-teal-100 text-[11px]">
-                    {selectedFile.parsedRows.slice(0, 25).map((m, idx) => (
-                      <div key={idx} className="px-3 py-1.5 flex items-center justify-between gap-2">
-                        <span className="font-bold text-slate-800 truncate">{m.name}</span>
-                        <span className="text-teal-800 font-medium truncate shrink-0">
-                          {m.dosage} · {m.frequency}
+              {/* LIVE CSV / PDF PREVIEW PANEL */}
+              {selectedFile && (
+                <div className="border border-teal-300 bg-white rounded-2xl shadow-xs overflow-hidden">
+                  <div className="px-4 py-2.5 bg-teal-900 text-white flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <TableIcon className="w-4 h-4 text-teal-200" />
+                      <span className="text-xs font-bold">
+                        Live File Preview: {selectedFile.name}
+                      </span>
+                      {!selectedFile.isPdf && (
+                        <span className="px-2 py-0.5 rounded-full bg-teal-700 text-teal-100 text-[10px] font-bold">
+                          {activeGrid.length} CSV Rows · {activeParsedRows.length} Medications
                         </span>
+                      )}
+                    </div>
+
+                    {!selectedFile.isPdf && (
+                      <div className="inline-flex items-center bg-teal-950/60 p-0.5 rounded-lg border border-teal-700">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewTab('spreadsheet')}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                            previewTab === 'spreadsheet'
+                              ? 'bg-white text-teal-900 shadow-2xs'
+                              : 'text-teal-200 hover:text-white'
+                          }`}
+                        >
+                          CSV Spreadsheet ({activeGrid.length} rows)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewTab('mapped')}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                            previewTab === 'mapped'
+                              ? 'bg-white text-teal-900 shadow-2xs'
+                              : 'text-teal-200 hover:text-white'
+                          }`}
+                        >
+                          Mapped Medications ({activeParsedRows.length})
+                        </button>
                       </div>
-                    ))}
+                    )}
                   </div>
+
+                  {selectedFile.isPdf ? (
+                    <div className="p-3 bg-slate-100">
+                      <iframe
+                        src={selectedFile.dataUrl}
+                        title={selectedFile.name}
+                        className="w-full h-64 rounded-xl border border-slate-300 bg-white"
+                      />
+                    </div>
+                  ) : previewTab === 'spreadsheet' ? (
+                    /* RAW CSV SPREADSHEET TABLE PREVIEW */
+                    activeGrid.length > 0 ? (
+                      <div className="max-h-64 overflow-auto">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-10">
+                            <tr>
+                              <th className="py-2 px-3 text-[10px] font-bold uppercase text-slate-400 border-r border-slate-200 w-10">
+                                Row
+                              </th>
+                              {Array.from({ length: maxCols }).map((_, cIdx) => (
+                                <th
+                                  key={cIdx}
+                                  className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-teal-900 border-r border-slate-200 last:border-r-0"
+                                >
+                                  {firstRowIsHeader && activeGrid[0][cIdx]
+                                    ? activeGrid[0][cIdx]
+                                    : `Column ${cIdx + 1}`}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200">
+                            {(firstRowIsHeader ? activeGrid.slice(1) : activeGrid).map((row, rIdx) => (
+                              <tr key={rIdx} className="hover:bg-teal-50/40 transition-colors">
+                                <td className="py-2 px-3 font-mono text-[10px] text-slate-400 bg-slate-50/70 border-r border-slate-200">
+                                  {rIdx + 1}
+                                </td>
+                                {Array.from({ length: maxCols }).map((_, cIdx) => (
+                                  <td
+                                    key={cIdx}
+                                    className={`py-2 px-3 border-r border-slate-100 last:border-r-0 ${
+                                      cIdx === 0 ? 'font-bold text-slate-900' : 'text-slate-700'
+                                    }`}
+                                  >
+                                    {row[cIdx] || '—'}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-4 text-xs font-mono text-slate-700 bg-slate-50 max-h-48 overflow-auto whitespace-pre-wrap">
+                        {selectedFile.textContent || 'Empty CSV file'}
+                      </div>
+                    )
+                  ) : (
+                    /* AUTO-MAPPED MEDICATIONS TABLE PREVIEW */
+                    <div className="max-h-64 overflow-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-teal-50 border-b border-teal-200 text-[10px] font-bold uppercase tracking-wider text-teal-900 sticky top-0 z-10">
+                          <tr>
+                            <th className="py-2 px-3 w-10">#</th>
+                            <th className="py-2 px-3">Medicine Name</th>
+                            <th className="py-2 px-3">Required Dosage</th>
+                            <th className="py-2 px-3">Route</th>
+                            <th className="py-2 px-3">Frequency</th>
+                            <th className="py-2 px-3">Duration</th>
+                            <th className="py-2 px-3">Instructions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {activeParsedRows.map((m, idx) => (
+                            <tr key={idx} className="hover:bg-teal-50/40">
+                              <td className="py-2 px-3 font-mono text-[10px] text-slate-400">
+                                {idx + 1}
+                              </td>
+                              <td className="py-2 px-3 font-bold text-slate-900">{m.name}</td>
+                              <td className="py-2 px-3 text-blue-800 font-semibold">{m.dosage}</td>
+                              <td className="py-2 px-3 text-slate-600">{m.route}</td>
+                              <td className="py-2 px-3 font-mono text-teal-800 font-bold">
+                                {m.frequency}
+                              </td>
+                              <td className="py-2 px-3 text-slate-600">{m.duration}</td>
+                              <td className="py-2 px-3 text-slate-500">{m.instructions}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-600 space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <p className="font-bold text-slate-700 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                    Supported CSV & PDF Formats:
+                    Supported CSV &amp; PDF Formats:
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleDownloadSampleCsv}
-                    className="text-[11px] font-bold text-teal-700 hover:text-teal-900 underline cursor-pointer"
-                  >
-                    Download Sample CSV Template
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleLoadSampleIntoPreview}
+                      className="text-[11px] font-bold text-teal-700 hover:text-teal-900 underline cursor-pointer"
+                    >
+                      Load Sample CSV in Preview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadSampleCsv}
+                      className="text-[11px] font-bold text-teal-700 hover:text-teal-900 underline cursor-pointer"
+                    >
+                      Download Sample CSV Template
+                    </button>
+                  </div>
                 </div>
                 <p>• Any CSV / Excel export (e.g. Medicine Name, Dosage, Route, Frequency, Duration, Instructions)</p>
                 <p>• Standard 2-column or 3-column PDF tables (e.g. No. | Medicine | Dosage)</p>
-                <p>• Text lists with "Medicine Name - Dosage" or "Medicine Name | Dosage"</p>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={onClose}
                   className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
                 >
-                  Cancel
+                  Close
                 </button>
                 <button
                   type="button"
@@ -856,26 +1054,63 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
           )}
 
           {mode === 'paste' && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                  Paste Medications & Dosages (One per line — CSV, Pipe |, Tab, or Dash - separated)
+                  Paste CSV or Medications &amp; Dosages (One per line — Comma, Pipe |, Tab, or Dash - separated)
                 </label>
                 <textarea
-                  rows={7}
+                  rows={5}
                   value={rawText}
                   onChange={e => setRawText(e.target.value)}
-                  placeholder={`Examples:\nAmoxicillin + Clavulanate, 625 mg, Oral, 1-0-1, 7 days, After food\nCefpodoxime Proxetil - 200 mg orally every 12 hours for 7 days\nTacrolimus 0.1% Ointment | Apply thin layer | 1-0-1 | 14 days | Apply on affected plaques`}
+                  placeholder={`Medicine Name,Required Dosage,Route,Frequency,Duration,Instructions\nAmoxicillin + Clavulanate, 625 mg, Oral, 1-0-1, 7 days, After food\nCefpodoxime Proxetil - 200 mg orally every 12 hours for 7 days`}
                   className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
                 />
               </div>
+
+              {/* Live Paste CSV Preview */}
+              {pastePreviewRows.length > 0 && (
+                <div className="border border-teal-200 rounded-xl overflow-hidden">
+                  <div className="px-3 py-2 bg-teal-50 border-b border-teal-200 text-[11px] font-bold text-teal-900 flex items-center justify-between">
+                    <span>Live CSV Preview ({pastePreviewRows.length} medications detected)</span>
+                    <span className="text-[10px] text-teal-700">Auto-mapped</span>
+                  </div>
+                  <div className="max-h-44 overflow-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase text-slate-500">
+                        <tr>
+                          <th className="py-1.5 px-3">#</th>
+                          <th className="py-1.5 px-3">Medicine</th>
+                          <th className="py-1.5 px-3">Dosage</th>
+                          <th className="py-1.5 px-3">Route</th>
+                          <th className="py-1.5 px-3">Frequency</th>
+                          <th className="py-1.5 px-3">Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {pastePreviewRows.map((m, idx) => (
+                          <tr key={idx}>
+                            <td className="py-1.5 px-3 font-mono text-[10px] text-slate-400">{idx + 1}</td>
+                            <td className="py-1.5 px-3 font-bold text-slate-900">{m.name}</td>
+                            <td className="py-1.5 px-3 text-blue-800 font-semibold">{m.dosage}</td>
+                            <td className="py-1.5 px-3 text-slate-600">{m.route}</td>
+                            <td className="py-1.5 px-3 font-mono text-teal-800 font-bold">{m.frequency}</td>
+                            <td className="py-1.5 px-3 text-slate-600">{m.duration}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={onClose}
                   className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
                 >
-                  Cancel
+                  Close
                 </button>
                 <button
                   type="button"

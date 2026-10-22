@@ -939,77 +939,50 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
         let durIdx = -1;
         let instrIdx = -1;
 
-        for (let r = 0; r < Math.min(3, grid.length); r++) {
+        for (let r = 0; r < Math.min(2, grid.length); r++) {
+          const hasDosageDigits = grid[r].some(c => /\b\d+\s*(mg|mcg|g|ml|iu|%)\b/i.test(c));
           const headerCandidate = grid[r].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-          const isHeaderRow = headerCandidate.some(
-            h =>
-              h.includes('medicin') ||
-              h.includes('medicat') ||
-              h.includes('drug') ||
-              h.includes('brand') ||
-              h.includes('generic') ||
-              h === 'name' ||
-              h.includes('itemname') ||
-              h.includes('product') ||
-              h.includes('dosage') ||
-              h.includes('dose') ||
-              h.includes('strength') ||
-              h.includes('posology') ||
-              h.includes('regimen') ||
-              h.includes('frequency')
-          );
+          const isHeaderRow =
+            !hasDosageDigits &&
+            headerCandidate.some(h =>
+              /^(medicine|medicinename|medication|medicationname|drug|drugname|brand|brandname|generic|genericname|name|item|itemname|product|productname|particulars|tablet|capsule|formulation|rx|dosage|requireddosage|dose|strength|posology|regimen|frequency|route|duration|instructions|notes|remarks|sig)$/.test(
+                h
+              )
+            );
 
           if (isHeaderRow) {
             headerRowIndex = r;
             headerCandidate.forEach((h, idx) => {
               if (
                 nameIdx === -1 &&
-                (h.includes('medicin') ||
-                  h.includes('medicat') ||
-                  h.includes('drug') ||
-                  h.includes('brand') ||
-                  h.includes('generic') ||
-                  h === 'name' ||
-                  h.includes('nameof') ||
-                  h.includes('item') ||
-                  h.includes('product') ||
-                  h === 'rx')
+                /^(medicine|medicinename|medication|medicationname|drug|drugname|brand|brandname|generic|genericname|name|nameofmedicine|item|itemname|product|productname|particulars|tablet|capsule|formulation|rx)$/.test(
+                  h
+                )
               ) {
                 nameIdx = idx;
               } else if (
                 dosageIdx === -1 &&
-                (h.includes('dosage') ||
-                  h.includes('dose') ||
-                  h.includes('strength') ||
-                  h.includes('posology') ||
-                  h.includes('regimen') ||
-                  h === 'mg' ||
-                  h.includes('conc'))
+                /^(dosage|requireddosage|dose|strength|posology|regimen|concentration|mg)$/.test(h)
               ) {
                 dosageIdx = idx;
               } else if (
                 routeIdx === -1 &&
-                (h.includes('route') || h.includes('form') || h.includes('mode') || h === 'type')
+                /^(route|form|mode|type|administration)$/.test(h)
               ) {
                 routeIdx = idx;
               } else if (
                 freqIdx === -1 &&
-                (h.includes('freq') || h.includes('schedule') || h.includes('timing'))
+                /^(frequency|freq|schedule|timing)$/.test(h)
               ) {
                 freqIdx = idx;
               } else if (
                 durIdx === -1 &&
-                (h.includes('durat') || h === 'days' || h.includes('course') || h.includes('period'))
+                /^(duration|days|course|period)$/.test(h)
               ) {
                 durIdx = idx;
               } else if (
                 instrIdx === -1 &&
-                (h.includes('instruct') ||
-                  h.includes('note') ||
-                  h.includes('remark') ||
-                  h.includes('direct') ||
-                  h === 'sig' ||
-                  h.includes('advice'))
+                /^(instructions|instruction|notes|note|remarks|remark|directions|sig|advice)$/.test(h)
               ) {
                 instrIdx = idx;
               }
@@ -1023,7 +996,8 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
                   idx !== freqIdx &&
                   idx !== durIdx &&
                   idx !== instrIdx &&
-                  !/^(no|sno|srno|id|index|row)$/.test(h)
+                  !/^(no|sno|srno|slno|id|index|row)$/.test(h) &&
+                  !/^\d+$/.test(h)
               );
               if (firstNonIndex !== -1) nameIdx = firstNonIndex;
             }
@@ -1038,11 +1012,11 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
 
           if (headerRowIndex !== -1 && nameIdx !== -1) {
             const medName = rawRow[nameIdx] || '';
-            if (!medName || medName.length < 2) continue;
+            if (!medName || medName.length < 1) continue;
             const medDose =
               dosageIdx !== -1
                 ? rawRow[dosageIdx] || ''
-                : rawRow.find((_, idx) => idx !== nameIdx && idx > nameIdx) || '';
+                : rawRow.find((val, idx) => idx !== nameIdx && idx > nameIdx && Boolean(val)) || '';
             const routeVal = routeIdx !== -1 ? rawRow[routeIdx] || '' : '';
             const freqVal = freqIdx !== -1 ? rawRow[freqIdx] || '' : '';
             const durVal = durIdx !== -1 ? rawRow[durIdx] || '' : '';
@@ -1052,8 +1026,14 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
             // Positional CSV row (strip leading row index like "1", "2.")
             const cols = /^\d{1,5}\.?$/.test(rawRow[0]) && rawRow.length > 1 ? rawRow.slice(1) : rawRow;
             const firstCol = cols[0] || '';
-            if (!firstCol || firstCol.length < 2) continue;
-            if (/^(no\.?|#|s\.?no|medicine\s*name|drug\s*name|medication|medicine|name)$/i.test(firstCol)) continue;
+            if (!firstCol || firstCol.length < 1) continue;
+            if (
+              /^(no\.?|#|s\.?no|sl\.?no|medicine\s*name|drug\s*name|medication|medicine|name)$/i.test(firstCol) &&
+              cols.length > 1 &&
+              /dosage|dose|strength|frequency/i.test(cols[1] || '')
+            ) {
+              continue;
+            }
 
             if (cols.length >= 2) {
               const [medName, medDose, freqCol, durCol, instrCol] = cols;
@@ -1069,6 +1049,19 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
                 results.push(inferFieldsFromDosage(firstCol, ''));
               }
             }
+          }
+        }
+
+        // Guaranteed fallback for any non-empty CSV grid
+        if (results.length === 0 && grid.length > 0) {
+          for (const row of grid) {
+            const nonEmpty = row.map(c => c.replace(/^["']|["']$/g, '').trim()).filter(Boolean);
+            if (nonEmpty.length === 0) continue;
+            const cols = /^\d{1,5}\.?$/.test(nonEmpty[0]) && nonEmpty.length > 1 ? nonEmpty.slice(1) : nonEmpty;
+            const nameVal = cols[0] || nonEmpty[0];
+            const doseVal = cols[1] || 'Standard dose';
+            const extraVal = cols.slice(2).join(' · ');
+            results.push(inferFieldsFromDosage(nameVal, doseVal, extraVal));
           }
         }
       }

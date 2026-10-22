@@ -505,6 +505,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
   const [libraryModalMode, setLibraryModalMode] = useState<'upload' | 'paste' | 'single'>('upload');
   const [librarySavedToast, setLibrarySavedToast] = useState<string | null>(null);
+  const [showUploadedLibraryPreview, setShowUploadedLibraryPreview] = useState(false);
 
   useEffect(() => {
     api.formulary
@@ -2642,6 +2643,24 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <span>Auto-save new medicines to My Library</span>
                     </label>
 
+                    { doctorFormulary.length > 0 && (
+                      <button
+                        type="button"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => setShowUploadedLibraryPreview(prev => !prev)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 border transition-colors cursor-pointer ${
+                          showUploadedLibraryPreview
+                            ? 'bg-teal-100 text-teal-900 border-teal-300'
+                            : 'bg-white hover:bg-teal-50 text-teal-800 border-teal-200'
+                        }`}
+                        title="Toggle preview of your uploaded CSV / personal medication library"
+                      >
+                        <span>
+                          {showUploadedLibraryPreview ? 'Hide CSV Preview' : `Preview CSV Library (${doctorFormulary.length})`}
+                        </span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onMouseDown={e => e.preventDefault()}
@@ -2660,6 +2679,68 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                 {/* Inner Prescription Builder Box */}
                 <div className="p-4 space-y-4">
+                  {showUploadedLibraryPreview && doctorFormulary.length > 0 && (
+                    <div className="border border-teal-200 bg-teal-50/30 rounded-xl overflow-hidden animate-in fade-in duration-150">
+                      <div className="px-3.5 py-2 bg-teal-900 text-white flex items-center justify-between text-xs font-bold">
+                        <span>
+                          Uploaded CSV / Personal Medication Library Preview ({doctorFormulary.length} items) — Click any row to populate Rx
+                        </span>
+                        <button
+                          type="button"
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => setShowUploadedLibraryPreview(false)}
+                          className="text-teal-200 hover:text-white cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="max-h-48 overflow-auto">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead className="bg-teal-50 border-b border-teal-200 text-[10px] font-bold uppercase text-teal-900 sticky top-0 z-10">
+                            <tr>
+                              <th className="py-1.5 px-3 w-8">#</th>
+                              <th className="py-1.5 px-3">Medicine Name</th>
+                              <th className="py-1.5 px-3">Required Dosage</th>
+                              <th className="py-1.5 px-3">Route</th>
+                              <th className="py-1.5 px-3">Frequency</th>
+                              <th className="py-1.5 px-3">Duration</th>
+                              <th className="py-1.5 px-3 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-teal-100 bg-white">
+                            {doctorFormulary.map((m, idx) => (
+                              <tr
+                                key={m.id || idx}
+                                onClick={() => {
+                                  setMedName(m.name);
+                                  setMedDosage(m.dosage);
+                                  setMedRoute(m.route || 'Oral');
+                                  setMedFrequency(m.frequency || '1-0-1');
+                                  setMedDuration(m.duration || '5 days');
+                                  setMedInstructions(m.instructions || 'After meals');
+                                  setMedQtyManual(false);
+                                }}
+                                className="hover:bg-teal-50/70 cursor-pointer transition-colors"
+                              >
+                                <td className="py-1.5 px-3 font-mono text-[10px] text-slate-400">{idx + 1}</td>
+                                <td className="py-1.5 px-3 font-bold text-slate-900">{m.name}</td>
+                                <td className="py-1.5 px-3 text-blue-800 font-semibold">{m.dosage}</td>
+                                <td className="py-1.5 px-3 text-slate-600">{m.route || 'Oral'}</td>
+                                <td className="py-1.5 px-3 font-mono text-teal-800 font-bold">{m.frequency}</td>
+                                <td className="py-1.5 px-3 text-slate-600">{m.duration}</td>
+                                <td className="py-1.5 px-3 text-right">
+                                  <span className="px-2 py-0.5 rounded bg-teal-100 text-teal-900 text-[10px] font-bold">
+                                    Select
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="p-4 bg-[#f8fafc] border border-slate-200/90 rounded-xl space-y-3.5">
                     {librarySavedToast && (
                       <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between">
@@ -4754,6 +4835,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         initialInstructions={medInstructions}
         onUpdated={(items, msg) => {
           setDoctorFormulary(items);
+          setShowUploadedLibraryPreview(true);
           if (msg) {
             setLibrarySavedToast(msg);
             setTimeout(() => setLibrarySavedToast(null), 5000);

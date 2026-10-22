@@ -341,7 +341,11 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
                           {med.isPersonal ? (
                             <>
                               <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold">
-                                My Library
+                                {med.source === 'csv_upload'
+                                  ? 'CSV Upload'
+                                  : med.source === 'pdf_upload'
+                                  ? 'PDF Upload'
+                                  : 'My Library'}
                               </span>
                               <button
                                 type="button"
@@ -457,9 +461,11 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
         initialMedName={search.trim()}
         onUpdated={(items, msg) => {
           setDoctorFormulary(items);
+          setActiveSubTab('formulary');
+          setLibraryFilter('personal');
           if (msg) {
             setLibraryFeedback(msg);
-            setTimeout(() => setLibraryFeedback(null), 5000);
+            setTimeout(() => setLibraryFeedback(null), 6000);
           }
         }}
       />

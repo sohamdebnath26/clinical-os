@@ -880,18 +880,27 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
             <div className="flex items-center gap-3">
               <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors">
                 <Upload className="w-3.5 h-3.5 text-teal-700" />
-                <span>{attachmentUrl ? 'Replace Report Scan' : 'Attach Report Scan / Image'}</span>
+                <span>{attachmentUrl ? 'Replace Report File' : 'Attach Report Scan / CSV / PDF'}</span>
                 <input
                   type="file"
-                  accept="image/*"
                   onChange={handleAttachmentUpload}
                   className="hidden"
                 />
               </label>
               {attachmentName && (
-                <span className="text-xs text-teal-800 font-medium truncate max-w-[200px]">
-                  {attachmentName}
-                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewAttachment({
+                      url: attachmentUrl,
+                      title: attachmentName
+                    })
+                  }
+                  className="text-xs text-teal-800 hover:underline font-bold truncate max-w-[220px] flex items-center gap-1 cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5 shrink-0" />
+                  <span>Preview {attachmentName}</span>
+                </button>
               )}
             </div>
 
@@ -1379,11 +1388,79 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
               </button>
             </div>
             <div className="p-4 overflow-y-auto flex-1 flex items-center justify-center bg-slate-900">
-              <img
-                src={previewAttachment.url}
-                alt={previewAttachment.title}
-                className="max-h-[75vh] w-auto object-contain rounded-lg"
-              />
+              {previewAttachment.url.startsWith('data:image/') ? (
+                <img
+                  src={previewAttachment.url}
+                  alt={previewAttachment.title}
+                  className="max-h-[75vh] w-auto object-contain rounded-lg"
+                />
+              ) : previewAttachment.url.startsWith('data:application/pdf') ? (
+                <iframe
+                  src={previewAttachment.url}
+                  title={previewAttachment.title}
+                  className="w-full h-[72vh] rounded-lg bg-white"
+                />
+              ) : (
+                (() => {
+                  let decodedText = '';
+                  try {
+                    const b64Idx = previewAttachment.url.indexOf(';base64,');
+                    if (b64Idx !== -1) {
+                      const b64 = previewAttachment.url.slice(b64Idx + 8);
+                      decodedText = decodeURIComponent(escape(atob(b64)));
+                    }
+                  } catch {
+                    try {
+                      const b64Idx = previewAttachment.url.indexOf(';base64,');
+                      if (b64Idx !== -1) {
+                        decodedText = atob(previewAttachment.url.slice(b64Idx + 8));
+                      }
+                    } catch {
+                      decodedText = '';
+                    }
+                  }
+                  const rows = decodedText
+                    .replace(/^\uFEFF/, '')
+                    .split(/\r\n|\n|\r/)
+                    .filter(l => l.trim().length > 0)
+                    .map(line => line.split(',').map(c => c.replace(/^["']|["']$/g, '').trim()));
+                  const maxC = rows.reduce((m, r) => Math.max(m, r.length), 0);
+                  return rows.length > 0 ? (
+                    <div className="w-full max-h-[72vh] overflow-auto bg-white rounded-xl border border-slate-200">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-teal-900 text-white sticky top-0">
+                          <tr>
+                            <th className="py-2 px-3 text-[10px] font-bold uppercase w-10">#</th>
+                            {(rows[0] || []).map((h, i) => (
+                              <th key={i} className="py-2 px-3 text-[10px] font-bold uppercase">
+                                {h || `Col ${i + 1}`}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {(rows.length > 1 ? rows.slice(1) : rows).map((r, rIdx) => (
+                            <tr key={rIdx} className="hover:bg-teal-50/40">
+                              <td className="py-2 px-3 font-mono text-[10px] text-slate-400">
+                                {rIdx + 1}
+                              </td>
+                              {Array.from({ length: maxC }).map((_, cIdx) => (
+                                <td key={cIdx} className="py-2 px-3 text-slate-800">
+                                  {r[cIdx] || '—'}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="p-6 bg-white rounded-xl text-xs text-slate-700 w-full">
+                      Attached File: {previewAttachment.title}
+                    </div>
+                  );
+                })()
+              )}
             </div>
           </div>
         </div>
