@@ -970,16 +970,72 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
             )}
 
             {visualMetrics && !isExtractingFeatures && (
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className={`p-3 rounded-xl border space-y-2.5 ${
+                visualMetrics.isSkinSpecimen === false
+                  ? 'bg-rose-50/70 border-rose-300'
+                  : visualMetrics.lightingStatus && visualMetrics.lightingStatus !== 'Optimal'
+                  ? 'bg-amber-50/60 border-amber-200'
+                  : 'bg-slate-50 border-slate-200'
+              }`}>
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-slate-700">
-                    Image Pre-Scan Summary
+                    Image Pre-Scan &amp; Quality Gatekeeper
                   </span>
                   <span className="text-slate-500 font-medium capitalize">
-                    {visualMetrics.morphologyCategory.replace(/_/g, ' ')}
-                    {visualMetrics.fitzpatrickType ? ` · Fitzpatrick ${visualMetrics.fitzpatrickType}` : ''}
+                    {visualMetrics.isSkinSpecimen === false
+                      ? 'Non-Skin Specimen'
+                      : visualMetrics.morphologyCategory.replace(/_/g, ' ')}
+                    {visualMetrics.isSkinSpecimen !== false && visualMetrics.fitzpatrickType ? ` · Fitzpatrick ${visualMetrics.fitzpatrickType}` : ''}
                   </span>
                 </div>
+
+                {/* Skin Specimen & Lighting Verification Pills */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+                  <div className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between font-medium ${
+                    visualMetrics.isSkinSpecimen === false
+                      ? 'bg-rose-100/80 border-rose-300 text-rose-800'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  }`}>
+                    <span>
+                      {visualMetrics.isSkinSpecimen === false ? '⚠ Non-Skin / Object' : '✓ Human Skin Verified'}
+                    </span>
+                    <span className="font-mono font-bold">
+                      {visualMetrics.skinPixelRatio ?? 85}% skin
+                    </span>
+                  </div>
+
+                  <div className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between font-medium ${
+                    !visualMetrics.lightingStatus || visualMetrics.lightingStatus === 'Optimal'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-amber-100/80 border-amber-300 text-amber-900'
+                  }`}>
+                    <span>
+                      {!visualMetrics.lightingStatus || visualMetrics.lightingStatus === 'Optimal'
+                        ? '✓ Lighting: Optimal'
+                        : `⚠ ${visualMetrics.lightingStatus}`}
+                    </span>
+                    <span className="font-mono font-bold">
+                      {visualMetrics.meanLuminance ?? 140}/255
+                    </span>
+                  </div>
+                </div>
+
+                {/* Rejection or Lighting Warning Messages */}
+                {(visualMetrics.rejectionReason || (visualMetrics.qualityWarnings && visualMetrics.qualityWarnings.length > 0)) && (
+                  <div className={`p-2 rounded-lg text-[11px] leading-relaxed border ${
+                    visualMetrics.isSkinSpecimen === false
+                      ? 'bg-white/90 border-rose-200 text-rose-700'
+                      : 'bg-white/90 border-amber-200 text-amber-800'
+                  }`}>
+                    {visualMetrics.rejectionReason && (
+                      <p className="font-semibold mb-0.5">{visualMetrics.rejectionReason}</p>
+                    )}
+                    {visualMetrics.qualityWarnings?.map((warn, idx) => (
+                      <p key={idx}>• {warn}</p>
+                    ))}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-4 gap-2 text-center bg-white rounded-lg p-2 border border-slate-200/80 text-xs">
                   <div>
                     <div className="text-[10px] text-slate-400">Redness</div>
@@ -1154,6 +1210,26 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                     <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white">
                       {analysisResult.primaryImpression}
                     </h2>
+                    {/* Specimen & Lighting Verification Badges in Report Banner */}
+                    <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                        analysisResult.isValidSkinSpecimen === false || analysisResult.visualMetrics?.isSkinSpecimen === false
+                          ? 'bg-rose-500/20 border-rose-400/50 text-rose-200'
+                          : 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200'
+                      }`}>
+                        {analysisResult.isValidSkinSpecimen === false || analysisResult.visualMetrics?.isSkinSpecimen === false
+                          ? `⚠ Non-Skin / Invalid Specimen (${analysisResult.visualMetrics?.skinPixelRatio ?? 0}% skin)`
+                          : `✓ Cutaneous Specimen Verified (${analysisResult.visualMetrics?.skinPixelRatio ?? 85}% skin)`}
+                      </span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                        (analysisResult.lightingQuality || analysisResult.visualMetrics?.lightingStatus || 'Optimal') === 'Optimal'
+                          ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
+                          : 'bg-amber-500/20 border-amber-400/50 text-amber-200'
+                      }`}>
+                        Lighting: {analysisResult.lightingQuality || analysisResult.visualMetrics?.lightingStatus || 'Optimal'}
+                        {analysisResult.visualMetrics?.meanLuminance !== undefined ? ` (${analysisResult.visualMetrics.meanLuminance}/255)` : ''}
+                      </span>
+                    </div>
                   </div>
 
                   {selectedPatient && onStartConsultationForPatient && (

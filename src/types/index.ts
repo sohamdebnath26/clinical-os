@@ -199,6 +199,20 @@ export interface VisualMorphologyMetrics {
   itaAngleDeg?: number;
   cieLabDeltaA?: number;
   cieLabDeltaL?: number;
+  // Specimen & Photometric Lighting Gatekeeper Telemetry
+  isSkinSpecimen?: boolean;
+  skinPixelRatio?: number; // 0 - 100 (% of ROI matching human cutaneous YCbCr/CIE-LAB locus)
+  lightingStatus?:
+    | 'Optimal'
+    | 'Underexposed (Too Dark)'
+    | 'Overexposed (Glare)'
+    | 'Uneven / Harsh Shadows'
+    | 'Blurry / Out of Focus';
+  meanLuminance?: number; // 0 - 255
+  glareRatio?: number; // 0 - 100 (% highlight clipping)
+  shadowRatio?: number; // 0 - 100 (% shadow clipping)
+  qualityWarnings?: string[];
+  rejectionReason?: string;
 }
 
 export interface AIImageAnalysisResult {
@@ -216,6 +230,14 @@ export interface AIImageAnalysisResult {
   patientId?: string;
   imageUrl?: string;
   visualMetrics?: VisualMorphologyMetrics;
+  isValidSkinSpecimen?: boolean;
+  lightingQuality?:
+    | 'Optimal'
+    | 'Underexposed (Too Dark)'
+    | 'Overexposed (Glare)'
+    | 'Uneven / Harsh Shadows'
+    | 'Blurry / Out of Focus';
+  qualityAssessmentNotes?: string[];
 }
 
 export interface ProgressionAnalysisResult {

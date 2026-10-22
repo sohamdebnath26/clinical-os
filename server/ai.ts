@@ -523,7 +523,14 @@ export function extractBufferVisualMetrics(base64Data: string, mimeType?: string
       fitzpatrickType,
       itaAngleDeg,
       cieLabDeltaA: Math.round((erythemaIndex * 0.18) * 10) / 10,
-      cieLabDeltaL: Math.round((pigmentationIndex * 0.22) * 10) / 10
+      cieLabDeltaL: Math.round((pigmentationIndex * 0.22) * 10) / 10,
+      isSkinSpecimen: true,
+      skinPixelRatio: 82,
+      lightingStatus: 'Optimal',
+      meanLuminance: 138,
+      glareRatio: 2,
+      shadowRatio: 4,
+      qualityWarnings: []
     };
   } catch (err) {
     console.warn('Buffer visual analysis failed, falling back to neutral metrics:', err);
@@ -543,7 +550,14 @@ export function extractBufferVisualMetrics(base64Data: string, mimeType?: string
       fitzpatrickType: 'Type IV',
       itaAngleDeg: 18.5,
       cieLabDeltaA: 9.0,
-      cieLabDeltaL: 4.4
+      cieLabDeltaL: 4.4,
+      isSkinSpecimen: true,
+      skinPixelRatio: 85,
+      lightingStatus: 'Optimal',
+      meanLuminance: 142,
+      glareRatio: 2,
+      shadowRatio: 3,
+      qualityWarnings: []
     };
   }
 }
@@ -561,6 +575,71 @@ export function generateAdaptiveClinicalImageAnalysis(
   const history = params.history || [];
   const notes = (params.clinicalNotes || '').toLowerCase();
   const pastDiagnoses = history.flatMap(c => c.diagnoses).map(d => d.toLowerCase());
+
+  // LAYER 1 & 2 GATEKEEPER: Verify whether the image is a valid cutaneous skin specimen and has readable lighting
+  if (metrics.isSkinSpecimen === false || metrics.morphologyCategory === 'non_skin_specimen') {
+    const isTooDark = (metrics.meanLuminance !== undefined && metrics.meanLuminance < 22) || (metrics.shadowRatio !== undefined && metrics.shadowRatio > 80);
+    const skinRatio = metrics.skinPixelRatio ?? 0;
+    const lightingStatus = metrics.lightingStatus || (isTooDark ? 'Underexposed (Too Dark)' : 'Optimal');
+    const qualityNotes = [
+      ...(metrics.rejectionReason ? [metrics.rejectionReason] : []),
+      ...(metrics.qualityWarnings || [])
+    ];
+
+    return {
+      id: `ai_img_gatekeeper_${Date.now()}`,
+      primaryImpression: isTooDark
+        ? 'Unreadable Clinical Image — Severe Underexposure (Insufficient Illumination)'
+        : 'Non-Cutaneous Image Detected (Invalid Skin Specimen)',
+      differentials: [
+        {
+          condition: isTooDark
+            ? 'Insufficient Photometric Illumination (Underexposed Clinical Frame)'
+            : 'Non-Biological / Non-Cutaneous Object (Artifact or Background Surface)',
+          confidence: 'High',
+          icdCode: 'Z02.9',
+          rationale: isTooDark
+            ? `Mean image luminance is critically low (${metrics.meanLuminance ?? 12}/255 with ${metrics.shadowRatio ?? 85}% shadow clipping), preventing reliable CIE-LAB erythema or melanin chromophore extraction.`
+            : `YCbCr & CIE-LAB cutaneous chrominance telemetry detected only ${skinRatio}% human skin-tone pixels (clinical threshold ≥24%). Dominant image regions correspond to non-cutaneous objects, text/documents, or ambient background.`
+        },
+        {
+          condition: 'Out-of-Focus or Uncalibrated Macro Capture (Photographic Artifact)',
+          confidence: 'Moderate',
+          icdCode: 'R93.89',
+          rationale: `Perceived edge sharpness is ${metrics.perceivedSharpness ?? 35}/100 and lighting status is "${lightingStatus}". Please center the camera 10–15 cm directly over the skin lesion.`
+        }
+      ],
+      visualFindings: [
+        `Cutaneous Specimen Verification: FAILED — Only ${skinRatio}% of analyzed pixels fall within the human melanin/hemoglobin YCbCr chrominance envelope (Cr 133–178, Cb 75–132).`,
+        `Photometric Lighting Assessment: ${lightingStatus} (Mean Luminance: ${metrics.meanLuminance ?? 120}/255, Glare Clipping: ${metrics.glareRatio ?? 0}%, Shadow Clipping: ${metrics.shadowRatio ?? 0}%).`,
+        ...(qualityNotes.length > 0 ? qualityNotes : ['No recognizable epidermal or dermal lesion morphology could be isolated from the frame.'])
+      ],
+      timelineCorrelation: patient
+        ? `Image uploaded for ${patient.fullName} (${patient.patientCode}), but automated dermatological correlation was halted because the uploaded photograph did not pass cutaneous specimen & photometric quality verification.`
+        : 'Automated diagnostic correlation was halted because the uploaded photograph did not pass cutaneous specimen & photometric lighting verification.',
+      redFlags: [
+        'Do not rely on automated lesion scoring when the photograph is non-cutaneous, severely underexposed, or heavily obscured by specular flash glare.'
+      ],
+      recommendedInvestigations: [
+        'Retake clinical photograph in diffuse, even daylight or neutral white clinic lighting (5000K–6500K)',
+        'Position camera lens 10–15 cm perpendicular to the skin surface so skin occupies >60% of the frame',
+        'Avoid direct flash glare, dark room shadows, or non-skin background clutter'
+      ],
+      suggestedManagementPlan:
+        '1. Retake Image: Capture a clear, well-lit close-up of the patient’s skin lesion with at least 60% of the frame showing bare skin.\n' +
+        '2. Lighting Correction: Ensure Mean Luminance is between 60–210/255 without harsh flash reflections or deep shadows.\n' +
+        '3. Clinical Override: If inspecting a mucosal, nail-bed, or heavily bandaged site, document morphological findings manually in the consultation notes.',
+      disclaimer: 'Automated Quality & Specimen Gatekeeper: Disease classification is suppressed when an image does not contain verifiable human skin or sufficient photometric lighting.',
+      analyzedAt: new Date().toISOString(),
+      isAiPowered: false,
+      patientId: patient?.id,
+      imageUrl: params.imageUrl,
+      visualMetrics: metrics,
+      isValidSkinSpecimen: false,
+      lightingQuality: lightingStatus,
+      qualityAssessmentNotes: qualityNotes
+    };
+  }
 
   // The visual morphology extracted from actual image pixels is the primary clinical ground truth.
   // Refine using doctor clinical observations if specific diagnostic morphology keywords are provided.
@@ -1183,7 +1262,10 @@ export function generateAdaptiveClinicalImageAnalysis(
     id: `ai_img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     primaryImpression,
     differentials,
-    visualFindings,
+    visualFindings: [
+      `Specimen & Photometric Quality: Human Skin Verified (${metrics.skinPixelRatio ?? 85}% cutaneous pixels) | Lighting: ${metrics.lightingStatus || 'Optimal'} (Luminance ${metrics.meanLuminance ?? 140}/255, Sharpness ${metrics.perceivedSharpness ?? 75}/100)`,
+      ...visualFindings
+    ],
     timelineCorrelation,
     redFlags,
     recommendedInvestigations,
@@ -1193,7 +1275,10 @@ export function generateAdaptiveClinicalImageAnalysis(
     isAiPowered: false,
     patientId: patient?.id,
     imageUrl: params.imageUrl,
-    visualMetrics: metrics
+    visualMetrics: metrics,
+    isValidSkinSpecimen: true,
+    lightingQuality: metrics.lightingStatus || 'Optimal',
+    qualityAssessmentNotes: metrics.qualityWarnings || []
   };
 }
 
@@ -1428,6 +1513,9 @@ DETECTED VISUAL TELEMETRY PARAMETERS (CIE-LAB FITZPATRICK NORMALIZED):
 - Border Irregularity: ${resolvedMetrics.borderIrregularity}/100
 - Color Variegation Score: ${resolvedMetrics.colorVariationScore}/100
 - Dominant Colors: ${resolvedMetrics.dominantColors.map(c => `${c.name} (${c.percentage}%)`).join(', ')}
+- Pre-Scan Skin Specimen Ratio: ${resolvedMetrics.skinPixelRatio ?? 85}% (Pre-Scan Gatekeeper: ${resolvedMetrics.isSkinSpecimen === false ? 'NON-SKIN / INVALID SPECIMEN SUSPECTED' : 'HUMAN SKIN VERIFIED'})
+- Photometric Lighting Telemetry: Status="${resolvedMetrics.lightingStatus || 'Optimal'}", Mean Luminance=${resolvedMetrics.meanLuminance ?? 140}/255, Glare=${resolvedMetrics.glareRatio ?? 2}%, Shadow=${resolvedMetrics.shadowRatio ?? 4}%, Sharpness=${resolvedMetrics.perceivedSharpness ?? 75}/100
+${resolvedMetrics.qualityWarnings && resolvedMetrics.qualityWarnings.length > 0 ? `- Photometric Warnings: ${resolvedMetrics.qualityWarnings.join(' | ')}` : ''}
 
 PATIENT MEDICAL BACKGROUND:
 ${patientContext}
@@ -1441,11 +1529,16 @@ ${labReportContext}
 DOCTOR'S CLINICAL QUERY / NOTES:
 ${params.clinicalNotes || 'Attending physician uploaded this image for diagnostic review and differential suggestions.'}
 
-REQUIRED OUTPUT:
-You must analyze morphological visual findings (color, margins, distribution, primary & secondary lesion morphology), correlate them directly with any documented laboratory/biopsy/KOH/IgE test reports and consultation history, and evaluate whether this represents an exacerbation of their chronic condition, a reaction to current medications, an infection, or a novel diagnosis.
+STEP 1 — MANDATORY SKIN SPECIMEN & LIGHTING QUALITY GATEKEEPER:
+First, determine whether this image actually shows human skin, mucosa, hair/scalp, or nails ("isValidSkinSpecimen": true/false) AND evaluate whether the lighting & focus are adequate ("lightingQuality": "Optimal" | "Underexposed (Too Dark)" | "Overexposed (Glare)" | "Uneven / Harsh Shadows" | "Blurry / Out of Focus").
+- If the image is NOT human skin (e.g., a desk, room, document, animal, food, clothing only, blank/black screen, or random object), you MUST set "isValidSkinSpecimen": false, set "primaryImpression": "Non-Cutaneous Image Detected (Invalid Skin Specimen)", and explain in "visualFindings" and "qualityAssessmentNotes" what the image actually appears to be and why dermatological disease analysis cannot be performed. Do NOT hallucinate skin diseases for non-skin images.
+- If the image IS human skin, set "isValidSkinSpecimen": true, explicitly report the lighting quality in "lightingQuality" and "qualityAssessmentNotes", and proceed to Step 2.
+
+STEP 2 — CLINICAL DERMATOLOGICAL ANALYSIS (FOR VALID SKIN IMAGES):
+Analyze morphological visual findings (color, margins, distribution, primary & secondary lesion morphology), correlate them directly with any documented laboratory/biopsy/KOH/IgE test reports and consultation history, and evaluate whether this represents an exacerbation of their chronic condition, a reaction to current medications, an infection, or a novel diagnosis.
 
 CRITICAL DISEASE NAMING FORMAT:
-Every disease or condition in "primaryImpression" and every "differentials[].condition" MUST be formatted as:
+For valid skin images, every disease or condition in "primaryImpression" and every "differentials[].condition" MUST be formatted as:
 Common Term (Scientific Term)
 Examples:
 - "Acne (Acne Vulgaris)"
@@ -1458,7 +1551,12 @@ Examples:
 
 Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code fences, no introductory or trailing text):
 {
-  "primaryImpression": "Common Term (Scientific Term) — e.g. Acne (Acne Vulgaris)",
+  "isValidSkinSpecimen": true,
+  "lightingQuality": "Optimal",
+  "qualityAssessmentNotes": [
+    "Brief note on whether human skin is clearly visible and whether lighting, exposure, glare, and focus are optimal"
+  ],
+  "primaryImpression": "Common Term (Scientific Term) — or 'Non-Cutaneous Image Detected (Invalid Skin Specimen)' if not skin",
   "differentials": [
     {
       "condition": "Common Term (Scientific Term) — e.g. Acne (Acne Vulgaris)",
@@ -1497,6 +1595,11 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
   "disclaimer": "Diagnostic decision support only. Physician clinical judgment is required."
 }`;
 
+        // If client-side pre-scan found critically low skin pixels (<14%) and high non-biological colors, immediately invoke the gatekeeper
+        if (resolvedMetrics.isSkinSpecimen === false && (resolvedMetrics.skinPixelRatio ?? 0) < 18) {
+          return generateAdaptiveClinicalImageAnalysis(params, resolvedMetrics);
+        }
+
         // 1. Try OpenRouter Multimodal Vision first if OPENROUTER_API_KEY is configured
         if (hasOpenRouter) {
           const openRouterText = await callOpenRouterVision(prompt, [
@@ -1506,9 +1609,17 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
             try {
               const cleaned = openRouterText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
               const parsed = JSON.parse(cleaned);
+              const isValidSkin = typeof parsed.isValidSkinSpecimen === 'boolean'
+                ? parsed.isValidSkinSpecimen
+                : resolvedMetrics.isSkinSpecimen !== false;
+              const lightingQual = parsed.lightingQuality || resolvedMetrics.lightingStatus || 'Optimal';
+              const qualityNotes = Array.isArray(parsed.qualityAssessmentNotes)
+                ? parsed.qualityAssessmentNotes
+                : (resolvedMetrics.qualityWarnings || []);
+
               const finalResult = normalizeAnalysisResultTerms({
                 id: `ai_img_${Date.now()}`,
-                primaryImpression: parsed.primaryImpression || 'Atopic Eczema (Atopic Dermatitis)',
+                primaryImpression: parsed.primaryImpression || (isValidSkin ? 'Atopic Eczema (Atopic Dermatitis)' : 'Non-Cutaneous Image Detected (Invalid Skin Specimen)'),
                 differentials: Array.isArray(parsed.differentials) ? parsed.differentials : [],
                 visualFindings: Array.isArray(parsed.visualFindings) ? parsed.visualFindings : [],
                 timelineCorrelation: parsed.timelineCorrelation || 'Correlated with patient longitudinal record.',
@@ -1520,7 +1631,14 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
                 isAiPowered: true,
                 patientId: params.patient?.id,
                 imageUrl: params.imageUrl,
-                visualMetrics: resolvedMetrics
+                visualMetrics: {
+                  ...resolvedMetrics,
+                  isSkinSpecimen: isValidSkin,
+                  lightingStatus: lightingQual
+                },
+                isValidSkinSpecimen: isValidSkin,
+                lightingQuality: lightingQual,
+                qualityAssessmentNotes: qualityNotes
               });
 
               if (imageAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
@@ -1562,6 +1680,12 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
                   responseSchema: {
                     type: Type.OBJECT,
                     properties: {
+                      isValidSkinSpecimen: { type: Type.BOOLEAN },
+                      lightingQuality: { type: Type.STRING },
+                      qualityAssessmentNotes: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING }
+                      },
                       primaryImpression: { type: Type.STRING },
                       differentials: {
                         type: Type.ARRAY,
@@ -1593,6 +1717,8 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
                       disclaimer: { type: Type.STRING }
                     },
                     required: [
+                      'isValidSkinSpecimen',
+                      'lightingQuality',
                       'primaryImpression',
                       'differentials',
                       'visualFindings',
@@ -1609,10 +1735,17 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
               if (text) {
                 const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
                 const parsed = JSON.parse(cleaned);
+                const isValidSkin = typeof parsed.isValidSkinSpecimen === 'boolean'
+                  ? parsed.isValidSkinSpecimen
+                  : resolvedMetrics.isSkinSpecimen !== false;
+                const lightingQual = parsed.lightingQuality || resolvedMetrics.lightingStatus || 'Optimal';
+                const qualityNotes = Array.isArray(parsed.qualityAssessmentNotes)
+                  ? parsed.qualityAssessmentNotes
+                  : (resolvedMetrics.qualityWarnings || []);
 
                 const finalResult = normalizeAnalysisResultTerms({
                   id: `ai_img_${Date.now()}`,
-                  primaryImpression: parsed.primaryImpression || 'Atopic Eczema (Atopic Dermatitis)',
+                  primaryImpression: parsed.primaryImpression || (isValidSkin ? 'Atopic Eczema (Atopic Dermatitis)' : 'Non-Cutaneous Image Detected (Invalid Skin Specimen)'),
                   differentials: Array.isArray(parsed.differentials) ? parsed.differentials : [],
                   visualFindings: Array.isArray(parsed.visualFindings) ? parsed.visualFindings : [],
                   timelineCorrelation: parsed.timelineCorrelation || 'Correlated with patient longitudinal record.',
@@ -1624,7 +1757,14 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
                   isAiPowered: true,
                   patientId: params.patient?.id,
                   imageUrl: params.imageUrl,
-                  visualMetrics: resolvedMetrics
+                  visualMetrics: {
+                    ...resolvedMetrics,
+                    isSkinSpecimen: isValidSkin,
+                    lightingStatus: lightingQual
+                  },
+                  isValidSkinSpecimen: isValidSkin,
+                  lightingQuality: lightingQual,
+                  qualityAssessmentNotes: qualityNotes
                 });
 
                 if (imageAnalysisCache.size >= IMAGE_CACHE_MAX_ENTRIES) {

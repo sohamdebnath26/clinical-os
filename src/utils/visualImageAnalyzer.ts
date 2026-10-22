@@ -70,9 +70,17 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
         const data = imgData.data;
         const totalPixels = sampleSize * sampleSize;
 
-        // 1. First pass: compute overall luminance, color baseline, and CIE-LAB perilesional baseline
+        // 1. First pass: compute overall luminance, color baseline, CIE-LAB perilesional baseline, and YCbCr skin/lighting gatekeeper
         let sumR = 0, sumG = 0, sumB = 0;
         let borderLabL = 0, borderLabA = 0, borderLabB = 0, borderCount = 0;
+        let skinPixelCount = 0;
+        let centerSkinPixelCount = 0;
+        let centerTotalCount = 0;
+        let nonBiologicalColorCount = 0;
+        let achromaticCount = 0;
+        let darkShadowCount = 0;
+        let brightGlareCount = 0;
+
         const lums: number[] = new Array(totalPixels);
         const reds: number[] = new Array(totalPixels);
 
@@ -88,12 +96,68 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           const lum = 0.299 * r + 0.587 * g + 0.114 * b;
           lums[i] = lum;
 
+          if (lum < 28) darkShadowCount++;
+          if (lum > 244) brightGlareCount++;
+
           const denom = Math.max(1, r + g + b);
           // Red excess over green & blue (hemoglobin vascular signal)
           reds[i] = Math.max(0, (2 * r - g - b) / denom);
 
+          // YCbCr + RGB human cutaneous & dermatological lesion chrominance envelope
+          const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+          const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+          const maxCh = Math.max(r, g, b);
+          const minCh = Math.min(r, g, b);
+          const chromaSpan = maxCh - minCh;
+
+          const isStandardSkinOrLesion =
+            cb >= 72 &&
+            cb <= 136 &&
+            cr >= 129 &&
+            cr <= 188 &&
+            r > b + 5 &&
+            r >= g * 0.9 &&
+            chromaSpan >= 10 &&
+            lum >= 18 &&
+            lum <= 245;
+
+          const isDeepFitzpatrickOrMelanocytic =
+            lum >= 15 &&
+            lum <= 95 &&
+            r > b + 4 &&
+            r >= g &&
+            cb >= 80 &&
+            cb <= 132 &&
+            cr >= 125 &&
+            cr <= 165 &&
+            chromaSpan >= 8;
+
+          const isAcuteErythematousPlaque =
+            r > 110 && r > g * 1.2 && r > b * 1.2 && cr >= 140;
+
+          const isCutaneousPixel =
+            isStandardSkinOrLesion || isDeepFitzpatrickOrMelanocytic || isAcuteErythematousPlaque;
+
+          const isNonBiologicalHue = b > r + 12 || g > r + 10 || (b > g + 16 && b > r);
+          const isAchromatic = chromaSpan < 10;
+
           const x = i % sampleSize;
           const y = Math.floor(i / sampleSize);
+          const isCenterRoi =
+            x >= sampleSize * 0.15 &&
+            x <= sampleSize * 0.85 &&
+            y >= sampleSize * 0.15 &&
+            y <= sampleSize * 0.85;
+
+          if (isCutaneousPixel) skinPixelCount++;
+          if (isNonBiologicalHue) nonBiologicalColorCount++;
+          if (isAchromatic) achromaticCount++;
+
+          if (isCenterRoi) {
+            centerTotalCount++;
+            if (isCutaneousPixel) centerSkinPixelCount++;
+          }
+
           const isOuterFrame = x < 20 || x >= sampleSize - 20 || y < 20 || y >= sampleSize - 20;
           if (isOuterFrame && lum > 25 && lum < 245) {
             const lab = rgbToCieLab(r, g, b);
@@ -475,6 +539,65 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           Math.max(2.5, Math.min(25.0, (Math.sqrt(lesionPixelCount) / sampleSize) * 35.0)) * 10
         ) / 10;
 
+        const perceivedSharpness = Math.max(12, Math.min(98, Math.round(avgEdgeGrad * 185)));
+        const meanLuminance = Math.round(baseLum);
+        const shadowRatio = Math.round((darkShadowCount / totalPixels) * 100);
+        const glareRatio = Math.round((brightGlareCount / totalPixels) * 100);
+        const nonBiologicalRatio = Math.round((nonBiologicalColorCount / totalPixels) * 100);
+        const achromaticRatio = Math.round((achromaticCount / totalPixels) * 100);
+
+        const isSvgPreset = imageDataUrl.startsWith('data:image/svg+xml');
+        const rawSkinRatio = Math.round((skinPixelCount / totalPixels) * 100);
+        const centerSkinRatio =
+          centerTotalCount > 0 ? Math.round((centerSkinPixelCount / centerTotalCount) * 100) : rawSkinRatio;
+        const skinPixelRatio = isSvgPreset
+          ? 94
+          : Math.max(rawSkinRatio, Math.round(rawSkinRatio * 0.45 + centerSkinRatio * 0.55));
+
+        const qualityWarnings: string[] = [];
+        let lightingStatus: NonNullable<VisualMorphologyMetrics['lightingStatus']> = 'Optimal';
+
+        if (!isSvgPreset) {
+          if (meanLuminance < 45 || shadowRatio > 48) {
+            lightingStatus = 'Underexposed (Too Dark)';
+            qualityWarnings.push(
+              `Image is underexposed (mean brightness ${meanLuminance}/255, ${shadowRatio}% dark shadow clipping). Erythema and pigment readings may be skewed. Retake in bright, indirect clinical lighting.`
+            );
+          } else if (meanLuminance > 232 || glareRatio > 38) {
+            lightingStatus = 'Overexposed (Glare)';
+            qualityWarnings.push(
+              `Direct flash washout or overexposure detected (brightness ${meanLuminance}/255, ${glareRatio}% highlight glare). Angle the camera 15° to eliminate specular reflection.`
+            );
+          } else if (shadowRatio > 24 && glareRatio > 14) {
+            lightingStatus = 'Uneven / Harsh Shadows';
+            qualityWarnings.push(
+              `Harsh directional shadows (${shadowRatio}%) and glare (${glareRatio}%) across the frame. Use diffused, even lighting over the anatomical site.`
+            );
+          } else if (perceivedSharpness < 22) {
+            lightingStatus = 'Blurry / Out of Focus';
+            qualityWarnings.push(
+              `Low epidermal focus sharpness (${perceivedSharpness}/100). Hold the lens 10–15 cm from the skin surface and tap to lock focus.`
+            );
+          }
+        }
+
+        let isSkinSpecimen = true;
+        let rejectionReason: string | undefined;
+
+        if (!isSvgPreset) {
+          if (meanLuminance < 22 || shadowRatio > 80) {
+            isSkinSpecimen = false;
+            rejectionReason = `Severe underexposure (${meanLuminance}/255 brightness; ${shadowRatio}% black/shadow pixels). The camera frame is too dark to verify human skin or evaluate lesion morphology.`;
+          } else if (skinPixelRatio < 24 || nonBiologicalRatio > 35 || (achromaticRatio > 78 && skinPixelRatio < 35)) {
+            isSkinSpecimen = false;
+            rejectionReason = `Non-cutaneous image detected (only ${skinPixelRatio}% of pixels match human skin chrominance; ${
+              nonBiologicalRatio > 35
+                ? `${nonBiologicalRatio}% non-biological blue/green/cyan hues`
+                : `${achromaticRatio}% flat achromatic/background surfaces`
+            }). Please upload a clear close-up photograph of human skin.`;
+          }
+        }
+
         resolve({
           erythemaIndex,
           pigmentationIndex,
@@ -485,11 +608,19 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           dominantColors,
           estimatedDiameterMm,
           textureEntropy,
-          perceivedSharpness: Math.max(18, Math.round(avgEdgeGrad * 180)),
+          perceivedSharpness,
           fitzpatrickType,
           itaAngleDeg,
           cieLabDeltaA: meanDeltaA,
-          cieLabDeltaL: meanDeltaL
+          cieLabDeltaL: meanDeltaL,
+          isSkinSpecimen,
+          skinPixelRatio,
+          lightingStatus,
+          meanLuminance,
+          glareRatio,
+          shadowRatio,
+          qualityWarnings,
+          rejectionReason
         });
       } catch (err) {
         console.warn('Canvas visual feature extraction failed, using fallback:', err);
@@ -560,6 +691,14 @@ export function getFallbackMetrics(imageStr?: string): VisualMorphologyMetrics {
     fitzpatrickType: 'Type IV',
     itaAngleDeg: 18.5,
     cieLabDeltaA: Math.round((erythemaIndex * 0.18) * 10) / 10,
-    cieLabDeltaL: Math.round((pigmentationIndex * 0.22) * 10) / 10
+    cieLabDeltaL: Math.round((pigmentationIndex * 0.22) * 10) / 10,
+    isSkinSpecimen: true,
+    skinPixelRatio: 82,
+    lightingStatus: 'Optimal',
+    meanLuminance: 145,
+    glareRatio: 3,
+    shadowRatio: 4,
+    qualityWarnings: []
   };
 }
+
