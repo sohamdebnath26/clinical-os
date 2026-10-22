@@ -41,13 +41,18 @@ interface ImageReportChatbotProps {
 
 const QUICK_REPORT_PROMPTS = [
   {
+    label: 'Causes & Healing Timeline',
+    prompt: 'What causes this condition, is it contagious, and what is the expected recovery timeline?',
+    icon: Sparkles
+  },
+  {
     label: 'Compare #1 vs #2 Differential',
     prompt: 'Compare the #1 and #2 differential diagnoses in this report and how to clinically differentiate them.',
     icon: Stethoscope
   },
   {
-    label: 'Treatment & Allergy Check',
-    prompt: 'Review the suggested treatment plan in the report and check for any patient allergy or medication adjustments.',
+    label: 'Treatment & Alternatives',
+    prompt: 'Review the suggested treatment plan, dosing, second-line alternatives, and any patient allergy checks.',
     icon: Pill
   },
   {
@@ -56,19 +61,19 @@ const QUICK_REPORT_PROMPTS = [
     icon: FileText
   },
   {
-    label: 'Explain Visual Metrics',
-    prompt: 'Explain the quantitative visual findings (erythema, pigmentation, border irregularity, Fitzpatrick type) in this report.',
+    label: 'Severity & Visual Metrics',
+    prompt: 'What is the clinical severity grade and what do the quantitative visual metrics (erythema, pigmentation, border) show?',
     icon: Activity
+  },
+  {
+    label: 'Diet, Skincare & Counseling',
+    prompt: 'What diet, skincare routine, and home care precautions should the patient follow for this condition?',
+    icon: MessageSquare
   },
   {
     label: 'Red Flags to Watch',
     prompt: 'What are the critical red flags and urgent escalation criteria in this report?',
     icon: ShieldAlert
-  },
-  {
-    label: 'Patient Counseling Note',
-    prompt: 'Draft a concise patient-friendly explanation and home care precaution note from this report.',
-    icon: MessageSquare
   }
 ];
 
@@ -110,7 +115,7 @@ export const ImageReportChatbot: React.FC<ImageReportChatbotProps> = ({
         `${patient ? ` linked to **${patient.fullName}** (${patient.age}y/${patient.gender})` : ''}.\n\n` +
         `- **Ranked Differentials:** ${(report.differentials || []).map(d => `${d.condition} (${d.confidence})`).join(' · ')}\n` +
         `- **Key Workup:** ${(report.recommendedInvestigations || [])[0] || 'Clinical correlation'}\n\n` +
-        `Ask me anything about this report—such as **differential comparison**, **dosing & allergy checks**, **dermoscopic metrics**, or **patient counseling notes**.`
+        `Ask me **any question** about this report—including **causes & triggers**, **contagiousness**, **healing timeline**, **severity**, **diet & skincare**, **differential comparisons**, **medications & alternatives**, or **workup**.`
     };
 
     setMessages([introMessage]);

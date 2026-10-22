@@ -2412,6 +2412,203 @@ export interface AskImageReportParams {
   conversationHistory?: ImageReportChatTurn[];
 }
 
+interface ConditionKnowledgeProfile {
+  etiologyAndTriggers: string[];
+  contagiousness: string;
+  prognosisAndTimeline: string;
+  dietAndSkincare: string[];
+  alternativesAndSafety: string;
+  followUpGuidance: string;
+}
+
+function getConditionKnowledgeProfile(
+  primaryImpression: string,
+  morphologyCategory?: string
+): ConditionKnowledgeProfile {
+  const lower = `${primaryImpression} ${morphologyCategory || ''}`.toLowerCase();
+
+  if (lower.includes('acne') || lower.includes('comedon') || lower.includes('follicul')) {
+    return {
+      etiologyAndTriggers: [
+        'Follicular hyperkeratinization, excess androgen-driven sebum production, *Cutibacterium acnes* colonization, and perifollicular inflammation.',
+        'Common triggers include occlusive cosmetics/oils, high-glycemic-index foods, whey protein/skim dairy, mechanical friction, stress, and hormonal fluctuations.'
+      ],
+      contagiousness:
+        '**Non-contagious.** Acne and non-infectious folliculitis cannot spread from person to person via touch or shared items (unless secondary bacterial impetiginization is present).',
+      prognosisAndTimeline:
+        'Initial reduction in active inflammatory papules typically begins within **2–4 weeks** of consistent topical therapy; fuller comedonal clearance and post-inflammatory erythema/hyperpigmentation improvement require **8–12 weeks**.',
+      dietAndSkincare: [
+        'Use a gentle, pH-balanced non-comedogenic cleanser twice daily; avoid harsh physical scrubs or picking/squeezing lesions.',
+        'Apply oil-free, non-comedogenic moisturizer and broad-spectrum SPF 30+ daily (especially important when using retinoids or benzoyl peroxide).',
+        'Moderate high-glycemic-load foods and excess dairy/whey supplements if flares correlate with diet.'
+      ],
+      alternativesAndSafety:
+        'If topical retinoids/benzoyl peroxide cause irritation, step down to every-other-night application or switch to **Azelaic Acid 15–20% cream** (which is also safe in pregnancy/lactation, unlike topical/oral retinoids and tetracyclines).',
+      followUpGuidance:
+        'Schedule clinical review in **6–8 weeks** to assess lesion count reduction, tolerability, and whether systemic therapy adjustment is needed.'
+    };
+  }
+
+  if (
+    lower.includes('tinea') ||
+    lower.includes('ringworm') ||
+    lower.includes('fungal') ||
+    lower.includes('candida') ||
+    lower.includes('onychomycosis') ||
+    lower.includes('dermatophyt')
+  ) {
+    return {
+      etiologyAndTriggers: [
+        'Superficial keratinophilic dermatophyte infection (*Trichophyton*, *Microsporum*, or *Epidermophyton* spp.) thriving in warm, humid microenvironments.',
+        'Predisposing factors include hyperhidrosis, tight synthetic clothing, shared towels/gym equipment, diabetes mellitus, or prior inappropriate topical corticosteroid use (*tinea incognito*).'
+      ],
+      contagiousness:
+        '**Contagious.** Can spread via direct skin-to-skin contact, autoinoculation from other body sites (e.g., tinea pedis to cruris), or contaminated fomites (towels, bedding, clothing).',
+      prognosisAndTimeline:
+        'Pruritus and active border erythema usually improve within **7–10 days** of antifungal therapy. Complete clinical resolution takes **2–4 weeks** (continue topical antifungal for at least 1–2 weeks after skin appears clear to prevent relapse).',
+      dietAndSkincare: [
+        'Keep the affected intertriginous or cutaneous area clean, cool, and thoroughly dry after bathing using a separate towel.',
+        'Wear loose-fitting, breathable 100% cotton clothing and wash garments/bedlinens in hot water.',
+        'Strictly avoid over-the-counter steroid-antifungal combination creams (e.g., clobetasol combinations), which cause treatment-resistant fungal relapse.'
+      ],
+      alternativesAndSafety:
+        'If topical allylamines (Terbinafine) or azoles (Luliconazole/Sertaconazole) are insufficient for extensive plaques, oral **Terbinafine 250 mg OD** or **Itraconazole 100–200 mg/day** for 2–4 weeks can be considered after checking baseline liver function and drug interactions.',
+      followUpGuidance:
+        'Review in **2–3 weeks** to confirm central and peripheral border clearance and ensure no recurrence.'
+    };
+  }
+
+  if (lower.includes('psoriasis')) {
+    return {
+      etiologyAndTriggers: [
+        'Immune-mediated T-cell (Th1/Th17) driven epidermal hyperproliferation with shortened keratinocyte transit time (~3–5 days vs normal 28 days).',
+        'Triggers include skin trauma (**Koebner phenomenon**), streptococcal pharyngitis, psychological stress, cold/dry weather, smoking, alcohol, and medications (beta-blockers, lithium, abrupt systemic steroid withdrawal).'
+      ],
+      contagiousness:
+        '**Strictly non-contagious.** Psoriasis is an autoimmune inflammatory skin condition and cannot be transmitted through contact.',
+      prognosisAndTimeline:
+        'Chronic relapsing-remitting condition. Plaque thickness and scaling typically improve within **2–4 weeks** of consistent topical corticosteroid + vitamin D3 analog therapy; long-term maintenance keeps plaques in remission.',
+      dietAndSkincare: [
+        'Apply thick, fragrance-free emollients (ceramide or urea-based) liberally right after lukewarm baths to soften micaceous scale.',
+        'Avoid scratching or forcefully picking scales to prevent Koebnerization (new plaques at trauma sites).',
+        'Anti-inflammatory Mediterranean-style diet, weight management, and avoiding alcohol/tobacco help reduce systemic flare frequency.'
+      ],
+      alternativesAndSafety:
+        'For facial or intertriginous areas, replace potent steroids with topical **Tacrolimus 0.1%** or **Pimecrolimus 1%** to avoid skin atrophy. Screen for joint stiffness/dactylitis (Psoriatic Arthritis) and metabolic syndrome.',
+      followUpGuidance:
+        'Review in **4 weeks** to transition from daily induction steroid therapy to a safe weekend-only/steroid-sparing maintenance schedule.'
+    };
+  }
+
+  if (
+    lower.includes('melanoma') ||
+    lower.includes('carcinoma') ||
+    lower.includes('bcc') ||
+    lower.includes('scc') ||
+    lower.includes('actinic') ||
+    lower.includes('malignant') ||
+    lower.includes('nevus') ||
+    lower.includes('pigmented_lesion')
+  ) {
+    return {
+      etiologyAndTriggers: [
+        'Cumulative ultraviolet (UV) radiation-induced DNA damage, intermittent intense sunburns, genetic susceptibility (e.g., *MC1R*, *CDKN2A*, *BRAF* pathways), and fair or UV-exposed phototypes.',
+        'Risk factors include atypical/dysplastic nevi, personal or family history of skin cancer, immunosuppression, and chronic sun exposure.'
+      ],
+      contagiousness:
+        '**Non-contagious.** Neoplastic and melanocytic/keratinocytic lesions are cellular proliferations and are never infectious.',
+      prognosisAndTimeline:
+        'Prognosis depends directly on histopathological depth (**Breslow thickness** for melanoma) or subtype/margins (for keratinocyte carcinomas). Early-stage in-situ or superficial lesions have **>95–99% cure rates** with timely complete surgical excision.',
+      dietAndSkincare: [
+        'Strict photoprotection: broad-spectrum SPF 50+ PA++++ sunscreen reapplied every 2 hours outdoors, UPF clothing, and wide-brimmed hats.',
+        'Perform monthly self-skin examinations using the **ABCDE criteria** and **Ugly Duckling sign**.',
+        'Do not apply caustic home remedies, lasers, or cryotherapy to an undiagnosed pigmented lesion prior to histopathological confirmation.'
+      ],
+      alternativesAndSafety:
+        'Excisional biopsy with 1–3 mm clinical margins down to subcutaneous fat is preferred over superficial shave biopsy for suspected melanocytic lesions to permit accurate Breslow depth measurement.',
+      followUpGuidance:
+        'Urgent dermatopathology/dermoscopy review within **1–2 weeks** for biopsy planning, followed by structured 3-to-6-month total-body skin surveillance.'
+    };
+  }
+
+  if (
+    lower.includes('herpes') ||
+    lower.includes('zoster') ||
+    lower.includes('shingles') ||
+    lower.includes('varicella') ||
+    lower.includes('viral') ||
+    lower.includes('vesicular')
+  ) {
+    return {
+      etiologyAndTriggers: [
+        'Reactivation or primary infection of human herpesviruses (HSV-1, HSV-2, or Varicella-Zoster Virus / VZV) along sensory ganglia and cutaneous nerves.',
+        'Triggers include physiological stress, fever, UV exposure, immunosuppression, or local tissue trauma.'
+      ],
+      contagiousness:
+        '**Contagious while active vesicles are present.** Vesicular fluid contains live virus until all lesions have fully crusted over. Avoid contact with infants, pregnant individuals, and immunocompromised patients.',
+      prognosisAndTimeline:
+        'Vesicles typically crust over within **7–10 days** and re-epithelialize within **2–3 weeks**. Early oral antiviral therapy (within 72 hours of rash onset) accelerates healing and reduces neuralgia risk.',
+      dietAndSkincare: [
+        'Keep vesicles clean and dry; apply cool saline or Burow’s solution compresses for 10–15 minutes to soothe acute burning/oozing.',
+        'Do not rupture or scratch intact vesicles to prevent secondary bacterial superinfection (*Staphylococcus*/*Streptococcus*).',
+        'Wash hands thoroughly after touching the affected dermatome or region.'
+      ],
+      alternativesAndSafety:
+        'Oral **Valacyclovir** (1000 mg TID for 7 days in Zoster; 500–1000 mg BID for HSV) offers superior bioavailability over Acyclovir. Adjust dosage in patients with renal impairment. Strongly avoid topical corticosteroids on active viral lesions.',
+      followUpGuidance:
+        'Review in **7–10 days** (or immediately if periocular/nasal tip involvement — **Hutchinson sign** — develops) to confirm crusting and evaluate neuropathic pain control.'
+    };
+  }
+
+  if (
+    lower.includes('urticaria') ||
+    lower.includes('hives') ||
+    lower.includes('wheal') ||
+    lower.includes('drug eruption')
+  ) {
+    return {
+      etiologyAndTriggers: [
+        'Cutaneous mast cell degranulation releasing histamine, leukotrienes, and platelet-activating factor, leading to transient dermal edema (wheals) and axon-reflex erythema.',
+        'Triggers include recent viral infections, medications (NSAIDs, antibiotics, ACE inhibitors), food allergens, physical stimuli (pressure, cold, heat), or idiopathic autoreactivity.'
+      ],
+      contagiousness:
+        '**Non-contagious.** Urticaria and allergic/drug reactions are immune-mediated hypersensitivity responses and cannot spread to others.',
+      prognosisAndTimeline:
+        'Individual urticarial wheals characteristically resolve within **<24 hours** without residual bruising, though new crops may appear over **days to 2–6 weeks** until the underlying trigger clears.',
+      dietAndSkincare: [
+        'Avoid NSAIDs (ibuprofen, aspirin, diclofenac), alcohol, tight friction-inducing clothing, and hot showers, which exacerbate histamine release.',
+        'Apply soothing calamine or 1% menthol aqueous cream to cool pruritic skin.',
+        'Maintain a symptom and exposure diary (foods, medications, activities) over the next 14 days.'
+      ],
+      alternativesAndSafety:
+        'Second-generation non-sedating H1 antihistamines (**Bilastine, Fexofenadine, Levocetirizine, or Cetirizine**) are first-line and can be safely up-dosed up to 4x standard dose per EAACI/WAO guidelines before resorting to systemic steroids.',
+      followUpGuidance:
+        'Follow up in **1–2 weeks** if wheals persist, or proceed to emergency care immediately if lip/tongue swelling, hoarseness, or wheezing occurs.'
+    };
+  }
+
+  // Default: Eczema / Atopic Dermatitis / Contact Dermatitis / Inflammatory Dermatosis
+  return {
+    etiologyAndTriggers: [
+      'Epidermal barrier dysfunction (filaggrin/ceramide deficiency), transepidermal water loss, and cutaneous Th2/Th1-mediated inflammatory hypersensitivity.',
+      'Common triggers include harsh soaps/detergents, fragrance/nickel/preservative allergens, low ambient humidity, wool/synthetic fabrics, sweat, and stress.'
+    ],
+    contagiousness:
+      '**Non-contagious.** Eczematous and inflammatory dermatoses cannot be passed from person to person.',
+    prognosisAndTimeline:
+      'Pruritus and acute erythema typically subside within **5–7 days** of targeted anti-inflammatory therapy and barrier repair; full epidermal barrier restoration takes **2–4 weeks**.',
+    dietAndSkincare: [
+      '**Soak-and-Seal Protocol:** Bathe in lukewarm (not hot) water for <10 minutes using a soap-free syndet cleanser, pat gently, and apply thick fragrance-free ceramide emollient within 3 minutes.',
+      'Wear soft breathable cotton clothing and avoid direct contact with fragrances, harsh detergents, or suspected allergens.',
+      'Keep fingernails short and consider bedtime antihistamines or cool compresses to break the **itch-scratch cycle**.'
+    ],
+    alternativesAndSafety:
+      'Match corticosteroid potency to anatomical site: use low-potency (**Hydrocortisone 1%** or **Desonide 0.05%**) or steroid-sparing calcineurin inhibitors (**Tacrolimus / Pimecrolimus**) on the face, eyelids, and folds; reserve mid-to-high potency (**Mometasone / Betamethasone**) for trunk and extremities for 7–14 days max.',
+    followUpGuidance:
+      'Review in **2 weeks** to step down from active topical steroid to maintenance emollient + pro-active calcineurin inhibitor therapy.'
+  };
+}
+
 export async function askImageReportAssistant(
   params: AskImageReportParams
 ): Promise<{ answer: string; isAiPowered: boolean }> {
@@ -2426,7 +2623,8 @@ export async function askImageReportAssistant(
     conversationHistory = []
   } = params;
 
-  const qLower = question.toLowerCase().trim();
+  const qRaw = question.trim();
+  const qLower = qRaw.toLowerCase();
   const diffsText = (report.differentials || [])
     .map(
       (d, idx) =>
@@ -2446,6 +2644,11 @@ export async function askImageReportAssistant(
   const patientSummary = patient
     ? `Patient: ${patient.fullName} (${patient.patientCode}, ${patient.age}y/${patient.gender}) | Allergies: ${patient.allergies || 'NKDA'} | Current Medications: ${patient.currentMedications || 'None'} | Past Visits: ${history.length}`
     : 'Unlinked / Guest Presentation';
+
+  const knowledge = getConditionKnowledgeProfile(
+    report.primaryImpression,
+    metrics?.morphologyCategory
+  );
 
   const reportContextBlock = `
 GENERATED AI CLINICAL IMAGE REPORT (ID: ${report.id}):
@@ -2473,6 +2676,14 @@ ${report.suggestedManagementPlan}
 
 06. RED FLAGS TO WATCH / RULE OUT:
 ${(report.redFlags || []).map(rf => `- ${rf}`).join('\n')}
+
+07. CONDITION CLINICAL KNOWLEDGE PROFILE:
+- Etiology & Triggers: ${knowledge.etiologyAndTriggers.join(' ')}
+- Contagiousness: ${knowledge.contagiousness}
+- Prognosis & Healing Timeline: ${knowledge.prognosisAndTimeline}
+- Diet, Lifestyle & Skincare: ${knowledge.dietAndSkincare.join(' ')}
+- Alternatives & Safety: ${knowledge.alternativesAndSafety}
+- Follow-Up Schedule: ${knowledge.followUpGuidance}
 `.trim();
 
   const recentTurns = conversationHistory
@@ -2481,18 +2692,19 @@ ${(report.redFlags || []).map(rf => `- ${rf}`).join('\n')}
     .join('\n\n');
 
   const prompt = `You are a board-certified Dermatology & Clinical Decision Support AI Assistant embedded directly inside the AI Clinical Image Analyzer.
-The attending doctor is communicating with you to get specific clinical information, clarifications, differential comparisons, therapeutic adjustments, or patient counseling points from the generated Clinical Image Diagnostic Report below.
+The attending doctor is asking you a question about the generated Clinical Image Diagnostic Report below. You must answer ANY type of question they ask about the report, the diagnosed condition (${report.primaryImpression}), its causes, prognosis, contagiousness, lifestyle/diet, differential diagnosis, visual metrics, tests, medications, dosing, alternatives, safety, or patient counseling.
 
 ${reportContextBlock}
 
 ${recentTurns ? `RECENT CONVERSATION HISTORY:\n${recentTurns}\n` : ''}
 DOCTOR'S QUESTION:
-${question}
+${qRaw}
 
 INSTRUCTIONS:
-1. Ground your answer directly in the generated report above (and linked patient allergies/medications/history when present).
-2. Use clear, concise medical formatting with bullet points and bold highlights so the doctor can scan it in seconds.
-3. Do NOT fabricate external patient history not present in the record, and keep recommendations clinically rigorous.`;
+1. Directly and thoroughly answer the doctor's specific question using the report data and dermatological knowledge above.
+2. Always refer to diseases in the format Common Term (Scientific Term) when naming conditions.
+3. Use clear, concise medical formatting with headings, bullet points, and bold highlights so the doctor can scan it in seconds.
+4. Never refuse to answer a clinical or report-related question or output generic placeholder text.`;
 
   const openRouterKey = (process.env.OPENROUTER_API_KEY || '').trim();
   const ai = getAIClient();
@@ -2538,149 +2750,284 @@ INSTRUCTIONS:
     }
   }
 
-  // 3. Intelligent Deterministic Report-Grounded Answer Engine
+  // 3. Comprehensive Multi-Intent Report & Clinical Knowledge QA Engine
   const topDiff = report.differentials?.[0];
   const secondDiff = report.differentials?.[1];
+  const thirdDiff = report.differentials?.[2];
 
-  if (
-    qLower.includes('differentiate') ||
-    qLower.includes('differential') ||
-    qLower.includes('compare') ||
-    qLower.includes('vs') ||
-    qLower.includes('icd')
-  ) {
-    return {
-      answer: `### Differential Diagnosis Breakdown from Report\n\n**Primary Impression:** **${report.primaryImpression}**\n\n${diffsText}\n\n${
-        topDiff && secondDiff
-          ? `### Clinical Differentiation (#1 vs #2)\n- **Favors ${topDiff.condition} (${topDiff.icdCode || 'Primary'}):** ${topDiff.rationale}\n- **Distinguishing ${secondDiff.condition} (${secondDiff.icdCode || 'Secondary'}):** ${secondDiff.rationale}\n- **Decisive Confirmatory Step:** ${report.recommendedInvestigations?.[0] || 'Targeted dermoscopy and clinical correlation.'}`
-          : ''
-      }`,
-      isAiPowered: false
-    };
+  const sections: string[] = [];
+
+  // Intent A: What is the disease / diagnosis / scientific name / common name / confidence / why diagnosed
+  const asksDiagnosisOrWhy =
+    /\b(what is|what's|which disease|which condition|diagnosis|impression|scientific|common name|common term|latin|medical term|called|identify|detected|found|why did|why is|how did|evidence|rationale|reason for|confidence|likelihood|certainty|accurate|sure)\b/i.test(
+      qLower
+    );
+
+  // Intent B: Causes / Etiology / Triggers / Pathophysiology
+  const asksCausesOrTriggers =
+    /\b(cause|causes|caused|etiology|pathophysiology|mechanism|trigger|triggers|why does|how does it happen|origin|factor|factors|aggra|worsen|flare)\b/i.test(
+      qLower
+    );
+
+  // Intent C: Contagiousness / Spread / Transmission
+  const asksContagious =
+    /\b(contagious|spread|spreading|infectious|infection|transmit|transmission|catch|communicable|contact with|touch|family|others)\b/i.test(
+      qLower
+    );
+
+  // Intent D: Prognosis / Recovery time / Healing duration / Cure
+  const asksPrognosisOrTime =
+    /\b(how long|heal|healing|recover|recovery|duration|time to|timeline|prognosis|cure|curable|permanent|clear up|resolve|resolution|go away|days|weeks|months|recur|recurrence)\b/i.test(
+      qLower
+    );
+
+  // Intent E: Diet / Food / Lifestyle / Skincare / Routine / Bathing / Sun / Home care
+  const asksDietOrLifestyle =
+    /\b(diet|food|eat|eating|avoid|nutrition|drink|lifestyle|habit|skincare|skin care|routine|wash|cleanser|soap|bath|shower|moisturizer|sunscreen|sun|spf|clothing|home care|self care|hygiene)\b/i.test(
+      qLower
+    );
+
+  // Intent F: Severity / Stage / Risk / Score / Size / Diameter
+  const asksSeverityOrSize =
+    /\b(severe|severity|mild|moderate|grade|grading|stage|staging|serious|dangerous|risk|score|abcde|size|diameter|mm|how bad|extent|intensity)\b/i.test(
+      qLower
+    );
+
+  // Intent G: Differential Diagnosis / Comparison / ICD-10
+  const asksDifferentials =
+    /\b(differentiate|differential|differentials|compare|comparison|vs|versus|other possibility|other condition|similar|rule out|icd|icd-10|code|#1|#2|second)\b/i.test(
+      qLower
+    );
+
+  // Intent H: Treatment / Medications / Dosage / Alternatives / Pregnancy / Pediatric / Side Effects / Allergies
+  const asksTreatment =
+    /\b(treat|treatment|management|medication|medicine|drug|cream|ointment|gel|lotion|tablet|pill|oral|topical|systemic|dose|dosage|dosing|prescribe|prescription|rx|steroid|antibiotic|antifungal|antihistamine|retinoid|alternative|second line|substitute|side effect|adverse|pregnant|pregnancy|lactation|breastfeeding|child|children|pediatric|kid|baby|safe|safety|allergy|allergies|interaction|plan|therapy|regimen)\b/i.test(
+      qLower
+    );
+
+  // Intent I: Tests / Workup / Biopsy / Lab / Dermoscopy
+  const asksTests =
+    /\b(test|tests|testing|workup|biopsy|investigation|investigations|lab|labs|blood|koh|scraping|culture|dermoscopy|dermoscopic|wood|patch test|confirm|confirmation|diagnostic)\b/i.test(
+      qLower
+    );
+
+  // Intent J: Red Flags / Complications / Urgent Referral
+  const asksRedFlags =
+    /\b(red flag|red flags|warning|urgent|emergency|danger|complication|complications|escalat|refer|referral|hospital|er|when to worry|watch out)\b/i.test(
+      qLower
+    );
+
+  // Intent K: Visual Findings / Morphology / Telemetry / Pigmentation / Erythema
+  const asksVisualMetrics =
+    /\b(metric|metrics|visual|erythema|redness|pigment|pigmentation|border|asymmetry|morphology|fitzpatrick|phototype|pattern|appearance|look like|lesion|plaque|papule|macule|scale|telemetry|finding|findings)\b/i.test(
+      qLower
+    );
+
+  // Intent L: Patient Counseling / Explain to Patient / Follow-up / Next Visit / History
+  const asksCounselingOrFollowUp =
+    /\b(counsel|counseling|explain to patient|patient note|precaution|precautions|advice|instruct|instruction|follow up|follow-up|followup|next visit|review|return|recheck|monitor|monitoring|history|past visit|previous|patient profile)\b/i.test(
+      qLower
+    );
+
+  if (asksDiagnosisOrWhy) {
+    sections.push(
+      `### Primary Diagnosis & Clinical Evidence\n` +
+        `- **Identified Condition (Common & Scientific Term):** **${report.primaryImpression}**${
+          topDiff?.icdCode ? ` · **ICD-10:** \`${topDiff.icdCode}\`` : ''
+        }\n` +
+        `- **Diagnostic Confidence:** **${topDiff?.confidence || 'High'} Likelihood** based on lesion morphology and regional distribution${
+          anatomicalSite ? ` at **${anatomicalSite}**` : ''
+        }.\n` +
+        `- **Diagnostic Rationale:** ${topDiff?.rationale || 'Lesion border, surface morphology, and erythema/pigmentation profile closely match this entity.'}\n` +
+        `- **Supporting Visual Evidence:**\n${(report.visualFindings || [])
+          .map(v => `  • ${v}`)
+          .join('\n')}`
+    );
   }
 
-  if (
-    qLower.includes('treatment') ||
-    qLower.includes('management') ||
-    qLower.includes('medication') ||
-    qLower.includes('prescribe') ||
-    qLower.includes('rx') ||
-    qLower.includes('dose') ||
-    qLower.includes('allergy') ||
-    qLower.includes('allergies') ||
-    qLower.includes('steroid') ||
-    qLower.includes('plan')
-  ) {
+  if (asksCausesOrTriggers) {
+    sections.push(
+      `### Etiology, Pathophysiology & Common Triggers\n` +
+        `For **${report.primaryImpression}**:\n` +
+        knowledge.etiologyAndTriggers.map(item => `- ${item}`).join('\n') +
+        `\n- **Patient Context Correlation:** ${report.timelineCorrelation}`
+    );
+  }
+
+  if (asksContagious) {
+    sections.push(
+      `### Contagiousness & Transmission Profile\n` +
+        `- **Status for ${report.primaryImpression}:** ${knowledge.contagiousness}\n` +
+        `- **Recommended Hygiene Measures:** Avoid sharing personal towels, razors, or topical applicators; maintain intact skin barrier hygiene.`
+    );
+  }
+
+  if (asksPrognosisOrTime) {
+    sections.push(
+      `### Expected Healing Timeline & Prognosis\n` +
+        `- **Recovery Timeline (${report.primaryImpression}):** ${knowledge.prognosisAndTimeline}\n` +
+        `- **Recommended Follow-Up:** ${knowledge.followUpGuidance}`
+    );
+  }
+
+  if (asksSeverityOrSize) {
+    const eIdx = metrics?.erythemaIndex ?? 50;
+    const pIdx = metrics?.pigmentationIndex ?? 45;
+    const bIdx = metrics?.borderIrregularity ?? 35;
+    const maxIndex = Math.max(eIdx, pIdx, bIdx);
+    const severityGrade =
+      abcdeScore?.riskLevel === 'High Risk' || maxIndex >= 72
+        ? 'Moderate-to-Severe (High Clinical Attention)'
+        : maxIndex >= 45
+        ? 'Moderate (Active Clinical Presentation)'
+        : 'Mild-to-Moderate (Localized Presentation)';
+
+    sections.push(
+      `### Clinical Severity & Morphometric Grading\n` +
+        `- **Estimated Clinical Grade:** **${severityGrade}**\n` +
+        (metrics
+          ? `- **Quantitative Indices:** Erythema **${metrics.erythemaIndex}/100** · Pigmentation **${metrics.pigmentationIndex}/100** · Asymmetry **${metrics.asymmetryScore}/100** · Border Irregularity **${metrics.borderIrregularity}/100**\n` +
+            `- **Estimated Lesion Diameter:** **~${metrics.estimatedDiameterMm || 5.0} mm** (Fitzpatrick Phototype: **${metrics.fitzpatrickType || 'Type IV'}**)\n`
+          : '') +
+        (abcdeScore
+          ? `- **ABCDE Dermoscopic Score:** **${abcdeScore.totalScore}/9** (${abcdeScore.riskLevel}) — ${abcdeScore.clinicalRecommendation}\n`
+          : '') +
+        `- **Escalation Threshold:** Immediate reassessment if any of the following occur: ${(report.redFlags || []).slice(0, 2).join('; ')}.`
+    );
+  }
+
+  if (asksDifferentials) {
+    sections.push(
+      `### Differential Diagnosis & Clinical Comparison\n` +
+        `**Primary Impression:** **${report.primaryImpression}**\n\n` +
+        `${diffsText}\n\n` +
+        (topDiff && secondDiff
+          ? `#### How to Differentiate at the Bedside\n` +
+            `- **Favors #1 ${topDiff.condition} (${topDiff.icdCode || 'Primary'}):** ${topDiff.rationale}\n` +
+            `- **Distinguishing #2 ${secondDiff.condition} (${secondDiff.icdCode || 'Secondary'}):** ${secondDiff.rationale}\n` +
+            (thirdDiff
+              ? `- **Distinguishing #3 ${thirdDiff.condition} (${thirdDiff.icdCode || 'Tertiary'}):** ${thirdDiff.rationale}\n`
+              : '') +
+            `- **Confirmatory Discriminator:** ${report.recommendedInvestigations?.[0] || 'Polarized dermoscopy and targeted clinical correlation.'}`
+          : '')
+    );
+  }
+
+  if (asksTreatment) {
     const allergyNote = patient?.allergies
-      ? `> **Allergy Safety Check for ${patient.fullName}:** Documented allergy to **${patient.allergies}**. Verify all prescribed topical/systemic agents avoid cross-reactivity.`
-      : `> **Allergy Safety Check:** ${patient ? `${patient.fullName} has no known drug allergies (NKDA) on file.` : 'No patient linked — confirm drug allergies before prescribing.'}`;
+      ? `> **Allergy Safety Check (${patient.fullName}):** Documented allergy to **${patient.allergies}**. Ensure prescribed agents avoid cross-reactivity.`
+      : `> **Allergy Safety Check:** ${
+          patient
+            ? `${patient.fullName} has no known drug allergies (NKDA) on file.`
+            : 'Confirm drug allergies before finalizing prescription.'
+        }`;
 
+    sections.push(
+      `### Management Plan, Dosing & Therapeutic Alternatives\n` +
+        `**Target Condition:** **${report.primaryImpression}**\n\n` +
+        `${allergyNote}\n\n` +
+        `#### First-Line Report Regimen\n${report.suggestedManagementPlan}\n\n` +
+        `#### Alternatives, Special Populations & Safety Notes\n- ${knowledge.alternativesAndSafety}\n` +
+        (patient?.currentMedications
+          ? `- **Current Medications on File (${patient.fullName}):** **${patient.currentMedications}** — verify no duplicate topical/systemic overlap.`
+          : '')
+    );
+  }
+
+  if (asksDietOrLifestyle) {
+    sections.push(
+      `### Diet, Skincare Routine & Lifestyle Recommendations\n` +
+        `Tailored guidance for **${report.primaryImpression}**:\n` +
+        knowledge.dietAndSkincare.map(item => `- ${item}`).join('\n')
+    );
+  }
+
+  if (asksTests) {
+    sections.push(
+      `### Recommended Diagnostic Workup & Investigations\n` +
+        `To definitively confirm **${report.primaryImpression}** and exclude mimics:\n\n` +
+        (report.recommendedInvestigations || [])
+          .map((inv, idx) => `${idx + 1}. **${inv}**`)
+          .join('\n') +
+        `\n\n- **Priority Clinical Step:** Perform **${
+          report.recommendedInvestigations?.[0] || 'polarized dermoscopy'
+        }** prior to initiating potent topical therapy that could mask diagnostic morphology.`
+    );
+  }
+
+  if (asksRedFlags) {
+    sections.push(
+      `### Critical Red Flags & Urgent Referral Criteria\n` +
+        `For **${report.primaryImpression}**, monitor and counsel the patient on:\n\n` +
+        (report.redFlags || []).map(rf => `- **${rf}**`).join('\n') +
+        (abcdeScore
+          ? `\n- **ABCDE Caliper Status:** Score **${abcdeScore.totalScore}/9** (${abcdeScore.riskLevel}) — ${abcdeScore.clinicalRecommendation}`
+          : '')
+    );
+  }
+
+  if (asksVisualMetrics && !asksSeverityOrSize) {
+    sections.push(
+      `### Visual Morphology & Quantitative Telemetry\n` +
+        (metrics
+          ? `- **Morphology Pattern:** ${metrics.morphologyCategory.replace(/_/g, ' ')}\n` +
+            `- **Estimated Fitzpatrick Phototype:** ${metrics.fitzpatrickType || 'Type IV'}\n` +
+            `- **Erythema (Redness) Index:** ${metrics.erythemaIndex}/100\n` +
+            `- **Pigmentation Index:** ${metrics.pigmentationIndex}/100\n` +
+            `- **Asymmetry / Border Irregularity:** ${metrics.asymmetryScore}/100 · ${metrics.borderIrregularity}/100\n` +
+            `- **Estimated Lesion Diameter:** ~${metrics.estimatedDiameterMm || 5.0} mm\n\n`
+          : '') +
+        `#### Key Visual Findings from Report\n` +
+        (report.visualFindings || []).map(v => `- ${v}`).join('\n')
+    );
+  }
+
+  if (asksCounselingOrFollowUp) {
+    sections.push(
+      `### Patient Counseling, History Correlation & Follow-Up Plan\n` +
+        `- **Condition to Explain to Patient:** **${report.primaryImpression}**${
+          anatomicalSite ? ` (Site: ${anatomicalSite})` : ''
+        }\n` +
+        `- **Contagiousness Reassurance:** ${knowledge.contagiousness}\n` +
+        `- **Expected Recovery:** ${knowledge.prognosisAndTimeline}\n` +
+        `- **Patient & Visit Correlation:** ${report.timelineCorrelation}\n` +
+        `- **Follow-Up Schedule:** ${knowledge.followUpGuidance}`
+    );
+  }
+
+  if (sections.length > 0) {
     return {
-      answer: `### Suggested Treatment & Management Protocol\n\n**Target Condition:** ${report.primaryImpression}\n\n${allergyNote}\n\n#### Report Regimen\n${report.suggestedManagementPlan}\n\n${
-        patient?.currentMedications
-          ? `#### Ongoing Medications Correlation\n- Current regimen on file: **${patient.currentMedications}**\n- Timeline note: ${report.timelineCorrelation}`
-          : ''
-      }`,
+      answer: sections.join('\n\n---\n\n'),
       isAiPowered: false
     };
   }
 
-  if (
-    qLower.includes('test') ||
-    qLower.includes('workup') ||
-    qLower.includes('biopsy') ||
-    qLower.includes('investigation') ||
-    qLower.includes('lab') ||
-    qLower.includes('confirm')
-  ) {
-    return {
-      answer: `### Recommended Diagnostic Workup & Investigations\n\nTo confirm **${report.primaryImpression}** and rule out secondary differentials:\n\n${(
-        report.recommendedInvestigations || []
-      )
-        .map((inv, idx) => `${idx + 1}. **${inv}**`)
-        .join('\n')}\n\n- **Highest Priority Action:** Start with **${
-        report.recommendedInvestigations?.[0] || 'clinical dermoscopy'
-      }** prior to initiating empiric therapy that might alter lesion morphology.`,
-      isAiPowered: false
-    };
-  }
-
-  if (
-    qLower.includes('red flag') ||
-    qLower.includes('warning') ||
-    qLower.includes('urgent') ||
-    qLower.includes('danger') ||
-    qLower.includes('emergency') ||
-    qLower.includes('rule out')
-  ) {
-    return {
-      answer: `### Critical Red Flags & Escalation Criteria\n\nFor **${report.primaryImpression}**, monitor closely for:\n\n${(
-        report.redFlags || []
-      )
-        .map(rf => `- **${rf}**`)
-        .join('\n')}\n\n${
-        abcdeScore
-          ? `- **ABCDE Caliper Status:** Score **${abcdeScore.totalScore}/9** (${abcdeScore.riskLevel}) — ${abcdeScore.clinicalRecommendation}`
-          : ''
-      }`,
-      isAiPowered: false
-    };
-  }
-
-  if (
-    qLower.includes('metric') ||
-    qLower.includes('visual') ||
-    qLower.includes('erythema') ||
-    qLower.includes('pigment') ||
-    qLower.includes('border') ||
-    qLower.includes('asymmetry') ||
-    qLower.includes('morphology') ||
-    qLower.includes('finding')
-  ) {
-    return {
-      answer: `### Visual Morphology & Quantitative Telemetry\n\n${
-        metrics
-          ? `- **Morphology Pattern:** ${metrics.morphologyCategory.replace(/_/g, ' ')}\n- **Estimated Fitzpatrick Phototype:** ${metrics.fitzpatrickType || 'Type IV'}\n- **Erythema (Redness) Index:** ${metrics.erythemaIndex}/100\n- **Pigmentation Index:** ${metrics.pigmentationIndex}/100\n- **Asymmetry / Border Irregularity:** ${metrics.asymmetryScore}/100 · ${metrics.borderIrregularity}/100\n- **Estimated Lesion Diameter:** ~${metrics.estimatedDiameterMm || 5.0} mm\n`
-          : ''
-      }\n#### Key Visual Observations from Report\n${(report.visualFindings || [])
-        .map(v => `- ${v}`)
-        .join('\n')}\n\n#### Patient History Correlation\n${report.timelineCorrelation}`,
-      isAiPowered: false
-    };
-  }
-
-  if (
-    qLower.includes('counsel') ||
-    qLower.includes('patient') ||
-    qLower.includes('explain') ||
-    qLower.includes('precaution') ||
-    qLower.includes('referral')
-  ) {
-    return {
-      answer: `### Patient Counseling & Communication Guide\n\n- **Working Diagnosis to Explain:** **${report.primaryImpression}**${
-        anatomicalSite ? ` (Site: ${anatomicalSite})` : ''
-      }\n- **Key Reassurance / Explanation:** Findings correlate with ${
-        topDiff ? `${topDiff.condition} (${topDiff.confidence} likelihood)` : report.primaryImpression
-      }.\n- **Next Diagnostic Step:** ${(report.recommendedInvestigations || [])[0] || 'Follow clinical care plan'}\n- **Care & Treatment Summary:**\n${
-        report.suggestedManagementPlan
-      }\n- **When to Seek Immediate Review (Red Flags):**\n${(report.redFlags || [])
-        .map(rf => `  • ${rf}`)
-        .join('\n')}`,
-      isAiPowered: false
-    };
-  }
-
-  // Default comprehensive report synthesis answer
+  // Fallback for any custom/open-ended question: directly address the doctor's query with full report + clinical knowledge synthesis
   return {
-    answer: `### Report Summary & Clinical Insights: ${report.primaryImpression}\n\n- **Primary Impression:** **${report.primaryImpression}** ${
-      topDiff?.icdCode ? `(ICD-10: \`${topDiff.icdCode}\`)` : ''
-    }\n- **Top Differentials:** ${(report.differentials || [])
-      .map(d => `${d.condition} (${d.confidence})`)
-      .join(' · ')}\n- **Key Visual Findings:** ${(report.visualFindings || []).slice(0, 3).join('; ')}\n- **History Correlation:** ${
-      report.timelineCorrelation
-    }\n- **Priority Workup:** ${(report.recommendedInvestigations || []).slice(0, 2).join('; ')}\n- **Suggested Plan:**\n${
-      report.suggestedManagementPlan
-    }\n\n*Ask me specifically about differential comparisons, medication adjustments, red flags, visual metrics, or patient counseling notes from this report.*`,
+    answer:
+      `### Clinical Analysis for Your Query: "${qRaw}"\n\n` +
+      `Based on the generated diagnostic report for **${report.primaryImpression}**${
+        topDiff?.icdCode ? ` (ICD-10: \`${topDiff.icdCode}\`)` : ''
+      }${anatomicalSite ? ` at **${anatomicalSite}**` : ''}:\n\n` +
+      `#### 1. Direct Diagnostic & Pathophysiological Context\n` +
+      `- **Primary Impression:** **${report.primaryImpression}** (${topDiff?.confidence || 'High'} confidence) — ${
+        topDiff?.rationale || 'Supported by cutaneous morphology and surface telemetry.'
+      }\n` +
+      `- **Ranked Differentials:** ${(report.differentials || [])
+        .map(d => `**${d.condition}** (${d.confidence}${d.icdCode ? `, \`${d.icdCode}\`` : ''})`)
+        .join(' · ')}\n` +
+      `- **Underlying Mechanism & Triggers:** ${knowledge.etiologyAndTriggers[0]}\n` +
+      `- **Contagiousness & Prognosis:** ${knowledge.contagiousness} ${knowledge.prognosisAndTimeline}\n\n` +
+      `#### 2. Visual & Patient Correlation\n` +
+      `- **Key Visual Findings:** ${(report.visualFindings || []).join('; ')}\n` +
+      `- **Patient Timeline:** ${report.timelineCorrelation}\n\n` +
+      `#### 3. Actionable Workup, Treatment & Follow-Up\n` +
+      `- **Recommended Workup:** ${(report.recommendedInvestigations || []).join('; ')}\n` +
+      `- **Management Regimen:**\n${report.suggestedManagementPlan}\n` +
+      `- **Skincare & Alternatives:** ${knowledge.dietAndSkincare[0]} ${knowledge.alternativesAndSafety}\n` +
+      `- **Red Flags to Monitor:** ${(report.redFlags || []).join('; ')}\n` +
+      `- **Follow-Up Schedule:** ${knowledge.followUpGuidance}`,
     isAiPowered: false
   };
 }
+
