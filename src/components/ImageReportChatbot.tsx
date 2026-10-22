@@ -159,7 +159,7 @@ export const ImageReportChatbot: React.FC<ImageReportChatbotProps> = ({
 
     const words = fullText.split(/(\s+)/);
     let currentIndex = 0;
-    const step = Math.max(3, Math.ceil(words.length / 45));
+    const step = Math.max(16, Math.ceil(words.length / 8));
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     setStreamingMsgId(msgId);
@@ -192,7 +192,7 @@ export const ImageReportChatbot: React.FC<ImageReportChatbotProps> = ({
           prev.map(m => (m.id === msgId ? { ...m, content: partial } : m))
         );
       }
-    }, 22);
+    }, 10);
   };
 
   const handleSendQuestion = async (customQuery?: string) => {

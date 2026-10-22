@@ -139,11 +139,10 @@ export const AIModal: React.FC<AIModalProps> = ({
 
   /**
    * Handles clicking on any prompt option:
-   * 1. Immediately shows the prompt in the typebar (input field) and focuses it.
-   * 2. If the user clicks the SAME option again within 2 seconds:
-   *    Response is taken ONCE (deduplicated, no duplicate requests).
-   * 3. Adds a 2-second delay before executing the AI response, giving doctor time to review/edit.
+   * Immediately populates and executes the AI response with a 500ms duplicate-click guard.
    */
+  const lastSubmittedRef = useRef<{ text: string; time: number } | null>(null);
+
   const handlePromptClick = (
     promptText: string,
     contextType?: 'soap' | 'summary' | 'medications' | 'followup' | 'general'
@@ -151,61 +150,24 @@ export const AIModal: React.FC<AIModalProps> = ({
     if (isLoading) return;
 
     const now = Date.now();
-
-    // 1. Immediately populate and show in typebar!
-    setQuestion(promptText);
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 50);
-
-    // 2. Check if the SAME option is clicked within 2 seconds:
     if (
-      pendingPrompt &&
-      pendingPrompt.text === promptText &&
-      now - pendingPrompt.startedAt < 2000
+      lastSubmittedRef.current &&
+      lastSubmittedRef.current.text === promptText &&
+      now - lastSubmittedRef.current.time < 600
     ) {
-      // Within 2 seconds, same option clicked again!
-      // Requirement: "within two seconds if the same option is clicked then response should be taken once, so add some delay"
-      setDuplicateClickNotice(true);
-      if (duplicateNoticeTimerRef.current) clearTimeout(duplicateNoticeTimerRef.current);
-      duplicateNoticeTimerRef.current = setTimeout(() => {
-        setDuplicateClickNotice(false);
-      }, 1800);
       return;
     }
 
-    // 3. Reset existing countdown and schedule new 2-second delay
+    lastSubmittedRef.current = { text: promptText, time: now };
     if (timerRef.current) clearTimeout(timerRef.current);
     if (intervalRef.current) clearInterval(intervalRef.current);
-
+    setPendingPrompt(null);
+    setCountdownMs(0);
     setDuplicateClickNotice(false);
-    setPendingPrompt({
-      text: promptText,
-      contextType,
-      startedAt: now
-    });
-    setCountdownMs(2000);
-
-    const startTime = Date.now();
-    intervalRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, 2000 - elapsed);
-      setCountdownMs(remaining);
-      if (remaining <= 0) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-      }
-    }, 50);
-
-    timerRef.current = setTimeout(() => {
-      setPendingPrompt(null);
-      setCountdownMs(0);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      // Trigger response once
-      handleAsk(promptText, contextType);
-    }, 2000);
+    handleAsk(promptText, contextType);
   };
 
-  // Immediate send (e.g. if doctor clicks "Send Now" or hits Enter during the 2s countdown)
+  // Immediate send
   const handleImmediateSend = (customText?: string) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -217,7 +179,7 @@ export const AIModal: React.FC<AIModalProps> = ({
     handleAsk(textToSend, contextType);
   };
 
-  // Cancel pending 2s timer to allow manual editing of typebar
+  // Cancel pending timer
   const handleCancelPending = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (intervalRef.current) clearInterval(intervalRef.current);

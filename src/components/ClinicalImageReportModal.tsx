@@ -3,6 +3,7 @@ import { Patient, AIImageAnalysisResult, Doctor } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import { ImageReportChatbot } from './ImageReportChatbot';
+import { MarkdownView, renderInlineMarkdown } from './MarkdownView';
 import {
   X,
   Bot,
@@ -259,7 +260,7 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
                       )}
                     </div>
                     <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                      {diff.rationale}
+                      {renderInlineMarkdown(diff.rationale, `mod-diff-${i}`)}
                     </p>
                   </div>
                   <span
@@ -292,7 +293,7 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
                   {analysis.visualFindings.map((finding, idx) => (
                     <li key={idx} className="flex items-start gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-teal-600 shrink-0 mt-1.5" />
-                      <span>{finding}</span>
+                      <span>{renderInlineMarkdown(finding, `mod-vf-${idx}`)}</span>
                     </li>
                   ))}
                 </ul>
@@ -302,9 +303,9 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
                 <div className="text-[11px] font-semibold text-teal-900 uppercase mb-1">
                   Patient History & Lab Correlation
                 </div>
-                <p className="text-xs text-teal-950 leading-relaxed font-normal">
-                  {analysis.timelineCorrelation}
-                </p>
+                <div className="text-xs text-teal-950 leading-relaxed font-normal">
+                  <MarkdownView content={analysis.timelineCorrelation} />
+                </div>
               </div>
             </div>
           </div>
@@ -323,7 +324,7 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
                   {analysis.recommendedInvestigations.map((inv, idx) => (
                     <li key={idx} className="flex items-start gap-2">
                       <span className="font-mono text-slate-400 font-semibold">{idx + 1}.</span>
-                      <span>{inv}</span>
+                      <span>{renderInlineMarkdown(inv, `mod-inv-${idx}`)}</span>
                     </li>
                   ))}
                 </ul>
@@ -333,9 +334,9 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
                 <div className="text-[11px] font-semibold text-slate-600 uppercase mb-1.5">
                   Suggested Treatment Regimen
                 </div>
-                <p className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
-                  {analysis.suggestedManagementPlan}
-                </p>
+                <div className="text-xs text-slate-700 leading-relaxed">
+                  <MarkdownView content={analysis.suggestedManagementPlan} />
+                </div>
               </div>
             </div>
           </div>
@@ -351,7 +352,7 @@ export const ClinicalImageReportModal: React.FC<ClinicalImageReportModalProps> =
                 {analysis.redFlags.map((flag, idx) => (
                   <li key={idx} className="flex items-start gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 mt-1.5" />
-                    <span>{flag}</span>
+                    <span>{renderInlineMarkdown(flag, `mod-rf-${idx}`)}</span>
                   </li>
                 ))}
               </ul>

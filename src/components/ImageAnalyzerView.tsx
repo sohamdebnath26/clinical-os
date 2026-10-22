@@ -18,6 +18,7 @@ import { PinToBodyMapModal } from './PinToBodyMapModal';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import { VoiceDictationButton } from './VoiceDictationButton';
 import { ImageReportChatbot } from './ImageReportChatbot';
+import { MarkdownView, renderInlineMarkdown } from './MarkdownView';
 import {
   Camera,
   Bot,
@@ -1397,7 +1398,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                             )}
                           </div>
                           <p className="text-xs text-slate-600 leading-relaxed">
-                            {diff.rationale}
+                            {renderInlineMarkdown(diff.rationale, `diff-rat-${idx}`)}
                           </p>
                         </div>
 
@@ -1468,7 +1469,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                         {analysisResult.visualFindings.map((finding, idx) => (
                           <li key={idx} className="flex items-start gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-teal-600 shrink-0 mt-1.5" />
-                            <span>{finding}</span>
+                            <span>{renderInlineMarkdown(finding, `vf-${idx}`)}</span>
                           </li>
                         ))}
                       </ul>
@@ -1478,9 +1479,9 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                       <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                         Patient History & Lab Correlation
                       </h4>
-                      <p className="text-xs text-slate-700 leading-relaxed bg-teal-50/50 border border-teal-100 rounded-xl p-3.5">
-                        {analysisResult.timelineCorrelation}
-                      </p>
+                      <div className="text-xs text-slate-700 leading-relaxed bg-teal-50/50 border border-teal-100 rounded-xl p-3.5">
+                        <MarkdownView content={analysisResult.timelineCorrelation} />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1501,7 +1502,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                         {analysisResult.recommendedInvestigations.map((inv, idx) => (
                           <li key={idx} className="flex items-start gap-2">
                             <span className="font-mono text-slate-400 font-semibold">{idx + 1}.</span>
-                            <span>{inv}</span>
+                            <span>{renderInlineMarkdown(inv, `inv-${idx}`)}</span>
                           </li>
                         ))}
                       </ul>
@@ -1512,8 +1513,8 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                         <Stethoscope className="w-3.5 h-3.5 text-teal-700" />
                         <span>Suggested Treatment Regimen</span>
                       </h4>
-                      <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
-                        {analysisResult.suggestedManagementPlan}
+                      <div className="text-xs text-slate-700 leading-relaxed">
+                        <MarkdownView content={analysisResult.suggestedManagementPlan} />
                       </div>
                     </div>
                   </div>
@@ -1530,7 +1531,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                       {analysisResult.redFlags.map((flag, idx) => (
                         <li key={idx} className="flex items-start gap-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 mt-1.5" />
-                          <span>{flag}</span>
+                          <span>{renderInlineMarkdown(flag, `rf-${idx}`)}</span>
                         </li>
                       ))}
                     </ul>
