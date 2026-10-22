@@ -477,7 +477,7 @@ export interface DoctorFormularyItem {
   duration: string;
   instructions: string;
   category?: string;
-  source?: 'manual' | 'pdf_upload' | 'csv_upload' | 'rx_learned';
+  source?: 'manual' | 'pdf_upload' | 'csv_upload' | 'rx_learned' | 'standard';
   createdAt: string;
   updatedAt: string;
 }

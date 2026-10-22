@@ -505,10 +505,7 @@ export const UPLOADED_ANTIMICROBIAL_MEDICATIONS = [
   { no: 96, name: "Paromomycin", dosage: "25–35 mg/kg/day", frequency: "Divided doses", duration: "7 days", instructions: "Intestinal amoebiasis/leishmaniasis per regimen" },
 ];
 
-export const COMMON_MEDICATIONS = [
-  ...UPLOADED_ENDOCRINE_MEDICATIONS,
-  ...UPLOADED_CARDIOVASCULAR_MEDICATIONS,
-  ...UPLOADED_ANTIMICROBIAL_MEDICATIONS,
+export const CORE_PRACTICE_MEDICATIONS = [
   { name: 'Tretinoin 0.025% Cream', dosage: 'Pea-sized amount', frequency: 'Once daily at night', duration: '30 days', instructions: 'Apply thin layer on dry skin 20 mins after washing. Avoid eyes and mouth.' },
   { name: 'Adapalene 0.1% + Benzoyl Peroxide 2.5% Gel', dosage: 'Thin layer', frequency: 'Once daily at night', duration: '30 days', instructions: 'Apply on affected facial areas. Use sunscreen during the day.' },
   { name: 'Doxycycline 100 mg Capsules', dosage: '100 mg', frequency: 'Once daily', duration: '14 days', instructions: 'Take with a full glass of water after food. Do not lie down for 30 minutes.' },
@@ -528,6 +525,20 @@ export const COMMON_MEDICATIONS = [
   { name: 'Mupirocin 2% Ointment', dosage: 'Thin layer', frequency: 'Three times daily', duration: '7 days', instructions: 'Apply on bacterial sores / folliculitis.' },
   { name: 'Salicylic Acid 2% + Lactic Acid Solution', dosage: '1 drop', frequency: 'Once daily at night', duration: '14 days', instructions: 'Apply specifically on wart / corn. Protect surrounding skin with petroleum jelly.' }
 ];
+
+// Single combined master clinical formulary without source segregation — default for all doctors
+export const MASTER_CLINICAL_FORMULARY = [
+  ...UPLOADED_ENDOCRINE_MEDICATIONS,
+  ...UPLOADED_CARDIOVASCULAR_MEDICATIONS,
+  ...UPLOADED_ANTIMICROBIAL_MEDICATIONS,
+  ...CORE_PRACTICE_MEDICATIONS
+].map((item, idx) => ({
+  ...item,
+  no: idx + 1,
+  category: 'Clinical Formulary'
+}));
+
+export const COMMON_MEDICATIONS = MASTER_CLINICAL_FORMULARY;
 
 export const COMMON_ALLERGIES = [
   'No Known Drug Allergies (NKDA)',

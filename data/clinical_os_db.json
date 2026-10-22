@@ -1104,7 +1104,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-22T18:21:36.228Z"
+    "updatedAt": "2026-10-22T18:42:31.210Z"
   },
   "appointments": [
     {
@@ -1344,10 +1344,10 @@
       "frequency": "3 times daily",
       "duration": "7 days",
       "instructions": "Complete prescribed course; check penicillin allergy",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:39.000Z",
-      "updatedAt": "2026-01-01T00:16:39.000Z"
+      "updatedAt": "2026-01-01T02:44:15.000Z"
     },
     {
       "id": "csv-antimicrobial-2",
@@ -1358,10 +1358,10 @@
       "frequency": "Every 6 hours",
       "duration": "7 days",
       "instructions": "Oral or IV depending on indication; check penicillin allergy",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:38.000Z",
-      "updatedAt": "2026-01-01T00:16:38.000Z"
+      "updatedAt": "2026-01-01T02:44:14.000Z"
     },
     {
       "id": "csv-antimicrobial-3",
@@ -1372,10 +1372,10 @@
       "frequency": "4 times daily",
       "duration": "7 days",
       "instructions": "Take on an empty stomach; complete course",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:37.000Z",
-      "updatedAt": "2026-01-01T00:16:37.000Z"
+      "updatedAt": "2026-01-01T02:44:13.000Z"
     },
     {
       "id": "csv-antimicrobial-4",
@@ -1386,10 +1386,10 @@
       "frequency": "IM single dose or weekly per indication",
       "duration": "1 day (Single dose)",
       "instructions": "Deep IM injection only; check allergy history",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:36.000Z",
-      "updatedAt": "2026-01-01T00:16:36.000Z"
+      "updatedAt": "2026-01-01T02:44:12.000Z"
     },
     {
       "id": "csv-antimicrobial-5",
@@ -1400,10 +1400,10 @@
       "frequency": "4 times daily",
       "duration": "7 days",
       "instructions": "Take on an empty stomach; monitor liver function with prolonged use",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:35.000Z",
-      "updatedAt": "2026-01-01T00:16:35.000Z"
+      "updatedAt": "2026-01-01T02:44:11.000Z"
     },
     {
       "id": "csv-antimicrobial-6",
@@ -1414,10 +1414,10 @@
       "frequency": "IV every 6–8 hours",
       "duration": "7 days",
       "instructions": "Hospital use; adjust for renal function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:34.000Z",
-      "updatedAt": "2026-01-01T00:16:34.000Z"
+      "updatedAt": "2026-01-01T02:44:10.000Z"
     },
     {
       "id": "csv-antimicrobial-7",
@@ -1428,10 +1428,10 @@
       "frequency": "IV every 8 hours",
       "duration": "7 days",
       "instructions": "Surgical prophylaxis and skin/soft-tissue infections",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:33.000Z",
-      "updatedAt": "2026-01-01T00:16:33.000Z"
+      "updatedAt": "2026-01-01T02:44:09.000Z"
     },
     {
       "id": "csv-antimicrobial-8",
@@ -1442,10 +1442,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Take with food; complete course",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:32.000Z",
-      "updatedAt": "2026-01-01T00:16:32.000Z"
+      "updatedAt": "2026-01-01T02:44:08.000Z"
     },
     {
       "id": "csv-antimicrobial-9",
@@ -1456,10 +1456,10 @@
       "frequency": "Once/twice daily",
       "duration": "7 days",
       "instructions": "Complete prescribed course",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:31.000Z",
-      "updatedAt": "2026-01-01T00:16:31.000Z"
+      "updatedAt": "2026-01-01T02:44:07.000Z"
     },
     {
       "id": "csv-antimicrobial-10",
@@ -1470,10 +1470,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Take with food; complete course",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:30.000Z",
-      "updatedAt": "2026-01-01T00:16:30.000Z"
+      "updatedAt": "2026-01-01T02:44:06.000Z"
     },
     {
       "id": "csv-antimicrobial-11",
@@ -1484,10 +1484,10 @@
       "frequency": "IV/IM once daily",
       "duration": "7 days",
       "instructions": "Hospital/clinic use; do not mix with calcium-containing IV fluids in neonates",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:29.000Z",
-      "updatedAt": "2026-01-01T00:16:29.000Z"
+      "updatedAt": "2026-01-01T02:44:05.000Z"
     },
     {
       "id": "csv-antimicrobial-12",
@@ -1498,10 +1498,10 @@
       "frequency": "IV every 6–8 hours",
       "duration": "7 days",
       "instructions": "Hospital use; adjust for renal function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:28.000Z",
-      "updatedAt": "2026-01-01T00:16:28.000Z"
+      "updatedAt": "2026-01-01T02:44:04.000Z"
     },
     {
       "id": "csv-antimicrobial-13",
@@ -1512,10 +1512,10 @@
       "frequency": "IV every 8 hours",
       "duration": "7 days",
       "instructions": "Hospital use; useful for Pseudomonas coverage",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:27.000Z",
-      "updatedAt": "2026-01-01T00:16:27.000Z"
+      "updatedAt": "2026-01-01T02:44:03.000Z"
     },
     {
       "id": "csv-antimicrobial-14",
@@ -1526,10 +1526,10 @@
       "frequency": "IV every 8–12 hours",
       "duration": "7 days",
       "instructions": "Hospital use; adjust for renal function; neurotoxicity risk in renal impairment",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:26.000Z",
-      "updatedAt": "2026-01-01T00:16:26.000Z"
+      "updatedAt": "2026-01-01T02:44:02.000Z"
     },
     {
       "id": "csv-antimicrobial-15",
@@ -1540,10 +1540,10 @@
       "frequency": "IV every 12 hours",
       "duration": "7 days",
       "instructions": "Hospital use; monitor for bleeding tendency",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:25.000Z",
-      "updatedAt": "2026-01-01T00:16:25.000Z"
+      "updatedAt": "2026-01-01T02:44:01.000Z"
     },
     {
       "id": "csv-antimicrobial-16",
@@ -1554,10 +1554,10 @@
       "frequency": "IV every 8 hours",
       "duration": "7 days",
       "instructions": "Hospital use; adjust for renal function; interacts with valproate",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:24.000Z",
-      "updatedAt": "2026-01-01T00:16:24.000Z"
+      "updatedAt": "2026-01-01T02:44:00.000Z"
     },
     {
       "id": "csv-antimicrobial-17",
@@ -1568,10 +1568,10 @@
       "frequency": "IV every 6 hours",
       "duration": "7 days",
       "instructions": "Hospital use; seizure risk in renal impairment",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:23.000Z",
-      "updatedAt": "2026-01-01T00:16:23.000Z"
+      "updatedAt": "2026-01-01T02:43:59.000Z"
     },
     {
       "id": "csv-antimicrobial-18",
@@ -1582,10 +1582,10 @@
       "frequency": "IV once daily",
       "duration": "7 days",
       "instructions": "Hospital/outpatient infusion; adjust for renal function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:22.000Z",
-      "updatedAt": "2026-01-01T00:16:22.000Z"
+      "updatedAt": "2026-01-01T02:43:58.000Z"
     },
     {
       "id": "csv-antimicrobial-19",
@@ -1596,10 +1596,10 @@
       "frequency": "IV every 8 hours",
       "duration": "7 days",
       "instructions": "Hospital use; option in severe beta-lactam allergy",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:21.000Z",
-      "updatedAt": "2026-01-01T00:16:21.000Z"
+      "updatedAt": "2026-01-01T02:43:57.000Z"
     },
     {
       "id": "csv-antimicrobial-20",
@@ -1610,10 +1610,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Take as directed; check QT-prolonging interactions",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:20.000Z",
-      "updatedAt": "2026-01-01T00:16:20.000Z"
+      "updatedAt": "2026-01-01T02:43:56.000Z"
     },
     {
       "id": "csv-antimicrobial-21",
@@ -1624,10 +1624,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Many drug interactions; check QT-prolonging drugs",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:19.000Z",
-      "updatedAt": "2026-01-01T00:16:19.000Z"
+      "updatedAt": "2026-01-01T02:43:55.000Z"
     },
     {
       "id": "csv-antimicrobial-22",
@@ -1638,10 +1638,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Avoid dairy/antacids near dose; tendon and QT warnings",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:18.000Z",
-      "updatedAt": "2026-01-01T00:16:18.000Z"
+      "updatedAt": "2026-01-01T02:43:54.000Z"
     },
     {
       "id": "csv-antimicrobial-23",
@@ -1652,10 +1652,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Tendon, QT and glucose warnings; hydrate well",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:17.000Z",
-      "updatedAt": "2026-01-01T00:16:17.000Z"
+      "updatedAt": "2026-01-01T02:43:53.000Z"
     },
     {
       "id": "csv-antimicrobial-24",
@@ -1666,10 +1666,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "QT prolongation warning; avoid with antacids",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:16.000Z",
-      "updatedAt": "2026-01-01T00:16:16.000Z"
+      "updatedAt": "2026-01-01T02:43:52.000Z"
     },
     {
       "id": "csv-antimicrobial-25",
@@ -1680,10 +1680,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Tendon and CNS warnings; separate from antacids",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:15.000Z",
-      "updatedAt": "2026-01-01T00:16:15.000Z"
+      "updatedAt": "2026-01-01T02:43:51.000Z"
     },
     {
       "id": "csv-antimicrobial-26",
@@ -1694,10 +1694,10 @@
       "frequency": "IV/IM once daily",
       "duration": "7 days",
       "instructions": "Hospital use; monitor renal function and levels",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:14.000Z",
-      "updatedAt": "2026-01-01T00:16:14.000Z"
+      "updatedAt": "2026-01-01T02:43:50.000Z"
     },
     {
       "id": "csv-antimicrobial-27",
@@ -1708,10 +1708,10 @@
       "frequency": "IV/IM once daily",
       "duration": "7 days",
       "instructions": "Hospital use; monitor renal function and hearing",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:13.000Z",
-      "updatedAt": "2026-01-01T00:16:13.000Z"
+      "updatedAt": "2026-01-01T02:43:49.000Z"
     },
     {
       "id": "csv-antimicrobial-28",
@@ -1722,10 +1722,10 @@
       "frequency": "IV once daily",
       "duration": "7 days",
       "instructions": "Hospital use; monitor renal function and levels",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:12.000Z",
-      "updatedAt": "2026-01-01T00:16:12.000Z"
+      "updatedAt": "2026-01-01T02:43:48.000Z"
     },
     {
       "id": "csv-antimicrobial-29",
@@ -1736,10 +1736,10 @@
       "frequency": "IM once daily",
       "duration": "7 days",
       "instructions": "Specialist TB use; monitor hearing and renal function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:11.000Z",
-      "updatedAt": "2026-01-01T00:16:11.000Z"
+      "updatedAt": "2026-01-01T02:43:47.000Z"
     },
     {
       "id": "csv-antimicrobial-30",
@@ -1750,10 +1750,10 @@
       "frequency": "IV every 8–12 hours",
       "duration": "7 days",
       "instructions": "Hospital use; monitor levels and renal function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:10.000Z",
-      "updatedAt": "2026-01-01T00:16:10.000Z"
+      "updatedAt": "2026-01-01T02:43:46.000Z"
     },
     {
       "id": "csv-antimicrobial-31",
@@ -1764,10 +1764,10 @@
       "frequency": "IV/IM every 12 hours for loading, then daily",
       "duration": "7 days",
       "instructions": "Hospital use; monitor renal function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:09.000Z",
-      "updatedAt": "2026-01-01T00:16:09.000Z"
+      "updatedAt": "2026-01-01T02:43:45.000Z"
     },
     {
       "id": "csv-antimicrobial-32",
@@ -1778,10 +1778,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Monitor blood counts; avoid serotonergic drug combinations",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:08.000Z",
-      "updatedAt": "2026-01-01T00:16:08.000Z"
+      "updatedAt": "2026-01-01T02:43:44.000Z"
     },
     {
       "id": "csv-antimicrobial-33",
@@ -1792,10 +1792,10 @@
       "frequency": "IV once daily",
       "duration": "7 days",
       "instructions": "Hospital use; monitor CK; not for pneumonia",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:07.000Z",
-      "updatedAt": "2026-01-01T00:16:07.000Z"
+      "updatedAt": "2026-01-01T02:43:43.000Z"
     },
     {
       "id": "csv-antimicrobial-34",
@@ -1806,10 +1806,10 @@
       "frequency": "IV in divided doses",
       "duration": "7 days",
       "instructions": "Specialist hospital use; monitor renal function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:06.000Z",
-      "updatedAt": "2026-01-01T00:16:06.000Z"
+      "updatedAt": "2026-01-01T02:43:42.000Z"
     },
     {
       "id": "csv-antimicrobial-35",
@@ -1820,10 +1820,10 @@
       "frequency": "IV in divided doses",
       "duration": "7 days",
       "instructions": "Specialist hospital use; nephrotoxicity and neurotoxicity risk",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:05.000Z",
-      "updatedAt": "2026-01-01T00:16:05.000Z"
+      "updatedAt": "2026-01-01T02:43:41.000Z"
     },
     {
       "id": "csv-antimicrobial-36",
@@ -1834,10 +1834,10 @@
       "frequency": "IV every 12 hours",
       "duration": "7 days",
       "instructions": "Hospital use; nausea common; not first-line for bloodstream infection",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:04.000Z",
-      "updatedAt": "2026-01-01T00:16:04.000Z"
+      "updatedAt": "2026-01-01T02:43:40.000Z"
     },
     {
       "id": "csv-antimicrobial-37",
@@ -1848,10 +1848,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Hydrate well; check sulfonamide allergy and potassium",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:03.000Z",
-      "updatedAt": "2026-01-01T00:16:03.000Z"
+      "updatedAt": "2026-01-01T02:43:39.000Z"
     },
     {
       "id": "csv-antimicrobial-38",
@@ -1862,10 +1862,10 @@
       "frequency": "4 times daily or twice daily (MR)",
       "duration": "7 days",
       "instructions": "Take with food; avoid if poor kidney function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:02.000Z",
-      "updatedAt": "2026-01-01T00:16:02.000Z"
+      "updatedAt": "2026-01-01T02:43:38.000Z"
     },
     {
       "id": "csv-antimicrobial-39",
@@ -1876,10 +1876,10 @@
       "frequency": "Single dose",
       "duration": "1 day (Single dose)",
       "instructions": "Dissolve in water; uncomplicated UTI",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:01.000Z",
-      "updatedAt": "2026-01-01T00:16:01.000Z"
+      "updatedAt": "2026-01-01T02:43:37.000Z"
     },
     {
       "id": "csv-antimicrobial-40",
@@ -1890,10 +1890,10 @@
       "frequency": "3 times daily",
       "duration": "7 days",
       "instructions": "Avoid alcohol during and 48 hours after",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:16:00.000Z",
-      "updatedAt": "2026-01-01T00:16:00.000Z"
+      "updatedAt": "2026-01-01T02:43:36.000Z"
     },
     {
       "id": "csv-antimicrobial-41",
@@ -1904,10 +1904,10 @@
       "frequency": "Single/twice daily",
       "duration": "7 days",
       "instructions": "Take with food; avoid alcohol",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:59.000Z",
-      "updatedAt": "2026-01-01T00:15:59.000Z"
+      "updatedAt": "2026-01-01T02:43:35.000Z"
     },
     {
       "id": "csv-antimicrobial-42",
@@ -1918,10 +1918,10 @@
       "frequency": "Single dose",
       "duration": "1 day (Single dose)",
       "instructions": "Take with food; avoid alcohol",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:58.000Z",
-      "updatedAt": "2026-01-01T00:15:58.000Z"
+      "updatedAt": "2026-01-01T02:43:34.000Z"
     },
     {
       "id": "csv-antimicrobial-43",
@@ -1932,10 +1932,10 @@
       "frequency": "Twice daily for 3 days",
       "duration": "3 days",
       "instructions": "Take with food",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:57.000Z",
-      "updatedAt": "2026-01-01T00:15:57.000Z"
+      "updatedAt": "2026-01-01T02:43:33.000Z"
     },
     {
       "id": "csv-antimicrobial-44",
@@ -1946,10 +1946,10 @@
       "frequency": "Divided every 6 hours",
       "duration": "7 days",
       "instructions": "Specialist use; monitor blood counts",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:56.000Z",
-      "updatedAt": "2026-01-01T00:15:56.000Z"
+      "updatedAt": "2026-01-01T02:43:32.000Z"
     },
     {
       "id": "csv-antimicrobial-45",
@@ -1960,10 +1960,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Give with pyridoxine; monitor liver function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:55.000Z",
-      "updatedAt": "2026-01-01T00:15:55.000Z"
+      "updatedAt": "2026-01-01T02:43:31.000Z"
     },
     {
       "id": "csv-antimicrobial-46",
@@ -1974,10 +1974,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Monitor liver function and uric acid",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:54.000Z",
-      "updatedAt": "2026-01-01T00:15:54.000Z"
+      "updatedAt": "2026-01-01T02:43:30.000Z"
     },
     {
       "id": "csv-antimicrobial-47",
@@ -1988,10 +1988,10 @@
       "frequency": "Weekly or daily per regimen",
       "duration": "4 weeks",
       "instructions": "Specialist TB use; many drug interactions",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:53.000Z",
-      "updatedAt": "2026-01-01T00:15:53.000Z"
+      "updatedAt": "2026-01-01T02:43:29.000Z"
     },
     {
       "id": "csv-antimicrobial-48",
@@ -2002,10 +2002,10 @@
       "frequency": "Per regimen",
       "duration": "7 days",
       "instructions": "DR-TB specialist use; monitor QT",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:52.000Z",
-      "updatedAt": "2026-01-01T00:15:52.000Z"
+      "updatedAt": "2026-01-01T02:43:28.000Z"
     },
     {
       "id": "csv-antimicrobial-49",
@@ -2016,10 +2016,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Specialist DR-TB regimen; take with food",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:51.000Z",
-      "updatedAt": "2026-01-01T00:15:51.000Z"
+      "updatedAt": "2026-01-01T02:43:27.000Z"
     },
     {
       "id": "csv-antimicrobial-50",
@@ -2030,10 +2030,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Specialist DR-TB use; monitor QT",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:50.000Z",
-      "updatedAt": "2026-01-01T00:15:50.000Z"
+      "updatedAt": "2026-01-01T02:43:26.000Z"
     },
     {
       "id": "csv-antimicrobial-51",
@@ -2044,10 +2044,10 @@
       "frequency": "Divided doses",
       "duration": "7 days",
       "instructions": "Take with food; monitor liver and thyroid function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:49.000Z",
-      "updatedAt": "2026-01-01T00:15:49.000Z"
+      "updatedAt": "2026-01-01T02:43:25.000Z"
     },
     {
       "id": "csv-antimicrobial-52",
@@ -2058,10 +2058,10 @@
       "frequency": "Divided doses",
       "duration": "7 days",
       "instructions": "Specialist DR-TB use; monitor mood/neurologic effects",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:48.000Z",
-      "updatedAt": "2026-01-01T00:15:48.000Z"
+      "updatedAt": "2026-01-01T02:43:24.000Z"
     },
     {
       "id": "csv-antimicrobial-53",
@@ -2072,10 +2072,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Check interactions; monitor liver function and visual symptoms",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:47.000Z",
-      "updatedAt": "2026-01-01T00:15:47.000Z"
+      "updatedAt": "2026-01-01T02:43:23.000Z"
     },
     {
       "id": "csv-antimicrobial-54",
@@ -2086,10 +2086,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Delayed-release tablet with food; check interactions",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:46.000Z",
-      "updatedAt": "2026-01-01T00:15:46.000Z"
+      "updatedAt": "2026-01-01T02:43:22.000Z"
     },
     {
       "id": "csv-antimicrobial-55",
@@ -2100,10 +2100,10 @@
       "frequency": "Every 8 hours for 6 doses, then once daily",
       "duration": "7 days",
       "instructions": "Specialist use; monitor liver function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:45.000Z",
-      "updatedAt": "2026-01-01T00:15:45.000Z"
+      "updatedAt": "2026-01-01T02:43:21.000Z"
     },
     {
       "id": "csv-antimicrobial-56",
@@ -2114,10 +2114,10 @@
       "frequency": "IV once daily",
       "duration": "7 days",
       "instructions": "Hospital use; adjust in liver impairment",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:44.000Z",
-      "updatedAt": "2026-01-01T00:15:44.000Z"
+      "updatedAt": "2026-01-01T02:43:20.000Z"
     },
     {
       "id": "csv-antimicrobial-57",
@@ -2128,10 +2128,10 @@
       "frequency": "IV once daily",
       "duration": "7 days",
       "instructions": "Hospital use for candidemia",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:43.000Z",
-      "updatedAt": "2026-01-01T00:15:43.000Z"
+      "updatedAt": "2026-01-01T02:43:19.000Z"
     },
     {
       "id": "csv-antimicrobial-58",
@@ -2142,10 +2142,10 @@
       "frequency": "IV once daily",
       "duration": "7 days",
       "instructions": "Hospital use for candidemia",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:42.000Z",
-      "updatedAt": "2026-01-01T00:15:42.000Z"
+      "updatedAt": "2026-01-01T02:43:18.000Z"
     },
     {
       "id": "csv-antimicrobial-59",
@@ -2156,10 +2156,10 @@
       "frequency": "Divided every 6 hours",
       "duration": "7 days",
       "instructions": "Specialist use; monitor blood counts and renal function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:41.000Z",
-      "updatedAt": "2026-01-01T00:15:41.000Z"
+      "updatedAt": "2026-01-01T02:43:17.000Z"
     },
     {
       "id": "csv-antimicrobial-60",
@@ -2170,10 +2170,10 @@
       "frequency": "Twice daily for 5 days",
       "duration": "5 days",
       "instructions": "Start within 48 hours; adjust in renal impairment",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:40.000Z",
-      "updatedAt": "2026-01-01T00:15:40.000Z"
+      "updatedAt": "2026-01-01T02:43:16.000Z"
     },
     {
       "id": "csv-antimicrobial-61",
@@ -2184,10 +2184,10 @@
       "frequency": "Single dose",
       "duration": "1 day (Single dose)",
       "instructions": "Influenza; avoid with polyvalent cation products",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:39.000Z",
-      "updatedAt": "2026-01-01T00:15:39.000Z"
+      "updatedAt": "2026-01-01T02:43:15.000Z"
     },
     {
       "id": "csv-antimicrobial-62",
@@ -2198,10 +2198,10 @@
       "frequency": "IV every 12 hours",
       "duration": "7 days",
       "instructions": "Hospital use; monitor blood counts and renal function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:38.000Z",
-      "updatedAt": "2026-01-01T00:15:38.000Z"
+      "updatedAt": "2026-01-01T02:43:14.000Z"
     },
     {
       "id": "csv-antimicrobial-63",
@@ -2212,10 +2212,10 @@
       "frequency": "Twice daily (induction) then once daily",
       "duration": "7 days",
       "instructions": "Take with food; monitor blood counts",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:37.000Z",
-      "updatedAt": "2026-01-01T00:15:37.000Z"
+      "updatedAt": "2026-01-01T02:43:13.000Z"
     },
     {
       "id": "csv-antimicrobial-64",
@@ -2226,10 +2226,10 @@
       "frequency": "IV once daily",
       "duration": "7 days",
       "instructions": "Hospital use; monitor liver function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:36.000Z",
-      "updatedAt": "2026-01-01T00:15:36.000Z"
+      "updatedAt": "2026-01-01T02:43:12.000Z"
     },
     {
       "id": "csv-antimicrobial-65",
@@ -2240,10 +2240,10 @@
       "frequency": "Twice daily for 5 days",
       "duration": "5 days",
       "instructions": "Many drug interactions; adjust in renal impairment",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:35.000Z",
-      "updatedAt": "2026-01-01T00:15:35.000Z"
+      "updatedAt": "2026-01-01T02:43:11.000Z"
     },
     {
       "id": "csv-antimicrobial-66",
@@ -2254,10 +2254,10 @@
       "frequency": "Twice daily for 5 days",
       "duration": "5 days",
       "instructions": "Avoid in pregnancy; start early",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:34.000Z",
-      "updatedAt": "2026-01-01T00:15:34.000Z"
+      "updatedAt": "2026-01-01T02:43:10.000Z"
     },
     {
       "id": "csv-antimicrobial-67",
@@ -2268,10 +2268,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Hepatitis C; used within combination regimen",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:33.000Z",
-      "updatedAt": "2026-01-01T00:15:33.000Z"
+      "updatedAt": "2026-01-01T02:43:09.000Z"
     },
     {
       "id": "csv-antimicrobial-68",
@@ -2282,10 +2282,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Hepatitis C; check hepatitis B status",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:32.000Z",
-      "updatedAt": "2026-01-01T00:15:32.000Z"
+      "updatedAt": "2026-01-01T02:43:08.000Z"
     },
     {
       "id": "csv-antimicrobial-69",
@@ -2296,10 +2296,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Take on an empty stomach; monitor hepatitis B response",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:31.000Z",
-      "updatedAt": "2026-01-01T00:15:31.000Z"
+      "updatedAt": "2026-01-01T02:43:07.000Z"
     },
     {
       "id": "csv-antimicrobial-70",
@@ -2310,10 +2310,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Monitor renal function and bone health",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:30.000Z",
-      "updatedAt": "2026-01-01T00:15:30.000Z"
+      "updatedAt": "2026-01-01T02:43:06.000Z"
     },
     {
       "id": "csv-antimicrobial-71",
@@ -2324,10 +2324,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Hepatitis B; take with food",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:29.000Z",
-      "updatedAt": "2026-01-01T00:15:29.000Z"
+      "updatedAt": "2026-01-01T02:43:05.000Z"
     },
     {
       "id": "csv-antimicrobial-72",
@@ -2338,10 +2338,10 @@
       "frequency": "Once/twice daily",
       "duration": "7 days",
       "instructions": "HIV/HBV use; adjust for renal function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:28.000Z",
-      "updatedAt": "2026-01-01T00:15:28.000Z"
+      "updatedAt": "2026-01-01T02:43:04.000Z"
     },
     {
       "id": "csv-antimicrobial-73",
@@ -2352,10 +2352,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Monitor blood counts; HIV regimen",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:27.000Z",
-      "updatedAt": "2026-01-01T00:15:27.000Z"
+      "updatedAt": "2026-01-01T02:43:03.000Z"
     },
     {
       "id": "csv-antimicrobial-74",
@@ -2366,10 +2366,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "HLA-B*5701 testing before use",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:26.000Z",
-      "updatedAt": "2026-01-01T00:15:26.000Z"
+      "updatedAt": "2026-01-01T02:43:02.000Z"
     },
     {
       "id": "csv-antimicrobial-75",
@@ -2380,10 +2380,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Separate from polyvalent cations; HIV regimen",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:25.000Z",
-      "updatedAt": "2026-01-01T00:15:25.000Z"
+      "updatedAt": "2026-01-01T02:43:01.000Z"
     },
     {
       "id": "csv-antimicrobial-76",
@@ -2394,10 +2394,10 @@
       "frequency": "Once daily at bedtime",
       "duration": "7 days",
       "instructions": "Take on empty stomach; CNS effects common",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:24.000Z",
-      "updatedAt": "2026-01-01T00:15:24.000Z"
+      "updatedAt": "2026-01-01T02:43:00.000Z"
     },
     {
       "id": "csv-antimicrobial-77",
@@ -2408,10 +2408,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Many drug interactions; GI upset common",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:23.000Z",
-      "updatedAt": "2026-01-01T00:15:23.000Z"
+      "updatedAt": "2026-01-01T02:42:59.000Z"
     },
     {
       "id": "csv-antimicrobial-78",
@@ -2422,10 +2422,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Take with food; check interactions",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:22.000Z",
-      "updatedAt": "2026-01-01T00:15:22.000Z"
+      "updatedAt": "2026-01-01T02:42:58.000Z"
     },
     {
       "id": "csv-antimicrobial-79",
@@ -2436,10 +2436,10 @@
       "frequency": "Once daily with food",
       "duration": "7 days",
       "instructions": "Check sulfonamide allergy and interactions",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:21.000Z",
-      "updatedAt": "2026-01-01T00:15:21.000Z"
+      "updatedAt": "2026-01-01T02:42:57.000Z"
     },
     {
       "id": "csv-antimicrobial-80",
@@ -2450,10 +2450,10 @@
       "frequency": "Twice daily",
       "duration": "7 days",
       "instructions": "Separate from antacids containing aluminium/magnesium",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:20.000Z",
-      "updatedAt": "2026-01-01T00:15:20.000Z"
+      "updatedAt": "2026-01-01T02:42:56.000Z"
     },
     {
       "id": "csv-antimicrobial-81",
@@ -2464,10 +2464,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "First-line HIV regimen; adherence essential",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:19.000Z",
-      "updatedAt": "2026-01-01T00:15:19.000Z"
+      "updatedAt": "2026-01-01T02:42:55.000Z"
     },
     {
       "id": "csv-antimicrobial-82",
@@ -2478,10 +2478,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "HIV treatment/PrEP; monitor renal function",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:18.000Z",
-      "updatedAt": "2026-01-01T00:15:18.000Z"
+      "updatedAt": "2026-01-01T02:42:54.000Z"
     },
     {
       "id": "csv-antimicrobial-83",
@@ -2492,10 +2492,10 @@
       "frequency": "Divided twice daily",
       "duration": "7 days",
       "instructions": "Teratogenic; monitor hemoglobin",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:17.000Z",
-      "updatedAt": "2026-01-01T00:15:17.000Z"
+      "updatedAt": "2026-01-01T02:42:53.000Z"
     },
     {
       "id": "csv-antimicrobial-84",
@@ -2506,10 +2506,10 @@
       "frequency": "Twice daily for 3 days",
       "duration": "3 days",
       "instructions": "Take with fatty food; treatment of uncomplicated falciparum malaria",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:16.000Z",
-      "updatedAt": "2026-01-01T00:15:16.000Z"
+      "updatedAt": "2026-01-01T02:42:52.000Z"
     },
     {
       "id": "csv-antimicrobial-85",
@@ -2520,10 +2520,10 @@
       "frequency": "IV at 0, 12, 24 hours then daily",
       "duration": "7 days",
       "instructions": "Severe malaria; hospital use",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:15.000Z",
-      "updatedAt": "2026-01-01T00:15:15.000Z"
+      "updatedAt": "2026-01-01T02:42:51.000Z"
     },
     {
       "id": "csv-antimicrobial-86",
@@ -2534,10 +2534,10 @@
       "frequency": "Per regimen over 3 days",
       "duration": "3 days",
       "instructions": "Vivax malaria in sensitive regions; take with food",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:14.000Z",
-      "updatedAt": "2026-01-01T00:15:14.000Z"
+      "updatedAt": "2026-01-01T02:42:50.000Z"
     },
     {
       "id": "csv-antimicrobial-87",
@@ -2548,10 +2548,10 @@
       "frequency": "Once daily for 7–14 days",
       "duration": "7–14 days",
       "instructions": "Test G6PD first; take with food",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:13.000Z",
-      "updatedAt": "2026-01-01T00:15:13.000Z"
+      "updatedAt": "2026-01-01T02:42:49.000Z"
     },
     {
       "id": "csv-antimicrobial-88",
@@ -2562,10 +2562,10 @@
       "frequency": "Single dose",
       "duration": "1 day (Single dose)",
       "instructions": "Test G6PD first; avoid in pregnancy",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:12.000Z",
-      "updatedAt": "2026-01-01T00:15:12.000Z"
+      "updatedAt": "2026-01-01T02:42:48.000Z"
     },
     {
       "id": "csv-antimicrobial-89",
@@ -2576,10 +2576,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Take with fatty food; malaria prophylaxis/treatment",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:11.000Z",
-      "updatedAt": "2026-01-01T00:15:11.000Z"
+      "updatedAt": "2026-01-01T02:42:47.000Z"
     },
     {
       "id": "csv-antimicrobial-90",
@@ -2590,10 +2590,10 @@
       "frequency": "Weekly for prophylaxis",
       "duration": "4 weeks",
       "instructions": "Avoid in psychiatric/seizure history",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:10.000Z",
-      "updatedAt": "2026-01-01T00:15:10.000Z"
+      "updatedAt": "2026-01-01T02:42:46.000Z"
     },
     {
       "id": "csv-antimicrobial-91",
@@ -2604,10 +2604,10 @@
       "frequency": "3 times daily",
       "duration": "7 days",
       "instructions": "Cinchonism common; monitor glucose and QT",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:09.000Z",
-      "updatedAt": "2026-01-01T00:15:09.000Z"
+      "updatedAt": "2026-01-01T02:42:45.000Z"
     },
     {
       "id": "csv-antimicrobial-92",
@@ -2618,10 +2618,10 @@
       "frequency": "Single dose",
       "duration": "1 day (Single dose)",
       "instructions": "Used in combination regimens; check sulfonamide allergy",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:08.000Z",
-      "updatedAt": "2026-01-01T00:15:08.000Z"
+      "updatedAt": "2026-01-01T02:42:44.000Z"
     },
     {
       "id": "csv-antimicrobial-93",
@@ -2632,10 +2632,10 @@
       "frequency": "Per indication",
       "duration": "7 days",
       "instructions": "Chew or swallow with food",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:07.000Z",
-      "updatedAt": "2026-01-01T00:15:07.000Z"
+      "updatedAt": "2026-01-01T02:42:43.000Z"
     },
     {
       "id": "csv-antimicrobial-94",
@@ -2646,10 +2646,10 @@
       "frequency": "Single/divided doses",
       "duration": "7 days",
       "instructions": "Take with food; indication-specific regimen",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:06.000Z",
-      "updatedAt": "2026-01-01T00:15:06.000Z"
+      "updatedAt": "2026-01-01T02:42:42.000Z"
     },
     {
       "id": "csv-antimicrobial-95",
@@ -2660,10 +2660,10 @@
       "frequency": "Single dose",
       "duration": "1 day (Single dose)",
       "instructions": "Roundworm/pinworm; repeat in 2 weeks if needed",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:05.000Z",
-      "updatedAt": "2026-01-01T00:15:05.000Z"
+      "updatedAt": "2026-01-01T02:42:41.000Z"
     },
     {
       "id": "csv-antimicrobial-96",
@@ -2674,10 +2674,10 @@
       "frequency": "Divided doses",
       "duration": "7 days",
       "instructions": "Intestinal amoebiasis/leishmaniasis per regimen",
-      "category": "Antimicrobial & Anti-infective CSV",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:15:04.000Z",
-      "updatedAt": "2026-01-01T00:15:04.000Z"
+      "updatedAt": "2026-01-01T02:42:40.000Z"
     },
     {
       "id": "pdf-endocrine-1",
@@ -2688,10 +2688,10 @@
       "frequency": "Once/divided with meals",
       "duration": "30 days (Ongoing)",
       "instructions": "Take with food; check renal function; hold around contrast procedures",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:59.000Z",
-      "updatedAt": "2026-01-01T00:49:59.000Z"
+      "updatedAt": "2026-01-01T02:46:39.000Z"
     },
     {
       "id": "pdf-endocrine-2",
@@ -2702,10 +2702,10 @@
       "frequency": "Once/twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Take with meals; hypoglycemia risk",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:58.000Z",
-      "updatedAt": "2026-01-01T00:49:58.000Z"
+      "updatedAt": "2026-01-01T02:46:38.000Z"
     },
     {
       "id": "pdf-endocrine-3",
@@ -2716,10 +2716,10 @@
       "frequency": "Once daily with breakfast",
       "duration": "30 days (Ongoing)",
       "instructions": "Hypoglycemia risk; adjust in renal impairment",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:57.000Z",
-      "updatedAt": "2026-01-01T00:49:57.000Z"
+      "updatedAt": "2026-01-01T02:46:37.000Z"
     },
     {
       "id": "pdf-endocrine-4",
@@ -2730,10 +2730,10 @@
       "frequency": "Once/twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Take 30 minutes before meals; hypoglycemia risk",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:56.000Z",
-      "updatedAt": "2026-01-01T00:49:56.000Z"
+      "updatedAt": "2026-01-01T02:46:36.000Z"
     },
     {
       "id": "pdf-endocrine-5",
@@ -2744,10 +2744,10 @@
       "frequency": "Once/twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Higher hypoglycemia risk; avoid in older adults/renal impairment",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:55.000Z",
-      "updatedAt": "2026-01-01T00:49:55.000Z"
+      "updatedAt": "2026-01-01T02:46:35.000Z"
     },
     {
       "id": "pdf-endocrine-6",
@@ -2758,10 +2758,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor for edema and heart failure; bone fracture risk",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:54.000Z",
-      "updatedAt": "2026-01-01T00:49:54.000Z"
+      "updatedAt": "2026-01-01T02:46:34.000Z"
     },
     {
       "id": "pdf-endocrine-7",
@@ -2772,10 +2772,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Adjust in renal impairment; report severe abdominal pain",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:53.000Z",
-      "updatedAt": "2026-01-01T00:49:53.000Z"
+      "updatedAt": "2026-01-01T02:46:33.000Z"
     },
     {
       "id": "pdf-endocrine-8",
@@ -2786,10 +2786,10 @@
       "frequency": "Once/twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor liver enzymes",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:52.000Z",
-      "updatedAt": "2026-01-01T00:49:52.000Z"
+      "updatedAt": "2026-01-01T02:46:32.000Z"
     },
     {
       "id": "pdf-endocrine-9",
@@ -2800,10 +2800,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "No renal adjustment needed; report severe abdominal pain",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:51.000Z",
-      "updatedAt": "2026-01-01T00:49:51.000Z"
+      "updatedAt": "2026-01-01T02:46:31.000Z"
     },
     {
       "id": "pdf-endocrine-10",
@@ -2814,10 +2814,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Adjust in renal impairment; monitor for heart failure",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:50.000Z",
-      "updatedAt": "2026-01-01T00:49:50.000Z"
+      "updatedAt": "2026-01-01T02:46:30.000Z"
     },
     {
       "id": "pdf-endocrine-11",
@@ -2828,10 +2828,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor glucose; adjust per local guidance",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:49.000Z",
-      "updatedAt": "2026-01-01T00:49:49.000Z"
+      "updatedAt": "2026-01-01T02:46:29.000Z"
     },
     {
       "id": "pdf-endocrine-12",
@@ -2842,10 +2842,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Genital hygiene; hold during acute illness/dehydration; ketoacidosis risk",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:48.000Z",
-      "updatedAt": "2026-01-01T00:49:48.000Z"
+      "updatedAt": "2026-01-01T02:46:28.000Z"
     },
     {
       "id": "pdf-endocrine-13",
@@ -2856,10 +2856,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Also used in heart failure/CKD; hold during acute illness",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:47.000Z",
-      "updatedAt": "2026-01-01T00:49:47.000Z"
+      "updatedAt": "2026-01-01T02:46:27.000Z"
     },
     {
       "id": "pdf-endocrine-14",
@@ -2870,10 +2870,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Foot care advised; ketoacidosis and dehydration risk",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:46.000Z",
-      "updatedAt": "2026-01-01T00:49:46.000Z"
+      "updatedAt": "2026-01-01T02:46:26.000Z"
     },
     {
       "id": "pdf-endocrine-15",
@@ -2884,10 +2884,10 @@
       "frequency": "Once weekly",
       "duration": "4 weeks",
       "instructions": "Subcutaneous injection; titrate slowly; GI side effects common",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:45.000Z",
-      "updatedAt": "2026-01-01T00:49:45.000Z"
+      "updatedAt": "2026-01-01T02:46:25.000Z"
     },
     {
       "id": "pdf-endocrine-16",
@@ -2898,10 +2898,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Take on empty stomach with small amount of water; wait 30 minutes before eating",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:44.000Z",
-      "updatedAt": "2026-01-01T00:49:44.000Z"
+      "updatedAt": "2026-01-01T02:46:24.000Z"
     },
     {
       "id": "pdf-endocrine-17",
@@ -2912,10 +2912,10 @@
       "frequency": "Once weekly",
       "duration": "4 weeks",
       "instructions": "Subcutaneous injection; GI side effects common",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:43.000Z",
-      "updatedAt": "2026-01-01T00:49:43.000Z"
+      "updatedAt": "2026-01-01T02:46:23.000Z"
     },
     {
       "id": "pdf-endocrine-18",
@@ -2926,10 +2926,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Subcutaneous injection; titrate slowly",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:42.000Z",
-      "updatedAt": "2026-01-01T00:49:42.000Z"
+      "updatedAt": "2026-01-01T02:46:22.000Z"
     },
     {
       "id": "pdf-endocrine-19",
@@ -2940,10 +2940,10 @@
       "frequency": "Once weekly",
       "duration": "4 weeks",
       "instructions": "Subcutaneous injection; titrate every 4 weeks",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:41.000Z",
-      "updatedAt": "2026-01-01T00:49:41.000Z"
+      "updatedAt": "2026-01-01T02:46:21.000Z"
     },
     {
       "id": "pdf-endocrine-20",
@@ -2954,10 +2954,10 @@
       "frequency": "3 times daily with meals",
       "duration": "30 days (Ongoing)",
       "instructions": "Take with first bite of food; flatulence common",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:40.000Z",
-      "updatedAt": "2026-01-01T00:49:40.000Z"
+      "updatedAt": "2026-01-01T02:46:20.000Z"
     },
     {
       "id": "pdf-endocrine-21",
@@ -2968,10 +2968,10 @@
       "frequency": "3 times daily before meals",
       "duration": "30 days (Ongoing)",
       "instructions": "Take just before meals; GI effects possible",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:39.000Z",
-      "updatedAt": "2026-01-01T00:49:39.000Z"
+      "updatedAt": "2026-01-01T02:46:19.000Z"
     },
     {
       "id": "pdf-endocrine-22",
@@ -2982,10 +2982,10 @@
       "frequency": "Before meals up to 4 times daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Skip dose if meal skipped; hypoglycemia risk",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:38.000Z",
-      "updatedAt": "2026-01-01T00:49:38.000Z"
+      "updatedAt": "2026-01-01T02:46:18.000Z"
     },
     {
       "id": "pdf-endocrine-23",
@@ -2996,10 +2996,10 @@
       "frequency": "30 minutes before meals",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor glucose; rotate injection sites",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:37.000Z",
-      "updatedAt": "2026-01-01T00:49:37.000Z"
+      "updatedAt": "2026-01-01T02:46:17.000Z"
     },
     {
       "id": "pdf-endocrine-24",
@@ -3010,10 +3010,10 @@
       "frequency": "Once/twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor glucose; resuspend before use",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:36.000Z",
-      "updatedAt": "2026-01-01T00:49:36.000Z"
+      "updatedAt": "2026-01-01T02:46:16.000Z"
     },
     {
       "id": "pdf-endocrine-25",
@@ -3024,10 +3024,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Basal insulin; monitor glucose; do not mix",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:35.000Z",
-      "updatedAt": "2026-01-01T00:49:35.000Z"
+      "updatedAt": "2026-01-01T02:46:15.000Z"
     },
     {
       "id": "pdf-endocrine-26",
@@ -3038,10 +3038,10 @@
       "frequency": "Once/twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Basal insulin; monitor glucose",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:34.000Z",
-      "updatedAt": "2026-01-01T00:49:34.000Z"
+      "updatedAt": "2026-01-01T02:46:14.000Z"
     },
     {
       "id": "pdf-endocrine-27",
@@ -3052,10 +3052,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Basal insulin; flexible dosing time",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:33.000Z",
-      "updatedAt": "2026-01-01T00:49:33.000Z"
+      "updatedAt": "2026-01-01T02:46:13.000Z"
     },
     {
       "id": "pdf-endocrine-28",
@@ -3066,10 +3066,10 @@
       "frequency": "With meals",
       "duration": "30 days (Ongoing)",
       "instructions": "Rapid-acting; inject at mealtime",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:32.000Z",
-      "updatedAt": "2026-01-01T00:49:32.000Z"
+      "updatedAt": "2026-01-01T02:46:12.000Z"
     },
     {
       "id": "pdf-endocrine-29",
@@ -3080,10 +3080,10 @@
       "frequency": "With meals",
       "duration": "30 days (Ongoing)",
       "instructions": "Rapid-acting; inject at mealtime",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:31.000Z",
-      "updatedAt": "2026-01-01T00:49:31.000Z"
+      "updatedAt": "2026-01-01T02:46:11.000Z"
     },
     {
       "id": "pdf-endocrine-30",
@@ -3094,10 +3094,10 @@
       "frequency": "With meals",
       "duration": "30 days (Ongoing)",
       "instructions": "Rapid-acting; inject at mealtime",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:30.000Z",
-      "updatedAt": "2026-01-01T00:49:30.000Z"
+      "updatedAt": "2026-01-01T02:46:10.000Z"
     },
     {
       "id": "pdf-endocrine-31",
@@ -3108,10 +3108,10 @@
       "frequency": "Twice daily with meals",
       "duration": "30 days (Ongoing)",
       "instructions": "Resuspend before use; consistent meal timing",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:29.000Z",
-      "updatedAt": "2026-01-01T00:49:29.000Z"
+      "updatedAt": "2026-01-01T02:46:09.000Z"
     },
     {
       "id": "pdf-endocrine-32",
@@ -3122,10 +3122,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Take on empty stomach 30–60 minutes before breakfast; separate from calcium/iron",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:28.000Z",
-      "updatedAt": "2026-01-01T00:49:28.000Z"
+      "updatedAt": "2026-01-01T02:46:08.000Z"
     },
     {
       "id": "pdf-endocrine-33",
@@ -3136,10 +3136,10 @@
       "frequency": "Once–three times daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Specialist use; monitor heart rate and TSH",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:27.000Z",
-      "updatedAt": "2026-01-01T00:49:27.000Z"
+      "updatedAt": "2026-01-01T02:46:07.000Z"
     },
     {
       "id": "pdf-endocrine-34",
@@ -3150,10 +3150,10 @@
       "frequency": "Once/divided",
       "duration": "30 days (Ongoing)",
       "instructions": "Report sore throat/fever promptly; monitor counts and liver",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:26.000Z",
-      "updatedAt": "2026-01-01T00:49:26.000Z"
+      "updatedAt": "2026-01-01T02:46:06.000Z"
     },
     {
       "id": "pdf-endocrine-35",
@@ -3164,10 +3164,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Report sore throat/fever; monitor liver and counts",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:25.000Z",
-      "updatedAt": "2026-01-01T00:49:25.000Z"
+      "updatedAt": "2026-01-01T02:46:05.000Z"
     },
     {
       "id": "pdf-endocrine-36",
@@ -3178,10 +3178,10 @@
       "frequency": "Divided 2–3 times daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Reserved for specific situations; liver toxicity risk",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:24.000Z",
-      "updatedAt": "2026-01-01T00:49:24.000Z"
+      "updatedAt": "2026-01-01T02:46:04.000Z"
     },
     {
       "id": "pdf-endocrine-37",
@@ -3192,10 +3192,10 @@
       "frequency": "Divided 2–3 times daily",
       "duration": "14 days",
       "instructions": "Adrenal insufficiency replacement; sick-day rules",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:23.000Z",
-      "updatedAt": "2026-01-01T00:49:23.000Z"
+      "updatedAt": "2026-01-01T02:46:03.000Z"
     },
     {
       "id": "pdf-endocrine-38",
@@ -3206,10 +3206,10 @@
       "frequency": "Once daily in the morning",
       "duration": "7 days",
       "instructions": "Take with food; taper if prolonged use",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:22.000Z",
-      "updatedAt": "2026-01-01T00:49:22.000Z"
+      "updatedAt": "2026-01-01T02:46:02.000Z"
     },
     {
       "id": "pdf-endocrine-39",
@@ -3220,10 +3220,10 @@
       "frequency": "Once daily or pulse",
       "duration": "7 days",
       "instructions": "Take with food; monitor glucose and BP",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:21.000Z",
-      "updatedAt": "2026-01-01T00:49:21.000Z"
+      "updatedAt": "2026-01-01T02:46:01.000Z"
     },
     {
       "id": "pdf-endocrine-40",
@@ -3234,10 +3234,10 @@
       "frequency": "Once/divided",
       "duration": "5 days",
       "instructions": "Potent steroid; short-course use; monitor glucose",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:20.000Z",
-      "updatedAt": "2026-01-01T00:49:20.000Z"
+      "updatedAt": "2026-01-01T02:46:00.000Z"
     },
     {
       "id": "pdf-endocrine-41",
@@ -3248,10 +3248,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor BP and potassium",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:19.000Z",
-      "updatedAt": "2026-01-01T00:49:19.000Z"
+      "updatedAt": "2026-01-01T02:45:59.000Z"
     },
     {
       "id": "pdf-endocrine-42",
@@ -3262,10 +3262,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Take with food; monitor for steroid adverse effects",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:18.000Z",
-      "updatedAt": "2026-01-01T00:49:18.000Z"
+      "updatedAt": "2026-01-01T02:45:58.000Z"
     },
     {
       "id": "pdf-endocrine-43",
@@ -3276,10 +3276,10 @@
       "frequency": "Once weekly",
       "duration": "4 weeks",
       "instructions": "Take upright with full glass of water; remain upright for 30 minutes",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:17.000Z",
-      "updatedAt": "2026-01-01T00:49:17.000Z"
+      "updatedAt": "2026-01-01T02:45:57.000Z"
     },
     {
       "id": "pdf-endocrine-44",
@@ -3290,10 +3290,10 @@
       "frequency": "Weekly/daily",
       "duration": "4 weeks",
       "instructions": "Take upright with water; remain upright",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:16.000Z",
-      "updatedAt": "2026-01-01T00:49:16.000Z"
+      "updatedAt": "2026-01-01T02:45:56.000Z"
     },
     {
       "id": "pdf-endocrine-45",
@@ -3304,10 +3304,10 @@
       "frequency": "Once monthly",
       "duration": "30 days (Ongoing)",
       "instructions": "Take upright with water; remain upright for 1 hour",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:15.000Z",
-      "updatedAt": "2026-01-01T00:49:15.000Z"
+      "updatedAt": "2026-01-01T02:45:55.000Z"
     },
     {
       "id": "pdf-endocrine-46",
@@ -3318,10 +3318,10 @@
       "frequency": "IV once yearly",
       "duration": "1 day (Single dose)",
       "instructions": "Hydrate; check calcium, vitamin D and renal function",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:14.000Z",
-      "updatedAt": "2026-01-01T00:49:14.000Z"
+      "updatedAt": "2026-01-01T02:45:54.000Z"
     },
     {
       "id": "pdf-endocrine-47",
@@ -3332,10 +3332,10 @@
       "frequency": "Subcutaneous every 6 months",
       "duration": "6 months",
       "instructions": "Do not delay doses; ensure calcium and vitamin D",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:13.000Z",
-      "updatedAt": "2026-01-01T00:49:13.000Z"
+      "updatedAt": "2026-01-01T02:45:53.000Z"
     },
     {
       "id": "pdf-endocrine-48",
@@ -3346,10 +3346,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Venous thromboembolism warning",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:12.000Z",
-      "updatedAt": "2026-01-01T00:49:12.000Z"
+      "updatedAt": "2026-01-01T02:45:52.000Z"
     },
     {
       "id": "pdf-endocrine-49",
@@ -3360,10 +3360,10 @@
       "frequency": "Subcutaneous daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Osteoporosis specialist use; check calcium",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:11.000Z",
-      "updatedAt": "2026-01-01T00:49:11.000Z"
+      "updatedAt": "2026-01-01T02:45:51.000Z"
     },
     {
       "id": "pdf-endocrine-50",
@@ -3374,10 +3374,10 @@
       "frequency": "Once/twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor calcium and phosphate",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:10.000Z",
-      "updatedAt": "2026-01-01T00:49:10.000Z"
+      "updatedAt": "2026-01-01T02:45:50.000Z"
     },
     {
       "id": "pdf-endocrine-51",
@@ -3388,10 +3388,10 @@
       "frequency": "Once daily with food",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor calcium; nausea common",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:09.000Z",
-      "updatedAt": "2026-01-01T00:49:09.000Z"
+      "updatedAt": "2026-01-01T02:45:49.000Z"
     },
     {
       "id": "pdf-endocrine-52",
@@ -3402,10 +3402,10 @@
       "frequency": "Once/twice weekly",
       "duration": "4 weeks",
       "instructions": "Take with food; monitor for valvulopathy at high doses",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:08.000Z",
-      "updatedAt": "2026-01-01T00:49:08.000Z"
+      "updatedAt": "2026-01-01T02:45:48.000Z"
     },
     {
       "id": "pdf-endocrine-53",
@@ -3416,10 +3416,10 @@
       "frequency": "Divided doses",
       "duration": "30 days (Ongoing)",
       "instructions": "Take with food; orthostatic hypotension possible",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:07.000Z",
-      "updatedAt": "2026-01-01T00:49:07.000Z"
+      "updatedAt": "2026-01-01T02:45:47.000Z"
     },
     {
       "id": "pdf-endocrine-54",
@@ -3430,10 +3430,10 @@
       "frequency": "Once/divided",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor sodium; limit fluid intake",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:06.000Z",
-      "updatedAt": "2026-01-01T00:49:06.000Z"
+      "updatedAt": "2026-01-01T02:45:46.000Z"
     },
     {
       "id": "pdf-endocrine-55",
@@ -3444,10 +3444,10 @@
       "frequency": "Three times daily or every 4 weeks",
       "duration": "4 weeks",
       "instructions": "Specialist use; monitor glucose and gallbladder",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:05.000Z",
-      "updatedAt": "2026-01-01T00:49:05.000Z"
+      "updatedAt": "2026-01-01T02:45:45.000Z"
     },
     {
       "id": "pdf-endocrine-56",
@@ -3458,10 +3458,10 @@
       "frequency": "Once weekly or every 2 weeks IM",
       "duration": "4 weeks",
       "instructions": "Monitor hematocrit, PSA and lipids",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:04.000Z",
-      "updatedAt": "2026-01-01T00:49:04.000Z"
+      "updatedAt": "2026-01-01T02:45:44.000Z"
     },
     {
       "id": "pdf-endocrine-57",
@@ -3472,10 +3472,10 @@
       "frequency": "3 times daily with meals",
       "duration": "30 days (Ongoing)",
       "instructions": "Take with fat-containing meal; vitamin supplementation may be needed",
-      "category": "Endocrine & Metabolic Medications",
-      "source": "pdf_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:49:03.000Z",
-      "updatedAt": "2026-01-01T00:49:03.000Z"
+      "updatedAt": "2026-01-01T02:45:43.000Z"
     },
     {
       "id": "csv-cardiovascular-1",
@@ -3486,10 +3486,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "May cause ankle swelling; check BP regularly",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:19.000Z",
-      "updatedAt": "2026-01-01T00:33:19.000Z"
+      "updatedAt": "2026-01-01T02:45:42.000Z"
     },
     {
       "id": "csv-cardiovascular-2",
@@ -3500,10 +3500,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Swallow whole; avoid grapefruit juice",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:18.000Z",
-      "updatedAt": "2026-01-01T00:33:18.000Z"
+      "updatedAt": "2026-01-01T02:45:41.000Z"
     },
     {
       "id": "csv-cardiovascular-3",
@@ -3514,10 +3514,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Swallow whole; ankle swelling possible",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:17.000Z",
-      "updatedAt": "2026-01-01T00:33:17.000Z"
+      "updatedAt": "2026-01-01T02:45:40.000Z"
     },
     {
       "id": "csv-cardiovascular-4",
@@ -3528,10 +3528,10 @@
       "frequency": "Once/divided",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor heart rate; avoid with beta-blockers unless supervised",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:16.000Z",
-      "updatedAt": "2026-01-01T00:33:16.000Z"
+      "updatedAt": "2026-01-01T02:45:39.000Z"
     },
     {
       "id": "csv-cardiovascular-5",
@@ -3542,10 +3542,10 @@
       "frequency": "Once/twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Constipation common; monitor heart rate",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:15.000Z",
-      "updatedAt": "2026-01-01T00:33:15.000Z"
+      "updatedAt": "2026-01-01T02:45:38.000Z"
     },
     {
       "id": "csv-cardiovascular-6",
@@ -3556,10 +3556,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor potassium/renal function; cough possible",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:14.000Z",
-      "updatedAt": "2026-01-01T00:33:14.000Z"
+      "updatedAt": "2026-01-01T02:45:37.000Z"
     },
     {
       "id": "csv-cardiovascular-7",
@@ -3570,10 +3570,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in pregnancy; monitor renal function and potassium",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:13.000Z",
-      "updatedAt": "2026-01-01T00:33:13.000Z"
+      "updatedAt": "2026-01-01T02:45:36.000Z"
     },
     {
       "id": "csv-cardiovascular-8",
@@ -3584,10 +3584,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in pregnancy; monitor potassium",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:12.000Z",
-      "updatedAt": "2026-01-01T00:33:12.000Z"
+      "updatedAt": "2026-01-01T02:45:35.000Z"
     },
     {
       "id": "csv-cardiovascular-9",
@@ -3598,10 +3598,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Take before food; monitor renal function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:11.000Z",
-      "updatedAt": "2026-01-01T00:33:11.000Z"
+      "updatedAt": "2026-01-01T02:45:34.000Z"
     },
     {
       "id": "csv-cardiovascular-10",
@@ -3612,10 +3612,10 @@
       "frequency": "2–3 times daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Take on empty stomach; monitor renal function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:10.000Z",
-      "updatedAt": "2026-01-01T00:33:10.000Z"
+      "updatedAt": "2026-01-01T02:45:33.000Z"
     },
     {
       "id": "csv-cardiovascular-11",
@@ -3626,10 +3626,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in pregnancy; monitor potassium",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:09.000Z",
-      "updatedAt": "2026-01-01T00:33:09.000Z"
+      "updatedAt": "2026-01-01T02:45:32.000Z"
     },
     {
       "id": "csv-cardiovascular-12",
@@ -3640,10 +3640,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in pregnancy; monitor renal function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:08.000Z",
-      "updatedAt": "2026-01-01T00:33:08.000Z"
+      "updatedAt": "2026-01-01T02:45:31.000Z"
     },
     {
       "id": "csv-cardiovascular-13",
@@ -3654,10 +3654,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in pregnancy; monitor potassium",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:07.000Z",
-      "updatedAt": "2026-01-01T00:33:07.000Z"
+      "updatedAt": "2026-01-01T02:45:30.000Z"
     },
     {
       "id": "csv-cardiovascular-14",
@@ -3668,10 +3668,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in pregnancy; monitor renal function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:06.000Z",
-      "updatedAt": "2026-01-01T00:33:06.000Z"
+      "updatedAt": "2026-01-01T02:45:29.000Z"
     },
     {
       "id": "csv-cardiovascular-15",
@@ -3682,10 +3682,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in pregnancy; monitor potassium",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:05.000Z",
-      "updatedAt": "2026-01-01T00:33:05.000Z"
+      "updatedAt": "2026-01-01T02:45:28.000Z"
     },
     {
       "id": "csv-cardiovascular-16",
@@ -3696,10 +3696,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in pregnancy; monitor potassium",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:04.000Z",
-      "updatedAt": "2026-01-01T00:33:04.000Z"
+      "updatedAt": "2026-01-01T02:45:27.000Z"
     },
     {
       "id": "csv-cardiovascular-17",
@@ -3710,10 +3710,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in pregnancy; monitor renal function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:03.000Z",
-      "updatedAt": "2026-01-01T00:33:03.000Z"
+      "updatedAt": "2026-01-01T02:45:26.000Z"
     },
     {
       "id": "csv-cardiovascular-18",
@@ -3724,10 +3724,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Heart failure; do not combine with ACE inhibitors",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:02.000Z",
-      "updatedAt": "2026-01-01T00:33:02.000Z"
+      "updatedAt": "2026-01-01T02:45:25.000Z"
     },
     {
       "id": "csv-cardiovascular-19",
@@ -3738,10 +3738,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid abrupt withdrawal; adjust in renal impairment",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:01.000Z",
-      "updatedAt": "2026-01-01T00:33:01.000Z"
+      "updatedAt": "2026-01-01T02:45:24.000Z"
     },
     {
       "id": "csv-cardiovascular-20",
@@ -3752,10 +3752,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid abrupt withdrawal; monitor heart rate",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:33:00.000Z",
-      "updatedAt": "2026-01-01T00:33:00.000Z"
+      "updatedAt": "2026-01-01T02:45:23.000Z"
     },
     {
       "id": "csv-cardiovascular-21",
@@ -3766,10 +3766,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid abrupt withdrawal; take with food",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:59.000Z",
-      "updatedAt": "2026-01-01T00:32:59.000Z"
+      "updatedAt": "2026-01-01T02:45:22.000Z"
     },
     {
       "id": "csv-cardiovascular-22",
@@ -3780,10 +3780,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Heart failure/hypertension; avoid abrupt withdrawal",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:58.000Z",
-      "updatedAt": "2026-01-01T00:32:58.000Z"
+      "updatedAt": "2026-01-01T02:45:21.000Z"
     },
     {
       "id": "csv-cardiovascular-23",
@@ -3794,10 +3794,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Take with food; titrate slowly in heart failure",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:57.000Z",
-      "updatedAt": "2026-01-01T00:32:57.000Z"
+      "updatedAt": "2026-01-01T02:45:20.000Z"
     },
     {
       "id": "csv-cardiovascular-24",
@@ -3808,10 +3808,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid abrupt withdrawal",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:56.000Z",
-      "updatedAt": "2026-01-01T00:32:56.000Z"
+      "updatedAt": "2026-01-01T02:45:19.000Z"
     },
     {
       "id": "csv-cardiovascular-25",
@@ -3822,10 +3822,10 @@
       "frequency": "Divided 2–3 times daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in asthma; also used for migraine prophylaxis and tremor",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:55.000Z",
-      "updatedAt": "2026-01-01T00:32:55.000Z"
+      "updatedAt": "2026-01-01T02:45:18.000Z"
     },
     {
       "id": "csv-cardiovascular-26",
@@ -3836,10 +3836,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Used in pregnancy hypertension; monitor BP and heart rate",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:54.000Z",
-      "updatedAt": "2026-01-01T00:32:54.000Z"
+      "updatedAt": "2026-01-01T02:45:17.000Z"
     },
     {
       "id": "csv-cardiovascular-27",
@@ -3850,10 +3850,10 @@
       "frequency": "Once/twice daily",
       "duration": "14 days",
       "instructions": "Monitor electrolytes and renal function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:53.000Z",
-      "updatedAt": "2026-01-01T00:32:53.000Z"
+      "updatedAt": "2026-01-01T02:45:16.000Z"
     },
     {
       "id": "csv-cardiovascular-28",
@@ -3864,10 +3864,10 @@
       "frequency": "Once daily",
       "duration": "14 days",
       "instructions": "Monitor electrolytes and renal function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:52.000Z",
-      "updatedAt": "2026-01-01T00:32:52.000Z"
+      "updatedAt": "2026-01-01T02:45:15.000Z"
     },
     {
       "id": "csv-cardiovascular-29",
@@ -3878,10 +3878,10 @@
       "frequency": "Once/twice daily",
       "duration": "14 days",
       "instructions": "Monitor electrolytes; potent loop diuretic",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:51.000Z",
-      "updatedAt": "2026-01-01T00:32:51.000Z"
+      "updatedAt": "2026-01-01T02:45:14.000Z"
     },
     {
       "id": "csv-cardiovascular-30",
@@ -3892,10 +3892,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor sodium, potassium and glucose; photosensitivity possible",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:50.000Z",
-      "updatedAt": "2026-01-01T00:32:50.000Z"
+      "updatedAt": "2026-01-01T02:45:13.000Z"
     },
     {
       "id": "csv-cardiovascular-31",
@@ -3906,10 +3906,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor electrolytes and uric acid",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:49.000Z",
-      "updatedAt": "2026-01-01T00:32:49.000Z"
+      "updatedAt": "2026-01-01T02:45:12.000Z"
     },
     {
       "id": "csv-cardiovascular-32",
@@ -3920,10 +3920,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor sodium and potassium",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:48.000Z",
-      "updatedAt": "2026-01-01T00:32:48.000Z"
+      "updatedAt": "2026-01-01T02:45:11.000Z"
     },
     {
       "id": "csv-cardiovascular-33",
@@ -3934,10 +3934,10 @@
       "frequency": "Once daily",
       "duration": "14 days",
       "instructions": "Potent; monitor electrolytes closely",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:47.000Z",
-      "updatedAt": "2026-01-01T00:32:47.000Z"
+      "updatedAt": "2026-01-01T02:45:10.000Z"
     },
     {
       "id": "csv-cardiovascular-34",
@@ -3948,10 +3948,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor potassium and renal function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:46.000Z",
-      "updatedAt": "2026-01-01T00:32:46.000Z"
+      "updatedAt": "2026-01-01T02:45:09.000Z"
     },
     {
       "id": "csv-cardiovascular-35",
@@ -3962,10 +3962,10 @@
       "frequency": "Once/twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor potassium; avoid with potassium supplements",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:45.000Z",
-      "updatedAt": "2026-01-01T00:32:45.000Z"
+      "updatedAt": "2026-01-01T02:45:08.000Z"
     },
     {
       "id": "csv-cardiovascular-36",
@@ -3976,10 +3976,10 @@
       "frequency": "Twice to 4 times daily",
       "duration": "30 days (Ongoing)",
       "instructions": "May cause lupus-like reaction at high doses; reflex tachycardia",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:44.000Z",
-      "updatedAt": "2026-01-01T00:32:44.000Z"
+      "updatedAt": "2026-01-01T02:45:07.000Z"
     },
     {
       "id": "csv-cardiovascular-37",
@@ -3990,10 +3990,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Do not stop abruptly; sedating",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:43.000Z",
-      "updatedAt": "2026-01-01T00:32:43.000Z"
+      "updatedAt": "2026-01-01T02:45:06.000Z"
     },
     {
       "id": "csv-cardiovascular-38",
@@ -4004,10 +4004,10 @@
       "frequency": "2–3 times daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Used in pregnancy hypertension; sedation common",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:42.000Z",
-      "updatedAt": "2026-01-01T00:32:42.000Z"
+      "updatedAt": "2026-01-01T02:45:05.000Z"
     },
     {
       "id": "csv-cardiovascular-39",
@@ -4018,10 +4018,10 @@
       "frequency": "Twice/three times daily",
       "duration": "30 days (Ongoing)",
       "instructions": "First-dose hypotension; take first dose at bedtime",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:41.000Z",
-      "updatedAt": "2026-01-01T00:32:41.000Z"
+      "updatedAt": "2026-01-01T02:45:04.000Z"
     },
     {
       "id": "csv-cardiovascular-40",
@@ -4032,10 +4032,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Nitrate-free interval needed; headache common",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:40.000Z",
-      "updatedAt": "2026-01-01T00:32:40.000Z"
+      "updatedAt": "2026-01-01T02:45:03.000Z"
     },
     {
       "id": "csv-cardiovascular-41",
@@ -4046,10 +4046,10 @@
       "frequency": "2–3 times daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid with phosphodiesterase-5 inhibitors",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:39.000Z",
-      "updatedAt": "2026-01-01T00:32:39.000Z"
+      "updatedAt": "2026-01-01T02:45:02.000Z"
     },
     {
       "id": "csv-cardiovascular-42",
@@ -4060,10 +4060,10 @@
       "frequency": "As needed for angina",
       "duration": "As needed",
       "instructions": "Sit down when using; avoid with PDE-5 inhibitors",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:38.000Z",
-      "updatedAt": "2026-01-01T00:32:38.000Z"
+      "updatedAt": "2026-01-01T02:45:01.000Z"
     },
     {
       "id": "csv-cardiovascular-43",
@@ -4074,10 +4074,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Mouth ulcer risk; avoid with PDE-5 inhibitors",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:37.000Z",
-      "updatedAt": "2026-01-01T00:32:37.000Z"
+      "updatedAt": "2026-01-01T02:45:00.000Z"
     },
     {
       "id": "csv-cardiovascular-44",
@@ -4088,10 +4088,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Swallow whole; monitor QT and interactions",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:36.000Z",
-      "updatedAt": "2026-01-01T00:32:36.000Z"
+      "updatedAt": "2026-01-01T02:44:59.000Z"
     },
     {
       "id": "csv-cardiovascular-45",
@@ -4102,10 +4102,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Take with food; visual brightness phenomena possible",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:35.000Z",
-      "updatedAt": "2026-01-01T00:32:35.000Z"
+      "updatedAt": "2026-01-01T02:44:58.000Z"
     },
     {
       "id": "csv-cardiovascular-46",
@@ -4116,10 +4116,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Take with meals; avoid in Parkinsonism",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:34.000Z",
-      "updatedAt": "2026-01-01T00:32:34.000Z"
+      "updatedAt": "2026-01-01T02:44:57.000Z"
     },
     {
       "id": "csv-cardiovascular-47",
@@ -4130,10 +4130,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor thyroid, liver, lung and eyes; many interactions",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:33.000Z",
-      "updatedAt": "2026-01-01T00:32:33.000Z"
+      "updatedAt": "2026-01-01T02:44:56.000Z"
     },
     {
       "id": "csv-cardiovascular-48",
@@ -4144,10 +4144,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor levels, potassium and renal function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:32.000Z",
-      "updatedAt": "2026-01-01T00:32:32.000Z"
+      "updatedAt": "2026-01-01T02:44:55.000Z"
     },
     {
       "id": "csv-cardiovascular-49",
@@ -4158,10 +4158,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in structural heart disease; monitor ECG",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:31.000Z",
-      "updatedAt": "2026-01-01T00:32:31.000Z"
+      "updatedAt": "2026-01-01T02:44:54.000Z"
     },
     {
       "id": "csv-cardiovascular-50",
@@ -4172,10 +4172,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor QT and renal function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:30.000Z",
-      "updatedAt": "2026-01-01T00:32:30.000Z"
+      "updatedAt": "2026-01-01T02:44:53.000Z"
     },
     {
       "id": "csv-cardiovascular-51",
@@ -4186,10 +4186,10 @@
       "frequency": "Twice daily with meals",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in severe heart failure; monitor liver function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:29.000Z",
-      "updatedAt": "2026-01-01T00:32:29.000Z"
+      "updatedAt": "2026-01-01T02:44:52.000Z"
     },
     {
       "id": "csv-cardiovascular-52",
@@ -4200,10 +4200,10 @@
       "frequency": "IV rapid bolus",
       "duration": "1 day (Single dose)",
       "instructions": "Hospital/emergency use for SVT; brief chest discomfort expected",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:28.000Z",
-      "updatedAt": "2026-01-01T00:32:28.000Z"
+      "updatedAt": "2026-01-01T02:44:51.000Z"
     },
     {
       "id": "csv-cardiovascular-53",
@@ -4214,10 +4214,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Take with food; bleeding risk",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:27.000Z",
-      "updatedAt": "2026-01-01T00:32:27.000Z"
+      "updatedAt": "2026-01-01T02:44:50.000Z"
     },
     {
       "id": "csv-cardiovascular-54",
@@ -4228,10 +4228,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid certain PPIs (omeprazole/esomeprazole) where possible",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:26.000Z",
-      "updatedAt": "2026-01-01T00:32:26.000Z"
+      "updatedAt": "2026-01-01T02:44:49.000Z"
     },
     {
       "id": "csv-cardiovascular-55",
@@ -4242,10 +4242,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in prior stroke/TIA; bleeding risk",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:25.000Z",
-      "updatedAt": "2026-01-01T00:32:25.000Z"
+      "updatedAt": "2026-01-01T02:44:48.000Z"
     },
     {
       "id": "csv-cardiovascular-56",
@@ -4256,10 +4256,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Dyspnea possible; avoid high-dose aspirin",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:24.000Z",
-      "updatedAt": "2026-01-01T00:32:24.000Z"
+      "updatedAt": "2026-01-01T02:44:47.000Z"
     },
     {
       "id": "csv-cardiovascular-57",
@@ -4270,10 +4270,10 @@
       "frequency": "Once daily in the evening",
       "duration": "30 days (Ongoing)",
       "instructions": "Regular INR monitoring; many interactions",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:23.000Z",
-      "updatedAt": "2026-01-01T00:32:23.000Z"
+      "updatedAt": "2026-01-01T02:44:46.000Z"
     },
     {
       "id": "csv-cardiovascular-58",
@@ -4284,10 +4284,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Do not stop without advice; adjust for renal function/age/weight",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:22.000Z",
-      "updatedAt": "2026-01-01T00:32:22.000Z"
+      "updatedAt": "2026-01-01T02:44:45.000Z"
     },
     {
       "id": "csv-cardiovascular-59",
@@ -4298,10 +4298,10 @@
       "frequency": "Once daily with evening meal",
       "duration": "30 days (Ongoing)",
       "instructions": "Must be taken with food at 15–20 mg doses",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:21.000Z",
-      "updatedAt": "2026-01-01T00:32:21.000Z"
+      "updatedAt": "2026-01-01T02:44:44.000Z"
     },
     {
       "id": "csv-cardiovascular-60",
@@ -4312,10 +4312,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Swallow capsule whole; adjust in renal impairment",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:20.000Z",
-      "updatedAt": "2026-01-01T00:32:20.000Z"
+      "updatedAt": "2026-01-01T02:44:43.000Z"
     },
     {
       "id": "csv-cardiovascular-61",
@@ -4326,10 +4326,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Adjust for renal function and weight",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:19.000Z",
-      "updatedAt": "2026-01-01T00:32:19.000Z"
+      "updatedAt": "2026-01-01T02:44:42.000Z"
     },
     {
       "id": "csv-cardiovascular-62",
@@ -4340,10 +4340,10 @@
       "frequency": "IV infusion",
       "duration": "7 days",
       "instructions": "Monitor aPTT/anti-Xa; check platelets",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:18.000Z",
-      "updatedAt": "2026-01-01T00:32:18.000Z"
+      "updatedAt": "2026-01-01T02:44:41.000Z"
     },
     {
       "id": "csv-cardiovascular-63",
@@ -4354,10 +4354,10 @@
       "frequency": "Twice daily (or 1.5 mg/kg once daily)",
       "duration": "7 days",
       "instructions": "Adjust in renal impairment; monitor platelets",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:17.000Z",
-      "updatedAt": "2026-01-01T00:32:17.000Z"
+      "updatedAt": "2026-01-01T02:44:40.000Z"
     },
     {
       "id": "csv-cardiovascular-64",
@@ -4368,10 +4368,10 @@
       "frequency": "Once daily",
       "duration": "7 days",
       "instructions": "Avoid in severe renal impairment",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:16.000Z",
-      "updatedAt": "2026-01-01T00:32:16.000Z"
+      "updatedAt": "2026-01-01T02:44:39.000Z"
     },
     {
       "id": "csv-cardiovascular-65",
@@ -4382,10 +4382,10 @@
       "frequency": "IV bolus then infusion",
       "duration": "1 day (Single dose)",
       "instructions": "Hospital emergency use only; strict eligibility criteria",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:15.000Z",
-      "updatedAt": "2026-01-01T00:32:15.000Z"
+      "updatedAt": "2026-01-01T02:44:38.000Z"
     },
     {
       "id": "csv-cardiovascular-66",
@@ -4396,10 +4396,10 @@
       "frequency": "Single IV dose",
       "duration": "1 day (Single dose)",
       "instructions": "Hospital emergency use only; screen bleeding risk",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:14.000Z",
-      "updatedAt": "2026-01-01T00:32:14.000Z"
+      "updatedAt": "2026-01-01T02:44:37.000Z"
     },
     {
       "id": "csv-cardiovascular-67",
@@ -4410,10 +4410,10 @@
       "frequency": "IV infusion over 60 minutes",
       "duration": "1 day (Single dose)",
       "instructions": "Hospital emergency use; avoid repeat use after prior exposure",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:13.000Z",
-      "updatedAt": "2026-01-01T00:32:13.000Z"
+      "updatedAt": "2026-01-01T02:44:36.000Z"
     },
     {
       "id": "csv-cardiovascular-68",
@@ -4424,10 +4424,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Report unexplained muscle pain; monitor liver tests as indicated",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:12.000Z",
-      "updatedAt": "2026-01-01T00:32:12.000Z"
+      "updatedAt": "2026-01-01T02:44:35.000Z"
     },
     {
       "id": "csv-cardiovascular-69",
@@ -4438,10 +4438,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Report muscle symptoms; adjust in renal impairment/Asian patients",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:11.000Z",
-      "updatedAt": "2026-01-01T00:32:11.000Z"
+      "updatedAt": "2026-01-01T02:44:34.000Z"
     },
     {
       "id": "csv-cardiovascular-70",
@@ -4452,10 +4452,10 @@
       "frequency": "Once daily in the evening",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid with strong CYP3A4 inhibitors; report muscle symptoms",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:10.000Z",
-      "updatedAt": "2026-01-01T00:32:10.000Z"
+      "updatedAt": "2026-01-01T02:44:33.000Z"
     },
     {
       "id": "csv-cardiovascular-71",
@@ -4466,10 +4466,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Fewer interactions; report muscle symptoms",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:09.000Z",
-      "updatedAt": "2026-01-01T00:32:09.000Z"
+      "updatedAt": "2026-01-01T02:44:32.000Z"
     },
     {
       "id": "csv-cardiovascular-72",
@@ -4480,10 +4480,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Report muscle symptoms; avoid with cyclosporine",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:08.000Z",
-      "updatedAt": "2026-01-01T00:32:08.000Z"
+      "updatedAt": "2026-01-01T02:44:31.000Z"
     },
     {
       "id": "csv-cardiovascular-73",
@@ -4494,10 +4494,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Can be combined with statins",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:07.000Z",
-      "updatedAt": "2026-01-01T00:32:07.000Z"
+      "updatedAt": "2026-01-01T02:44:30.000Z"
     },
     {
       "id": "csv-cardiovascular-74",
@@ -4508,10 +4508,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor liver and renal function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:06.000Z",
-      "updatedAt": "2026-01-01T00:32:06.000Z"
+      "updatedAt": "2026-01-01T02:44:29.000Z"
     },
     {
       "id": "csv-cardiovascular-75",
@@ -4522,10 +4522,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Increases statin myopathy risk; avoid combination where possible",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:05.000Z",
-      "updatedAt": "2026-01-01T00:32:05.000Z"
+      "updatedAt": "2026-01-01T02:44:28.000Z"
     },
     {
       "id": "csv-cardiovascular-76",
@@ -4536,10 +4536,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor uric acid; tendon rupture risk",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:04.000Z",
-      "updatedAt": "2026-01-01T00:32:04.000Z"
+      "updatedAt": "2026-01-01T02:44:27.000Z"
     },
     {
       "id": "csv-cardiovascular-77",
@@ -4550,10 +4550,10 @@
       "frequency": "Every 2 weeks",
       "duration": "4 weeks",
       "instructions": "Subcutaneous injection; specialist lipid therapy",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:03.000Z",
-      "updatedAt": "2026-01-01T00:32:03.000Z"
+      "updatedAt": "2026-01-01T02:44:26.000Z"
     },
     {
       "id": "csv-cardiovascular-78",
@@ -4564,10 +4564,10 @@
       "frequency": "Every 2 weeks",
       "duration": "4 weeks",
       "instructions": "Subcutaneous injection; specialist lipid therapy",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:02.000Z",
-      "updatedAt": "2026-01-01T00:32:02.000Z"
+      "updatedAt": "2026-01-01T02:44:25.000Z"
     },
     {
       "id": "csv-cardiovascular-79",
@@ -4578,10 +4578,10 @@
       "frequency": "Day 0, day 90, then every 6 months",
       "duration": "6 months",
       "instructions": "Subcutaneous injection by healthcare professional",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:01.000Z",
-      "updatedAt": "2026-01-01T00:32:01.000Z"
+      "updatedAt": "2026-01-01T02:44:24.000Z"
     },
     {
       "id": "csv-cardiovascular-80",
@@ -4592,10 +4592,10 @@
       "frequency": "Twice daily with food",
       "duration": "30 days (Ongoing)",
       "instructions": "Monitor for atrial fibrillation and bleeding",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:32:00.000Z",
-      "updatedAt": "2026-01-01T00:32:00.000Z"
+      "updatedAt": "2026-01-01T02:44:23.000Z"
     },
     {
       "id": "csv-cardiovascular-81",
@@ -4606,10 +4606,10 @@
       "frequency": "Once daily with food",
       "duration": "30 days (Ongoing)",
       "instructions": "Heart failure; avoid in pregnancy and with nitrates/riociguat",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:31:59.000Z",
-      "updatedAt": "2026-01-01T00:31:59.000Z"
+      "updatedAt": "2026-01-01T02:44:22.000Z"
     },
     {
       "id": "csv-cardiovascular-82",
@@ -4620,10 +4620,10 @@
       "frequency": "3 times daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid nitrates; specialist use",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:31:58.000Z",
-      "updatedAt": "2026-01-01T00:31:58.000Z"
+      "updatedAt": "2026-01-01T02:44:21.000Z"
     },
     {
       "id": "csv-cardiovascular-83",
@@ -4634,10 +4634,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid nitrates; specialist use",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:31:57.000Z",
-      "updatedAt": "2026-01-01T00:31:57.000Z"
+      "updatedAt": "2026-01-01T02:44:20.000Z"
     },
     {
       "id": "csv-cardiovascular-84",
@@ -4648,10 +4648,10 @@
       "frequency": "Twice daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Teratogenic; monitor liver function",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:31:56.000Z",
-      "updatedAt": "2026-01-01T00:31:56.000Z"
+      "updatedAt": "2026-01-01T02:44:19.000Z"
     },
     {
       "id": "csv-cardiovascular-85",
@@ -4662,10 +4662,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Teratogenic; monitor for edema and anemia",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:31:55.000Z",
-      "updatedAt": "2026-01-01T00:31:55.000Z"
+      "updatedAt": "2026-01-01T02:44:18.000Z"
     },
     {
       "id": "csv-cardiovascular-86",
@@ -4676,10 +4676,10 @@
       "frequency": "Once daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Teratogenic; monitor hemoglobin",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:31:54.000Z",
-      "updatedAt": "2026-01-01T00:31:54.000Z"
+      "updatedAt": "2026-01-01T02:44:17.000Z"
     },
     {
       "id": "csv-cardiovascular-87",
@@ -4690,10 +4690,262 @@
       "frequency": "Three times daily",
       "duration": "30 days (Ongoing)",
       "instructions": "Avoid in pregnancy and with nitrates",
-      "category": "Cardiovascular Medications",
-      "source": "csv_upload",
+      "category": "Clinical Formulary",
+      "source": "standard",
       "createdAt": "2026-01-01T00:31:53.000Z",
-      "updatedAt": "2026-01-01T00:31:53.000Z"
+      "updatedAt": "2026-01-01T02:44:16.000Z"
+    },
+    {
+      "id": "formulary-default-241",
+      "doctorId": "shared",
+      "name": "Tretinoin 0.025% Cream",
+      "dosage": "Pea-sized amount",
+      "route": "Topical",
+      "frequency": "Once daily at night",
+      "duration": "30 days",
+      "instructions": "Apply thin layer on dry skin 20 mins after washing. Avoid eyes and mouth.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:39.000Z",
+      "updatedAt": "2026-01-01T02:42:39.000Z"
+    },
+    {
+      "id": "formulary-default-242",
+      "doctorId": "shared",
+      "name": "Adapalene 0.1% + Benzoyl Peroxide 2.5% Gel",
+      "dosage": "Thin layer",
+      "route": "Topical",
+      "frequency": "Once daily at night",
+      "duration": "30 days",
+      "instructions": "Apply on affected facial areas. Use sunscreen during the day.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:38.000Z",
+      "updatedAt": "2026-01-01T02:42:38.000Z"
+    },
+    {
+      "id": "formulary-default-243",
+      "doctorId": "shared",
+      "name": "Doxycycline 100 mg Capsules",
+      "dosage": "100 mg",
+      "route": "Oral",
+      "frequency": "Once daily",
+      "duration": "14 days",
+      "instructions": "Take with a full glass of water after food. Do not lie down for 30 minutes.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:37.000Z",
+      "updatedAt": "2026-01-01T02:42:37.000Z"
+    },
+    {
+      "id": "formulary-default-244",
+      "doctorId": "shared",
+      "name": "Azithromycin 500 mg Tablets",
+      "dosage": "500 mg",
+      "route": "Oral",
+      "frequency": "Once daily (Mon-Wed-Fri)",
+      "duration": "3 weeks",
+      "instructions": "Take 1 hour before or 2 hours after food.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:36.000Z",
+      "updatedAt": "2026-01-01T02:42:36.000Z"
+    },
+    {
+      "id": "formulary-default-245",
+      "doctorId": "shared",
+      "name": "Cetirizine 10 mg Tablets",
+      "dosage": "10 mg",
+      "route": "Oral",
+      "frequency": "1 tablet at bedtime",
+      "duration": "10 days",
+      "instructions": "For itching relief. May cause slight drowsiness.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:35.000Z",
+      "updatedAt": "2026-01-01T02:42:35.000Z"
+    },
+    {
+      "id": "formulary-default-246",
+      "doctorId": "shared",
+      "name": "Levocetirizine 5 mg + Montelukast 10 mg",
+      "dosage": "1 tablet",
+      "route": "Oral",
+      "frequency": "Once daily at night",
+      "duration": "14 days",
+      "instructions": "For allergic rash and hives. Take after dinner.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:34.000Z",
+      "updatedAt": "2026-01-01T02:42:34.000Z"
+    },
+    {
+      "id": "formulary-default-247",
+      "doctorId": "shared",
+      "name": "Hydrocortisone 1% Cream",
+      "dosage": "Thin layer",
+      "route": "Topical",
+      "frequency": "Twice daily",
+      "duration": "7 days",
+      "instructions": "Apply sparingly on inflamed skin only.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:33.000Z",
+      "updatedAt": "2026-01-01T02:42:33.000Z"
+    },
+    {
+      "id": "formulary-default-248",
+      "doctorId": "shared",
+      "name": "Mometasone Furoate 0.1% Cream",
+      "dosage": "Thin layer",
+      "route": "Topical",
+      "frequency": "Once daily",
+      "duration": "10 days",
+      "instructions": "Apply on affected eczema/plaque areas. Do not use on face without direction.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:32.000Z",
+      "updatedAt": "2026-01-01T02:42:32.000Z"
+    },
+    {
+      "id": "formulary-default-249",
+      "doctorId": "shared",
+      "name": "Ketoconazole 2% Shampoo",
+      "dosage": "5 ml",
+      "route": "Topical",
+      "frequency": "2-3 times weekly",
+      "duration": "4 weeks",
+      "instructions": "Massage into wet scalp, leave on for 5 minutes before rinsing.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:31.000Z",
+      "updatedAt": "2026-01-01T02:42:31.000Z"
+    },
+    {
+      "id": "formulary-default-250",
+      "doctorId": "shared",
+      "name": "Itraconazole 100 mg Capsules",
+      "dosage": "100 mg",
+      "route": "Oral",
+      "frequency": "Twice daily (1-0-1)",
+      "duration": "14 days",
+      "instructions": "Take immediately after a full meal.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:30.000Z",
+      "updatedAt": "2026-01-01T02:42:30.000Z"
+    },
+    {
+      "id": "formulary-default-251",
+      "doctorId": "shared",
+      "name": "Terbinafine 250 mg Tablets",
+      "dosage": "250 mg",
+      "route": "Oral",
+      "frequency": "Once daily",
+      "duration": "14 days",
+      "instructions": "Take with food.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:29.000Z",
+      "updatedAt": "2026-01-01T02:42:29.000Z"
+    },
+    {
+      "id": "formulary-default-252",
+      "doctorId": "shared",
+      "name": "Minoxidil 5% Topical Solution",
+      "dosage": "1 ml",
+      "route": "Topical",
+      "frequency": "Twice daily",
+      "duration": "60 days",
+      "instructions": "Apply directly to thinning scalp with dropper. Wash hands after use.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:28.000Z",
+      "updatedAt": "2026-01-01T02:42:28.000Z"
+    },
+    {
+      "id": "formulary-default-253",
+      "doctorId": "shared",
+      "name": "Biotin 10 mg + Minerals Tablet",
+      "dosage": "1 tablet",
+      "route": "Oral",
+      "frequency": "Once daily after breakfast",
+      "duration": "60 days",
+      "instructions": "Nutritional hair & nail supplement.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:27.000Z",
+      "updatedAt": "2026-01-01T02:42:27.000Z"
+    },
+    {
+      "id": "formulary-default-254",
+      "doctorId": "shared",
+      "name": "Moisturizing Cream (Ceramides + Hyaluronic Acid)",
+      "dosage": "Liberal amount",
+      "route": "Topical",
+      "frequency": "3-4 times daily",
+      "duration": "Ongoing",
+      "instructions": "Apply immediately after bathing on damp skin.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:26.000Z",
+      "updatedAt": "2026-01-01T02:42:26.000Z"
+    },
+    {
+      "id": "formulary-default-255",
+      "doctorId": "shared",
+      "name": "Broad Spectrum SPF 50+ Sunscreen",
+      "dosage": "Two finger lengths",
+      "route": "Topical",
+      "frequency": "Every morning and reapply every 3 hrs",
+      "duration": "Ongoing",
+      "instructions": "Apply 20 mins before sun exposure.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:25.000Z",
+      "updatedAt": "2026-01-01T02:42:25.000Z"
+    },
+    {
+      "id": "formulary-default-256",
+      "doctorId": "shared",
+      "name": "Fusidic Acid 2% Cream",
+      "dosage": "Thin layer",
+      "route": "Topical",
+      "frequency": "Twice daily",
+      "duration": "7 days",
+      "instructions": "Apply on infected lesions.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:24.000Z",
+      "updatedAt": "2026-01-01T02:42:24.000Z"
+    },
+    {
+      "id": "formulary-default-257",
+      "doctorId": "shared",
+      "name": "Mupirocin 2% Ointment",
+      "dosage": "Thin layer",
+      "route": "Topical",
+      "frequency": "Three times daily",
+      "duration": "7 days",
+      "instructions": "Apply on bacterial sores / folliculitis.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:23.000Z",
+      "updatedAt": "2026-01-01T02:42:23.000Z"
+    },
+    {
+      "id": "formulary-default-258",
+      "doctorId": "shared",
+      "name": "Salicylic Acid 2% + Lactic Acid Solution",
+      "dosage": "1 drop",
+      "route": "Topical",
+      "frequency": "Once daily at night",
+      "duration": "14 days",
+      "instructions": "Apply specifically on wart / corn. Protect surrounding skin with petroleum jelly.",
+      "category": "Clinical Formulary",
+      "source": "standard",
+      "createdAt": "2026-01-01T02:42:22.000Z",
+      "updatedAt": "2026-01-01T02:42:22.000Z"
     }
   ]
 }

@@ -519,16 +519,20 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     ...doctorFormulary.map(m => ({
       name: m.name,
       dosage: m.dosage,
-      route: m.route,
+      route: m.route || (/cream|gel|ointment|lotion|shampoo|solution|spf|sunscreen|topical/i.test(`${m.name} ${m.dosage}`) ? 'Topical' : /\b(iv|im|iv\/im|infusion)\b/i.test(`${m.name} ${m.dosage}`) ? 'IV / IM' : 'Oral'),
       frequency: m.frequency,
       duration: m.duration,
       instructions: m.instructions,
-      isPersonal: true
+      isPersonal: !m.id?.startsWith('formulary-default-') && m.doctorId !== 'shared'
     })),
     ...COMMON_MEDICATIONS.filter(m => !personalNamesMap.has(m.name.toLowerCase())).map(m => ({
       name: m.name,
       dosage: m.dosage,
-      route: undefined as string | undefined,
+      route: /cream|gel|ointment|lotion|shampoo|solution|spf|sunscreen|topical/i.test(`${m.name} ${m.dosage}`)
+        ? 'Topical'
+        : /\b(iv|im|iv\/im|infusion)\b/i.test(`${m.name} ${m.dosage}`)
+        ? 'IV / IM'
+        : 'Oral',
       frequency: m.frequency,
       duration: m.duration,
       instructions: m.instructions,
@@ -2628,7 +2632,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       )}
                     </h4>
                     <span className="px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-[10px] font-bold">
-                      {doctor?.name || 'Doctor'}'s Library ({doctorFormulary.length} custom + {COMMON_MEDICATIONS.length} std)
+                      Clinical Formulary ({allDoctorMedications.length} default medications)
                     </span>
                   </div>
 
@@ -2640,10 +2644,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         onChange={e => setAutoSaveToLibrary(e.target.checked)}
                         className="rounded border-slate-300 text-teal-700 focus:ring-teal-500"
                       />
-                      <span>Auto-save new medicines to My Library</span>
+                      <span>Auto-save new medicines to Clinical Library</span>
                     </label>
 
-                    { doctorFormulary.length > 0 && (
+                    { allDoctorMedications.length > 0 && (
                       <button
                         type="button"
                         onMouseDown={e => e.preventDefault()}
@@ -2653,10 +2657,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             ? 'bg-teal-100 text-teal-900 border-teal-300'
                             : 'bg-white hover:bg-teal-50 text-teal-800 border-teal-200'
                         }`}
-                        title="Toggle preview of your uploaded CSV / personal medication library"
+                        title="Toggle preview of clinical medications"
                       >
                         <span>
-                          {showUploadedLibraryPreview ? 'Hide CSV Preview' : `Preview CSV Library (${doctorFormulary.length})`}
+                          {showUploadedLibraryPreview ? 'Hide Formulary' : `Preview Formulary (${allDoctorMedications.length})`}
                         </span>
                       </button>
                     )}
@@ -2669,7 +2673,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         setIsLibraryModalOpen(true);
                       }}
                       className="px-2.5 py-1 rounded-lg bg-teal-800 hover:bg-teal-900 text-white text-[11px] font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-                      title="Upload a PDF/CSV medication file or add medicines to your personal library"
+                      title="Upload a PDF/CSV medication file or add medicines to your clinical library"
                     >
                       <Upload className="w-3 h-3" />
                       <span>Upload CSV / PDF Library</span>
@@ -2679,11 +2683,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                 {/* Inner Prescription Builder Box */}
                 <div className="p-4 space-y-4">
-                  {showUploadedLibraryPreview && doctorFormulary.length > 0 && (
+                  {showUploadedLibraryPreview && allDoctorMedications.length > 0 && (
                     <div className="border border-teal-200 bg-teal-50/30 rounded-xl overflow-hidden animate-in fade-in duration-150">
                       <div className="px-3.5 py-2 bg-teal-900 text-white flex items-center justify-between text-xs font-bold">
                         <span>
-                          Uploaded CSV / Personal Medication Library Preview ({doctorFormulary.length} items) — Click any row to populate Rx
+                          Clinical Formulary Preview ({allDoctorMedications.length} items) — Click any row to populate Rx
                         </span>
                         <button
                           type="button"
@@ -2708,9 +2712,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-teal-100 bg-white">
-                            {doctorFormulary.map((m, idx) => (
+                            {allDoctorMedications.map((m, idx) => (
                               <tr
-                                key={m.id || idx}
+                                key={m.name || idx}
                                 onClick={() => {
                                   setMedName(m.name);
                                   setMedDosage(m.dosage);
@@ -2880,7 +2884,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-64 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
                             <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between sticky top-0 z-10 border-b border-slate-100">
                               <span>
-                                {doctor?.name || 'Doctor'}'s Library (
+                                Clinical Formulary (
                                 {
                                   allDoctorMedications.filter(m => {
                                     const q = medName.toLowerCase().trim();

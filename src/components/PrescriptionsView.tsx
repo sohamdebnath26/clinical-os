@@ -19,7 +19,6 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState<'formulary' | 'registry'>('formulary');
-  const [libraryFilter, setLibraryFilter] = useState<'all' | 'personal' | 'standard'>('all');
 
   // Upload / Add to Personal Library modal state
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -50,7 +49,7 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
     try {
       await api.formulary.delete(id);
       setDoctorFormulary(prev => prev.filter(item => item.id !== id));
-      setLibraryFeedback(`Removed "${name}" from your personal library.`);
+      setLibraryFeedback(`Removed "${name}" from your clinical library.`);
       setTimeout(() => setLibraryFeedback(null), 3500);
     } catch {
       // ignore
@@ -85,18 +84,18 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
     p.instructions.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Merge doctor's personalized library first, then standard catalogue (deduplicated by name)
+  // Unified master formulary combining preloaded default medicines and custom additions
   const personalNamesSet = new Set(doctorFormulary.map(m => m.name.toLowerCase()));
   const mergedFormulary = [
     ...doctorFormulary.map(m => ({
       id: m.id,
       name: m.name,
       dosage: m.dosage,
-      route: m.route || 'Oral',
+      route: m.route || (/cream|gel|ointment|lotion|shampoo|solution|spf|sunscreen|topical/i.test(`${m.name} ${m.dosage}`) ? 'Topical' : /\b(iv|im|iv\/im|infusion)\b/i.test(`${m.name} ${m.dosage}`) ? 'IV / IM' : 'Oral'),
       frequency: m.frequency,
       duration: m.duration,
       instructions: m.instructions,
-      isPersonal: true,
+      isPersonal: !m.id.startsWith('formulary-default-') && m.doctorId !== 'shared',
       source: m.source
     })),
     ...COMMON_MEDICATIONS.filter(m => !personalNamesSet.has(m.name.toLowerCase())).map((m, idx) => ({
@@ -118,8 +117,6 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
   ];
 
   const filteredFormulary = mergedFormulary.filter(m => {
-    if (libraryFilter === 'personal' && !m.isPersonal) return false;
-    if (libraryFilter === 'standard' && m.isPersonal) return false;
     const q = search.toLowerCase().trim();
     if (!q) return true;
     return (
@@ -136,12 +133,12 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             {activeSubTab === 'formulary'
-              ? `Personalized Medical Library — ${doctor?.name || 'Doctor'}`
+              ? 'Clinical Medical Formulary'
               : 'Prescription Registry'}
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             {activeSubTab === 'formulary'
-              ? `${doctorFormulary.length} custom doctor medications + ${COMMON_MEDICATIONS.length} standard antimicrobial & clinic drugs (${mergedFormulary.length} total auto-lookup items)`
+              ? `Unified master library of ${mergedFormulary.length} medications default to all doctors, with instant search & auto-complete.`
               : `View all active and historical medication regimens prescribed in your clinic (${filtered.length} entries)`}
           </p>
         </div>
@@ -232,41 +229,11 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
         </div>
 
         {activeSubTab === 'formulary' && (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLibraryFilter('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                libraryFilter === 'all'
-                  ? 'bg-teal-800 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              All ({mergedFormulary.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setLibraryFilter('personal')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                libraryFilter === 'personal'
-                  ? 'bg-teal-800 text-white'
-                  : 'bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100'
-              }`}
-            >
-              <Sparkles className="w-3 h-3" />
-              <span>My Personal Library ({doctorFormulary.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setLibraryFilter('standard')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                libraryFilter === 'standard'
-                  ? 'bg-teal-800 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Standard Catalogue ({COMMON_MEDICATIONS.length})
-            </button>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-50 text-teal-900 border border-teal-200 flex items-center gap-1.5">
+              <Pill className="w-3.5 h-3.5 text-teal-700" />
+              <span>{filteredFormulary.length} Clinical Formulary Medications</span>
+            </span>
           </div>
         )}
       </div>
@@ -276,9 +243,7 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
           {filteredFormulary.length === 0 ? (
             <div className="p-10 text-center space-y-3">
               <p className="text-xs text-slate-500">
-                {libraryFilter === 'personal'
-                  ? 'You have not added any custom medications to your personal library yet. Upload a PDF/CSV or add a medicine above, or type a new medicine during a consultation!'
-                  : `No medicines matching "${search}".`}
+                {`No medicines matching "${search}".`}
               </p>
               {search.trim() && (
                 <button
@@ -290,7 +255,7 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold shadow-xs cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add "{search.trim()}" to My Personal Library</span>
+                  <span>Add "{search.trim()}" to Clinical Library</span>
                 </button>
               )}
             </div>
@@ -301,10 +266,11 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
                   <tr>
                     <th className="py-3 px-4 w-14">#</th>
                     <th className="py-3 px-4">Medicine Name</th>
+                    <th className="py-3 px-4">Route</th>
                     <th className="py-3 px-4">Required Dosage</th>
-                    <th className="py-3 px-4">Frequency & Duration</th>
+                    <th className="py-3 px-4">Frequency &amp; Duration</th>
                     <th className="py-3 px-4">Clinical Instructions</th>
-                    <th className="py-3 px-4 text-right">Library Source</th>
+                    <th className="py-3 px-4 text-right">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -315,15 +281,16 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
                         <div className="flex items-center gap-2">
-                          <div
-                            className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                              med.isPersonal ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-teal-50 text-teal-700'
-                            }`}
-                          >
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-teal-50 text-teal-700">
                             <Pill className="w-3.5 h-3.5" />
                           </div>
                           <span>{med.name}</span>
                         </div>
+                      </td>
+                      <td className="py-3 px-4 text-slate-700 font-medium">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px]">
+                          {med.route || 'Oral'}
+                        </span>
                       </td>
                       <td className="py-3 px-4 text-slate-800 font-semibold">
                         <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-100">
@@ -338,27 +305,18 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {med.isPersonal ? (
-                            <>
-                              <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold">
-                                {med.source === 'csv_upload'
-                                  ? 'CSV Upload'
-                                  : med.source === 'pdf_upload'
-                                  ? 'PDF Upload'
-                                  : 'My Library'}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePersonalMed(med.id, med.name)}
-                                className="p-1 text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
-                                title="Remove from my personal library"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </>
+                          {med.isPersonal && med.id && !med.id.startsWith('std-') && !med.id.startsWith('formulary-default-') ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePersonalMed(med.id, med.name)}
+                              className="p-1 text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
+                              title="Remove medication"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           ) : (
                             <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-medium">
-                              Standard Formulary
+                              Default Formulary
                             </span>
                           )}
                         </div>

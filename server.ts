@@ -125,6 +125,7 @@ app.post('/api/auth/login', (req, res) => {
     resourceId: doctor.id
   });
 
+  db.ensureDefaultFormulary();
   res.json({ token, doctor });
 });
 
@@ -177,6 +178,7 @@ app.post('/api/auth/sso', (req, res) => {
     metadata: { organization: orgName, provider: 'sso' }
   });
 
+  db.ensureDefaultFormulary();
   res.json({ token, doctor });
 });
 
@@ -217,6 +219,7 @@ app.post('/api/auth/google', (req, res) => {
     metadata: { provider: 'google' }
   });
 
+  db.ensureDefaultFormulary();
   res.json({ token, doctor });
 });
 
@@ -252,6 +255,7 @@ app.post('/api/auth/register', (req, res) => {
       expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
     });
 
+    db.ensureDefaultFormulary();
     res.status(201).json({ token, doctor });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Registration failed';

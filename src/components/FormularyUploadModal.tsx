@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { DoctorFormularyItem } from '../types';
 import { api } from '../lib/api';
 import {
+  MASTER_CLINICAL_FORMULARY,
   UPLOADED_ENDOCRINE_MEDICATIONS,
   UPLOADED_CARDIOVASCULAR_MEDICATIONS,
   UPLOADED_ANTIMICROBIAL_MEDICATIONS
@@ -596,30 +597,9 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadPresetDataset = (preset: 'endocrine' | 'cardiovascular' | 'antimicrobial' | 'all') => {
-    setSelectedPreset(preset);
-    const items =
-      preset === 'endocrine'
-        ? UPLOADED_ENDOCRINE_MEDICATIONS
-        : preset === 'cardiovascular'
-        ? UPLOADED_CARDIOVASCULAR_MEDICATIONS
-        : preset === 'antimicrobial'
-        ? UPLOADED_ANTIMICROBIAL_MEDICATIONS
-        : [
-            ...UPLOADED_ENDOCRINE_MEDICATIONS,
-            ...UPLOADED_CARDIOVASCULAR_MEDICATIONS,
-            ...UPLOADED_ANTIMICROBIAL_MEDICATIONS
-          ].map((item, idx) => ({ ...item, no: idx + 1 }));
-
-    const fileName =
-      preset === 'endocrine'
-        ? 'Endocrine_and_Metabolic_Medications.pdf'
-        : preset === 'cardiovascular'
-        ? 'Cardiovascular_Medications.csv'
-        : preset === 'antimicrobial'
-        ? 'Antimicrobial_and_Anti-infective_Medications.csv'
-        : 'Complete_Clinical_Formulary_240_Medications.csv';
-
+  const loadMasterDataset = () => {
+    const items = MASTER_CLINICAL_FORMULARY;
+    const fileName = 'Master_Clinical_Formulary_258_Medications.csv';
     const csvText = buildCatalogCsvString(items);
     const csvGrid = detectDelimiterAndParseGrid(csvText);
     const parsedRows = parseCsvOrTextClient(csvText);
@@ -647,7 +627,7 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
       if (initialInstructions) setSingleInstructions(initialInstructions);
 
       if (initialMode === 'upload' && !selectedFile) {
-        loadPresetDataset('endocrine');
+        loadMasterDataset();
       }
     }
   }, [
@@ -765,12 +745,12 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
 
   const handleDownloadSampleCsv = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const sampleCsv = selectedFile?.textContent || buildCatalogCsvString(UPLOADED_ENDOCRINE_MEDICATIONS);
+    const sampleCsv = selectedFile?.textContent || buildCatalogCsvString(MASTER_CLINICAL_FORMULARY);
     const blob = new Blob([sampleCsv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = (selectedFile?.name || 'Endocrine_and_Metabolic_Medications.csv').replace(/\.pdf$/i, '.csv');
+    link.download = (selectedFile?.name || 'Master_Clinical_Formulary_258_Medications.csv').replace(/\.pdf$/i, '.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -779,7 +759,7 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
 
   const handleLoadSampleIntoPreview = (e: React.MouseEvent) => {
     e.stopPropagation();
-    loadPresetDataset('endocrine');
+    loadMasterDataset();
   };
 
   const handleImportFileOrText = async () => {
@@ -1028,56 +1008,19 @@ export const FormularyUploadModal: React.FC<FormularyUploadModalProps> = ({
                 </div>
               </div>
 
-              {/* Quick Dataset Switcher for Uploaded Clinical Catalogues */}
+              {/* Master Clinical Formulary status banner */}
               <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 bg-teal-50/70 border border-teal-200 rounded-xl">
                 <span className="text-[11px] font-bold text-teal-900 flex items-center gap-1.5">
                   <Pill className="w-3.5 h-3.5 text-teal-700" />
-                  <span>Loaded Clinical Sheets:</span>
+                  <span>Master Clinical Formulary: 258 combined medicines default to all doctors</span>
                 </span>
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => loadPresetDataset('endocrine')}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
-                      selectedPreset === 'endocrine'
-                        ? 'bg-teal-800 text-white shadow-2xs'
-                        : 'bg-white text-teal-800 border border-teal-200 hover:bg-teal-100'
-                    }`}
+                    onClick={loadMasterDataset}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-teal-800 text-white shadow-2xs hover:bg-teal-900 transition-colors cursor-pointer"
                   >
-                    Endocrine &amp; Metabolic (57)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => loadPresetDataset('cardiovascular')}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
-                      selectedPreset === 'cardiovascular'
-                        ? 'bg-teal-800 text-white shadow-2xs'
-                        : 'bg-white text-teal-800 border border-teal-200 hover:bg-teal-100'
-                    }`}
-                  >
-                    Cardiovascular (87)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => loadPresetDataset('antimicrobial')}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
-                      selectedPreset === 'antimicrobial'
-                        ? 'bg-teal-800 text-white shadow-2xs'
-                        : 'bg-white text-teal-800 border border-teal-200 hover:bg-teal-100'
-                    }`}
-                  >
-                    Antimicrobial (96)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => loadPresetDataset('all')}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
-                      selectedPreset === 'all'
-                        ? 'bg-teal-800 text-white shadow-2xs'
-                        : 'bg-white text-teal-800 border border-teal-200 hover:bg-teal-100'
-                    }`}
-                  >
-                    All 240 Combined
+                    Reset to 258 Default Medicines
                   </button>
                 </div>
               </div>

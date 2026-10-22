@@ -21,6 +21,7 @@ import {
   DoctorFormularyItem
 } from '../src/types/index.js';
 import {
+  MASTER_CLINICAL_FORMULARY,
   UPLOADED_ENDOCRINE_MEDICATIONS,
   UPLOADED_CARDIOVASCULAR_MEDICATIONS,
   UPLOADED_ANTIMICROBIAL_MEDICATIONS
@@ -1621,104 +1622,70 @@ class DatabaseService {
   }
 
   // --- Personalized Doctor Medical Library (Formulary) ---
-  private ensureDefaultFormulary() {
+  public ensureDefaultFormulary() {
     if (!this.data.formularyItems) {
       this.data.formularyItems = [];
     }
     let changed = false;
     const baseTime = new Date('2026-01-01T00:00:00.000Z').getTime();
 
-    const datasets: Array<{
-      prefix: string;
-      category: string;
-      source: 'pdf_upload' | 'csv_upload';
-      offsetSeconds: number;
-      items: Array<{
-        no: number;
-        name: string;
-        dosage: string;
-        frequency: string;
-        duration: string;
-        instructions: string;
-      }>;
-    }> = [
-      {
-        prefix: 'pdf-endocrine',
-        category: 'Endocrine & Metabolic Medications',
-        source: 'pdf_upload',
-        offsetSeconds: 3000,
-        items: UPLOADED_ENDOCRINE_MEDICATIONS
-      },
-      {
-        prefix: 'csv-cardiovascular',
-        category: 'Cardiovascular Medications',
-        source: 'csv_upload',
-        offsetSeconds: 2000,
-        items: UPLOADED_CARDIOVASCULAR_MEDICATIONS
-      },
-      {
-        prefix: 'csv-antimicrobial',
-        category: 'Antimicrobial & Anti-infective CSV',
-        source: 'csv_upload',
-        offsetSeconds: 1000,
-        items: UPLOADED_ANTIMICROBIAL_MEDICATIONS
-      }
-    ];
+    // Map all master clinical medications into a single unified default collection for all doctors
+    for (const med of MASTER_CLINICAL_FORMULARY) {
+      const seedId = `formulary-default-${med.no}`;
+      const combinedText = `${med.name} ${med.dosage} ${med.frequency} ${med.instructions}`;
+      const inferredRoute = /\b(iv|im|iv\/im|infusion|injection|subcutaneous|sc)\b/i.test(combinedText)
+        ? 'IV / IM'
+        : /\b(intranasal|intranasally|nasal|sublingual)\b/i.test(combinedText)
+        ? 'Nasal / Drops'
+        : /cream|gel|ointment|lotion|shampoo|solution|topical|spf|sunscreen/i.test(combinedText)
+        ? 'Topical'
+        : 'Oral';
 
-    for (const ds of datasets) {
-      for (const med of ds.items) {
-        const seedId = `${ds.prefix}-${med.no}`;
-        const combinedText = `${med.name} ${med.dosage} ${med.frequency} ${med.instructions}`;
-        const inferredRoute = /\b(iv|im|iv\/im|infusion|injection|subcutaneous|sc)\b/i.test(combinedText)
-          ? 'IV / IM'
-          : /\b(intranasal|intranasally|nasal|sublingual)\b/i.test(combinedText)
-          ? 'Nasal / Drops'
-          : /cream|gel|ointment|lotion|shampoo|solution|topical/i.test(combinedText)
-          ? 'Topical'
-          : 'Oral';
+      // Newer timestamp so sequential master order is preserved
+      const itemTimestamp = new Date(baseTime + (10000 - med.no) * 1000).toISOString();
 
-        const itemTimestamp = new Date(baseTime + (ds.offsetSeconds - med.no) * 1000).toISOString();
+      const existing = this.data.formularyItems.find(
+        item =>
+          item.id === seedId ||
+          item.name.toLowerCase() === med.name.toLowerCase()
+      );
 
-        const existing = this.data.formularyItems.find(
-          item =>
-            item.id === seedId ||
-            item.name.toLowerCase() === med.name.toLowerCase()
-        );
-
-        if (!existing) {
-          this.data.formularyItems.push({
-            id: seedId,
-            doctorId: 'shared',
-            name: med.name,
-            dosage: med.dosage,
-            route: inferredRoute,
-            frequency: med.frequency,
-            duration: med.duration,
-            instructions: med.instructions,
-            category: ds.category,
-            source: ds.source,
-            createdAt: itemTimestamp,
-            updatedAt: itemTimestamp
-          });
+      if (!existing) {
+        this.data.formularyItems.push({
+          id: seedId,
+          doctorId: 'shared',
+          name: med.name,
+          dosage: med.dosage,
+          route: inferredRoute,
+          frequency: med.frequency,
+          duration: med.duration,
+          instructions: med.instructions,
+          category: 'Clinical Formulary',
+          source: 'standard',
+          createdAt: itemTimestamp,
+          updatedAt: itemTimestamp
+        });
+        changed = true;
+      } else {
+        // Normalize any previously segregated items so they are combined and shared
+        if (
+          existing.doctorId !== 'shared' ||
+          existing.category !== 'Clinical Formulary' ||
+          existing.source !== 'standard' ||
+          existing.dosage !== med.dosage ||
+          existing.frequency !== med.frequency ||
+          existing.instructions !== med.instructions
+        ) {
+          existing.doctorId = 'shared';
+          existing.category = 'Clinical Formulary';
+          existing.source = 'standard';
+          existing.dosage = med.dosage;
+          existing.route = inferredRoute;
+          existing.frequency = med.frequency;
+          existing.duration = med.duration;
+          existing.instructions = med.instructions;
+          existing.updatedAt = itemTimestamp;
           changed = true;
-        } else if (existing.id === seedId) {
-          if (
-            existing.dosage !== med.dosage ||
-            existing.frequency !== med.frequency ||
-            existing.instructions !== med.instructions ||
-            existing.updatedAt !== itemTimestamp
-          ) {
-            existing.dosage = med.dosage;
-            existing.route = inferredRoute;
-            existing.frequency = med.frequency;
-            existing.duration = med.duration;
-            existing.instructions = med.instructions;
-            existing.category = ds.category;
-            existing.source = ds.source;
-            existing.createdAt = itemTimestamp;
-            existing.updatedAt = itemTimestamp;
-            changed = true;
-          }
         }
       }
     }
@@ -1729,6 +1696,7 @@ class DatabaseService {
   }
 
   public getDoctorFormulary(doctorId: string): DoctorFormularyItem[] {
+    this.ensureDefaultFormulary();
     if (!this.data.formularyItems) {
       this.data.formularyItems = [];
     }
