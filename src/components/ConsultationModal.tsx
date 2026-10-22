@@ -34,7 +34,6 @@ import {
   ArrowLeft,
   Mic,
   Search,
-  Upload,
   BookOpen
 } from 'lucide-react';
 
@@ -503,7 +502,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [doctorFormulary, setDoctorFormulary] = useState<DoctorFormularyItem[]>([]);
   const [autoSaveToLibrary, setAutoSaveToLibrary] = useState(true);
   const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
-  const [libraryModalMode, setLibraryModalMode] = useState<'upload' | 'paste' | 'single'>('upload');
   const [librarySavedToast, setLibrarySavedToast] = useState<string | null>(null);
   const [showUploadedLibraryPreview, setShowUploadedLibraryPreview] = useState(false);
 
@@ -2669,14 +2667,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       type="button"
                       onMouseDown={e => e.preventDefault()}
                       onClick={() => {
-                        setLibraryModalMode('upload');
                         setIsLibraryModalOpen(true);
                       }}
                       className="px-2.5 py-1 rounded-lg bg-teal-800 hover:bg-teal-900 text-white text-[11px] font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-                      title="Upload a PDF/CSV medication file or add medicines to your clinical library"
+                      title="Add a custom medicine to your clinical library"
                     >
-                      <Upload className="w-3 h-3" />
-                      <span>Upload CSV / PDF Library</span>
+                      <Plus className="w-3 h-3" />
+                      <span>Add Medicine</span>
                     </button>
                   </div>
                 </div>
@@ -4825,12 +4822,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         />
       )}
 
-      {/* Doctor's Personalized Medical Library Upload / Add Modal */}
+      {/* Doctor's Add Medicine Modal */}
       <FormularyUploadModal
         isOpen={isLibraryModalOpen}
         onClose={() => setIsLibraryModalOpen(false)}
         doctorName={doctor?.name || 'Doctor'}
-        initialMode={libraryModalMode}
         initialMedName={medName.trim()}
         initialDosage={medDosage}
         initialRoute={medRoute}

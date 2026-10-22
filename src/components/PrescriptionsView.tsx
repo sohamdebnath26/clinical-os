@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PrescriptionItem, Patient, DoctorFormularyItem } from '../types';
 import { api } from '../lib/api';
-import { Pill, Search, Printer, FileText, ArrowRight, BookOpen, Upload, Plus, Trash2, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Pill, Search, Printer, FileText, ArrowRight, BookOpen, Plus, Trash2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { PrintRxModal } from './PrintRxModal';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import { FormularyUploadModal } from './FormularyUploadModal';
@@ -20,9 +20,8 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
   const [isLoading, setIsLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState<'formulary' | 'registry'>('formulary');
 
-  // Upload / Add to Personal Library modal state
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [uploadModalMode, setUploadModalMode] = useState<'upload' | 'paste' | 'single'>('upload');
+  // Add Medicine modal state
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [libraryFeedback, setLibraryFeedback] = useState<string | null>(null);
 
   // Print modal state
@@ -145,30 +144,14 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
 
         <div className="flex flex-wrap items-center gap-2.5">
           {activeSubTab === 'formulary' && (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setUploadModalMode('upload');
-                  setIsUploadModalOpen(true);
-                }}
-                className="px-3.5 py-2 rounded-xl bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Upload CSV / PDF Library</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setUploadModalMode('single');
-                  setIsUploadModalOpen(true);
-                }}
-                className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-teal-800 border border-teal-200 text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Medicine</span>
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Medicine</span>
+            </button>
           )}
 
           <div className="inline-flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
@@ -248,10 +231,7 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
               {search.trim() && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setUploadModalMode('single');
-                    setIsUploadModalOpen(true);
-                  }}
+                  onClick={() => setIsAddModalOpen(true)}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold shadow-xs cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -412,15 +392,13 @@ export const PrescriptionsView: React.FC<PrescriptionsViewProps> = ({ onSelectPa
       )}
 
       <FormularyUploadModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
         doctorName={doctor?.name || 'Doctor'}
-        initialMode={uploadModalMode}
         initialMedName={search.trim()}
         onUpdated={(items, msg) => {
           setDoctorFormulary(items);
           setActiveSubTab('formulary');
-          setLibraryFilter('personal');
           if (msg) {
             setLibraryFeedback(msg);
             setTimeout(() => setLibraryFeedback(null), 6000);
