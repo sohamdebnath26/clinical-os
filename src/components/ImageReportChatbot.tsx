@@ -41,39 +41,39 @@ interface ImageReportChatbotProps {
 
 const QUICK_REPORT_PROMPTS = [
   {
-    label: 'Causes & Healing Timeline',
-    prompt: 'What causes this condition, is it contagious, and what is the expected recovery timeline?',
+    label: 'Causes, Spread & Healing',
+    prompt: 'What causes this condition in simple terms, can it spread to family members, and how long does it take to heal?',
     icon: Sparkles
   },
   {
-    label: 'Compare #1 vs #2 Differential',
-    prompt: 'Compare the #1 and #2 differential diagnoses in this report and how to clinically differentiate them.',
+    label: 'Compare #1 vs #2 in Plain Words',
+    prompt: 'Can you explain the difference between the #1 and #2 conditions in simple, everyday terms?',
     icon: Stethoscope
   },
   {
-    label: 'Treatment & Alternatives',
-    prompt: 'Review the suggested treatment plan, dosing, second-line alternatives, and any patient allergy checks.',
+    label: 'How to Use Medicine & Creams',
+    prompt: 'How should the prescribed medicine or cream be applied step-by-step, and are there any simple alternatives for sensitive skin?',
     icon: Pill
   },
   {
-    label: 'Priority Workup / Biopsy',
-    prompt: 'Which recommended investigation or biopsy from the report is highest priority and why?',
-    icon: FileText
-  },
-  {
-    label: 'Severity & Biological Presentation',
-    prompt: 'What is the clinical severity grade and what biological inferences (vascular erythema, melanin distribution, epidermal morphology) are indicated?',
+    label: 'Is It Serious or Dangerous?',
+    prompt: 'Is this condition dangerous or life-threatening, and what does the skin examination show in plain language?',
     icon: Activity
   },
   {
-    label: 'Diet, Skincare & Counseling',
-    prompt: 'What diet, skincare routine, and home care precautions should the patient follow for this condition?',
+    label: 'Daily Skincare & Diet Tips',
+    prompt: 'What daily skincare routine, bathing habits, and diet tips should be followed to help this heal faster?',
     icon: MessageSquare
   },
   {
-    label: 'Red Flags to Watch',
-    prompt: 'What are the critical red flags and urgent escalation criteria in this report?',
+    label: 'Warning Signs to Watch',
+    prompt: 'What warning signs or red flags should prompt immediate medical attention?',
     icon: ShieldAlert
+  },
+  {
+    label: 'Simple Patient Handout',
+    prompt: 'Can you provide a simple, comforting explanation of this condition that can be shared directly with the patient?',
+    icon: FileText
   }
 ];
 
@@ -134,12 +134,16 @@ export const ImageReportChatbot: React.FC<ImageReportChatbotProps> = ({
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isAiPowered: true,
       content:
-        `I've analyzed the scan and loaded the diagnostic report for **${report.primaryImpression}**` +
+        `I've analyzed the scan and prepared the diagnostic summary for **${report.primaryImpression}**` +
         `${topDiff?.icdCode ? ` (ICD-10: \`${topDiff.icdCode}\`)` : ''}` +
         `${patient ? ` for **${patient.fullName}** (${patient.age}y/${patient.gender})` : ''}.\n\n` +
-        `- **Top Differentials:** ${(report.differentials || []).map(d => `${d.condition} (${d.confidence})`).join(' · ')}\n` +
-        `- **Priority Workup:** ${(report.recommendedInvestigations || [])[0] || 'Clinical correlation'}\n\n` +
-        `Ask me anything about this case—just like chatting with a colleague! We can discuss **why this diagnosis was chosen**, **causes & healing time**, **medication adjustments**, **diet & skincare**, or **how to explain this to the patient**.`
+        `- **Top Possibilities:** ${(report.differentials || []).map(d => `${d.condition} (${d.confidence})`).join(' · ')}\n` +
+        `- **Recommended Next Step:** ${(report.recommendedInvestigations || [])[0] || 'Physical clinical exam'}\n\n` +
+        `Ask me any question! I answer in **plain, easy-to-understand layman's terms** with a structured breakdown:\n` +
+        `• 💡 **Direct Answer** to your question\n` +
+        `• 🔍 **Plain English Explanation** without heavy jargon\n` +
+        `• 📋 **Practical Steps & Home Care** you can actually take\n` +
+        `• ⚠️ **Warning Signs** to watch for`
     };
 
     setMessages([introMessage]);
@@ -276,8 +280,8 @@ export const ImageReportChatbot: React.FC<ImageReportChatbotProps> = ({
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isAiPowered: true,
         content:
-          `Conversation reset! I'm grounded in **${report.primaryImpression}**` +
-          `${topDiff?.icdCode ? ` (ICD-10: \`${topDiff.icdCode}\`)` : ''}. What would you like to discuss about this case?`
+          `Conversation reset! I'm ready to answer any question about **${report.primaryImpression}**` +
+          `${topDiff?.icdCode ? ` (ICD-10: \`${topDiff.icdCode}\`)` : ''} in clear, structured, plain-language terms. What would you like to know?`
       }
     ]);
     setQuestion('');
@@ -285,15 +289,15 @@ export const ImageReportChatbot: React.FC<ImageReportChatbotProps> = ({
 
   const followUpSuggestions = report
     ? [
-        `Why is ${report.primaryImpression.split('(')[0].trim()} favored over #2?`,
-        'What if the patient has sensitive skin or is pregnant?',
-        'Explain this condition simply for the patient',
-        'What are the second-line medication options?'
+        `Is ${report.primaryImpression.split('(')[0].trim()} contagious to other people?`,
+        'What are the everyday causes and triggers for this?',
+        'How long will this take to completely heal?',
+        'What creams and daily habits help this heal faster?'
       ]
     : [
-        'How do I differentiate eczema vs tinea corporis?',
-        'First-line topical regimen for Acne (Acne Vulgaris)?',
-        'When should a pigmented lesion be biopsied?'
+        'How do I tell ringworm apart from dry eczema in plain terms?',
+        'What is the easiest daily skincare routine for active acne?',
+        'What warning signs mean a skin spot needs an urgent biopsy?'
       ];
 
   return (
@@ -319,8 +323,8 @@ export const ImageReportChatbot: React.FC<ImageReportChatbotProps> = ({
             </div>
             <p className="text-xs text-slate-300 mt-0.5">
               {report
-                ? `Chat naturally about "${report.primaryImpression}", differentials, dosing, causes, or patient care`
-                : 'Ask any clinical or dermatology question interactively—before or after scanning an image'}
+                ? `Ask questions in plain English—get structured, jargon-free answers on causes, healing, medicines, & care`
+                : 'Ask any skin question in plain English to get structured, easy-to-understand clinical answers'}
             </p>
           </div>
         </div>

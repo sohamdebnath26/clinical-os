@@ -2893,12 +2893,15 @@ export interface AskImageReportParams {
 }
 
 interface ConditionKnowledgeProfile {
+  plainName: string;
+  simpleExplanation: string;
   etiologyAndTriggers: string[];
   contagiousness: string;
   prognosisAndTimeline: string;
   dietAndSkincare: string[];
   alternativesAndSafety: string;
   followUpGuidance: string;
+  dangerLevel: string;
 }
 
 function getConditionKnowledgeProfile(
@@ -2907,28 +2910,37 @@ function getConditionKnowledgeProfile(
 ): ConditionKnowledgeProfile {
   const lower = `${primaryImpression} ${morphologyCategory || ''}`.toLowerCase();
 
+  // 1. Acne & Folliculitis (Pimples & Clogged Pores)
   if (lower.includes('acne') || lower.includes('comedon') || lower.includes('follicul')) {
     return {
+      plainName: 'Acne (Pimples & Clogged Pores)',
+      simpleExplanation:
+        'Acne happens when natural skin oils and dead skin cells get trapped inside tiny hair pores. Normal, harmless skin bacteria multiply inside the trapped oil, causing red pimples, whiteheads, or blackheads.',
       etiologyAndTriggers: [
-        'Follicular hyperkeratinization, excess androgen-driven sebum production, *Cutibacterium acnes* colonization, and perifollicular inflammation.',
-        'Common triggers include occlusive cosmetics/oils, high-glycemic-index foods, whey protein/skim dairy, mechanical friction, stress, and hormonal fluctuations.'
+        'Excess skin oil: Hormones during puberty, stress, or menstrual cycles trigger glands to produce more oil.',
+        'Clogged pores: Dead skin flakes stick together and block pore openings instead of shedding naturally.',
+        'Everyday triggers: Heavy or greasy face creams, sweating under hats or masks, hard scrubbing, and high-sugar snacks or whey protein shakes.'
       ],
       contagiousness:
-        '**Non-contagious.** Acne and non-infectious folliculitis cannot spread from person to person via touch or shared items (unless secondary bacterial impetiginization is present).',
+        '**Not contagious.** You cannot catch acne from or spread it to anyone else through touching, hugging, or sharing towels.',
       prognosisAndTimeline:
-        'Initial reduction in active inflammatory papules typically begins within **2–4 weeks** of consistent topical therapy; fuller comedonal clearance and post-inflammatory erythema/hyperpigmentation improvement require **8–12 weeks**.',
+        'Active red pimples usually start calming down within **2 to 3 weeks** of daily treatment. Deeper clearing and gradual fading of leftover dark marks takes **8 to 12 weeks** of steady, gentle care.',
       dietAndSkincare: [
-        'Use a gentle, pH-balanced non-comedogenic cleanser twice daily; avoid harsh physical scrubs or picking/squeezing lesions.',
-        'Apply oil-free, non-comedogenic moisturizer and broad-spectrum SPF 30+ daily (especially important when using retinoids or benzoyl peroxide).',
-        'Moderate high-glycemic-load foods and excess dairy/whey supplements if flares correlate with diet.'
+        'Wash gently: Cleanse your face twice a day with a mild foaming face wash and lukewarm water. Never scrub hard with rough sponges.',
+        'Do not squeeze or pop pimples: Squeezing pushes bacteria deeper into the skin, worsens swelling, and leads to permanent dark spots or scars.',
+        'Choose oil-free products: Use moisturizers and sunscreens labeled "non-comedogenic" (which means they won\'t clog pores).',
+        'Diet tip: Cut back on sugary sodas, candy, and whey protein supplements if you notice breakouts after having them.'
       ],
       alternativesAndSafety:
-        'If topical retinoids/benzoyl peroxide cause irritation, step down to every-other-night application or switch to **Azelaic Acid 15–20% cream** (which is also safe in pregnancy/lactation, unlike topical/oral retinoids and tetracyclines).',
+        'If drying creams like benzoyl peroxide or retinoids cause stinging, apply a light moisturizer first, or use the cream every other night. Gentle Azelaic Acid cream is an effective, gentle alternative that is safe even during pregnancy.',
       followUpGuidance:
-        'Schedule clinical review in **6–8 weeks** to assess lesion count reduction, tolerability, and whether systemic therapy adjustment is needed.'
+        'Check back with your doctor in **6 to 8 weeks** to see how much the skin has cleared and adjust treatment if needed.',
+      dangerLevel:
+        'Mild to moderate and very common. It is not dangerous to overall health, and gentle daily habits prevent permanent scarring.'
     };
   }
 
+  // 2. Ringworm / Fungal Skin Rashes (Tinea)
   if (
     lower.includes('tinea') ||
     lower.includes('ringworm') ||
@@ -2938,48 +2950,63 @@ function getConditionKnowledgeProfile(
     lower.includes('dermatophyt')
   ) {
     return {
+      plainName: 'Ringworm (Fungal Skin Rash)',
+      simpleExplanation:
+        'Despite the name, there is no actual worm involved. Ringworm is a very common surface fungal infection of the skin that forms an itchy, circular red or pink rash with a raised, scaly outer ring and a clearer center.',
       etiologyAndTriggers: [
-        'Superficial keratinophilic dermatophyte infection (*Trichophyton*, *Microsporum*, or *Epidermophyton* spp.) thriving in warm, humid microenvironments.',
-        'Predisposing factors include hyperhidrosis, tight synthetic clothing, shared towels/gym equipment, diabetes mellitus, or prior inappropriate topical corticosteroid use (*tinea incognito*).'
+        'Surface fungus on the skin: Harmless fungi that naturally live in our environment can grow on warm, damp skin.',
+        'Moisture and sweat: Wearing tight gym clothes, sweating, or staying in damp clothes creates the perfect moist environment for the fungus.',
+        'Pets or shared items: Can be picked up from playful kittens, puppies, gym mats, or shared damp towels.'
       ],
       contagiousness:
-        '**Contagious.** Can spread via direct skin-to-skin contact, autoinoculation from other body sites (e.g., tinea pedis to cruris), or contaminated fomites (towels, bedding, clothing).',
+        '**Yes, it can spread to others.** It can spread through direct skin-to-skin contact, sharing unwashed towels or clothing, or touching infected household pets. Keep your towels separate and wash your hands after applying cream.',
       prognosisAndTimeline:
-        'Pruritus and active border erythema usually improve within **7–10 days** of antifungal therapy. Complete clinical resolution takes **2–4 weeks** (continue topical antifungal for at least 1–2 weeks after skin appears clear to prevent relapse).',
+        'The itching and redness usually start improving within **5 to 7 days** of using antifungal cream. The entire rash usually clears up in **2 to 4 weeks**. *Important tip:* Keep applying the cream for 1 extra week after the rash looks completely gone so it doesn\'t return.',
       dietAndSkincare: [
-        'Keep the affected intertriginous or cutaneous area clean, cool, and thoroughly dry after bathing using a separate towel.',
-        'Wear loose-fitting, breathable 100% cotton clothing and wash garments/bedlinens in hot water.',
-        'Strictly avoid over-the-counter steroid-antifungal combination creams (e.g., clobetasol combinations), which cause treatment-resistant fungal relapse.'
+        'Keep the area dry: Thoroughly dry the skin after every shower using a clean towel. Never leave skin folds damp.',
+        'Wear loose cotton: Soft, breathable cotton clothes allow sweat to evaporate easily.',
+        'Never use steroid creams: Avoid over-the-counter hydrocortisone or steroid creams on ringworm—they temporarily hide redness but actually feed the fungus and make it much harder to cure.',
+        'Wash clothes in warm water: Wash your clothing, bedsheets, and towels regularly to kill fungal spores.'
       ],
       alternativesAndSafety:
-        'If topical allylamines (Terbinafine) or azoles (Luliconazole/Sertaconazole) are insufficient for extensive plaques, oral **Terbinafine 250 mg OD** or **Itraconazole 100–200 mg/day** for 2–4 weeks can be considered after checking baseline liver function and drug interactions.',
+        'Over-the-counter or prescribed antifungal creams (like Terbinafine, Clotrimazole, or Ketoconazole) work very well when applied twice daily. If the rash is widespread, your doctor may prescribe gentle antifungal tablets.',
       followUpGuidance:
-        'Review in **2–3 weeks** to confirm central and peripheral border clearance and ensure no recurrence.'
+        'Review with your doctor in **2 to 3 weeks** to verify the rash has completely cleared.',
+      dangerLevel:
+        'Not dangerous to overall health, but needs dedicated antifungal cream to prevent it from growing larger or spreading.'
     };
   }
 
+  // 3. Psoriasis (Thick Scaly Patches)
   if (lower.includes('psoriasis')) {
     return {
+      plainName: 'Psoriasis (Thick, Scaly Skin Patches)',
+      simpleExplanation:
+        'Psoriasis is a chronic condition where the body\'s immune system causes skin cells to grow too quickly—in just 3 to 5 days instead of the normal 28 days. This buildup creates raised, reddish patches covered with silvery-white flakes.',
       etiologyAndTriggers: [
-        'Immune-mediated T-cell (Th1/Th17) driven epidermal hyperproliferation with shortened keratinocyte transit time (~3–5 days vs normal 28 days).',
-        'Triggers include skin trauma (**Koebner phenomenon**), streptococcal pharyngitis, psychological stress, cold/dry weather, smoking, alcohol, and medications (beta-blockers, lithium, abrupt systemic steroid withdrawal).'
+        'Fast skin turnover: The immune system speeds up skin renewal, causing skin cells to pile up on the surface.',
+        'Everyday triggers: Emotional stress, dry cold winter air, skin cuts or scrapes, throat infections, and smoking or alcohol.'
       ],
       contagiousness:
-        '**Strictly non-contagious.** Psoriasis is an autoimmune inflammatory skin condition and cannot be transmitted through contact.',
+        '**Completely non-contagious.** You cannot catch psoriasis from or spread it to anyone else through touching, hugging, or sharing items.',
       prognosisAndTimeline:
-        'Chronic relapsing-remitting condition. Plaque thickness and scaling typically improve within **2–4 weeks** of consistent topical corticosteroid + vitamin D3 analog therapy; long-term maintenance keeps plaques in remission.',
+        'Psoriasis is a long-term condition that comes and goes in flares. With regular use of prescribed creams, thick plaques and scaling noticeably soften and flatten within **2 to 4 weeks**.',
       dietAndSkincare: [
-        'Apply thick, fragrance-free emollients (ceramide or urea-based) liberally right after lukewarm baths to soften micaceous scale.',
-        'Avoid scratching or forcefully picking scales to prevent Koebnerization (new plaques at trauma sites).',
-        'Anti-inflammatory Mediterranean-style diet, weight management, and avoiding alcohol/tobacco help reduce systemic flare frequency.'
+        'Moisturize heavily: Apply thick, fragrance-free creams or petroleum jelly right after lukewarm showers to lock in moisture.',
+        'Do not peel scales: Resisting the urge to pick or scratch flakes off prevents skin irritation that causes new patches to form.',
+        'Take lukewarm baths: Hot water strips natural skin oils and makes itching worse. Keep showers short.',
+        'Healthy lifestyle: Gentle exercise, stress management, avoiding smoking, and eating an anti-inflammatory diet help reduce flare-ups.'
       ],
       alternativesAndSafety:
-        'For facial or intertriginous areas, replace potent steroids with topical **Tacrolimus 0.1%** or **Pimecrolimus 1%** to avoid skin atrophy. Screen for joint stiffness/dactylitis (Psoriatic Arthritis) and metabolic syndrome.',
+        'Doctors use combination creams with vitamin D and mild steroids for body patches. On delicate areas like the face or groin, steroid-sparing creams (like Tacrolimus) are used to protect thin skin.',
       followUpGuidance:
-        'Review in **4 weeks** to transition from daily induction steroid therapy to a safe weekend-only/steroid-sparing maintenance schedule.'
+        'Check in with your doctor in **4 weeks** to see how the skin is responding.',
+      dangerLevel:
+        'Manageable skin condition. If you ever feel joint pain or morning stiffness in your fingers or knees, let your doctor know so they can check your joints.'
     };
   }
 
+  // 4. Moles & Pigmented Spots
   if (
     lower.includes('melanoma') ||
     lower.includes('carcinoma') ||
@@ -2988,29 +3015,37 @@ function getConditionKnowledgeProfile(
     lower.includes('actinic') ||
     lower.includes('malignant') ||
     lower.includes('nevus') ||
-    lower.includes('pigmented_lesion')
+    lower.includes('pigmented') ||
+    lower.includes('mole')
   ) {
     return {
+      plainName: 'Skin Mole / Pigmented Spot',
+      simpleExplanation:
+        'A mole or dark spot is a natural collection of pigment-making cells (melanocytes) in the skin. The vast majority of moles are completely harmless and normal, but doctors check them for changes in size, shape, and color.',
       etiologyAndTriggers: [
-        'Cumulative ultraviolet (UV) radiation-induced DNA damage, intermittent intense sunburns, genetic susceptibility (e.g., *MC1R*, *CDKN2A*, *BRAF* pathways), and fair or UV-exposed phototypes.',
-        'Risk factors include atypical/dysplastic nevi, personal or family history of skin cancer, immunosuppression, and chronic sun exposure.'
+        'Sunlight exposure: Ultraviolet (UV) light from sunlight or tanning beds stimulates pigment cells and can cause new spots or changes.',
+        'Genetics: Having family members with many moles or fair skin that burns easily.'
       ],
       contagiousness:
-        '**Non-contagious.** Neoplastic and melanocytic/keratinocytic lesions are cellular proliferations and are never infectious.',
+        '**Completely non-contagious.** Moles and dark spots are natural skin structures and can never spread to others.',
       prognosisAndTimeline:
-        'Prognosis depends directly on histopathological depth (**Breslow thickness** for melanoma) or subtype/margins (for keratinocyte carcinomas). Early-stage in-situ or superficial lesions have **>95–99% cure rates** with timely complete surgical excision.',
+        'Common benign moles remain stable for decades without causing any health problems. Any spot that rapidly grows, bleeds, or changes color should be checked promptly by a doctor.',
       dietAndSkincare: [
-        'Strict photoprotection: broad-spectrum SPF 50+ PA++++ sunscreen reapplied every 2 hours outdoors, UPF clothing, and wide-brimmed hats.',
-        'Perform monthly self-skin examinations using the **ABCDE criteria** and **Ugly Duckling sign**.',
-        'Do not apply caustic home remedies, lasers, or cryotherapy to an undiagnosed pigmented lesion prior to histopathological confirmation.'
+        'Sunscreen every day: Apply broad-spectrum SPF 30+ or 50+ sunscreen to sun-exposed areas before going outside.',
+        'Wear protective clothing: Hats, sunglasses, and long sleeves provide the best sun defense during peak midday hours.',
+        'Monthly home check: Check your skin once a month. Use the ABCDE rule: look for Asymmetry (uneven halves), irregular Borders, multiple Colors, Diameter larger than a pencil eraser (6mm), or Evolving (changing) spots.',
+        'Never scrape or burn moles off at home: Avoid home DIY mole removers, as they can cause severe scars or mask dangerous changes.'
       ],
       alternativesAndSafety:
-        'Excisional biopsy with 1–3 mm clinical margins down to subcutaneous fat is preferred over superficial shave biopsy for suspected melanocytic lesions to permit accurate Breslow depth measurement.',
+        'If a mole looks unusual under the doctor\'s magnifying dermatoscope light, the doctor may perform a quick, painless biopsy to examine it under a microscope.',
       followUpGuidance:
-        'Urgent dermatopathology/dermoscopy review within **1–2 weeks** for biopsy planning, followed by structured 3-to-6-month total-body skin surveillance.'
+        'Have any changing spot evaluated in person within **1 to 2 weeks**, or schedule a routine annual skin exam.',
+      dangerLevel:
+        'Most moles are benign and harmless. Monitoring for unusual changes ensures complete peace of mind.'
     };
   }
 
+  // 5. Shingles / Herpes / Blistering Viral Rash
   if (
     lower.includes('herpes') ||
     lower.includes('zoster') ||
@@ -3020,26 +3055,33 @@ function getConditionKnowledgeProfile(
     lower.includes('vesicular')
   ) {
     return {
+      plainName: 'Shingles (Viral Blister Rash)',
+      simpleExplanation:
+        'Shingles is a skin rash caused by the same virus that causes chickenpox. After chickenpox, the virus stays quietly asleep in nerve roots. Years later, it can wake up and cause a band of painful, fluid-filled blisters on one side of the body.',
       etiologyAndTriggers: [
-        'Reactivation or primary infection of human herpesviruses (HSV-1, HSV-2, or Varicella-Zoster Virus / VZV) along sensory ganglia and cutaneous nerves.',
-        'Triggers include physiological stress, fever, UV exposure, immunosuppression, or local tissue trauma.'
+        'Waking of chickenpox virus: The sleeping virus travels along a single nerve pathway to the skin.',
+        'Triggers: Lowered immune resistance, aging, severe stress, physical fatigue, or illness.'
       ],
       contagiousness:
-        '**Contagious while active vesicles are present.** Vesicular fluid contains live virus until all lesions have fully crusted over. Avoid contact with infants, pregnant individuals, and immunocompromised patients.',
+        '**Contagious to people who have never had chickenpox or the vaccine.** Fluid from open blisters can spread chickenpox. Keep blisters covered, wash hands, and stay away from pregnant women, newborns, and people with weak immune systems until blisters crust over.',
       prognosisAndTimeline:
-        'Vesicles typically crust over within **7–10 days** and re-epithelialize within **2–3 weeks**. Early oral antiviral therapy (within 72 hours of rash onset) accelerates healing and reduces neuralgia risk.',
+        'Blisters typically fill, break, and crust over within **7 to 10 days**. The rash usually heals completely within **2 to 3 weeks**. Starting prescription antiviral pills within the first 3 days of rash onset dramatically reduces pain and speeds recovery.',
       dietAndSkincare: [
-        'Keep vesicles clean and dry; apply cool saline or Burow’s solution compresses for 10–15 minutes to soothe acute burning/oozing.',
-        'Do not rupture or scratch intact vesicles to prevent secondary bacterial superinfection (*Staphylococcus*/*Streptococcus*).',
-        'Wash hands thoroughly after touching the affected dermatome or region.'
+        'Cool wet compresses: Place a clean, cool, damp cloth over the rash for 15 minutes a few times a day to soothe burning and itching.',
+        'Keep blisters clean & covered: Cover loosely with a sterile non-stick bandage. Do not scratch or pop blisters.',
+        'Wear loose, soft cotton shirts: Avoid tight or scratchy wool clothes that rub against the sensitive skin.',
+        'Rest and hydration: Rest as much as possible and drink plenty of fluids to help your immune system fight the virus.'
       ],
       alternativesAndSafety:
-        'Oral **Valacyclovir** (1000 mg TID for 7 days in Zoster; 500–1000 mg BID for HSV) offers superior bioavailability over Acyclovir. Adjust dosage in patients with renal impairment. Strongly avoid topical corticosteroids on active viral lesions.',
+        'Prescription antiviral pills (Valacyclovir or Acyclovir) work best when started early. Mild pain relievers or nerve pain medications can be prescribed if the skin feels burning or hypersensitive.',
       followUpGuidance:
-        'Review in **7–10 days** (or immediately if periocular/nasal tip involvement — **Hutchinson sign** — develops) to confirm crusting and evaluate neuropathic pain control.'
+        'Check in with your doctor in **7 to 10 days**, or immediately if you see blisters near your eye or tip of your nose.',
+      dangerLevel:
+        'Painful and uncomfortable, but heals well with early antiviral medicine. Prompt care prevents lingering nerve sensitivity.'
     };
   }
 
+  // 6. Hives / Urticaria (Itchy Welts)
   if (
     lower.includes('urticaria') ||
     lower.includes('hives') ||
@@ -3047,45 +3089,57 @@ function getConditionKnowledgeProfile(
     lower.includes('drug eruption')
   ) {
     return {
+      plainName: 'Hives (Itchy Red Welts / Urticaria)',
+      simpleExplanation:
+        'Hives are raised, red, very itchy welts that appear suddenly on the skin. They happen when allergy cells in the skin release a natural chemical called histamine, causing blood vessels to leak tiny amounts of fluid.',
       etiologyAndTriggers: [
-        'Cutaneous mast cell degranulation releasing histamine, leukotrienes, and platelet-activating factor, leading to transient dermal edema (wheals) and axon-reflex erythema.',
-        'Triggers include recent viral infections, medications (NSAIDs, antibiotics, ACE inhibitors), food allergens, physical stimuli (pressure, cold, heat), or idiopathic autoreactivity.'
+        'Histamine release: Skin allergy cells react to a trigger, causing sudden swelling and itching.',
+        'Common triggers: Recent viral infections, new medications (like painkillers or antibiotics), food reactions, insect bites, cold air, pressure, or stress.'
       ],
       contagiousness:
-        '**Non-contagious.** Urticaria and allergic/drug reactions are immune-mediated hypersensitivity responses and cannot spread to others.',
+        '**Completely non-contagious.** Hives are an internal allergic reaction and cannot spread to anyone else.',
       prognosisAndTimeline:
-        'Individual urticarial wheals characteristically resolve within **<24 hours** without residual bruising, though new crops may appear over **days to 2–6 weeks** until the underlying trigger clears.',
+        'An individual hive welt usually disappears on its own within **24 hours**, but new welts may pop up in other spots over a few days or weeks until the trigger is cleared.',
       dietAndSkincare: [
-        'Avoid NSAIDs (ibuprofen, aspirin, diclofenac), alcohol, tight friction-inducing clothing, and hot showers, which exacerbate histamine release.',
-        'Apply soothing calamine or 1% menthol aqueous cream to cool pruritic skin.',
-        'Maintain a symptom and exposure diary (foods, medications, activities) over the next 14 days.'
+        'Antihistamine relief: Over-the-counter non-drowsy allergy pills (like Cetirizine or Fexofenadine) calm down histamine and relieve itching quickly.',
+        'Cool the skin: Apply a cool damp washcloth or calamine lotion to soothe hot, itchy skin.',
+        'Avoid hot showers: Hot baths or showers expand blood vessels and make itching much worse. Stick to lukewarm water.',
+        'Identify triggers: Make a quick note of any new foods, medications, or soaps you started in the last few days.'
       ],
       alternativesAndSafety:
-        'Second-generation non-sedating H1 antihistamines (**Bilastine, Fexofenadine, Levocetirizine, or Cetirizine**) are first-line and can be safely up-dosed up to 4x standard dose per EAACI/WAO guidelines before resorting to systemic steroids.',
+        'If single-dose allergy medicine isn\'t enough, your doctor can safely increase the dose. Avoid ibuprofen or aspirin during a hive flare, as they can worsen histamine release.',
       followUpGuidance:
-        'Follow up in **1–2 weeks** if wheals persist, or proceed to emergency care immediately if lip/tongue swelling, hoarseness, or wheezing occurs.'
+        'See your doctor if hives persist for more than a week.',
+      dangerLevel:
+        'Mild to moderate. *Emergency note:* If hives are accompanied by swelling of the lips, tongue, throat, or trouble breathing, call emergency services immediately.'
     };
   }
 
-  // Default: Eczema / Atopic Dermatitis / Contact Dermatitis / Inflammatory Dermatosis
+  // 7. Eczema / Sensitive Itchy Skin (Default)
   return {
+    plainName: 'Eczema (Sensitive, Dry, Itchy Skin)',
+    simpleExplanation:
+      'Eczema is a condition where the skin\'s natural moisture barrier is weak and sensitive. Moisture escapes too quickly, and everyday irritants easily enter, causing dry, red, itchy, and sensitive patches.',
     etiologyAndTriggers: [
-      'Epidermal barrier dysfunction (filaggrin/ceramide deficiency), transepidermal water loss, and cutaneous Th2/Th1-mediated inflammatory hypersensitivity.',
-      'Common triggers include harsh soaps/detergents, fragrance/nickel/preservative allergens, low ambient humidity, wool/synthetic fabrics, sweat, and stress.'
+      'Weak moisture barrier: The outer layer of skin lacks natural oils and ceramides that normally lock water in.',
+      'Everyday triggers: Harsh soaps, perfumed laundry detergents, hot showers, dry winter air, wool fabrics, sweat, and emotional stress.'
     ],
     contagiousness:
-      '**Non-contagious.** Eczematous and inflammatory dermatoses cannot be passed from person to person.',
+      '**Completely non-contagious.** Eczema cannot be passed from person to person. You can safely touch and care for someone with eczema.',
     prognosisAndTimeline:
-      'Pruritus and acute erythema typically subside within **5–7 days** of targeted anti-inflammatory therapy and barrier repair; full epidermal barrier restoration takes **2–4 weeks**.',
+      'With regular moisturizing and the doctor\'s soothing cream, active itching and redness usually calm down in **5 to 7 days**. Rebuilding the skin\'s natural moisture shield takes about **2 to 4 weeks** of consistent daily care.',
     dietAndSkincare: [
-      '**Soak-and-Seal Protocol:** Bathe in lukewarm (not hot) water for <10 minutes using a soap-free syndet cleanser, pat gently, and apply thick fragrance-free ceramide emollient within 3 minutes.',
-      'Wear soft breathable cotton clothing and avoid direct contact with fragrances, harsh detergents, or suspected allergens.',
-      'Keep fingernails short and consider bedtime antihistamines or cool compresses to break the **itch-scratch cycle**.'
+      'The "Soak and Seal" rule: Take a short (5 to 10 minute) lukewarm shower, gently pat dry with a towel (don\'t rub), and apply a thick moisturizing cream within 3 minutes while skin is still damp.',
+      'Choose fragrance-free: Use gentle, soap-free body washes and fragrance-free laundry detergents labeled for sensitive skin.',
+      'Wear soft cotton: Soft, breathable cotton clothes reduce friction and keep the skin cool.',
+      'Keep nails short: Trimming nails prevents skin damage and infections from nighttime scratching.'
     ],
     alternativesAndSafety:
-      'Match corticosteroid potency to anatomical site: use low-potency (**Hydrocortisone 1%** or **Desonide 0.05%**) or steroid-sparing calcineurin inhibitors (**Tacrolimus / Pimecrolimus**) on the face, eyelids, and folds; reserve mid-to-high potency (**Mometasone / Betamethasone**) for trunk and extremities for 7–14 days max.',
+      'Use mild prescription steroid creams only on active red patches for 1 to 2 weeks, then switch to a soothing ceramide moisturizer for daily protection. Non-steroid soothing creams (like Tacrolimus) are used for sensitive areas like the face.',
     followUpGuidance:
-      'Review in **2 weeks** to step down from active topical steroid to maintenance emollient + pro-active calcineurin inhibitor therapy.'
+      'Check in with your doctor in **2 weeks** to review how the skin barrier is healing.',
+    dangerLevel:
+      'Very common and completely manageable with gentle skincare habits. It is not dangerous.'
   };
 }
 
@@ -3174,15 +3228,39 @@ NO IMAGE REPORT GENERATED YET (Pre-Analysis / General Dermatology Consultation M
 - Linked Patient Context: ${patientSummary}
 `.trim();
 
-  const systemInstruction = `You are a highly intelligent, interactive, conversational Dermatology & Clinical Decision Support GPT (like ChatGPT for physicians) embedded inside the AI Clinical Image Analyzer of Clinical OS.
+  const systemInstruction = `You are a helpful, empathetic, and structured medical assistant in Clinical OS.
+Your core mission is to answer doctor, patient, and caregiver queries in simple LAYMAN'S TERMS and in a CLEAN, HIGHLY STRUCTURED MANNER.
 
 ${reportContextBlock}
 
-HOW TO RESPOND (CRITICAL):
-1. Reply naturally, conversationally, and interactively like ChatGPT talking with a fellow physician. Start by directly answering the user's exact question in natural, fluent prose — do NOT output rigid, robotic form templates or canned headers unless a structured breakdown helps clarify a complex answer.
-2. Answer ANY question the user asks: whether it is about the active image report, specific medications, dosing, pediatric/pregnancy adjustments, drug interactions, pathophysiology, causes, prognosis, diet/skincare, differential comparisons, general dermatology/medicine, or casual follow-up questions ("why?", "what if the patient is allergic?", "explain in simple terms for the patient", "give me an alternative cream", etc.).
-3. When naming skin diseases, include the format Common Term (Scientific Term), e.g., Acne (Acne Vulgaris) or Atopic Eczema (Atopic Dermatitis), where natural.
-4. At the end of your reply, briefly offer 1 relevant, conversational follow-up question or next step (e.g., "Would you like me to adjust this regimen for pediatric dosing or draft a quick patient handout?") so the conversation feels genuinely interactive.`;
+STRICT RESPONSE RULES:
+1. EXPLAIN IN LAYMAN'S TERMS:
+   - Always translate medical jargon into plain, everyday English. If you mention a medical term (e.g. "Erythema", "Pruritus", "Tinea", "Desquamation"), immediately explain what it means in simple words (e.g. "Erythema (skin redness)", "Pruritus (itching)", "Desquamation (peeling skin)").
+   - Never use AI/ML jargon, raw numerical equations, or technical pixel metrics.
+   - Keep the tone friendly, practical, and empathetic.
+
+2. ALWAYS USE A CLEAN, 4-PART STRUCTURED FORMAT:
+   Every response MUST be organized with clear markdown headings and bullet points:
+   ### 💡 Direct Answer
+   (1-2 clear, direct sentences answering the exact question in plain English)
+
+   #### 🔍 What This Means (In Plain English)
+   - Bullet point explaining the core condition or trigger simply.
+   - Bullet point with practical everyday context.
+
+   #### 📋 Practical Steps / What To Do
+   - Step 1: Clear instruction on medicine, cream, or daily care.
+   - Step 2: Everyday precaution (washing, clothes, habits).
+   - Step 3: What to avoid (e.g. scratching, harsh soaps, hot water).
+
+   #### ⚠️ When to Seek Urgent Medical Care
+   - 2-3 simple warning signs in everyday words.
+
+3. DIRECTLY ANSWER WHAT WAS ASKED:
+   - If asked about contagiousness, answer clearly YES or NO in the direct answer.
+   - If asked about recovery time, state the days/weeks timeline clearly upfront.
+   - If asked about food/diet, give specific everyday foods to eat and avoid.
+   - If asked about whether it's dangerous, provide clear, reassuring facts.`;
 
   // Build multi-turn messages array (filtering out the initial system banner message)
   const historyMessages: { role: 'user' | 'assistant'; content: string }[] = conversationHistory
@@ -3216,11 +3294,11 @@ HOW TO RESPOND (CRITICAL):
   const openRouterKey = (process.env.OPENROUTER_API_KEY || '').trim();
   const ai = getAIClient();
 
-  // 1. Try OpenRouter if configured (with strict 3.2s fast timeout)
+  // 1. Try OpenRouter if configured (with 7500ms timeout for structured answers)
   if (openRouterKey && openRouterKey.length >= 8) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3200);
+      const timeoutId = setTimeout(() => controller.abort(), 7500);
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -3231,7 +3309,7 @@ HOW TO RESPOND (CRITICAL):
         },
         body: JSON.stringify({
           model: process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.5-flash',
-          temperature: 0.4,
+          temperature: 0.3,
           messages: openAiMessages
         }),
         signal: controller.signal
@@ -3251,7 +3329,7 @@ HOW TO RESPOND (CRITICAL):
     }
   }
 
-  // 2. Try Gemini SDK if configured (with ThinkingLevel.LOW and 3.0s timeout)
+  // 2. Try Gemini SDK if configured (with 6500ms timeout)
   if (ai && Date.now() > geminiCooldownUntil) {
     const transcript = historyMessages
       .map(m => `${m.role === 'user' ? 'Doctor' : 'Assistant'}: ${m.content}`)
@@ -3260,7 +3338,7 @@ HOW TO RESPOND (CRITICAL):
       ? `CONVERSATION SO FAR:\n${transcript}\n\nDoctor: ${qRaw}`
       : qRaw;
 
-    const text = await generateWithGemini(ai, geminiContents, systemInstruction, 3000);
+    const text = await generateWithGemini(ai, geminiContents, systemInstruction, 6500);
     if (text) {
       const ans = { answer: text, isAiPowered: true };
       setCachedChatResponse(cacheKey, ans);
@@ -3268,7 +3346,7 @@ HOW TO RESPOND (CRITICAL):
     }
   }
 
-  // 3. Instant Clinical Dermatology GPT Engine (< 10ms response time, zero external network stall!)
+  // 3. Structured Layman Fallback Engine
   if (!report) {
     const generalAnswer = answerGeneralDermatologyKnowledge(qRaw);
     if (generalAnswer) {
@@ -3279,15 +3357,17 @@ HOW TO RESPOND (CRITICAL):
 
     const ans = {
       answer:
-        `### Clinical Dermatology Consultation${
-          patient ? `: **${patient.fullName}** (${patient.age}y/${patient.gender})` : ''
-        }\n\n` +
-        `Regarding your question (*"${qRaw}"*):\n\n` +
-        `- **Clinical Evaluation**: In dermatology practice, always correlate **primary lesion morphology** (*macule, papule, plaque, vesicle, pustule*) with **border configuration** and **dermoscopic vascular/pigment patterns**.\n` +
-        `- **First-Line Safety**: Confirm **10% KOH microscopy** before applying topical corticosteroids to any annular or intertriginous scaly rash to prevent ***Tinea Incognito***, and verify **pregnancy/allergy status** (${
-          patient?.allergies ? `**${patient.allergies}**` : '*NKDA*'
-        }) before prescribing systemic agents.\n\n` +
-        `*Upload or select a clinical photograph above and click **"Analyze Clinical Image with AI"** to ground our conversation directly in a lesion scan, or click any follow-up topic below!*`,
+        `### 💡 Direct Answer\n\n` +
+        `I am ready to help you understand any skin condition or symptom${patient ? ` for **${patient.fullName}**` : ''} in clear, plain language.\n\n` +
+        `#### 🔍 What This Means in Plain English\n` +
+        `- You can ask about **what causes rashes**, **how long treatments take**, **daily skin care**, or **safe home remedies**.\n` +
+        `- When you upload or take a photo above and click **"Analyze Clinical Specimen"**, I will explain your exact photo in structured everyday terms.\n\n` +
+        `#### 📋 Practical Steps to Get Started\n` +
+        `- **Step 1**: Take or upload a clear, well-lit photo of the skin area.\n` +
+        `- **Step 2**: Add any quick notes (like "itching for 3 days" or "on the inner forearm").\n` +
+        `- **Step 3**: Click **"Analyze Clinical Specimen"** to get your personalized report.\n\n` +
+        `#### ⚠️ General Safety Reminder\n` +
+        `- Never apply harsh bleach, abrasive scrubs, or unverified home concoctions to sensitive skin.`,
       isAiPowered: true
     };
     setCachedChatResponse(cacheKey, ans);
@@ -3296,224 +3376,267 @@ HOW TO RESPOND (CRITICAL):
 
   const topDiff = report.differentials?.[0];
   const secondDiff = report.differentials?.[1];
-  const thirdDiff = report.differentials?.[2];
 
   // Greetings or conversational check-ins
   if (/^(hi|hello|hey|good morning|good afternoon|good evening|thanks|thank you|ok|okay)\b/i.test(qLower) && qRaw.length < 35) {
     const ans = {
       answer:
-        `Hello Doctor! I've loaded the diagnostic report for **${report.primaryImpression}**${
-          patient ? ` on **${patient.fullName}**` : ''
-        }.\n\n` +
-        `- **Visual Telemetry**: Erythema **${metrics?.erythemaIndex ?? 50}/100** · Pigmentation **${
-          metrics?.pigmentationIndex ?? 45
-        }/100** · Border Irregularity **${metrics?.borderIrregularity ?? 35}/100**\n` +
-        `- **Top Differential**: **${topDiff?.condition || report.primaryImpression}** (*${
-          topDiff?.confidence || 'High'
-        } Likelihood*)\n\n` +
-        `*What would you like to review first? We can compare **#1 vs #2 differentials**, check **dosing & pregnancy/pediatric alternatives**, or generate a **patient-friendly explanation**.*`,
+        `### 💡 Welcome! I'm here to help\n\n` +
+        `I've reviewed the report for **${knowledge.plainName}**${patient ? ` for **${patient.fullName}**` : ''}.\n\n` +
+        `#### 🔍 Quick Summary of the Condition\n` +
+        `- **What it is**: ${knowledge.simpleExplanation}\n` +
+        `- **Is it contagious?**: ${knowledge.contagiousness}\n` +
+        `- **Expected recovery**: ${knowledge.prognosisAndTimeline}\n\n` +
+        `#### 📋 What You Can Ask Me in Plain English\n` +
+        `- *"What causes this and can it spread to family members?"*\n` +
+        `- *"How do I apply the prescribed creams correctly?"*\n` +
+        `- *"What foods, soaps, or daily skincare habits help it heal faster?"*\n` +
+        `- *"How long will it take to clear up, and is it dangerous?"*`,
       isAiPowered: true
     };
     setCachedChatResponse(cacheKey, ans);
     return ans;
   }
 
-  // Patient-friendly simple explanation fast path
-  if (
-    /\b(explain|simple|simply|layman|patient handout|for the patient|tell the patient|counsel)\b/i.test(qLower) &&
-    !qLower.includes('diet')
-  ) {
-    const simpleName = report.primaryImpression.split('(')[0].trim();
+  // Question 1: Contagiousness & Spreading
+  if (/\b(contagious|spread|spreading|infectious|infection|transmit|transmission|catch|contact|family|others|touch|touching)\b/i.test(qLower)) {
+    const isContagious = knowledge.contagiousness.toLowerCase().includes('yes') || knowledge.contagiousness.toLowerCase().includes('contagious while');
     const ans = {
       answer:
-        `### Patient-Friendly Explanation: **${report.primaryImpression}**\n\n` +
-        `Here is how you can explain this condition clearly and reassuringly to **${
-          patient?.fullName || 'the patient'
-        }** in plain language:\n\n` +
-        `> *"Your skin scan shows a condition called **${report.primaryImpression}**. In simple terms, **${simpleName}** happens when ${knowledge.etiologyAndTriggers[0]
-          .toLowerCase()
-          .replace(/\.$/, '')}."*\n` +
-        `> *"${knowledge.contagiousness.replace(/\*\*/g, '')} With the targeted creams and medications we are starting today, ${knowledge.prognosisAndTimeline
-          .charAt(0)
-          .toLowerCase()}${knowledge.prognosisAndTimeline.slice(1).replace(/\*\*/g, '')}"*\n\n` +
-        `#### Key Take-Home Points for the Patient\n` +
-        `- **How to Use Your Treatment**:\n${report.suggestedManagementPlan}\n` +
-        `- **Daily Skin Care**: ${knowledge.dietAndSkincare[0]}\n` +
-        `- **When to Check Back**: ${knowledge.followUpGuidance}`,
+        `### 💡 Direct Answer\n\n` +
+        `${knowledge.contagiousness}\n\n` +
+        `#### 🔍 What This Means in Plain English\n` +
+        `- **Condition**: **${knowledge.plainName}**\n` +
+        `- **How it works**: ${isContagious
+            ? 'The fungus or virus lives on the skin surface and can be transferred through direct skin contact or sharing damp items.'
+            : 'This is an internal or immune-related skin reaction. It is completely safe to touch, hug, and live with family members.'}\n` +
+        `- **Underlying reason**: ${knowledge.simpleExplanation}\n\n` +
+        `#### 📋 Practical Hygiene Steps to Protect Everyone\n` +
+        `- **Keep towels separate**: Use your own clean bath towel and never share clothing or washcloths while the rash is active.\n` +
+        `- **Wash hands thoroughly**: Wash your hands with warm water and soap every time after touching or applying cream to the skin.\n` +
+        `- **Keep the skin clean and dry**: Gently pat dry after showering; loose-fitting cotton clothing allows the skin to breathe.\n\n` +
+        `#### ⚠️ When to Seek Medical Attention\n` +
+        `- If the rash begins rapidly spreading across other body areas, starts oozing yellow pus, or becomes hot and painful.`,
       isAiPowered: true
     };
     setCachedChatResponse(cacheKey, ans);
     return ans;
   }
 
-  const conversationalParts: string[] = [];
-
-  if (
-    /\b(what is|what's|which disease|which condition|diagnosis|impression|scientific|common name|common term|called|identify|why did|why is|how did|evidence|rationale|confidence|likelihood|accurate|sure)\b/i.test(
-      qLower
-    )
-  ) {
-    conversationalParts.push(
-      `### Primary Diagnostic Impression: **${report.primaryImpression}**\n\n` +
-        `Based on the lesion's visual morphology${anatomicalSite ? ` at the **${anatomicalSite}**` : ''}, the primary impression is **${
-          report.primaryImpression
-        }**${topDiff?.icdCode ? ` (ICD-10: \`${topDiff.icdCode}\`)` : ''} with **${
-          topDiff?.confidence || 'High'
-        } confidence**.\n\n` +
-        `- **Key Diagnostic Rationale**: *${
-          topDiff?.rationale ||
-          'The border characteristics, surface texture, and erythema/pigmentation profile closely match this presentation.'
-        }*\n` +
-        `- **Observed Visual Features**:\n` +
-        (report.visualFindings || []).map(v => `  - ${v}`).join('\n')
-    );
+  // Question 2: Causes, Triggers & Why it Happened
+  if (/\b(cause|causes|caused|etiology|pathophysiology|mechanism|trigger|triggers|why does|why did|origin|factor|flare|worsen|reason)\b/i.test(qLower)) {
+    const ans = {
+      answer:
+        `### 💡 Direct Answer\n\n` +
+        `**${knowledge.plainName}** happens when ${knowledge.etiologyAndTriggers[0].toLowerCase()}.\n\n` +
+        `#### 🔍 What This Means in Plain English\n` +
+        `- ${knowledge.simpleExplanation}\n` +
+        knowledge.etiologyAndTriggers.map(item => `- **Trigger**: ${item}`).join('\n') + `\n\n` +
+        `#### 📋 How to Prevent Flares & What to Do\n` +
+        `- **Gentle daily cleansing**: Wash with mild, fragrance-free soap; avoid scrubbing or hot water.\n` +
+        `- **Moisture protection**: ${knowledge.dietAndSkincare[0] || 'Keep the skin gently moisturized with a plain, fragrance-free cream.'}\n` +
+        `- **Avoid known triggers**: Avoid scratchy fabrics, harsh detergents, and known food or stress triggers.\n\n` +
+        `#### ⚠️ Warning Signs to Watch For\n` +
+        `- Rapidly expanding redness, localized swelling, warmth, or signs of secondary infection like fever or pus.`,
+      isAiPowered: true
+    };
+    setCachedChatResponse(cacheKey, ans);
+    return ans;
   }
 
-  if (/\b(cause|causes|caused|etiology|pathophysiology|mechanism|trigger|triggers|why does|origin|factor|flare|worsen)\b/i.test(qLower)) {
-    conversationalParts.push(
-      `### Etiology & Flare Triggers: **${report.primaryImpression}**\n\n` +
-        knowledge.etiologyAndTriggers.map(item => `- ${item}`).join('\n') +
-        `\n\n- **Patient Timeline Correlation**: *${report.timelineCorrelation}*`
-    );
+  // Question 3: Healing Timeline & Recovery Duration
+  if (/\b(how long|heal|healing|recover|recovery|duration|time to|timeline|prognosis|cure|curable|permanent|clear up|resolve|go away|days|weeks|months|recur|how fast)\b/i.test(qLower)) {
+    const ans = {
+      answer:
+        `### 💡 Direct Answer\n\n` +
+        `You can expect improvement within **5 to 7 days**, with full healing typically taking **${knowledge.prognosisAndTimeline.includes('weeks') ? '2 to 4 weeks' : 'a few weeks'}** of regular care.\n\n` +
+        `#### 🔍 What to Expect Over Time (In Plain English)\n` +
+        `- **First few days**: Itching, burning, and acute redness begin calming down as treatment takes effect.\n` +
+        `- **Weeks 1 to 2**: Skin texture starts smoothing out, flakes soften, and raised edges begin flattening.\n` +
+        `- **Full resolution**: ${knowledge.prognosisAndTimeline}\n\n` +
+        `#### 📋 Practical Tips to Speed Up Healing\n` +
+        `- **Stay consistent**: Apply prescribed creams exactly as instructed every single day.\n` +
+        `- **Continue after clearing**: Keep using the cream for 1 extra week after the rash looks gone so it doesn't return.\n` +
+        `- **Do not scratch**: Scratching tears delicate new skin, delays recovery, and invites bacteria.\n\n` +
+        `#### ⚠️ When to Check Back with Your Doctor\n` +
+        `- ${knowledge.followUpGuidance}\n` +
+        `- If there is no noticeable improvement after 10 to 14 days, contact your doctor to adjust the plan.`,
+      isAiPowered: true
+    };
+    setCachedChatResponse(cacheKey, ans);
+    return ans;
   }
 
-  if (/\b(contagious|spread|spreading|infectious|infection|transmit|transmission|catch|contact|family|others)\b/i.test(qLower)) {
-    conversationalParts.push(
-      `### Contagiousness & Transmission Risk\n\n` +
-        `- ${knowledge.contagiousness}\n` +
-        `- **Hygiene Precaution**: *Advise the patient not to share personal towels, razors, or unwashed bedding while the skin barrier is actively inflamed.*`
-    );
-  }
-
-  if (/\b(how long|heal|healing|recover|recovery|duration|time to|timeline|prognosis|cure|curable|permanent|clear up|resolve|go away|days|weeks|months|recur)\b/i.test(qLower)) {
-    conversationalParts.push(
-      `### Expected Healing Timeline & Prognosis\n\n` +
-        `- **Recovery Course**: ${knowledge.prognosisAndTimeline}\n` +
-        `- **Follow-Up Schedule**: ${knowledge.followUpGuidance}`
-    );
-  }
-
-  if (/\b(severe|severity|mild|moderate|grade|grading|stage|serious|dangerous|risk|score|abcde|size|diameter|mm|how bad|metric|metrics)\b/i.test(qLower)) {
-    const eIdx = metrics?.erythemaIndex ?? 50;
-    const pIdx = metrics?.pigmentationIndex ?? 45;
-    const bIdx = metrics?.borderIrregularity ?? 35;
-    const maxIndex = Math.max(eIdx, pIdx, bIdx);
-    const severityGrade =
-      abcdeScore?.riskLevel?.includes('High') || maxIndex >= 72
-        ? 'Moderate-to-Severe (*warrants close clinical attention*)'
-        : maxIndex >= 45
-        ? 'Moderate (*active symptomatic presentation*)'
-        : 'Mild-to-Moderate (*localized presentation*)';
-
-    conversationalParts.push(
-      `### Clinical Severity & Quantitative Visual Metrics\n\n` +
-        `- **Overall Clinical Severity Grade**: **${severityGrade}**\n` +
-        (metrics
-          ? `- **Erythema (Redness) Index**: **${metrics.erythemaIndex}/100**\n` +
-            `- **Pigmentation Index**: **${metrics.pigmentationIndex}/100**\n` +
-            `- **Asymmetry & Border Irregularity**: **${metrics.asymmetryScore}/100** Asymmetry · **${metrics.borderIrregularity}/100** Border Irregularity\n` +
-            `- **Estimated Lesion Diameter & Phototype**: **~${metrics.estimatedDiameterMm || 5.0} mm** · Fitzpatrick **${
-              metrics.fitzpatrickType || 'Type IV'
-            }**\n`
-          : '') +
-        (abcdeScore
-          ? `- **ABCDE Dermoscopic Score**: **${abcdeScore.totalScore}/9 (${abcdeScore.riskLevel})** — *${abcdeScore.clinicalRecommendation}*`
-          : '')
-    );
-  }
-
-  if (/\b(differentiate|differential|differentials|compare|comparison|vs|versus|other possibility|similar|rule out|icd|code|#1|#2|second|favored)\b/i.test(qLower)) {
-    conversationalParts.push(
-      `### Differential Diagnosis Comparison (#1 vs. #2)\n\n` +
-        `${diffsText}\n\n` +
-        (topDiff && secondDiff
-          ? `| Feature | **#1: ${topDiff.condition}** | **#2: ${secondDiff.condition}** |\n` +
-            `| :--- | :--- | :--- |\n` +
-            `| **Likelihood** | **${topDiff.confidence}** (Primary Impression) | **${secondDiff.confidence}** (Secondary Differential) |\n` +
-            `| **Key Supporting Evidence** | ${topDiff.rationale} | ${secondDiff.rationale} |\n` +
-            `| **Decisive Confirmatory Step** | **${report.recommendedInvestigations?.[0] || 'Polarized Dermoscopy'}** | **${
-              report.recommendedInvestigations?.[1] || 'Targeted Clinical Workup / Biopsy'
-            }** |\n`
-          : '') +
-        (thirdDiff ? `\n- **#3 Tertiary Differential**: **${thirdDiff.condition}** (*${thirdDiff.confidence} Likelihood*) — ${thirdDiff.rationale}` : '')
-    );
-  }
-
+  // Question 4: Treatment, Medications, Creams & Dosing
   if (
     /\b(treat|treatment|management|medication|medicine|drug|cream|ointment|gel|lotion|tablet|pill|oral|topical|systemic|dose|dosage|dosing|prescribe|prescription|rx|steroid|antibiotic|antifungal|antihistamine|retinoid|alternative|second line|substitute|side effect|adverse|pregnant|pregnancy|lactation|child|children|pediatric|kid|baby|safe|safety|allergy|allergies|interaction|plan|therapy|regimen)\b/i.test(
       qLower
     )
   ) {
-    const allergySentence = patient?.allergies
-      ? `- **Allergy Safety Alert**: **${patient.fullName}** has a documented allergy to **${patient.allergies}** — *strictly avoid cross-reactive agents.*`
-      : patient
-      ? `- **Allergy Safety Check**: **${patient.fullName}** has **no known drug allergies (NKDA)** on file.`
-      : `- **Allergy Safety Check**: *Verify patient drug allergies prior to initiating systemic therapy.*`;
+    const allergyText = patient?.allergies
+      ? `*(Safety alert: **${patient.fullName}** has a documented allergy to **${patient.allergies}** — cross-reactive medicines must be avoided).*`
+      : '*(No known drug allergies recorded).*';
 
-    conversationalParts.push(
-      `### Treatment Plan, Dosing & Second-Line Alternatives\n\n` +
-        `${allergySentence}\n\n` +
-        `#### **1. Suggested First-Line Regimen**\n${report.suggestedManagementPlan}\n\n` +
-        `#### **2. Second-Line Alternatives & Sensitive Skin / Pregnancy Safety**\n- ${knowledge.alternativesAndSafety}`
-    );
-  }
-
-  if (/\b(diet|food|eat|eating|avoid|nutrition|drink|lifestyle|habit|skincare|skin care|routine|wash|cleanser|soap|bath|shower|moisturizer|sunscreen|sun|spf|clothing|home care|self care|hygiene)\b/i.test(qLower)) {
-    conversationalParts.push(
-      `### Daily Skincare Routine, Diet & Patient Counseling\n\n` +
-        knowledge.dietAndSkincare.map(item => `- ${item}`).join('\n')
-    );
-  }
-
-  if (/\b(test|tests|testing|workup|biopsy|investigation|investigations|lab|labs|blood|koh|scraping|culture|dermoscopy|dermoscopic|wood|patch test|confirm|diagnostic|priority)\b/i.test(qLower)) {
-    conversationalParts.push(
-      `### Priority Diagnostic Workup & Biopsy Guidance\n\n` +
-        (report.recommendedInvestigations || []).map((inv, idx) => `${idx + 1}. **${inv}**${idx === 0 ? ' *(Highest Priority)*' : ''}`).join('\n') +
-        `\n\n- **Clinical Rationale**: Performing **${
-          report.recommendedInvestigations?.[0] || 'polarized dermoscopy'
-        }** first confirms **${report.primaryImpression}** and rules out **${
-          secondDiff?.condition || 'mimics'
-        }** before topical therapy alters the lesion's classic morphology.`
-    );
-  }
-
-  if (/\b(red flag|red flags|warning|urgent|emergency|danger|complication|complications|escalat|refer|referral|hospital|when to worry|watch out)\b/i.test(qLower)) {
-    conversationalParts.push(
-      `### Critical Red Flags & Urgent Escalation Criteria\n\n` +
-        (report.redFlags || []).map(rf => `- **${rf}**`).join('\n')
-    );
-  }
-
-  if (conversationalParts.length > 0) {
     const ans = {
       answer:
-        conversationalParts.join('\n\n') +
-        `\n\n*Would you like me to adjust the prescription dosing for pediatric/pregnancy safety, compare another differential, or format a patient-friendly summary?*`,
+        `### 💡 Direct Answer\n\n` +
+        `The primary treatment for **${knowledge.plainName}** is targeted soothing medication to calm inflammation and eliminate the trigger. ${allergyText}\n\n` +
+        `#### 🔍 Prescribed Treatment Regimen (In Plain English)\n` +
+        `${report.suggestedManagementPlan}\n\n` +
+        `#### 📋 How to Apply the Medicine Correctly (Step-by-Step)\n` +
+        `- **Step 1 — Cleanse & Dry**: Wash the area gently with lukewarm water and pat dry with a clean towel.\n` +
+        `- **Step 2 — Thin Layer**: Smooth a thin, pea-sized layer of cream over the rash, extending about half an inch past the edges.\n` +
+        `- **Step 3 — Clean Up**: Wash your hands thoroughly with soap right after applying.\n` +
+        `- **Alternative / Sensitive Skin Note**: ${knowledge.alternativesAndSafety}\n\n` +
+        `#### ⚠️ When to Stop & Call Your Doctor\n` +
+        `- If you experience severe stinging, swelling of the lips or face, widespread hives, or unexpected skin blistering.`,
       isAiPowered: true
     };
     setCachedChatResponse(cacheKey, ans);
     return ans;
   }
 
-  // Comprehensive conversational synthesis for any other open-ended question
+  // Question 5: Severity, Cancer, Is it Dangerous?
+  if (/\b(severe|severity|mild|moderate|grade|grading|stage|serious|dangerous|danger|risk|score|cancer|malignant|how bad|fatal|life threatening|worry|scared)\b/i.test(qLower)) {
+    const ans = {
+      answer:
+        `### 💡 Direct Answer\n\n` +
+        `**${knowledge.plainName}** is ${knowledge.dangerLevel.toLowerCase()}\n\n` +
+        `#### 🔍 What the Skin Examination Shows (In Plain English)\n` +
+        `- **Visual presentation**: ${(report.visualFindings || []).slice(0, 2).join('; ') || 'Localized, well-defined skin changes'}.\n` +
+        `- **Nature of condition**: ${knowledge.simpleExplanation}\n` +
+        `- **Is it contagious?**: ${knowledge.contagiousness}\n\n` +
+        `#### 📋 What You Should Do Now\n` +
+        `- Follow the prescribed cream routine consistently for the full duration.\n` +
+        `- ${knowledge.dietAndSkincare[0] || 'Keep the skin clean, cool, and gently moisturized.'}\n` +
+        `- Avoid picking, scratching, or applying harsh unverified home remedies.\n\n` +
+        `#### ⚠️ Warning Signs That Require In-Person Review\n` +
+        `- ${report.redFlags?.[0] || 'Rapid growth, bleeding, or open sores'}.\n` +
+        `- Redness spreading rapidly with high fever, chills, or red streaks traveling along the skin.`,
+      isAiPowered: true
+    };
+    setCachedChatResponse(cacheKey, ans);
+    return ans;
+  }
+
+  // Question 6: Diet, Foods, Skincare, Showers & Home Care
+  if (/\b(diet|food|eat|eating|avoid|nutrition|drink|lifestyle|habit|skincare|skin care|routine|wash|cleanser|soap|bath|shower|moisturizer|sunscreen|sun|spf|clothing|home care|self care|hygiene)\b/i.test(qLower)) {
+    const ans = {
+      answer:
+        `### 💡 Direct Answer\n\n` +
+        `For **${knowledge.plainName}**, gentle daily skin habits and avoiding skin irritants play a crucial role in healing quickly and preventing flares.\n\n` +
+        `#### 🔍 Daily Skincare & Bathing Routine (In Plain English)\n` +
+        knowledge.dietAndSkincare.map(item => `- ${item}`).join('\n') + `\n\n` +
+        `#### 📋 Diet & Nutrition Tips\n` +
+        `- **Drink plenty of water**: 6 to 8 glasses daily keeps skin cells hydrated and flushes waste.\n` +
+        `- **Foods that help**: Fresh fruits, vegetables, and omega-3 rich foods (walnuts, flaxseeds, fish) help calm internal inflammation.\n` +
+        `- **Foods to limit**: Reduce high-sugar snacks, sodas, and excess dairy if you notice breakouts or flares after eating them.\n\n` +
+        `#### ⚠️ When to Seek Medical Attention\n` +
+        `- If skin becomes deeply cracked, oozes yellow fluid, or develops a honey-colored crust.`,
+      isAiPowered: true
+    };
+    setCachedChatResponse(cacheKey, ans);
+    return ans;
+  }
+
+  // Question 7: Differential Comparison (#1 vs #2)
+  if (/\b(differentiate|differential|differentials|compare|comparison|vs|versus|other possibility|similar|rule out|icd|code|#1|#2|second|favored|difference)\b/i.test(qLower)) {
+    const ans = {
+      answer:
+        `### 💡 Direct Answer\n\n` +
+        `The primary diagnosis is **${report.primaryImpression}** (${topDiff?.confidence || 'High'} likelihood). The pattern of skin redness, edges, and surface texture matches this condition best.\n\n` +
+        `#### 🔍 Comparison in Plain English (#1 vs. #2)\n` +
+        `- **#1 Primary: ${topDiff?.condition || report.primaryImpression}**\n` +
+        `  - *What it means*: ${topDiff?.rationale || 'The ring border, surface scaling, and central clearing match this condition.'}\n` +
+        (secondDiff ? `- **#2 Alternative: ${secondDiff.condition}**\n  - *What it means*: ${secondDiff.rationale}\n` : '') +
+        `\n#### 📋 How Doctors Differentiate Them\n` +
+        `- **Key difference**: ${report.recommendedInvestigations?.[0] || 'A simple, painless visual check or skin scraping under a light'} confirms the exact diagnosis.\n` +
+        `- **Next step**: ${knowledge.followUpGuidance}\n\n` +
+        `#### ⚠️ When to Re-evaluate\n` +
+        `- If there is no response to the first-line treatment within 2 weeks, your doctor will re-evaluate for the alternative possibility.`,
+      isAiPowered: true
+    };
+    setCachedChatResponse(cacheKey, ans);
+    return ans;
+  }
+
+  // Question 8: Tests, Investigations, Biopsies
+  if (/\b(test|tests|testing|workup|biopsy|investigation|investigations|lab|labs|blood|koh|scraping|culture|dermoscopy|dermoscopic|wood|patch test|confirm|diagnostic|priority)\b/i.test(qLower)) {
+    const ans = {
+      answer:
+        `### 💡 Direct Answer\n\n` +
+        `In most cases, **${knowledge.plainName}** is diagnosed directly by visual exam. The highest-priority test on your report is: **${(report.recommendedInvestigations || [])[0] || 'Clinical visual evaluation'}**.\n\n` +
+        `#### 🔍 Recommended Tests (In Plain English)\n` +
+        (report.recommendedInvestigations || []).map((inv, idx) => `- **Test ${idx + 1}**: ${inv}`).join('\n') + `\n\n` +
+        `#### 📋 Why These Tests Help\n` +
+        `- **Accurate confirmation**: Confirms whether the rash is caused by a fungus, bacteria, or sensitive skin before prescribing stronger drugs.\n` +
+        `- **Avoids wrong creams**: Prevents using steroid creams on fungal infections which makes them worse.\n\n` +
+        `#### ⚠️ When Tests Are Urgently Needed\n` +
+        `- If the rash is spreading rapidly, accompanied by fever, or not healing after standard creams.`,
+      isAiPowered: true
+    };
+    setCachedChatResponse(cacheKey, ans);
+    return ans;
+  }
+
+  // Question 9: Red Flags & Urgent Danger Signs
+  if (/\b(red flag|red flags|warning|urgent|emergency|danger|complication|complications|escalat|refer|referral|hospital|when to worry|watch out)\b/i.test(qLower)) {
+    const ans = {
+      answer:
+        `### 💡 Direct Answer\n\n` +
+        `Here are the critical warning signs to watch for with **${knowledge.plainName}**. If you experience any of these, contact a doctor promptly.\n\n` +
+        `#### 🔍 Warning Signs / Red Flags to Watch\n` +
+        (report.redFlags || []).map(rf => `- ⚠️ **${rf}**`).join('\n') + `\n\n` +
+        `#### 📋 What to Do If Warning Signs Appear\n` +
+        `- **Stop suspect products**: If swelling or itching started after a new cream or pill, discontinue it immediately.\n` +
+        `- **Do not scratch or pop**: Keep the skin clean, covered, and untouched.\n` +
+        `- **Emergency care**: If you ever experience swelling of the lips, tongue, or difficulty breathing, call emergency services immediately.\n\n` +
+        `#### ⚠️ Routine Follow-Up\n` +
+        `- ${knowledge.followUpGuidance}`,
+      isAiPowered: true
+    };
+    setCachedChatResponse(cacheKey, ans);
+    return ans;
+  }
+
+  // Question 10: Simple Patient Handout / Plain Language Explanation
+  if (/\b(explain|simple|simply|layman|patient handout|for the patient|tell the patient|counsel)\b/i.test(qLower)) {
+    const ans = {
+      answer:
+        `### 💡 Direct Answer\n\n` +
+        `Here is a simple, comforting explanation of **${knowledge.plainName}** you can share with **${patient?.fullName || 'the patient'}**:\n\n` +
+        `> *"Your skin examination shows a common condition called **${knowledge.plainName}**. In simple terms, this happens when ${knowledge.etiologyAndTriggers[0].toLowerCase()}.\n` +
+        `> ${knowledge.contagiousness.replace(/\*\*/g, '')} With the soothing cream we are starting today, ${knowledge.prognosisAndTimeline.charAt(0).toLowerCase()}${knowledge.prognosisAndTimeline.slice(1).replace(/\*\*/g, '')}."*\n\n` +
+        `#### 🔍 What It Means (In Plain English)\n` +
+        `- ${knowledge.simpleExplanation}\n` +
+        `- **Is it dangerous?**: ${knowledge.dangerLevel}\n\n` +
+        `#### 📋 Key Take-Home Instructions for Home Care\n` +
+        `- **How to use your medicine**:\n${report.suggestedManagementPlan}\n` +
+        `- **Daily skin care**: ${knowledge.dietAndSkincare[0]}\n` +
+        `- **Checkup**: ${knowledge.followUpGuidance}\n\n` +
+        `#### ⚠️ When to Contact Us\n` +
+        `- If the rash spreads rapidly, becomes unusually painful, or doesn't improve within 10 days.`,
+      isAiPowered: true
+    };
+    setCachedChatResponse(cacheKey, ans);
+    return ans;
+  }
+
+  // Comprehensive fallback for any other open-ended question
   const openEndedAns = {
     answer:
-      `### Clinical Analysis: **${report.primaryImpression}**${
-        topDiff?.icdCode ? ` (ICD-10: \`${topDiff.icdCode}\`)` : ''
-      }\n\n` +
-      `Regarding your question (*"${qRaw}"*)${anatomicalSite ? ` for the lesion on the **${anatomicalSite}**` : ''}:\n\n` +
-      `- **Morphological Grounding**: The scan demonstrates ${(report.visualFindings || [])
-        .slice(0, 2)
-        .join(' and ')
-        .toLowerCase()}, supporting **${report.primaryImpression}** over **${
-        secondDiff?.condition || 'secondary differentials'
-      }**.\n` +
-      `- **Etiology & Course**: ${knowledge.etiologyAndTriggers[0]} ${knowledge.contagiousness} ${knowledge.prognosisAndTimeline}\n` +
-      `- **Priority Action Plan**: Confirm with **${
-        report.recommendedInvestigations?.[0] || 'clinical dermoscopy'
-      }** and initiate:\n${report.suggestedManagementPlan}\n` +
-      `- **Supportive Care**: ${knowledge.dietAndSkincare[0]}\n\n` +
-      `*What specific aspect of this case would you like to explore next—dosing adjustments, differential clues, or patient counseling?*`,
+      `### 💡 Direct Answer\n\n` +
+      `Regarding your question (*"${qRaw}"*): For **${knowledge.plainName}**, the condition is well understood and responds effectively to targeted care.\n\n` +
+      `#### 🔍 What This Means in Plain English\n` +
+      `- **About the condition**: ${knowledge.simpleExplanation}\n` +
+      `- **Is it contagious?**: ${knowledge.contagiousness}\n` +
+      `- **Expected recovery**: ${knowledge.prognosisAndTimeline}\n\n` +
+      `#### 📋 Recommended Steps to Take\n` +
+      `- **Treatment**: Follow the prescribed regimen:\n${report.suggestedManagementPlan}\n` +
+      `- **Daily habit**: ${knowledge.dietAndSkincare[0]}\n` +
+      `- **Checkup**: ${knowledge.followUpGuidance}\n\n` +
+      `#### ⚠️ When to Seek Medical Care\n` +
+      `- If you develop fever, spreading pain, yellow oozing, or if there is no improvement after 1 to 2 weeks.`,
     isAiPowered: true
   };
   setCachedChatResponse(cacheKey, openEndedAns);
