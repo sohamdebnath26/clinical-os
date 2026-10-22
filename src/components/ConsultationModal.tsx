@@ -2582,9 +2582,37 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             placeholder="Search drug..."
                             value={medName}
                             onChange={e => {
-                              setMedName(e.target.value);
+                              const val = e.target.value;
+                              setMedName(val);
                               setIsMedDropdownOpen(true);
                               if (rxFeedbackHint) setRxFeedbackHint(null);
+                              const exactMatch = COMMON_MEDICATIONS.find(
+                                m => m.name.toLowerCase() === val.trim().toLowerCase()
+                              );
+                              if (exactMatch) {
+                                const combinedText = `${exactMatch.name} ${exactMatch.dosage} ${exactMatch.frequency}`;
+                                const isTopical = /cream|gel|ointment|lotion|shampoo|solution|spf|sunscreen|topical/i.test(combinedText);
+                                const isIVIM = /\b(iv|im|iv\/im|infusion)\b/i.test(combinedText);
+                                const isDrops = /\b(ophthalmic|drops)\b/i.test(combinedText);
+                                setMedDosage(exactMatch.dosage);
+                                setMedRoute(isTopical ? 'Topical' : isIVIM ? 'IV / IM' : isDrops ? 'Nasal / Drops' : 'Oral');
+                                setMedFrequency(
+                                  exactMatch.frequency.includes('1-0-1') || /^twice daily$/i.test(exactMatch.frequency.trim())
+                                    ? '1-0-1'
+                                    : /^3 times daily$|^three times daily$/i.test(exactMatch.frequency.trim())
+                                    ? '1-1-1'
+                                    : /^4 times daily$|^every 6 hours$/i.test(exactMatch.frequency.trim())
+                                    ? '1-1-1-1'
+                                    : /night|bedtime/i.test(exactMatch.frequency)
+                                    ? '0-0-1'
+                                    : /^once daily$/i.test(exactMatch.frequency.trim())
+                                    ? '1-0-0'
+                                    : exactMatch.frequency
+                                );
+                                setMedDuration(exactMatch.duration);
+                                setMedInstructions(exactMatch.instructions);
+                                setMedQtyManual(false);
+                              }
                             }}
                             onFocus={() => setIsMedDropdownOpen(true)}
                             onKeyDown={e => {
@@ -2627,14 +2655,20 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                         {/* Auto-suggest dropdown menu */}
                         {isMedDropdownOpen && (
-                          <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
-                            <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                          <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-64 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+                            <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between sticky top-0 z-10 border-b border-slate-100">
                               <span>
                                 Drug Catalogue (
                                 {
-                                  COMMON_MEDICATIONS.filter(m =>
-                                    m.name.toLowerCase().includes(medName.toLowerCase().trim())
-                                  ).length
+                                  COMMON_MEDICATIONS.filter(m => {
+                                    const q = medName.toLowerCase().trim();
+                                    return (
+                                      !q ||
+                                      m.name.toLowerCase().includes(q) ||
+                                      m.dosage.toLowerCase().includes(q) ||
+                                      m.instructions.toLowerCase().includes(q)
+                                    );
+                                  }).length
                                 }
                                 )
                               </span>
@@ -2647,29 +2681,50 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                 <X className="w-3 h-3" />
                               </button>
                             </div>
-                            {COMMON_MEDICATIONS.filter(m =>
-                              m.name.toLowerCase().includes(medName.toLowerCase().trim())
-                            ).map(med => {
-                              const isTopical = /cream|gel|ointment|lotion|shampoo|solution|spf|sunscreen/i.test(
-                                med.name
+                            {COMMON_MEDICATIONS.filter(m => {
+                              const q = medName.toLowerCase().trim();
+                              return (
+                                !q ||
+                                m.name.toLowerCase().includes(q) ||
+                                m.dosage.toLowerCase().includes(q) ||
+                                m.instructions.toLowerCase().includes(q)
                               );
+                            }).map((med, idx) => {
+                              const combinedText = `${med.name} ${med.dosage} ${med.frequency}`;
+                              const isTopical = /cream|gel|ointment|lotion|shampoo|solution|spf|sunscreen|topical/i.test(
+                                combinedText
+                              );
+                              const isIVIM = /\b(iv|im|iv\/im|infusion)\b/i.test(combinedText);
+                              const isDrops = /\b(ophthalmic|drops)\b/i.test(combinedText);
                               return (
                                 <button
-                                  key={med.name}
+                                  key={`${med.name}-${idx}`}
                                   type="button"
                                   onMouseDown={e => e.preventDefault()}
                                   onClick={() => {
                                     setMedName(med.name);
                                     setMedDosage(med.dosage);
-                                    setMedRoute(isTopical ? 'Topical' : 'Oral');
+                                    setMedRoute(
+                                      isTopical
+                                        ? 'Topical'
+                                        : isIVIM
+                                        ? 'IV / IM'
+                                        : isDrops
+                                        ? 'Nasal / Drops'
+                                        : 'Oral'
+                                    );
                                     setMedFrequency(
-                                      med.frequency.includes('1-0-1') || /twice/i.test(med.frequency)
+                                      med.frequency.includes('1-0-1') || /^twice daily$/i.test(med.frequency.trim())
                                         ? '1-0-1'
-                                        : /three|thrice/i.test(med.frequency)
+                                        : /^3 times daily$|^three times daily$/i.test(med.frequency.trim())
                                         ? '1-1-1'
+                                        : /^4 times daily$|^every 6 hours$/i.test(med.frequency.trim())
+                                        ? '1-1-1-1'
                                         : /night|bedtime/i.test(med.frequency)
                                         ? '0-0-1'
-                                        : '1-0-0'
+                                        : /^once daily$/i.test(med.frequency.trim())
+                                        ? '1-0-0'
+                                        : med.frequency
                                     );
                                     setMedDuration(med.duration);
                                     setMedInstructions(med.instructions);
@@ -2679,10 +2734,20 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                   }}
                                   className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50/60 flex flex-col text-slate-800 transition-colors cursor-pointer"
                                 >
-                                  <span className="font-semibold text-slate-900">{med.name}</span>
-                                  <span className="text-[10px] text-slate-400">
-                                    {med.dosage} • {med.frequency} • {med.duration}
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-semibold text-slate-900">{med.name}</span>
+                                    <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">
+                                      {med.dosage}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 mt-0.5">
+                                    {med.frequency} • {med.duration}
                                   </span>
+                                  {med.instructions && (
+                                    <span className="text-[10px] text-slate-400 italic truncate mt-0.5">
+                                      {med.instructions}
+                                    </span>
+                                  )}
                                 </button>
                               );
                             })}
