@@ -384,6 +384,19 @@
   "clinicalImages": [],
   "auditLogs": [
     {
+      "actorId": "doc-org-001",
+      "actorName": "Dr. Sarah Chen, MD",
+      "action": "doctor_sso_login",
+      "resourceType": "auth",
+      "resourceId": "doc-org-001",
+      "metadata": {
+        "organization": "Metro Health University Medical Center",
+        "provider": "sso"
+      },
+      "id": "aud-mvjdwp2a-9dv4",
+      "timestamp": "2026-10-22T10:14:40.354Z"
+    },
+    {
       "actorId": "doc-demo-001",
       "actorName": "Dr. Demo",
       "action": "doctor_login",
@@ -1091,7 +1104,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-22T09:21:17.711Z"
+    "updatedAt": "2026-10-22T10:29:39.828Z"
   },
   "appointments": [
     {
@@ -1137,7 +1150,7 @@
   ],
   "testReports": [
     {
-      "id": "rep-con-mumnfac9-ol53-uasyi",
+      "id": "rep-con-mumnfac9-ol53-ccu5v",
       "patientId": "pat-mumnf2c6-8awj",
       "consultationId": "con-muy1aite-6kt4",
       "testName": "Dermoscopy (Dermatoscopy)",
@@ -1154,7 +1167,7 @@
       "clinicalNotes": "Epidermal predominance confirmed; favorable response expected to topical depigmenting agents.",
       "previousResults": [
         {
-          "id": "prev-rep-con-mumnfac9-ol53-uasyi-2",
+          "id": "prev-rep-con-mumnfac9-ol53-ccu5v-2",
           "orderedDate": "2026-09-29T12:24:40.473Z",
           "reportDate": "2026-09-29T12:24:47.360Z",
           "resultFlag": "normal",
@@ -1167,7 +1180,7 @@
           "archivedAt": "2026-10-07T11:38:20.746Z"
         },
         {
-          "id": "prev-base-con-mumnfac9-ol53-axe7",
+          "id": "prev-base-con-mumnfac9-ol53-uqvt",
           "orderedDate": "2026-09-01T12:24:40.473Z",
           "reportDate": "2026-09-01T12:24:40.473Z",
           "resultFlag": "abnormal",
@@ -1184,7 +1197,7 @@
       "updatedAt": "2026-10-07T11:38:20.746Z"
     },
     {
-      "id": "rep-con-mumnfac9-ol53-qnyka",
+      "id": "rep-con-mumnfac9-ol53-ni9gm",
       "patientId": "pat-mumnf2c6-8awj",
       "consultationId": "con-muy1aite-6kt4",
       "testName": "Complete Blood Count (CBC) & Coagulation Screen",
@@ -1201,7 +1214,7 @@
       "clinicalNotes": "Baseline systemic screening satisfactory for planned dermatological therapy.",
       "previousResults": [
         {
-          "id": "prev-rep-con-mumnfac9-ol53-qnyka-2",
+          "id": "prev-rep-con-mumnfac9-ol53-ni9gm-2",
           "orderedDate": "2026-09-29T12:24:40.473Z",
           "reportDate": "2026-09-29T12:24:47.360Z",
           "resultFlag": "normal",
@@ -1214,7 +1227,7 @@
           "archivedAt": "2026-10-07T11:38:20.746Z"
         },
         {
-          "id": "prev-base-con-mumnfac9-ol53-wxc8",
+          "id": "prev-base-con-mumnfac9-ol53-vqsr",
           "orderedDate": "2026-09-01T12:24:40.473Z",
           "reportDate": "2026-09-01T12:24:40.473Z",
           "resultFlag": "abnormal",
@@ -1231,7 +1244,7 @@
       "updatedAt": "2026-10-07T11:38:20.746Z"
     },
     {
-      "id": "rep-con-kabir-01-4bz6q",
+      "id": "rep-con-kabir-01-bapgy",
       "patientId": "pat-mv0er2l2-uln3",
       "consultationId": "con-kabir-01",
       "testName": "Serum Free Testosterone",
@@ -1248,7 +1261,7 @@
       "clinicalNotes": "Baseline systemic screening satisfactory for planned dermatological therapy.",
       "previousResults": [
         {
-          "id": "prev-base-con-kabir-01-2s8r",
+          "id": "prev-base-con-kabir-01-mvkz",
           "orderedDate": "2026-09-17T10:30:00.000Z",
           "reportDate": "2026-09-17T10:30:00.000Z",
           "resultFlag": "abnormal",
@@ -1265,7 +1278,7 @@
       "updatedAt": "2026-10-15T10:30:00.000Z"
     },
     {
-      "id": "rep-con-kabir-01-usk8t",
+      "id": "rep-con-kabir-01-rx3c8",
       "patientId": "pat-mv0er2l2-uln3",
       "consultationId": "con-kabir-01",
       "testName": "Liver Function Panel",
@@ -1282,7 +1295,7 @@
       "clinicalNotes": "Baseline systemic screening satisfactory for planned dermatological therapy.",
       "previousResults": [
         {
-          "id": "prev-base-con-kabir-01-sc2a",
+          "id": "prev-base-con-kabir-01-yufc",
           "orderedDate": "2026-09-17T10:30:00.000Z",
           "reportDate": "2026-09-17T10:30:00.000Z",
           "resultFlag": "abnormal",
@@ -1310,15 +1323,15 @@
     "activeModel": "google/gemini-2.5-pro",
     "transactions": [
       {
-        "id": "tx-init-mvjc01vx",
+        "id": "tx-init-mvjdu9mv",
         "type": "initial_trial",
         "description": "Welcome Trial: 10 Free AI Clinical Image Diagnostic Scans",
         "creditsDelta": 10,
         "amountInr": 0,
         "paymentMethod": "System",
-        "timestamp": "2026-10-22T09:21:17.709Z"
+        "timestamp": "2026-10-22T10:12:47.047Z"
       }
     ],
-    "updatedAt": "2026-10-22T09:21:17.709Z"
+    "updatedAt": "2026-10-22T10:12:47.047Z"
   }
 }

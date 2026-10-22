@@ -231,7 +231,15 @@ function MainApp() {
         {/* Dynamic Route Viewport */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-8">
           <div className="max-w-7xl mx-auto">
-            <ErrorBoundary fallbackTitle="Clinical View Encountered an Issue">
+            <ErrorBoundary
+              key={activePatientId ? `patient-${activePatientId}` : `route-${currentRoute}`}
+              fallbackTitle="Clinical View Encountered an Issue"
+              onReset={() => {
+                setActivePatientId(null);
+                setPatientProfileInitialTab(undefined);
+                setCurrentRoute('dashboard');
+              }}
+            >
               {activePatientId ? (
                 <PatientProfileView
                   patientId={activePatientId}

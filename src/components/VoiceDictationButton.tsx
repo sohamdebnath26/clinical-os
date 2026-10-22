@@ -44,11 +44,25 @@ export interface VoiceDictationButtonProps {
    * Whether to show live interim speech preview bubble
    */
   showLivePreview?: boolean;
+  /**
+   * Alias for value (used in PatientReportsSection)
+   */
+  currentValue?: string;
+  /**
+   * Alias for onChange (used in PatientReportsSection)
+   */
+  onUpdate?: (updatedValue: string) => void;
+  /**
+   * Optional size hint
+   */
+  size?: string;
 }
 
 export const VoiceDictationButton: React.FC<VoiceDictationButtonProps> = ({
-  value = '',
+  value,
+  currentValue,
   onChange,
+  onUpdate,
   onTranscript,
   variant = 'badge',
   label,
@@ -57,6 +71,8 @@ export const VoiceDictationButton: React.FC<VoiceDictationButtonProps> = ({
   title,
   showLivePreview = true
 }) => {
+  const resolvedValue = value ?? currentValue ?? '';
+  const resolvedOnChange = onChange ?? onUpdate;
   const { language: appLang } = useLanguage();
   const [showErrorToast, setShowErrorToast] = useState(false);
 
@@ -71,16 +87,16 @@ export const VoiceDictationButton: React.FC<VoiceDictationButtonProps> = ({
       onTranscript(clean);
     }
 
-    if (onChange) {
-      if (!value || !value.trim()) {
+    if (resolvedOnChange) {
+      if (!resolvedValue || !resolvedValue.trim()) {
         const capitalized = clean.charAt(0).toUpperCase() + clean.slice(1);
-        onChange(capitalized);
+        resolvedOnChange(capitalized);
       } else {
-        const trimmed = value.trim();
+        const trimmed = resolvedValue.trim();
         const endsWithPunctuation = /[.!?;,:]$/.test(trimmed);
         const prefix = endsWithPunctuation ? `${trimmed} ` : `${trimmed}. `;
         const capitalized = clean.charAt(0).toUpperCase() + clean.slice(1);
-        onChange(`${prefix}${capitalized}`);
+        resolvedOnChange(`${prefix}${capitalized}`);
       }
     }
   };

@@ -1,6 +1,7 @@
 export interface Doctor {
   id: string;
   name: string;
+  fullName?: string;
   email: string;
   speciality: string;
   registrationNumber: string;
@@ -47,6 +48,7 @@ export interface BodyMarker {
   y: number; // percentage 0-100
   view: 'front' | 'back';
   bodyPart: string;
+  anatomicalPart?: string;
   type: 'lesion' | 'rash' | 'acne' | 'pigmentation' | 'hair' | 'custom';
   color: string;
   notes?: string;
@@ -65,8 +67,10 @@ export interface ClinicalImage {
   mimeType: string;
   sizeBytes: number;
   caption?: string;
+  bodyArea?: string;
   tags?: string[];
   bodyMarkerId?: string;
+  uploadedAt?: string;
   createdAt: string;
 }
 
@@ -190,7 +194,8 @@ export interface VisualMorphologyMetrics {
     | 'keratotic_verrucous'
     | 'eczematous_dermatitis'
     | 'vascular_purpuric'
-    | 'hypopigmented_macular';
+    | 'hypopigmented_macular'
+    | 'non_skin_specimen';
   dominantColors: { hex: string; name: string; percentage: number }[];
   estimatedDiameterMm?: number;
   textureEntropy?: number;
@@ -268,6 +273,7 @@ export interface ABCDEScoreResult {
   totalScore: number; // 0 - 9
   riskLevel: 'Low Risk / Benign Characteristics' | 'Moderate Risk / Dysplastic / Follow-up Needed' | 'High Suspicion / Urgent Dermoscopy or Biopsy';
   recommendations: string[];
+  clinicalRecommendation?: string;
   disclaimer: string;
   isAiPowered: boolean;
   analyzedAt: string;
@@ -429,6 +435,7 @@ export interface PatientTestReport {
   attachmentUrl?: string;
   attachmentName?: string;
   isPreviousReport?: boolean;
+  archiveCurrentAsPrevious?: boolean;
   previousResults?: HistoricalReportSnapshot[];
   createdAt: string;
   updatedAt: string;

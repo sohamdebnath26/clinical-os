@@ -350,11 +350,11 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
       .filter(Boolean)
       .join(' | ');
 
-    const allergiesList = noKnownAllergies
-      ? ['No Known Allergies']
+    const allergiesText = noKnownAllergies
+      ? 'No Known Allergies'
       : notes.trim()
-      ? [notes.trim()]
-      : [];
+      ? notes.trim()
+      : '';
 
     try {
       const patientRes = await api.patients.create(
@@ -367,7 +367,7 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
           weight: weight ? Number(weight) : undefined,
           notes: combinedNotes || undefined,
           discountPanel: discountPanel.trim() || undefined,
-          allergies: allergiesList,
+          allergies: allergiesText,
           primaryDiagnosis:
             selectedSymptoms.length > 0 ? selectedSymptoms[0] : 'General Consultation'
         },
@@ -692,7 +692,11 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                     onClick={() => {
                       setFullName(existingDuplicatePatient.fullName);
                       setAge(String(existingDuplicatePatient.age));
-                      setSex(existingDuplicatePatient.gender);
+                      setSex(
+                        existingDuplicatePatient.gender === 'Prefer not to say'
+                          ? 'Not specified'
+                          : existingDuplicatePatient.gender
+                      );
                       if (existingDuplicatePatient.weight) {
                         setWeight(String(existingDuplicatePatient.weight));
                       }

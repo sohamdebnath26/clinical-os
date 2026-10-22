@@ -53,22 +53,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const loadDashboardData = () => {
-    Promise.all([
+    Promise.allSettled([
       api.dashboard.getStats(),
       api.appointments.list()
-    ])
-      .then(([dashRes, apptRes]) => {
-        setStats(dashRes.stats);
-        setRecentVisits(dashRes.recentVisits);
-        setRecentPatients(dashRes.recentPatients);
+    ]).then(([dashResult, apptResult]) => {
+      if (dashResult.status === 'fulfilled' && dashResult.value) {
+        const dashRes = dashResult.value;
+        if (dashRes.stats) setStats(dashRes.stats);
+        setRecentVisits(Array.isArray(dashRes.recentVisits) ? dashRes.recentVisits : []);
+        setRecentPatients(Array.isArray(dashRes.recentPatients) ? dashRes.recentPatients : []);
         if (dashRes.revenue) {
           setRevenue(dashRes.revenue);
         }
-        setAppointments(apptRes.appointments);
-      })
-      .catch(err => {
-        console.warn('Dashboard data error:', err);
-      });
+      } else if (dashResult.status === 'rejected') {
+        console.warn('Dashboard stats error:', dashResult.reason);
+      }
+
+      if (apptResult.status === 'fulfilled' && apptResult.value) {
+        setAppointments(
+          Array.isArray(apptResult.value.appointments) ? apptResult.value.appointments : []
+        );
+      } else if (apptResult.status === 'rejected') {
+        console.warn('Dashboard appointments error:', apptResult.reason);
+      }
+    });
   };
 
   useEffect(() => {
@@ -538,11 +546,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <li className="flex items-start gap-2.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#102a26] mt-2 shrink-0" />
                     <span>
-                      {nextQueueDisplay.patientRecord?.allergies &&
-                      nextQueueDisplay.patientRecord.allergies.length > 0 &&
-                      nextQueueDisplay.patientRecord.allergies[0] !== 'No Known Allergies'
-                        ? `Allergy flag on file (${nextQueueDisplay.patientRecord.allergies.join(', ')}). Check before prescribing.`
-                        : 'Allergy flag on file. Check before prescribing.'}
+                      {(() => {
+                        const rawAllergies = nextQueueDisplay.patientRecord?.allergies as unknown;
+                        const allergyText = Array.isArray(rawAllergies)
+                          ? rawAllergies.filter(Boolean).join(', ')
+                          : typeof rawAllergies === 'string'
+                          ? rawAllergies.trim()
+                          : '';
+                        if (
+                          allergyText &&
+                          allergyText.toLowerCase() !== 'no known allergies' &&
+                          allergyText.toLowerCase() !== 'none'
+                        ) {
+                          return `Allergy flag on file (${allergyText}). Check before prescribing.`;
+                        }
+                        return 'Allergy flag on file. Check before prescribing.';
+                      })()}
                     </span>
                   </li>
                 </ul>

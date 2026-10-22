@@ -1451,7 +1451,7 @@ export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<
       params.testReports?.[0]?.id,
       params.testReports?.[0]?.updatedAt,
       params.clinicalNotes?.trim(),
-      resolvedMetrics.isSkinSpecimen
+      String(resolvedMetrics.isSkinSpecimen ?? true)
     ]);
 
     const cached = imageAnalysisCache.get(cacheKey);
@@ -1519,7 +1519,7 @@ DETECTED VISUAL TELEMETRY PARAMETERS (CIE-LAB FITZPATRICK NORMALIZED):
 - Border Irregularity: ${resolvedMetrics.borderIrregularity}/100
 - Color Variegation Score: ${resolvedMetrics.colorVariationScore}/100
 - Dominant Colors: ${resolvedMetrics.dominantColors.map(c => `${c.name} (${c.percentage}%)`).join(', ')}
-- Pre-Scan Skin Specimen Ratio: ${resolvedMetrics.skinPixelRatio ?? 85}% (Pre-Scan Gatekeeper: ${resolvedMetrics.isSkinSpecimen === false ? 'NON-SKIN / INVALID SPECIMEN SUSPECTED' : 'HUMAN SKIN VERIFIED'})
+- Pre-Scan Skin Specimen Ratio: ${resolvedMetrics.skinPixelRatio ?? 85}% (Pre-Scan Gatekeeper: ${Boolean(resolvedMetrics.isSkinSpecimen) === false ? 'NON-SKIN / INVALID SPECIMEN SUSPECTED' : 'HUMAN SKIN VERIFIED'})
 - Photometric Lighting Telemetry: Status="${resolvedMetrics.lightingStatus || 'Optimal'}", Mean Luminance=${resolvedMetrics.meanLuminance ?? 140}/255, Glare=${resolvedMetrics.glareRatio ?? 2}%, Shadow=${resolvedMetrics.shadowRatio ?? 4}%, Sharpness=${resolvedMetrics.perceivedSharpness ?? 75}/100
 ${resolvedMetrics.qualityWarnings && resolvedMetrics.qualityWarnings.length > 0 ? `- Photometric Warnings: ${resolvedMetrics.qualityWarnings.join(' | ')}` : ''}
 
@@ -1612,7 +1612,7 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
               const parsed = JSON.parse(cleaned);
               const isValidSkin = typeof parsed.isValidSkinSpecimen === 'boolean'
                 ? parsed.isValidSkinSpecimen
-                : resolvedMetrics.isSkinSpecimen !== false;
+                : Boolean(resolvedMetrics.isSkinSpecimen ?? true);
 
               if (!isValidSkin) {
                 return generateAdaptiveClinicalImageAnalysis(params, {
@@ -1752,7 +1752,7 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
                 const parsed = JSON.parse(cleaned);
                 const isValidSkin = typeof parsed.isValidSkinSpecimen === 'boolean'
                   ? parsed.isValidSkinSpecimen
-                  : resolvedMetrics.isSkinSpecimen !== false;
+                  : Boolean(resolvedMetrics.isSkinSpecimen ?? true);
                 const lightingQual = parsed.lightingQuality || resolvedMetrics.lightingStatus || 'Optimal';
                 const qualityNotes = Array.isArray(parsed.qualityAssessmentNotes)
                   ? parsed.qualityAssessmentNotes
@@ -3070,7 +3070,7 @@ HOW TO RESPOND (CRITICAL):
     const bIdx = metrics?.borderIrregularity ?? 35;
     const maxIndex = Math.max(eIdx, pIdx, bIdx);
     const severityGrade =
-      abcdeScore?.riskLevel === 'High Risk' || maxIndex >= 72
+      abcdeScore?.riskLevel?.includes('High') || maxIndex >= 72
         ? 'moderate-to-severe (warrants close clinical attention)'
         : maxIndex >= 45
         ? 'moderate (active symptomatic presentation)'

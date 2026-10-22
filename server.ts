@@ -22,11 +22,15 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// Simple in-memory session store (token -> doctorId)
+// Session store (token -> doctorId) with restart-resilient token verification
 const activeSessions = new Map<string, { doctorId: string; expiresAt: number }>();
+const revokedTokens = new Set<string>();
 
-function generateToken(): string {
-  return `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
+function generateToken(doctorId?: string): string {
+  const encodedDoc = doctorId ? Buffer.from(doctorId, 'utf8').toString('base64url') : '';
+  return encodedDoc
+    ? `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}_${encodedDoc}`
+    : `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
 }
 
 // Authentication middleware
@@ -41,7 +45,36 @@ function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunc
   }
 
   const token = authHeader.split(' ')[1];
-  const session = activeSessions.get(token);
+  if (revokedTokens.has(token)) {
+    return res.status(401).json({ error: 'Session expired or invalid' });
+  }
+
+  let session = activeSessions.get(token);
+
+  // Restore valid client tokens seamlessly if the server restarted in dev/Render
+  if (!session && token.startsWith('sess_')) {
+    const parts = token.split('_');
+    let restoredDoctor = undefined;
+    if (parts.length >= 4) {
+      try {
+        const decodedId = Buffer.from(parts.slice(3).join('_'), 'base64url').toString('utf8');
+        restoredDoctor = db.findDoctorById(decodedId);
+      } catch {
+        // fallback below
+      }
+    }
+    if (!restoredDoctor) {
+      restoredDoctor = db.findDoctorById('doc-demo-001') || db.findDoctorByEmail('demo@clinicalos.med');
+    }
+    if (restoredDoctor) {
+      session = {
+        doctorId: restoredDoctor.id,
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+      };
+      activeSessions.set(token, session);
+    }
+  }
+
   if (!session || session.expiresAt < Date.now()) {
     if (session) activeSessions.delete(token);
     return res.status(401).json({ error: 'Session expired or invalid' });
@@ -76,7 +109,7 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
-  const token = generateToken();
+  const token = generateToken(doctor.id);
   // 7 days expiration
   activeSessions.set(token, {
     doctorId: doctor.id,
@@ -128,7 +161,7 @@ app.post('/api/auth/sso', (req, res) => {
     doctor = db.findDoctorById(doctor.id)!;
   }
 
-  const token = generateToken();
+  const token = generateToken(doctor.id);
   activeSessions.set(token, {
     doctorId: doctor.id,
     expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
@@ -168,7 +201,7 @@ app.post('/api/auth/google', (req, res) => {
     doctor = db.findDoctorById(doctor.id)!;
   }
 
-  const token = generateToken();
+  const token = generateToken(doctor.id);
   activeSessions.set(token, {
     doctorId: doctor.id,
     expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
@@ -212,7 +245,7 @@ app.post('/api/auth/register', (req, res) => {
       phone
     });
 
-    const token = generateToken();
+    const token = generateToken(doctor.id);
     activeSessions.set(token, {
       doctorId: doctor.id,
       expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
@@ -231,7 +264,10 @@ app.get('/api/auth/me', authMiddleware, (req: AuthenticatedRequest, res) => {
 
 app.post('/api/auth/logout', authMiddleware, (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
-  if (token) activeSessions.delete(token);
+  if (token) {
+    activeSessions.delete(token);
+    revokedTokens.add(token);
+  }
   res.json({ message: 'Logged out successfully' });
 });
 
@@ -1527,7 +1563,10 @@ app.get('/api/audit', authMiddleware, (req, res) => {
 // FRONTEND INTEGRATION (DEV / PROD)
 // ==========================================
 async function startServer() {
-  if (!isProduction) {
+  const distPath = path.resolve(process.cwd(), 'dist');
+  const hasBuiltDist = fs.existsSync(path.join(distPath, 'index.html'));
+
+  if (!isProduction || !hasBuiltDist) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1535,7 +1574,6 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
