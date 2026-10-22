@@ -110,36 +110,55 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           const minCh = Math.min(r, g, b);
           const chromaSpan = maxCh - minCh;
 
+          // Tightened biological skin & cutaneous lesion envelope (excludes yellow/beige walls, neon graphics, flat grey/tan objects)
           const isStandardSkinOrLesion =
-            cb >= 72 &&
-            cb <= 136 &&
-            cr >= 129 &&
-            cr <= 188 &&
-            r > b + 5 &&
-            r >= g * 0.9 &&
-            chromaSpan >= 10 &&
-            lum >= 18 &&
-            lum <= 245;
+            cb >= 77 &&
+            cb <= 127 &&
+            cr >= 134 &&
+            cr <= 174 &&
+            r > g + 4 &&
+            g >= b - 3 &&
+            r > b + 12 &&
+            chromaSpan >= 15 &&
+            chromaSpan <= 130 &&
+            lum >= 24 &&
+            lum <= 238;
 
           const isDeepFitzpatrickOrMelanocytic =
-            lum >= 15 &&
-            lum <= 95 &&
-            r > b + 4 &&
-            r >= g &&
-            cb >= 80 &&
-            cb <= 132 &&
-            cr >= 125 &&
-            cr <= 165 &&
-            chromaSpan >= 8;
+            lum >= 18 &&
+            lum <= 90 &&
+            r > g + 3 &&
+            g >= b &&
+            r > b + 8 &&
+            cb >= 82 &&
+            cb <= 126 &&
+            cr >= 131 &&
+            cr <= 162 &&
+            chromaSpan >= 12 &&
+            chromaSpan <= 95;
 
           const isAcuteErythematousPlaque =
-            r > 110 && r > g * 1.2 && r > b * 1.2 && cr >= 140;
+            r > 115 &&
+            r > g * 1.25 &&
+            r > b * 1.28 &&
+            g >= b * 0.85 &&
+            cr >= 142 &&
+            cr <= 184 &&
+            cb >= 74 &&
+            cb <= 128 &&
+            chromaSpan <= 145;
 
           const isCutaneousPixel =
             isStandardSkinOrLesion || isDeepFitzpatrickOrMelanocytic || isAcuteErythematousPlaque;
 
-          const isNonBiologicalHue = b > r + 12 || g > r + 10 || (b > g + 16 && b > r);
-          const isAchromatic = chromaSpan < 10;
+          // Non-biological hues: blue/cyan/green dominance, pure yellow (g >= r - 2 with high chroma), or oversaturated synthetic neon
+          const isNonBiologicalHue =
+            b > r + 8 ||
+            g > r + 6 ||
+            (b > g + 12 && b > r) ||
+            (r > 180 && g > 175 && b < 90 && Math.abs(r - g) < 12) ||
+            chromaSpan > 150;
+          const isAchromatic = chromaSpan < 13;
 
           const x = i % sampleSize;
           const y = Math.floor(i / sampleSize);
@@ -539,6 +558,26 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           Math.max(2.5, Math.min(25.0, (Math.sqrt(lesionPixelCount) / sampleSize) * 35.0)) * 10
         ) / 10;
 
+        // Measure biological micro-texture vs synthetic digital flatness / hard geometric edges
+        let digitalFlatCount = 0;
+        let hardStepEdgeCount = 0;
+        let textureSampled = 0;
+        for (let y = 1; y < sampleSize - 1; y += 2) {
+          for (let x = 1; x < sampleSize - 1; x += 2) {
+            textureSampled++;
+            const dx = Math.abs(gridLum[y][x] - gridLum[y][x - 1]);
+            const dy = Math.abs(gridLum[y][x] - gridLum[y - 1][x]);
+            if (dx < 0.45 && dy < 0.45) {
+              digitalFlatCount++;
+            }
+            if (dx > 58 || dy > 58) {
+              hardStepEdgeCount++;
+            }
+          }
+        }
+        const digitalFlatRatio = Math.round((digitalFlatCount / Math.max(1, textureSampled)) * 100);
+        const hardStepEdgeRatio = Math.round((hardStepEdgeCount / Math.max(1, textureSampled)) * 100);
+
         const perceivedSharpness = Math.max(12, Math.min(98, Math.round(avgEdgeGrad * 185)));
         const meanLuminance = Math.round(baseLum);
         const shadowRatio = Math.round((darkShadowCount / totalPixels) * 100);
@@ -552,7 +591,7 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           centerTotalCount > 0 ? Math.round((centerSkinPixelCount / centerTotalCount) * 100) : rawSkinRatio;
         const skinPixelRatio = isSvgPreset
           ? 94
-          : Math.max(rawSkinRatio, Math.round(rawSkinRatio * 0.45 + centerSkinRatio * 0.55));
+          : Math.round(rawSkinRatio * 0.45 + centerSkinRatio * 0.55);
 
         const qualityWarnings: string[] = [];
         let lightingStatus: NonNullable<VisualMorphologyMetrics['lightingStatus']> = 'Optimal';
@@ -588,14 +627,27 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           if (meanLuminance < 22 || shadowRatio > 80) {
             isSkinSpecimen = false;
             rejectionReason = `Severe underexposure (${meanLuminance}/255 brightness; ${shadowRatio}% black/shadow pixels). The camera frame is too dark to verify human skin or evaluate lesion morphology.`;
-          } else if (skinPixelRatio < 24 || nonBiologicalRatio > 35 || (achromaticRatio > 78 && skinPixelRatio < 35)) {
+          } else if (
+            skinPixelRatio < 30 ||
+            centerSkinRatio < 26 ||
+            nonBiologicalRatio > 25 ||
+            achromaticRatio > 65 ||
+            (digitalFlatRatio > 50 && skinPixelRatio < 65) ||
+            (hardStepEdgeRatio > 10 && skinPixelRatio < 55)
+          ) {
             isSkinSpecimen = false;
-            rejectionReason = `Non-cutaneous image detected (only ${skinPixelRatio}% of pixels match human skin chrominance; ${
-              nonBiologicalRatio > 35
-                ? `${nonBiologicalRatio}% non-biological blue/green/cyan hues`
-                : `${achromaticRatio}% flat achromatic/background surfaces`
-            }). Please upload a clear close-up photograph of human skin.`;
+            const specificCause =
+              nonBiologicalRatio > 25
+                ? `${nonBiologicalRatio}% non-biological hues (blue/green/cyan/synthetic)`
+                : digitalFlatRatio > 50 || hardStepEdgeRatio > 10
+                ? `synthetic/non-biological surface or graphic (${digitalFlatRatio}% flat digital regions, ${hardStepEdgeRatio}% sharp geometric edges)`
+                : `${achromaticRatio}% non-cutaneous background/object surfaces`;
+            rejectionReason = `Non-biological / non-cutaneous image detected (only ${skinPixelRatio}% of pixels match human skin chrominance; ${specificCause}). Please upload a clear close-up photograph of human skin.`;
           }
+        }
+
+        if (!isSkinSpecimen) {
+          morphologyCategory = 'non_skin_specimen';
         }
 
         resolve({

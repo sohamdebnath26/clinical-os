@@ -1438,14 +1438,20 @@ export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<
   // Resolve visual morphology metrics: either passed from client canvas or extracted from image buffer
   const resolvedMetrics = params.visualMetrics || extractBufferVisualMetrics(params.imageBase64, params.mimeType);
 
+  // If client-side YCbCr/CIE-LAB & micro-texture gatekeeper detected a non-biological / non-cutaneous image, immediately return the gatekeeper report
+  if (resolvedMetrics.isSkinSpecimen === false || resolvedMetrics.morphologyCategory === 'non_skin_specimen') {
+    return generateAdaptiveClinicalImageAnalysis(params, resolvedMetrics);
+  }
+
   if (params.imageBase64) {
-    const cacheKey = computeImageContextHash('img_analysis_v2', params.imageBase64, [
+    const cacheKey = computeImageContextHash('img_analysis_v3', params.imageBase64, [
       params.patient?.id,
       params.patient?.updatedAt,
       params.history?.[0]?.id,
       params.testReports?.[0]?.id,
       params.testReports?.[0]?.updatedAt,
-      params.clinicalNotes?.trim()
+      params.clinicalNotes?.trim(),
+      resolvedMetrics.isSkinSpecimen
     ]);
 
     const cached = imageAnalysisCache.get(cacheKey);
@@ -1595,11 +1601,6 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
   "disclaimer": "Diagnostic decision support only. Physician clinical judgment is required."
 }`;
 
-        // If client-side pre-scan found critically low skin pixels (<14%) and high non-biological colors, immediately invoke the gatekeeper
-        if (resolvedMetrics.isSkinSpecimen === false && (resolvedMetrics.skinPixelRatio ?? 0) < 18) {
-          return generateAdaptiveClinicalImageAnalysis(params, resolvedMetrics);
-        }
-
         // 1. Try OpenRouter Multimodal Vision first if OPENROUTER_API_KEY is configured
         if (hasOpenRouter) {
           const openRouterText = await callOpenRouterVision(prompt, [
@@ -1612,6 +1613,20 @@ Return ONLY a valid, raw JSON object (strictly no markdown formatting, no code f
               const isValidSkin = typeof parsed.isValidSkinSpecimen === 'boolean'
                 ? parsed.isValidSkinSpecimen
                 : resolvedMetrics.isSkinSpecimen !== false;
+
+              if (!isValidSkin) {
+                return generateAdaptiveClinicalImageAnalysis(params, {
+                  ...resolvedMetrics,
+                  isSkinSpecimen: false,
+                  morphologyCategory: 'non_skin_specimen',
+                  rejectionReason:
+                    parsed.qualityAssessmentNotes?.[0] ||
+                    parsed.visualFindings?.[0] ||
+                    resolvedMetrics.rejectionReason ||
+                    'Multimodal Vision Gatekeeper confirmed this image is not a biological human skin specimen.'
+                });
+              }
+
               const lightingQual = parsed.lightingQuality || resolvedMetrics.lightingStatus || 'Optimal';
               const qualityNotes = Array.isArray(parsed.qualityAssessmentNotes)
                 ? parsed.qualityAssessmentNotes
