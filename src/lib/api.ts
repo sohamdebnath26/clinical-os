@@ -488,7 +488,7 @@ export const api = {
       }),
     chatWithReport: (data: {
       question: string;
-      report: AIImageAnalysisResult;
+      report?: AIImageAnalysisResult | null;
       anatomicalSite?: string;
       clinicalNotes?: string;
       abcdeScore?: ABCDEScoreResult | null;

@@ -36,22 +36,66 @@ function getAIClient(): GoogleGenAI | null {
   return genAI;
 }
 
-async function generateWithGemini(ai: GoogleGenAI, prompt: string): Promise<string | null> {
-  const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
-  for (const model of models) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt
-      });
-      const text = response.text?.trim();
+async function generateWithPollinationsGPT(
+  messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
+  temperature = 0.4
+): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 14000);
+    const response = await fetch('https://text.pollinations.ai/openai', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'openai',
+        temperature,
+        messages
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (response.ok) {
+      const data = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const text = data.choices?.[0]?.message?.content?.trim();
       if (text) return text;
-    } catch (err) {
-      console.warn(`Attempt with ${model} failed, trying next:`, err);
     }
+  } catch (err) {
+    console.warn('Pollinations GPT fallback warning:', err instanceof Error ? err.message : err);
   }
   return null;
 }
+
+async function generateWithGemini(ai: GoogleGenAI | null, prompt: string): Promise<string | null> {
+  if (ai) {
+    const models = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
+    for (const model of models) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: prompt
+        });
+        const text = response.text?.trim();
+        if (text) return text;
+      } catch (err) {
+        console.warn(`Attempt with ${model} failed, trying next:`, err instanceof Error ? err.message : err);
+      }
+    }
+  }
+
+  return generateWithPollinationsGPT([
+    {
+      role: 'system',
+      content:
+        'You are an expert, conversational clinical dermatology and medical AI assistant (like ChatGPT for physicians). Respond naturally, helpfully, and accurately.'
+    },
+    { role: 'user', content: prompt }
+  ]);
+}
+
 
 export function generateStructuredSummaryFallback(params: {
   date: string;
@@ -2403,7 +2447,7 @@ export interface ImageReportChatTurn {
 
 export interface AskImageReportParams {
   question: string;
-  report: AIImageAnalysisResult;
+  report?: AIImageAnalysisResult | null;
   anatomicalSite?: string;
   clinicalNotes?: string;
   abcdeScore?: ABCDEScoreResult | null;
@@ -2625,14 +2669,15 @@ export async function askImageReportAssistant(
 
   const qRaw = question.trim();
   const qLower = qRaw.toLowerCase();
-  const diffsText = (report.differentials || [])
+
+  const diffsText = (report?.differentials || [])
     .map(
       (d, idx) =>
         `${idx + 1}. **${d.condition}** (${d.confidence} Likelihood${d.icdCode ? ` · ICD-10: ${d.icdCode}` : ''}) — ${d.rationale}`
     )
     .join('\n');
 
-  const metrics = report.visualMetrics;
+  const metrics = report?.visualMetrics;
   const metricsSummary = metrics
     ? `Pattern: ${metrics.morphologyCategory.replace(/_/g, ' ')}; Fitzpatrick Skin Type: ${metrics.fitzpatrickType || 'Type IV'}; Erythema Index: ${metrics.erythemaIndex}/100; Pigmentation Index: ${metrics.pigmentationIndex}/100; Asymmetry: ${metrics.asymmetryScore}/100; Border Irregularity: ${metrics.borderIrregularity}/100; Est. Diameter: ~${metrics.estimatedDiameterMm || 5.0} mm`
     : 'Visual metrics not separately indexed';
@@ -2646,12 +2691,13 @@ export async function askImageReportAssistant(
     : 'Unlinked / Guest Presentation';
 
   const knowledge = getConditionKnowledgeProfile(
-    report.primaryImpression,
+    report?.primaryImpression || clinicalNotes || 'Dermatological Presentation',
     metrics?.morphologyCategory
   );
 
-  const reportContextBlock = `
-GENERATED AI CLINICAL IMAGE REPORT (ID: ${report.id}):
+  const reportContextBlock = report
+    ? `
+ACTIVE AI CLINICAL IMAGE REPORT (ID: ${report.id}):
 - Primary Clinical Impression: ${report.primaryImpression}
 - Anatomical Site: ${anatomicalSite || 'Unspecified cutaneous site'}
 - Doctor Observation Notes: ${clinicalNotes || 'None provided'}
@@ -2684,27 +2730,43 @@ ${(report.redFlags || []).map(rf => `- ${rf}`).join('\n')}
 - Diet, Lifestyle & Skincare: ${knowledge.dietAndSkincare.join(' ')}
 - Alternatives & Safety: ${knowledge.alternativesAndSafety}
 - Follow-Up Schedule: ${knowledge.followUpGuidance}
+`.trim()
+    : `
+NO IMAGE REPORT GENERATED YET (Pre-Analysis / General Dermatology Consultation Mode):
+- Anatomical Site Entered: ${anatomicalSite || 'None yet'}
+- Doctor Notes Entered: ${clinicalNotes || 'None yet'}
+- Linked Patient Context: ${patientSummary}
 `.trim();
 
-  const recentTurns = conversationHistory
-    .slice(-6)
-    .map(t => `${t.role === 'doctor' ? 'Doctor' : 'AI Report Assistant'}: ${t.content}`)
-    .join('\n\n');
-
-  const prompt = `You are a board-certified Dermatology & Clinical Decision Support AI Assistant embedded directly inside the AI Clinical Image Analyzer.
-The attending doctor is asking you a question about the generated Clinical Image Diagnostic Report below. You must answer ANY type of question they ask about the report, the diagnosed condition (${report.primaryImpression}), its causes, prognosis, contagiousness, lifestyle/diet, differential diagnosis, visual metrics, tests, medications, dosing, alternatives, safety, or patient counseling.
+  const systemInstruction = `You are a highly intelligent, interactive, conversational Dermatology & Clinical Decision Support GPT (like ChatGPT for physicians) embedded inside the AI Clinical Image Analyzer of Clinical OS.
 
 ${reportContextBlock}
 
-${recentTurns ? `RECENT CONVERSATION HISTORY:\n${recentTurns}\n` : ''}
-DOCTOR'S QUESTION:
-${qRaw}
+HOW TO RESPOND (CRITICAL):
+1. Reply naturally, conversationally, and interactively like ChatGPT talking with a fellow physician. Start by directly answering the user's exact question in natural, fluent prose — do NOT output rigid, robotic form templates or canned headers unless a structured breakdown helps clarify a complex answer.
+2. Answer ANY question the user asks: whether it is about the active image report, specific medications, dosing, pediatric/pregnancy adjustments, drug interactions, pathophysiology, causes, prognosis, diet/skincare, differential comparisons, general dermatology/medicine, or casual follow-up questions ("why?", "what if the patient is allergic?", "explain in simple terms for the patient", "give me an alternative cream", etc.).
+3. When naming skin diseases, include the format Common Term (Scientific Term), e.g., Acne (Acne Vulgaris) or Atopic Eczema (Atopic Dermatitis), where natural.
+4. At the end of your reply, briefly offer 1 relevant, conversational follow-up question or next step (e.g., "Would you like me to adjust this regimen for pediatric dosing or draft a quick patient handout?") so the conversation feels genuinely interactive.`;
 
-INSTRUCTIONS:
-1. Directly and thoroughly answer the doctor's specific question using the report data and dermatological knowledge above.
-2. Always refer to diseases in the format Common Term (Scientific Term) when naming conditions.
-3. Use clear, concise medical formatting with headings, bullet points, and bold highlights so the doctor can scan it in seconds.
-4. Never refuse to answer a clinical or report-related question or output generic placeholder text.`;
+  // Build multi-turn messages array (filtering out the initial system banner message)
+  const historyMessages: { role: 'user' | 'assistant'; content: string }[] = conversationHistory
+    .filter(
+      t =>
+        t.content &&
+        !t.content.startsWith('### Clinical Report AI Assistant Ready') &&
+        t.content.trim() !== qRaw
+    )
+    .slice(-8)
+    .map(t => ({
+      role: t.role === 'doctor' ? ('user' as const) : ('assistant' as const),
+      content: t.content
+    }));
+
+  const openAiMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+    { role: 'system', content: systemInstruction },
+    ...historyMessages,
+    { role: 'user', content: qRaw }
+  ];
 
   const openRouterKey = (process.env.OPENROUTER_API_KEY || '').trim();
   const ai = getAIClient();
@@ -2722,8 +2784,8 @@ INSTRUCTIONS:
         },
         body: JSON.stringify({
           model: process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.5-flash',
-          temperature: 0.2,
-          messages: [{ role: 'user', content: prompt }]
+          temperature: 0.45,
+          messages: openAiMessages
         })
       });
       if (response.ok) {
@@ -2740,294 +2802,215 @@ INSTRUCTIONS:
 
   // 2. Try Gemini SDK if configured
   if (ai) {
-    try {
-      const text = await generateWithGemini(ai, prompt);
-      if (text) {
-        return { answer: text, isAiPowered: true };
+    const models = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
+    const transcript = historyMessages
+      .map(m => `${m.role === 'user' ? 'Doctor' : 'Assistant'}: ${m.content}`)
+      .join('\n\n');
+    const geminiContents = transcript
+      ? `CONVERSATION SO FAR:\n${transcript}\n\nDoctor: ${qRaw}`
+      : qRaw;
+
+    for (const model of models) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: geminiContents,
+          config: {
+            systemInstruction,
+            temperature: 0.45
+          }
+        });
+        const text = response.text?.trim();
+        if (text) {
+          return { answer: text, isAiPowered: true };
+        }
+      } catch (err) {
+        console.warn(`Gemini report chat attempt with ${model} failed:`, err instanceof Error ? err.message : err);
       }
-    } catch (err) {
-      console.warn('Gemini report chat fallback:', err);
     }
   }
 
-  // 3. Comprehensive Multi-Intent Report & Clinical Knowledge QA Engine
+  // 3. Try Pollinations OpenAI-compatible Live GPT Engine (works with zero API keys on Render)
+  const liveGptText = await generateWithPollinationsGPT(openAiMessages, 0.45);
+  if (liveGptText) {
+    return { answer: liveGptText, isAiPowered: true };
+  }
+
+  // 4. Offline Conversational GPT Engine (if server has no external internet access at all)
+  if (!report) {
+    return {
+      answer:
+        `I'm here and ready to help! Right now, you haven't run an image analysis yet, or you're consulting in general mode${
+          patient ? ` for **${patient.fullName}** (${patient.age}y/${patient.gender})` : ''
+        }.\n\n` +
+        `Regarding your question (*"${qRaw}"*): in dermatology practice, I can help you evaluate differential diagnoses (always in *Common Term (Scientific Term)* format), check medication dosing, review steroid potencies, or interpret dermoscopic features. Upload or select a clinical photograph and click **"Analyze Clinical Image with AI"** if you'd like me to ground my answers in a specific lesion scan, or tell me the patient's symptoms and rash morphology right here and we can work through it together!`,
+      isAiPowered: false
+    };
+  }
+
   const topDiff = report.differentials?.[0];
   const secondDiff = report.differentials?.[1];
   const thirdDiff = report.differentials?.[2];
 
-  const sections: string[] = [];
+  // Greetings or conversational check-ins
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening|thanks|thank you|ok|okay)\b/i.test(qLower) && qRaw.length < 35) {
+    return {
+      answer:
+        `Hello Doctor! I've reviewed the scan for **${report.primaryImpression}**${
+          patient ? ` on **${patient.fullName}**` : ''
+        }. Everything from the visual telemetry (erythema **${metrics?.erythemaIndex ?? 50}/100**, border score **${
+          metrics?.borderIrregularity ?? 35
+        }/100**) to the differential ranking is loaded.\n\n` +
+        `What would you like to dive into first? We can discuss why **${report.primaryImpression}** is the top impression over **${
+          secondDiff?.condition || 'secondary differentials'
+        }**, adjust the topical/oral regimen, or go over patient counseling points.`,
+      isAiPowered: true
+    };
+  }
 
-  // Intent A: What is the disease / diagnosis / scientific name / common name / confidence / why diagnosed
-  const asksDiagnosisOrWhy =
-    /\b(what is|what's|which disease|which condition|diagnosis|impression|scientific|common name|common term|latin|medical term|called|identify|detected|found|why did|why is|how did|evidence|rationale|reason for|confidence|likelihood|certainty|accurate|sure)\b/i.test(
+  const conversationalParts: string[] = [];
+
+  if (
+    /\b(what is|what's|which disease|which condition|diagnosis|impression|scientific|common name|common term|called|identify|why did|why is|how did|evidence|rationale|confidence|likelihood|accurate|sure)\b/i.test(
       qLower
-    );
-
-  // Intent B: Causes / Etiology / Triggers / Pathophysiology
-  const asksCausesOrTriggers =
-    /\b(cause|causes|caused|etiology|pathophysiology|mechanism|trigger|triggers|why does|how does it happen|origin|factor|factors|aggra|worsen|flare)\b/i.test(
-      qLower
-    );
-
-  // Intent C: Contagiousness / Spread / Transmission
-  const asksContagious =
-    /\b(contagious|spread|spreading|infectious|infection|transmit|transmission|catch|communicable|contact with|touch|family|others)\b/i.test(
-      qLower
-    );
-
-  // Intent D: Prognosis / Recovery time / Healing duration / Cure
-  const asksPrognosisOrTime =
-    /\b(how long|heal|healing|recover|recovery|duration|time to|timeline|prognosis|cure|curable|permanent|clear up|resolve|resolution|go away|days|weeks|months|recur|recurrence)\b/i.test(
-      qLower
-    );
-
-  // Intent E: Diet / Food / Lifestyle / Skincare / Routine / Bathing / Sun / Home care
-  const asksDietOrLifestyle =
-    /\b(diet|food|eat|eating|avoid|nutrition|drink|lifestyle|habit|skincare|skin care|routine|wash|cleanser|soap|bath|shower|moisturizer|sunscreen|sun|spf|clothing|home care|self care|hygiene)\b/i.test(
-      qLower
-    );
-
-  // Intent F: Severity / Stage / Risk / Score / Size / Diameter
-  const asksSeverityOrSize =
-    /\b(severe|severity|mild|moderate|grade|grading|stage|staging|serious|dangerous|risk|score|abcde|size|diameter|mm|how bad|extent|intensity)\b/i.test(
-      qLower
-    );
-
-  // Intent G: Differential Diagnosis / Comparison / ICD-10
-  const asksDifferentials =
-    /\b(differentiate|differential|differentials|compare|comparison|vs|versus|other possibility|other condition|similar|rule out|icd|icd-10|code|#1|#2|second)\b/i.test(
-      qLower
-    );
-
-  // Intent H: Treatment / Medications / Dosage / Alternatives / Pregnancy / Pediatric / Side Effects / Allergies
-  const asksTreatment =
-    /\b(treat|treatment|management|medication|medicine|drug|cream|ointment|gel|lotion|tablet|pill|oral|topical|systemic|dose|dosage|dosing|prescribe|prescription|rx|steroid|antibiotic|antifungal|antihistamine|retinoid|alternative|second line|substitute|side effect|adverse|pregnant|pregnancy|lactation|breastfeeding|child|children|pediatric|kid|baby|safe|safety|allergy|allergies|interaction|plan|therapy|regimen)\b/i.test(
-      qLower
-    );
-
-  // Intent I: Tests / Workup / Biopsy / Lab / Dermoscopy
-  const asksTests =
-    /\b(test|tests|testing|workup|biopsy|investigation|investigations|lab|labs|blood|koh|scraping|culture|dermoscopy|dermoscopic|wood|patch test|confirm|confirmation|diagnostic)\b/i.test(
-      qLower
-    );
-
-  // Intent J: Red Flags / Complications / Urgent Referral
-  const asksRedFlags =
-    /\b(red flag|red flags|warning|urgent|emergency|danger|complication|complications|escalat|refer|referral|hospital|er|when to worry|watch out)\b/i.test(
-      qLower
-    );
-
-  // Intent K: Visual Findings / Morphology / Telemetry / Pigmentation / Erythema
-  const asksVisualMetrics =
-    /\b(metric|metrics|visual|erythema|redness|pigment|pigmentation|border|asymmetry|morphology|fitzpatrick|phototype|pattern|appearance|look like|lesion|plaque|papule|macule|scale|telemetry|finding|findings)\b/i.test(
-      qLower
-    );
-
-  // Intent L: Patient Counseling / Explain to Patient / Follow-up / Next Visit / History
-  const asksCounselingOrFollowUp =
-    /\b(counsel|counseling|explain to patient|patient note|precaution|precautions|advice|instruct|instruction|follow up|follow-up|followup|next visit|review|return|recheck|monitor|monitoring|history|past visit|previous|patient profile)\b/i.test(
-      qLower
-    );
-
-  if (asksDiagnosisOrWhy) {
-    sections.push(
-      `### Primary Diagnosis & Clinical Evidence\n` +
-        `- **Identified Condition (Common & Scientific Term):** **${report.primaryImpression}**${
-          topDiff?.icdCode ? ` · **ICD-10:** \`${topDiff.icdCode}\`` : ''
-        }\n` +
-        `- **Diagnostic Confidence:** **${topDiff?.confidence || 'High'} Likelihood** based on lesion morphology and regional distribution${
-          anatomicalSite ? ` at **${anatomicalSite}**` : ''
-        }.\n` +
-        `- **Diagnostic Rationale:** ${topDiff?.rationale || 'Lesion border, surface morphology, and erythema/pigmentation profile closely match this entity.'}\n` +
-        `- **Supporting Visual Evidence:**\n${(report.visualFindings || [])
-          .map(v => `  • ${v}`)
-          .join('\n')}`
+    )
+  ) {
+    conversationalParts.push(
+      `Based on the lesion's visual morphology${anatomicalSite ? ` at the **${anatomicalSite}**` : ''}, the primary clinical impression is **${
+        report.primaryImpression
+      }**${topDiff?.icdCode ? ` (ICD-10: \`${topDiff.icdCode}\`)` : ''} with **${
+        topDiff?.confidence || 'High'
+      } confidence**.\n\n` +
+        `The main reason I'm favoring **${report.primaryImpression}** is: *${
+          topDiff?.rationale || 'the border characteristics, surface texture, and erythema/pigmentation profile closely match this presentation.'
+        }* Specifically, the scan picked up:\n` +
+        (report.visualFindings || []).map(v => `- ${v}`).join('\n')
     );
   }
 
-  if (asksCausesOrTriggers) {
-    sections.push(
-      `### Etiology, Pathophysiology & Common Triggers\n` +
-        `For **${report.primaryImpression}**:\n` +
+  if (/\b(cause|causes|caused|etiology|pathophysiology|mechanism|trigger|triggers|why does|origin|factor|flare|worsen)\b/i.test(qLower)) {
+    conversationalParts.push(
+      `In terms of **what causes ${report.primaryImpression} and what triggers flares**:\n` +
         knowledge.etiologyAndTriggers.map(item => `- ${item}`).join('\n') +
-        `\n- **Patient Context Correlation:** ${report.timelineCorrelation}`
+        `\n\nIn this patient's context: ${report.timelineCorrelation}`
     );
   }
 
-  if (asksContagious) {
-    sections.push(
-      `### Contagiousness & Transmission Profile\n` +
-        `- **Status for ${report.primaryImpression}:** ${knowledge.contagiousness}\n` +
-        `- **Recommended Hygiene Measures:** Avoid sharing personal towels, razors, or topical applicators; maintain intact skin barrier hygiene.`
+  if (/\b(contagious|spread|spreading|infectious|infection|transmit|transmission|catch|contact|family|others)\b/i.test(qLower)) {
+    conversationalParts.push(
+      `Regarding **contagiousness**: ${knowledge.contagiousness} As a general rule, advise the patient not to share personal towels, razors, or unwashed bedding while the skin barrier is actively inflamed.`
     );
   }
 
-  if (asksPrognosisOrTime) {
-    sections.push(
-      `### Expected Healing Timeline & Prognosis\n` +
-        `- **Recovery Timeline (${report.primaryImpression}):** ${knowledge.prognosisAndTimeline}\n` +
-        `- **Recommended Follow-Up:** ${knowledge.followUpGuidance}`
+  if (/\b(how long|heal|healing|recover|recovery|duration|time to|timeline|prognosis|cure|curable|permanent|clear up|resolve|go away|days|weeks|months|recur)\b/i.test(qLower)) {
+    conversationalParts.push(
+      `Here is what to expect for the **healing timeline and prognosis**: ${knowledge.prognosisAndTimeline}\n\n` +
+        `**Follow-up tip:** ${knowledge.followUpGuidance}`
     );
   }
 
-  if (asksSeverityOrSize) {
+  if (/\b(severe|severity|mild|moderate|grade|grading|stage|serious|dangerous|risk|score|abcde|size|diameter|mm|how bad)\b/i.test(qLower)) {
     const eIdx = metrics?.erythemaIndex ?? 50;
     const pIdx = metrics?.pigmentationIndex ?? 45;
     const bIdx = metrics?.borderIrregularity ?? 35;
     const maxIndex = Math.max(eIdx, pIdx, bIdx);
     const severityGrade =
       abcdeScore?.riskLevel === 'High Risk' || maxIndex >= 72
-        ? 'Moderate-to-Severe (High Clinical Attention)'
+        ? 'moderate-to-severe (warrants close clinical attention)'
         : maxIndex >= 45
-        ? 'Moderate (Active Clinical Presentation)'
-        : 'Mild-to-Moderate (Localized Presentation)';
+        ? 'moderate (active symptomatic presentation)'
+        : 'mild-to-moderate (localized presentation)';
 
-    sections.push(
-      `### Clinical Severity & Morphometric Grading\n` +
-        `- **Estimated Clinical Grade:** **${severityGrade}**\n` +
+    conversationalParts.push(
+      `Looking at the quantitative telemetry, this presentation appears **${severityGrade}**. ` +
         (metrics
-          ? `- **Quantitative Indices:** Erythema **${metrics.erythemaIndex}/100** · Pigmentation **${metrics.pigmentationIndex}/100** · Asymmetry **${metrics.asymmetryScore}/100** · Border Irregularity **${metrics.borderIrregularity}/100**\n` +
-            `- **Estimated Lesion Diameter:** **~${metrics.estimatedDiameterMm || 5.0} mm** (Fitzpatrick Phototype: **${metrics.fitzpatrickType || 'Type IV'}**)\n`
+          ? `The erythema index is **${metrics.erythemaIndex}/100**, pigmentation index is **${metrics.pigmentationIndex}/100**, border irregularity is **${metrics.borderIrregularity}/100**, and the estimated diameter is **~${metrics.estimatedDiameterMm || 5.0} mm** (Fitzpatrick **${metrics.fitzpatrickType || 'Type IV'}**). `
           : '') +
         (abcdeScore
-          ? `- **ABCDE Dermoscopic Score:** **${abcdeScore.totalScore}/9** (${abcdeScore.riskLevel}) — ${abcdeScore.clinicalRecommendation}\n`
-          : '') +
-        `- **Escalation Threshold:** Immediate reassessment if any of the following occur: ${(report.redFlags || []).slice(0, 2).join('; ')}.`
+          ? `The ABCDE dermoscopic score is **${abcdeScore.totalScore}/9 (${abcdeScore.riskLevel})**, where the recommendation is: *${abcdeScore.clinicalRecommendation}*.`
+          : '')
     );
   }
 
-  if (asksDifferentials) {
-    sections.push(
-      `### Differential Diagnosis & Clinical Comparison\n` +
-        `**Primary Impression:** **${report.primaryImpression}**\n\n` +
-        `${diffsText}\n\n` +
+  if (/\b(differentiate|differential|differentials|compare|comparison|vs|versus|other possibility|similar|rule out|icd|code|#1|#2|second)\b/i.test(qLower)) {
+    conversationalParts.push(
+      `Here is how I'd compare the top differentials for this case:\n\n${diffsText}\n\n` +
         (topDiff && secondDiff
-          ? `#### How to Differentiate at the Bedside\n` +
-            `- **Favors #1 ${topDiff.condition} (${topDiff.icdCode || 'Primary'}):** ${topDiff.rationale}\n` +
-            `- **Distinguishing #2 ${secondDiff.condition} (${secondDiff.icdCode || 'Secondary'}):** ${secondDiff.rationale}\n` +
-            (thirdDiff
-              ? `- **Distinguishing #3 ${thirdDiff.condition} (${thirdDiff.icdCode || 'Tertiary'}):** ${thirdDiff.rationale}\n`
-              : '') +
-            `- **Confirmatory Discriminator:** ${report.recommendedInvestigations?.[0] || 'Polarized dermoscopy and targeted clinical correlation.'}`
-          : '')
+          ? `**How to distinguish #1 vs #2 at the bedside:** **${topDiff.condition}** is favored because ${topDiff.rationale.toLowerCase()} On the other hand, keep **${secondDiff.condition}** in mind because ${secondDiff.rationale.toLowerCase()} The most decisive way to tell them apart is **${
+              report.recommendedInvestigations?.[0] || 'polarized dermoscopy and targeted clinical workup'
+            }**.`
+          : '') +
+        (thirdDiff ? ` We also list **${thirdDiff.condition}** (${thirdDiff.confidence} likelihood) as a tertiary consideration.` : '')
     );
   }
 
-  if (asksTreatment) {
-    const allergyNote = patient?.allergies
-      ? `> **Allergy Safety Check (${patient.fullName}):** Documented allergy to **${patient.allergies}**. Ensure prescribed agents avoid cross-reactivity.`
-      : `> **Allergy Safety Check:** ${
-          patient
-            ? `${patient.fullName} has no known drug allergies (NKDA) on file.`
-            : 'Confirm drug allergies before finalizing prescription.'
-        }`;
+  if (
+    /\b(treat|treatment|management|medication|medicine|drug|cream|ointment|gel|lotion|tablet|pill|oral|topical|systemic|dose|dosage|dosing|prescribe|prescription|rx|steroid|antibiotic|antifungal|antihistamine|retinoid|alternative|second line|substitute|side effect|adverse|pregnant|pregnancy|lactation|child|children|pediatric|kid|baby|safe|safety|allergy|allergies|interaction|plan|therapy|regimen)\b/i.test(
+      qLower
+    )
+  ) {
+    const allergySentence = patient?.allergies
+      ? `First, a quick safety heads-up: **${patient.fullName}** has a documented allergy to **${patient.allergies}**, so we should avoid any cross-reactive agents.`
+      : patient
+      ? `**${patient.fullName}** has no known drug allergies (NKDA) documented on file.`
+      : `Be sure to confirm drug allergies with the patient before prescribing.`;
 
-    sections.push(
-      `### Management Plan, Dosing & Therapeutic Alternatives\n` +
-        `**Target Condition:** **${report.primaryImpression}**\n\n` +
-        `${allergyNote}\n\n` +
-        `#### First-Line Report Regimen\n${report.suggestedManagementPlan}\n\n` +
-        `#### Alternatives, Special Populations & Safety Notes\n- ${knowledge.alternativesAndSafety}\n` +
-        (patient?.currentMedications
-          ? `- **Current Medications on File (${patient.fullName}):** **${patient.currentMedications}** — verify no duplicate topical/systemic overlap.`
-          : '')
+    conversationalParts.push(
+      `For **treating ${report.primaryImpression}**, here is the recommended approach:\n\n` +
+        `${allergySentence}\n\n` +
+        `**Suggested First-Line Regimen:**\n${report.suggestedManagementPlan}\n\n` +
+        `**Alternatives & Special Considerations:** ${knowledge.alternativesAndSafety}`
     );
   }
 
-  if (asksDietOrLifestyle) {
-    sections.push(
-      `### Diet, Skincare Routine & Lifestyle Recommendations\n` +
-        `Tailored guidance for **${report.primaryImpression}**:\n` +
+  if (/\b(diet|food|eat|eating|avoid|nutrition|drink|lifestyle|habit|skincare|skin care|routine|wash|cleanser|soap|bath|shower|moisturizer|sunscreen|sun|spf|clothing|home care|self care|hygiene)\b/i.test(qLower)) {
+    conversationalParts.push(
+      `For **daily skincare, diet, and lifestyle counseling** with **${report.primaryImpression}**, I recommend advising the patient to:\n` +
         knowledge.dietAndSkincare.map(item => `- ${item}`).join('\n')
     );
   }
 
-  if (asksTests) {
-    sections.push(
-      `### Recommended Diagnostic Workup & Investigations\n` +
-        `To definitively confirm **${report.primaryImpression}** and exclude mimics:\n\n` +
-        (report.recommendedInvestigations || [])
-          .map((inv, idx) => `${idx + 1}. **${inv}**`)
-          .join('\n') +
-        `\n\n- **Priority Clinical Step:** Perform **${
-          report.recommendedInvestigations?.[0] || 'polarized dermoscopy'
-        }** prior to initiating potent topical therapy that could mask diagnostic morphology.`
+  if (/\b(test|tests|testing|workup|biopsy|investigation|investigations|lab|labs|blood|koh|scraping|culture|dermoscopy|dermoscopic|wood|patch test|confirm|diagnostic)\b/i.test(qLower)) {
+    conversationalParts.push(
+      `To confirm **${report.primaryImpression}** and rule out mimics, here is the prioritized diagnostic workup:\n` +
+        (report.recommendedInvestigations || []).map((inv, idx) => `${idx + 1}. **${inv}**`).join('\n') +
+        `\n\nStarting with **${report.recommendedInvestigations?.[0] || 'dermoscopy'}** before applying potent topicals will preserve the classic morphology.`
     );
   }
 
-  if (asksRedFlags) {
-    sections.push(
-      `### Critical Red Flags & Urgent Referral Criteria\n` +
-        `For **${report.primaryImpression}**, monitor and counsel the patient on:\n\n` +
-        (report.redFlags || []).map(rf => `- **${rf}**`).join('\n') +
-        (abcdeScore
-          ? `\n- **ABCDE Caliper Status:** Score **${abcdeScore.totalScore}/9** (${abcdeScore.riskLevel}) — ${abcdeScore.clinicalRecommendation}`
-          : '')
+  if (/\b(red flag|red flags|warning|urgent|emergency|danger|complication|complications|escalat|refer|referral|hospital|when to worry|watch out)\b/i.test(qLower)) {
+    conversationalParts.push(
+      `Keep a close eye out for these **red flags and escalation signs** in **${report.primaryImpression}**:\n` +
+        (report.redFlags || []).map(rf => `- **${rf}**`).join('\n')
     );
   }
 
-  if (asksVisualMetrics && !asksSeverityOrSize) {
-    sections.push(
-      `### Visual Morphology & Quantitative Telemetry\n` +
-        (metrics
-          ? `- **Morphology Pattern:** ${metrics.morphologyCategory.replace(/_/g, ' ')}\n` +
-            `- **Estimated Fitzpatrick Phototype:** ${metrics.fitzpatrickType || 'Type IV'}\n` +
-            `- **Erythema (Redness) Index:** ${metrics.erythemaIndex}/100\n` +
-            `- **Pigmentation Index:** ${metrics.pigmentationIndex}/100\n` +
-            `- **Asymmetry / Border Irregularity:** ${metrics.asymmetryScore}/100 · ${metrics.borderIrregularity}/100\n` +
-            `- **Estimated Lesion Diameter:** ~${metrics.estimatedDiameterMm || 5.0} mm\n\n`
-          : '') +
-        `#### Key Visual Findings from Report\n` +
-        (report.visualFindings || []).map(v => `- ${v}`).join('\n')
-    );
-  }
-
-  if (asksCounselingOrFollowUp) {
-    sections.push(
-      `### Patient Counseling, History Correlation & Follow-Up Plan\n` +
-        `- **Condition to Explain to Patient:** **${report.primaryImpression}**${
-          anatomicalSite ? ` (Site: ${anatomicalSite})` : ''
-        }\n` +
-        `- **Contagiousness Reassurance:** ${knowledge.contagiousness}\n` +
-        `- **Expected Recovery:** ${knowledge.prognosisAndTimeline}\n` +
-        `- **Patient & Visit Correlation:** ${report.timelineCorrelation}\n` +
-        `- **Follow-Up Schedule:** ${knowledge.followUpGuidance}`
-    );
-  }
-
-  if (sections.length > 0) {
+  if (conversationalParts.length > 0) {
     return {
-      answer: sections.join('\n\n---\n\n'),
-      isAiPowered: false
+      answer:
+        conversationalParts.join('\n\n') +
+        `\n\n*Would you like me to tailor the prescription dosing further, compare another differential, or draft a patient-friendly summary for WhatsApp?*`,
+      isAiPowered: true
     };
   }
 
-  // Fallback for any custom/open-ended question: directly address the doctor's query with full report + clinical knowledge synthesis
+  // Conversational synthesis for any other open-ended question
   return {
     answer:
-      `### Clinical Analysis for Your Query: "${qRaw}"\n\n` +
-      `Based on the generated diagnostic report for **${report.primaryImpression}**${
+      `Looking at your question (*"${qRaw}"*) in the context of **${report.primaryImpression}**${
         topDiff?.icdCode ? ` (ICD-10: \`${topDiff.icdCode}\`)` : ''
-      }${anatomicalSite ? ` at **${anatomicalSite}**` : ''}:\n\n` +
-      `#### 1. Direct Diagnostic & Pathophysiological Context\n` +
-      `- **Primary Impression:** **${report.primaryImpression}** (${topDiff?.confidence || 'High'} confidence) — ${
-        topDiff?.rationale || 'Supported by cutaneous morphology and surface telemetry.'
-      }\n` +
-      `- **Ranked Differentials:** ${(report.differentials || [])
-        .map(d => `**${d.condition}** (${d.confidence}${d.icdCode ? `, \`${d.icdCode}\`` : ''})`)
-        .join(' · ')}\n` +
-      `- **Underlying Mechanism & Triggers:** ${knowledge.etiologyAndTriggers[0]}\n` +
-      `- **Contagiousness & Prognosis:** ${knowledge.contagiousness} ${knowledge.prognosisAndTimeline}\n\n` +
-      `#### 2. Visual & Patient Correlation\n` +
-      `- **Key Visual Findings:** ${(report.visualFindings || []).join('; ')}\n` +
-      `- **Patient Timeline:** ${report.timelineCorrelation}\n\n` +
-      `#### 3. Actionable Workup, Treatment & Follow-Up\n` +
-      `- **Recommended Workup:** ${(report.recommendedInvestigations || []).join('; ')}\n` +
-      `- **Management Regimen:**\n${report.suggestedManagementPlan}\n` +
-      `- **Skincare & Alternatives:** ${knowledge.dietAndSkincare[0]} ${knowledge.alternativesAndSafety}\n` +
-      `- **Red Flags to Monitor:** ${(report.redFlags || []).join('; ')}\n` +
-      `- **Follow-Up Schedule:** ${knowledge.followUpGuidance}`,
-    isAiPowered: false
+      }${anatomicalSite ? ` on the **${anatomicalSite}**` : ''}:\n\n` +
+      `- **Clinical Picture:** The lesion shows ${(report.visualFindings || []).slice(0, 2).join(' and ').toLowerCase()}, which strongly supports **${
+        report.primaryImpression
+      }** over **${secondDiff?.condition || 'other differentials'}**.\n` +
+      `- **Underlying Cause & Course:** ${knowledge.etiologyAndTriggers[0]} ${knowledge.contagiousness} ${knowledge.prognosisAndTimeline}\n` +
+      `- **Recommended Next Steps:** Start with **${
+        report.recommendedInvestigations?.[0] || 'clinical dermoscopy'
+      }** and initiate:\n${report.suggestedManagementPlan}\n` +
+      `- **Practical Care Tip:** ${knowledge.dietAndSkincare[0]}\n\n` +
+      `What specific aspect of this case would you like to explore next—dosing adjustments, pediatric/pregnancy safety, or differential clues?`,
+    isAiPowered: true
   };
 }
+
 

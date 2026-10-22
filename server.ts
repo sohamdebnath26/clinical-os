@@ -1163,8 +1163,8 @@ app.post('/api/ai/chat', authMiddleware, async (req, res) => {
 
 app.post('/api/ai/report-chat', authMiddleware, async (req, res) => {
   const { question, report, anatomicalSite, clinicalNotes, abcdeScore, patientId, conversationHistory } = req.body || {};
-  if (!question || !report) {
-    return res.status(400).json({ error: 'Both question and generated report context are required' });
+  if (!question) {
+    return res.status(400).json({ error: 'Question is required' });
   }
 
   let patient = undefined;
@@ -1179,7 +1179,7 @@ app.post('/api/ai/report-chat', authMiddleware, async (req, res) => {
   try {
     const result = await askImageReportAssistant({
       question,
-      report,
+      report: report || null,
       anatomicalSite,
       clinicalNotes,
       abcdeScore,
