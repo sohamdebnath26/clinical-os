@@ -214,6 +214,9 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
         let silveryWhiteScaleCount = 0;
         let chalkWhiteDepigmentCount = 0;
         let tanFleshCount = 0;
+        let follicularPustuleCount = 0;
+        let follicularComedoneCount = 0;
+        let discretePapuleCount = 0;
 
         const gridLum: number[][] = Array.from({ length: sampleSize }, () => new Array(sampleSize).fill(0));
         const isLesionGrid: boolean[][] = Array.from({ length: sampleSize }, () => new Array(sampleSize).fill(false));
@@ -252,10 +255,24 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
             // Golden-honey / exudative crust / yellow fibrin slough (Impetigo / Ulcer bed)
             const isGoldenCrust = r > 145 && g > 120 && b < 95 && (r - b) > 45 && (g - b) > 30;
 
-            // Chalk-white depigmentation (Vitiligo)
-            const isChalkWhite = lum > 205 && Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && (lum - baseLum) > 35;
+            // Chalk-white depigmentation (True Vitiligo: chalk-white, non-glare, prominent contrast)
+            // Exclude camera flash / specular highlights (r > 248) and minor surface variations
+            const isChalkWhite = lum > 212 && lum < 248 && Math.abs(r - g) < 8 && Math.abs(g - b) < 8 && (lum - baseLum) > 42;
 
-            const isAnomalous = isRedFlare || isDarkMelanin || isLightScale || isPurple || isGoldenCrust || isChalkWhite || lumDiff > 35;
+            // Acne / Follicular features:
+            // Pustule head: pale yellowish-white inflammatory tip
+            const isPustuleHead = lum > 135 && lum < 235 && (lum - baseLum) > 10 && r > 125 && g > 115 && b < 170 && r > b + 15 && Math.abs(r - g) < 28;
+            if (isPustuleHead) follicularPustuleCount++;
+
+            // Comedone: small dark follicular plug / blackhead
+            const isComedone = (baseLum - lum) > 22 && lum < 105 && r < 110 && g < 100 && b < 90 && Math.abs(r - g) < 18;
+            if (isComedone) follicularComedoneCount++;
+
+            // Discrete inflammatory papule: focused red bump
+            const isPapule = isRedFlare && r > 115 && redExcess > 0.14;
+            if (isPapule) discretePapuleCount++;
+
+            const isAnomalous = isRedFlare || isDarkMelanin || isLightScale || isPurple || isGoldenCrust || isChalkWhite || isPustuleHead || isComedone || lumDiff > 35;
 
             if (isAnomalous) {
               lesionPixelCount++;
@@ -482,8 +499,22 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
         // Preserve exact deterministic hits for high-confidence preset/classic patterns first:
         let morphologyCategory: VisualMorphologyMetrics['morphologyCategory'];
 
-        if (depigmentRatio > 0.12 || (chalkWhiteDepigmentCount > 70 && erythemaIndex < 38) || (focalLightRatio > 0.38 && meanDeltaA < 4.5)) {
+        // True vitiligo / hypopigmentation requires true chalk-white contrast covering a significant area
+        const isTrueDepigmentation =
+          (depigmentRatio > 0.22 && chalkWhiteDepigmentCount > 800 && erythemaIndex < 25) ||
+          (depigmentRatio > 0.35 && erythemaIndex < 30);
+
+        // Acne / Papulopustular Follicular presentation:
+        // Characterized by discrete inflammatory papules, pustule tips, or comedonal follicular plugs
+        const isAcneOrPapulopustular =
+          (follicularPustuleCount > 15 || (discretePapuleCount > 35 && erythemaIndex >= 22) || (follicularComedoneCount > 12 && erythemaIndex >= 18)) &&
+          darkRatio < 0.20 &&
+          !isAnnular;
+
+        if (isTrueDepigmentation) {
           morphologyCategory = 'hypopigmented_macular';
+        } else if (isAcneOrPapulopustular) {
+          morphologyCategory = 'papulopustular_follicular';
         } else if (isAnnular && darkRatio < 0.20) {
           morphologyCategory = 'annular_scaling';
         } else if ((darkRatio > 0.14 || focalDarkRatio > 0.22) && (pigmentationIndex >= 28 || meanDeltaL >= 9)) {
@@ -498,6 +529,10 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
           // Multi-dimensional feature affinity scoring for real-world clinical photographs
           const categoryScores: { category: VisualMorphologyMetrics['morphologyCategory']; score: number }[] = [
             {
+              category: 'papulopustular_follicular',
+              score: (erythemaIndex * 0.95) + (discretePapuleCount * 1.6) + (follicularPustuleCount * 2.8) + (follicularComedoneCount * 2.2) + (yellowRatio * 180) + ((1 - Math.min(1, lesionRatio * 1.6)) * 42) + (borderIrregularity * 0.6)
+            },
+            {
               category: 'pigmented_melanocytic',
               score: (pigmentationIndex * 1.45) + (meanDeltaL * 2.4) + (focalDarkRatio * 95) - (erythemaIndex * 0.45)
             },
@@ -508,10 +543,6 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
             {
               category: 'inflammatory_plaque',
               score: (erythemaIndex * 0.85) + (scaleRatio * 260) + (focalLightRatio * 75) + (textureEntropy * 0.55)
-            },
-            {
-              category: 'papulopustular_follicular',
-              score: (erythemaIndex * 0.78) + (yellowRatio * 210) + ((1 - Math.min(1, lesionRatio * 1.6)) * 38) + (borderIrregularity * 0.6)
             },
             {
               category: 'vesicular_bullous',
@@ -535,7 +566,7 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
             },
             {
               category: 'hypopigmented_macular',
-              score: (focalLightRatio * 165) + (depigmentRatio * 300) + Math.max(0, 45 - pigmentationIndex) * 0.8 + Math.max(0, 45 - erythemaIndex) * 0.6
+              score: (depigmentRatio * 320) + Math.max(0, 40 - pigmentationIndex) * 0.7 + Math.max(0, 35 - erythemaIndex) * 0.5
             },
             {
               category: 'eczematous_dermatitis',

@@ -139,11 +139,7 @@ export const ImageReportChatbot: React.FC<ImageReportChatbotProps> = ({
         `${patient ? ` for **${patient.fullName}** (${patient.age}y/${patient.gender})` : ''}.\n\n` +
         `- **Top Possibilities:** ${(report.differentials || []).map(d => `${d.condition} (${d.confidence})`).join(' · ')}\n` +
         `- **Recommended Next Step:** ${(report.recommendedInvestigations || [])[0] || 'Physical clinical exam'}\n\n` +
-        `Ask me any question! I answer in **plain, easy-to-understand layman's terms** with a structured breakdown:\n` +
-        `• 💡 **Direct Answer** to your question\n` +
-        `• 🔍 **Plain English Explanation** without heavy jargon\n` +
-        `• 📋 **Practical Steps & Home Care** you can actually take\n` +
-        `• ⚠️ **Warning Signs** to watch for`
+        `Feel free to ask me any question about this case—such as what causes it, whether it's contagious, healing timeline, creams, or daily skincare.`
     };
 
     setMessages([introMessage]);
@@ -280,8 +276,8 @@ export const ImageReportChatbot: React.FC<ImageReportChatbotProps> = ({
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isAiPowered: true,
         content:
-          `Conversation reset! I'm ready to answer any question about **${report.primaryImpression}**` +
-          `${topDiff?.icdCode ? ` (ICD-10: \`${topDiff.icdCode}\`)` : ''} in clear, structured, plain-language terms. What would you like to know?`
+          `Conversation reset! I'm ready to answer any questions about **${report.primaryImpression}**` +
+          `${topDiff?.icdCode ? ` (ICD-10: \`${topDiff.icdCode}\`)` : ''}. What would you like to know?`
       }
     ]);
     setQuestion('');
