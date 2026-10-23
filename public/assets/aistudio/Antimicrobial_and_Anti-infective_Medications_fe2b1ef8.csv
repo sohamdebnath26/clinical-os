@@ -1,0 +1,97 @@
+﻿No.,Medicine Name,Dose,Frequency,Instructions
+1,Amoxicillin,500 mg,3 times daily,Complete prescribed course; check penicillin allergy
+2,Ampicillin,500 mg–2 g,Every 6 hours,Oral or IV depending on indication; check penicillin allergy
+3,Penicillin V,250–500 mg,4 times daily,Take on an empty stomach; complete course
+4,Benzathine penicillin G,1.2–2.4 million units,IM single dose or weekly per indication,Deep IM injection only; check allergy history
+5,Flucloxacillin,500 mg,4 times daily,Take on an empty stomach; monitor liver function with prolonged use
+6,Piperacillin + tazobactam,4.5 g,IV every 6–8 hours,Hospital use; adjust for renal function
+7,Cefazolin,1–2 g,IV every 8 hours,Surgical prophylaxis and skin/soft-tissue infections
+8,Cefuroxime,250–500 mg,Twice daily,Take with food; complete course
+9,Cefixime,200–400 mg/day,Once/twice daily,Complete prescribed course
+10,Cefpodoxime,100–200 mg,Twice daily,Take with food; complete course
+11,Ceftriaxone,1–2 g,IV/IM once daily,Hospital/clinic use; do not mix with calcium-containing IV fluids in neonates
+12,Cefotaxime,1–2 g,IV every 6–8 hours,Hospital use; adjust for renal function
+13,Ceftazidime,1–2 g,IV every 8 hours,Hospital use; useful for Pseudomonas coverage
+14,Cefepime,1–2 g,IV every 8–12 hours,Hospital use; adjust for renal function; neurotoxicity risk in renal impairment
+15,Cefoperazone + sulbactam,1.5–3 g,IV every 12 hours,Hospital use; monitor for bleeding tendency
+16,Meropenem,1 g,IV every 8 hours,Hospital use; adjust for renal function; interacts with valproate
+17,Imipenem + cilastatin,500 mg,IV every 6 hours,Hospital use; seizure risk in renal impairment
+18,Ertapenem,1 g,IV once daily,Hospital/outpatient infusion; adjust for renal function
+19,Aztreonam,1–2 g,IV every 8 hours,Hospital use; option in severe beta-lactam allergy
+20,Azithromycin,"500 mg day 1 then 250 mg, or 500 mg daily",Once daily,Take as directed; check QT-prolonging interactions
+21,Clarithromycin,250–500 mg,Twice daily,Many drug interactions; check QT-prolonging drugs
+22,Ciprofloxacin,500–750 mg,Twice daily,Avoid dairy/antacids near dose; tendon and QT warnings
+23,Levofloxacin,500–750 mg,Once daily,"Tendon, QT and glucose warnings; hydrate well"
+24,Moxifloxacin,400 mg,Once daily,QT prolongation warning; avoid with antacids
+25,Ofloxacin,200–400 mg,Twice daily,Tendon and CNS warnings; separate from antacids
+26,Gentamicin,5–7 mg/kg,IV/IM once daily,Hospital use; monitor renal function and levels
+27,Amikacin,15 mg/kg,IV/IM once daily,Hospital use; monitor renal function and hearing
+28,Tobramycin,5–7 mg/kg,IV once daily,Hospital use; monitor renal function and levels
+29,Streptomycin,15 mg/kg (max 1 g),IM once daily,Specialist TB use; monitor hearing and renal function
+30,Vancomycin,15–20 mg/kg,IV every 8–12 hours,Hospital use; monitor levels and renal function
+31,Teicoplanin,6–12 mg/kg,"IV/IM every 12 hours for loading, then daily",Hospital use; monitor renal function
+32,Linezolid,600 mg,Twice daily,Monitor blood counts; avoid serotonergic drug combinations
+33,Daptomycin,4–6 mg/kg,IV once daily,Hospital use; monitor CK; not for pneumonia
+34,Colistin,Weight-based loading and maintenance,IV in divided doses,Specialist hospital use; monitor renal function
+35,Polymyxin B,1.5–2.5 mg/kg/day,IV in divided doses,Specialist hospital use; nephrotoxicity and neurotoxicity risk
+36,Tigecycline,100 mg then 50 mg,IV every 12 hours,Hospital use; nausea common; not first-line for bloodstream infection
+37,Co-trimoxazole (trimethoprim + sulfamethoxazole),160/800 mg,Twice daily,Hydrate well; check sulfonamide allergy and potassium
+38,Nitrofurantoin,50–100 mg,4 times daily or twice daily (MR),Take with food; avoid if poor kidney function
+39,Fosfomycin,3 g,Single dose,Dissolve in water; uncomplicated UTI
+40,Metronidazole oral,400–500 mg,3 times daily,Avoid alcohol during and 48 hours after
+41,Tinidazole,2 g single dose or 500 mg twice daily,Single/twice daily,Take with food; avoid alcohol
+42,Secnidazole,2 g,Single dose,Take with food; avoid alcohol
+43,Nitazoxanide,500 mg,Twice daily for 3 days,Take with food
+44,Chloramphenicol,50 mg/kg/day,Divided every 6 hours,Specialist use; monitor blood counts
+45,Isoniazid,5 mg/kg (usual 300 mg),Once daily,Give with pyridoxine; monitor liver function
+46,Pyrazinamide,20–25 mg/kg,Once daily,Monitor liver function and uric acid
+47,Rifapentine,600–1200 mg,Weekly or daily per regimen,Specialist TB use; many drug interactions
+48,Bedaquiline,400 mg daily for 2 weeks then 200 mg three times weekly,Per regimen,DR-TB specialist use; monitor QT
+49,Pretomanid,200 mg,Once daily,Specialist DR-TB regimen; take with food
+50,Delamanid,100 mg,Twice daily,Specialist DR-TB use; monitor QT
+51,Ethionamide,15–20 mg/kg/day,Divided doses,Take with food; monitor liver and thyroid function
+52,Cycloserine,10–15 mg/kg/day,Divided doses,Specialist DR-TB use; monitor mood/neurologic effects
+53,Voriconazole,6 mg/kg IV twice on day 1 then 4 mg/kg; oral 200 mg,Twice daily,Check interactions; monitor liver function and visual symptoms
+54,Posaconazole,300 mg twice day 1 then 300 mg,Once daily,Delayed-release tablet with food; check interactions
+55,Isavuconazole,372 mg isavuconazonium sulfate,"Every 8 hours for 6 doses, then once daily",Specialist use; monitor liver function
+56,Caspofungin,70 mg then 50 mg,IV once daily,Hospital use; adjust in liver impairment
+57,Micafungin,100–150 mg,IV once daily,Hospital use for candidemia
+58,Anidulafungin,200 mg then 100 mg,IV once daily,Hospital use for candidemia
+59,Flucytosine,100–150 mg/kg/day,Divided every 6 hours,Specialist use; monitor blood counts and renal function
+60,Oseltamivir,75 mg,Twice daily for 5 days,Start within 48 hours; adjust in renal impairment
+61,Baloxavir marboxil,40–80 mg (weight based),Single dose,Influenza; avoid with polyvalent cation products
+62,Ganciclovir,5 mg/kg,IV every 12 hours,Hospital use; monitor blood counts and renal function
+63,Valganciclovir,900 mg,Twice daily (induction) then once daily,Take with food; monitor blood counts
+64,Remdesivir,200 mg then 100 mg,IV once daily,Hospital use; monitor liver function
+65,Nirmatrelvir + ritonavir,300 mg + 100 mg,Twice daily for 5 days,Many drug interactions; adjust in renal impairment
+66,Molnupiravir,800 mg,Twice daily for 5 days,Avoid in pregnancy; start early
+67,Sofosbuvir,400 mg,Once daily,Hepatitis C; used within combination regimen
+68,Sofosbuvir + velpatasvir,400 mg + 100 mg,Once daily,Hepatitis C; check hepatitis B status
+69,Entecavir,0.5 mg,Once daily,Take on an empty stomach; monitor hepatitis B response
+70,Tenofovir disoproxil fumarate,300 mg,Once daily,Monitor renal function and bone health
+71,Tenofovir alafenamide,25 mg,Once daily,Hepatitis B; take with food
+72,Lamivudine,150 mg twice daily or 300 mg,Once/twice daily,HIV/HBV use; adjust for renal function
+73,Zidovudine,300 mg,Twice daily,Monitor blood counts; HIV regimen
+74,Abacavir,600 mg,Once daily,HLA-B*5701 testing before use
+75,Dolutegravir,50 mg,Once daily,Separate from polyvalent cations; HIV regimen
+76,Efavirenz,600 mg,Once daily at bedtime,Take on empty stomach; CNS effects common
+77,Lopinavir + ritonavir,400 mg + 100 mg,Twice daily,Many drug interactions; GI upset common
+78,Atazanavir + ritonavir,300 mg + 100 mg,Once daily,Take with food; check interactions
+79,Darunavir + ritonavir,800 mg + 100 mg,Once daily with food,Check sulfonamide allergy and interactions
+80,Raltegravir,400 mg,Twice daily,Separate from antacids containing aluminium/magnesium
+81,Tenofovir + lamivudine + dolutegravir (TLD),300 mg + 300 mg + 50 mg,Once daily,First-line HIV regimen; adherence essential
+82,Emtricitabine + tenofovir,200 mg + 300 mg,Once daily,HIV treatment/PrEP; monitor renal function
+83,Ribavirin,Weight-based,Divided twice daily,Teratogenic; monitor hemoglobin
+84,Artemether + lumefantrine,"20/120 mg tablets, weight-based (4 tablets for adults)",Twice daily for 3 days,Take with fatty food; treatment of uncomplicated falciparum malaria
+85,Artesunate,2.4 mg/kg,"IV at 0, 12, 24 hours then daily",Severe malaria; hospital use
+86,Chloroquine,600 mg base then 300 mg,Per regimen over 3 days,Vivax malaria in sensitive regions; take with food
+87,Primaquine,0.25–0.5 mg/kg,Once daily for 7–14 days,Test G6PD first; take with food
+88,Tafenoquine,300 mg,Single dose,Test G6PD first; avoid in pregnancy
+89,Atovaquone + proguanil,250 mg + 100 mg,Once daily,Take with fatty food; malaria prophylaxis/treatment
+90,Mefloquine,250 mg,Weekly for prophylaxis,Avoid in psychiatric/seizure history
+91,Quinine,600 mg,3 times daily,Cinchonism common; monitor glucose and QT
+92,Sulfadoxine + pyrimethamine,Weight-based,Single dose,Used in combination regimens; check sulfonamide allergy
+93,Mebendazole,100 mg twice daily for 3 days or 500 mg single dose,Per indication,Chew or swallow with food
+94,Praziquantel,40–60 mg/kg,Single/divided doses,Take with food; indication-specific regimen
+95,Pyrantel pamoate,11 mg/kg (max 1 g),Single dose,Roundworm/pinworm; repeat in 2 weeks if needed
+96,Paromomycin,25–35 mg/kg/day,Divided doses,Intestinal amoebiasis/leishmaniasis per regimen
