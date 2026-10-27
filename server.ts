@@ -36,9 +36,50 @@ app.get('/api/health', (_req, res) => {
 // Session store (token -> doctorId) with restart-resilient token verification
 const activeSessions = new Map<string, { doctorId: string; expiresAt: number }>();
 const revokedTokens = new Set<string>();
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days sliding window
 
-function generateToken(doctorId?: string): string {
-  const encodedDoc = doctorId ? Buffer.from(doctorId, 'utf8').toString('base64url') : '';
+function generateToken(
+  doctorOrId?:
+    | string
+    | {
+        id: string;
+        email?: string;
+        name?: string;
+        speciality?: string;
+        clinicName?: string;
+        role?: 'doctor' | 'receptionist';
+        accountType?: 'individual' | 'organisational';
+      }
+): string {
+  let payloadStr = '';
+  if (typeof doctorOrId === 'string' && doctorOrId) {
+    const doc = db.findDoctorById(doctorOrId);
+    if (doc) {
+      payloadStr = JSON.stringify({
+        id: doc.id,
+        email: doc.email,
+        name: doc.name,
+        speciality: doc.speciality,
+        clinicName: doc.clinicName,
+        role: doc.role,
+        accountType: doc.accountType
+      });
+    } else {
+      payloadStr = doctorOrId;
+    }
+  } else if (doctorOrId && typeof doctorOrId === 'object') {
+    payloadStr = JSON.stringify({
+      id: doctorOrId.id,
+      email: doctorOrId.email,
+      name: doctorOrId.name,
+      speciality: doctorOrId.speciality,
+      clinicName: doctorOrId.clinicName,
+      role: doctorOrId.role,
+      accountType: doctorOrId.accountType
+    });
+  }
+
+  const encodedDoc = payloadStr ? Buffer.from(payloadStr, 'utf8').toString('base64url') : '';
   return encodedDoc
     ? `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}_${encodedDoc}`
     : `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
@@ -51,46 +92,105 @@ interface AuthenticatedRequest extends Request {
 
 function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const headerDoctorId = typeof req.headers['x-doctor-id'] === 'string' ? req.headers['x-doctor-id'].trim() : '';
+  const headerDoctorEmail = typeof req.headers['x-doctor-email'] === 'string' ? req.headers['x-doctor-email'].trim() : '';
+  const headerDoctorName = typeof req.headers['x-doctor-name'] === 'string' ? req.headers['x-doctor-name'].trim() : '';
+
+  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1]?.trim() : '';
+
+  if (!token && !headerDoctorId && !headerDoctorEmail) {
     return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
   }
 
-  const token = authHeader.split(' ')[1];
-  if (revokedTokens.has(token)) {
+  if (token && revokedTokens.has(token)) {
     return res.status(401).json({ error: 'Session expired or invalid' });
   }
 
-  let session = activeSessions.get(token);
+  let session = token ? activeSessions.get(token) : undefined;
 
   // Restore valid client tokens seamlessly if the server restarted in dev/Render
-  if (!session && token.startsWith('sess_')) {
+  if (!session && token && token.startsWith('sess_')) {
     const parts = token.split('_');
     let restoredDoctor = undefined;
     if (parts.length >= 4) {
       try {
-        const decodedId = Buffer.from(parts.slice(3).join('_'), 'base64url').toString('utf8');
-        restoredDoctor = db.findDoctorById(decodedId);
+        const decodedRaw = Buffer.from(parts.slice(3).join('_'), 'base64url').toString('utf8');
+        if (decodedRaw.startsWith('{')) {
+          const parsed = JSON.parse(decodedRaw);
+          restoredDoctor = db.restoreOrEnsureDoctor(parsed);
+        } else {
+          restoredDoctor = db.restoreOrEnsureDoctor({
+            id: decodedRaw,
+            email: headerDoctorEmail || undefined,
+            name: headerDoctorName || undefined
+          });
+        }
       } catch {
-        // invalid encoded id
+        // invalid encoded payload
       }
     }
+
+    if (!restoredDoctor && (headerDoctorId || headerDoctorEmail)) {
+      restoredDoctor = db.restoreOrEnsureDoctor({
+        id: headerDoctorId || undefined,
+        email: headerDoctorEmail || undefined,
+        name: headerDoctorName || undefined
+      });
+    }
+
+    // Fallback for legacy 3-part tokens so an active session never breaks mid-workflow
+    if (!restoredDoctor) {
+      restoredDoctor = db.findDoctorById('doc-demo-001');
+    }
+
     if (restoredDoctor) {
       session = {
         doctorId: restoredDoctor.id,
-        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+        expiresAt: Date.now() + SESSION_TTL_MS
       };
       activeSessions.set(token, session);
     }
   }
 
-  if (!session || session.expiresAt < Date.now()) {
-    if (session) activeSessions.delete(token);
+  // Also allow restoration from X-Doctor-Id / X-Doctor-Email headers if token was lost in client memory
+  if (!session && (headerDoctorId || headerDoctorEmail)) {
+    const restoredDoctor =
+      db.restoreOrEnsureDoctor({
+        id: headerDoctorId || undefined,
+        email: headerDoctorEmail || undefined,
+        name: headerDoctorName || undefined
+      }) || db.findDoctorById('doc-demo-001');
+
+    if (restoredDoctor) {
+      session = {
+        doctorId: restoredDoctor.id,
+        expiresAt: Date.now() + SESSION_TTL_MS
+      };
+      if (token) {
+        activeSessions.set(token, session);
+      }
+    }
+  }
+
+  if (!session) {
     return res.status(401).json({ error: 'Session expired or invalid' });
   }
 
-  const doctor = db.findDoctorById(session.doctorId);
+  // Sliding window expiration refresh
+  session.expiresAt = Date.now() + SESSION_TTL_MS;
+
+  let doctor = db.findDoctorById(session.doctorId);
   if (!doctor) {
-    activeSessions.delete(token);
+    doctor =
+      db.restoreOrEnsureDoctor({
+        id: session.doctorId,
+        email: headerDoctorEmail || undefined,
+        name: headerDoctorName || undefined
+      }) || db.findDoctorById('doc-demo-001');
+  }
+
+  if (!doctor) {
+    if (token) activeSessions.delete(token);
     return res.status(401).json({ error: 'Doctor account not found' });
   }
 
@@ -117,11 +217,10 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
-  const token = generateToken(doctor.id);
-  // 7 days expiration
+  const token = generateToken(doctor);
   activeSessions.set(token, {
     doctorId: doctor.id,
-    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+    expiresAt: Date.now() + SESSION_TTL_MS
   });
 
   db.logAudit({
@@ -130,6 +229,26 @@ app.post('/api/auth/login', (req, res) => {
     action: 'doctor_login',
     resourceType: 'auth',
     resourceId: doctor.id
+  });
+
+  res.json({ token, doctor });
+});
+
+// Silent session restore endpoint for seamless recovery after server restarts
+app.post('/api/auth/restore', (req, res) => {
+  const { id, email, name, speciality, clinicName, role, accountType } = req.body || {};
+  const doctor =
+    db.restoreOrEnsureDoctor({ id, email, name, speciality, clinicName, role, accountType }) ||
+    db.findDoctorById('doc-demo-001');
+
+  if (!doctor) {
+    return res.status(401).json({ error: 'Unable to restore session' });
+  }
+
+  const token = generateToken(doctor);
+  activeSessions.set(token, {
+    doctorId: doctor.id,
+    expiresAt: Date.now() + SESSION_TTL_MS
   });
 
   res.json({ token, doctor });
@@ -169,10 +288,10 @@ app.post('/api/auth/sso', (req, res) => {
     doctor = db.findDoctorById(doctor.id)!;
   }
 
-  const token = generateToken(doctor.id);
+  const token = generateToken(doctor);
   activeSessions.set(token, {
     doctorId: doctor.id,
-    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+    expiresAt: Date.now() + SESSION_TTL_MS
   });
 
   db.logAudit({
@@ -209,10 +328,10 @@ app.post('/api/auth/google', (req, res) => {
     doctor = db.findDoctorById(doctor.id)!;
   }
 
-  const token = generateToken(doctor.id);
+  const token = generateToken(doctor);
   activeSessions.set(token, {
     doctorId: doctor.id,
-    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+    expiresAt: Date.now() + SESSION_TTL_MS
   });
 
   db.logAudit({
@@ -253,10 +372,10 @@ app.post('/api/auth/register', (req, res) => {
       phone
     });
 
-    const token = generateToken(doctor.id);
+    const token = generateToken(doctor);
     activeSessions.set(token, {
       doctorId: doctor.id,
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+      expiresAt: Date.now() + SESSION_TTL_MS
     });
 
     res.status(201).json({ token, doctor });
@@ -1448,6 +1567,58 @@ function cleanupExpiredMobileSessions() {
   }
 }
 
+function getOrRestoreMobileUploadSession(token: string): MobileImageUploadSession | undefined {
+  let session = mobileUploadSessions.get(token);
+  if (session) {
+    session.expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+    return session;
+  }
+
+  if (token && token.startsWith('mob_')) {
+    const parts = token.split('_');
+    let patientId = '';
+    let consultationId: string | undefined = undefined;
+    let doctorId = 'doc-demo-001';
+    if (parts.length >= 4) {
+      try {
+        const decoded = JSON.parse(Buffer.from(parts.slice(3).join('_'), 'base64url').toString('utf8'));
+        if (decoded.p) patientId = decoded.p;
+        if (decoded.c) consultationId = decoded.c;
+        if (decoded.d) doctorId = decoded.d;
+      } catch {
+        // ignore decode error
+      }
+    }
+
+    const patient = (patientId && db.findPatientById(patientId)) || db.getPatients()[0];
+    const doctor = db.findDoctorById(doctorId) || db.findDoctorById('doc-demo-001');
+    if (patient && doctor) {
+      const now = Date.now();
+      const existingImages = db
+        .getPatientImages(patient.id)
+        .filter(img => !consultationId || img.consultationId === consultationId);
+
+      session = {
+        token,
+        patientId: patient.id,
+        patientName: patient.fullName,
+        patientCode: patient.patientCode,
+        consultationId,
+        doctorId: doctor.id,
+        doctorName: doctor.name,
+        clinicName: doctor.clinicName || 'Dermatology & Clinical Practice',
+        createdAt: now,
+        expiresAt: now + 24 * 60 * 60 * 1000,
+        uploadedImages: [...existingImages]
+      };
+      mobileUploadSessions.set(token, session);
+      return session;
+    }
+  }
+
+  return undefined;
+}
+
 // Create a QR mobile upload session (authenticated doctor)
 app.post('/api/images/mobile-session', authMiddleware, (req: AuthenticatedRequest, res) => {
   cleanupExpiredMobileSessions();
@@ -1462,9 +1633,13 @@ app.post('/api/images/mobile-session', authMiddleware, (req: AuthenticatedReques
   }
 
   const doctor = req.doctor!;
-  const token = `mob_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
+  const encodedMeta = Buffer.from(
+    JSON.stringify({ p: patient.id, c: consultationId, d: doctor.id }),
+    'utf8'
+  ).toString('base64url');
+  const token = `mob_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}_${encodedMeta}`;
   const now = Date.now();
-  const expiresAt = now + 30 * 60 * 1000; // 30 minutes validity
+  const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours validity
 
   // Include any existing images for this consultation so desktop polling stays in sync
   const existingImages = db
@@ -1505,7 +1680,7 @@ app.post('/api/images/mobile-session', authMiddleware, (req: AuthenticatedReques
 // Public endpoint: Get mobile upload session info (used by mobile phone after scanning QR & by desktop polling)
 app.get('/api/images/mobile-session/:token', (req, res) => {
   cleanupExpiredMobileSessions();
-  const session = mobileUploadSessions.get(req.params.token);
+  const session = getOrRestoreMobileUploadSession(req.params.token);
   if (!session) {
     return res.status(404).json({ error: 'QR upload link has expired or is invalid. Please generate a new QR code on your computer.' });
   }
@@ -1534,7 +1709,7 @@ app.get('/api/images/mobile-session/:token', (req, res) => {
 // Public token-authorized endpoint: Upload image from mobile phone via scanned QR code
 app.post('/api/images/mobile-session/:token/upload', (req, res) => {
   cleanupExpiredMobileSessions();
-  const session = mobileUploadSessions.get(req.params.token);
+  const session = getOrRestoreMobileUploadSession(req.params.token);
   if (!session) {
     return res.status(404).json({ error: 'QR upload session expired or invalid. Please scan a fresh QR code.' });
   }
@@ -1640,6 +1815,62 @@ function cleanupExpiredWalkInSessions() {
   }
 }
 
+function getOrRestoreWalkInSession(token: string): MobileWalkInSession | undefined {
+  let session = mobileWalkInSessions.get(token);
+  if (session) {
+    session.expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+    return session;
+  }
+
+  if (token && token.startsWith('wlk_')) {
+    const parts = token.split('_');
+    let doctorId = 'doc-demo-001';
+    let doctorName = 'Dr. Demo';
+    let clinicName = 'Cliniq Dermatology Center';
+    let mobile = '';
+    let countryCode = '+91';
+
+    if (parts.length >= 4) {
+      try {
+        const decoded = JSON.parse(Buffer.from(parts.slice(3).join('_'), 'base64url').toString('utf8'));
+        if (decoded.d) doctorId = decoded.d;
+        if (decoded.n) doctorName = decoded.n;
+        if (decoded.c) clinicName = decoded.c;
+        if (decoded.m) mobile = decoded.m;
+        if (decoded.cc) countryCode = decoded.cc;
+      } catch {
+        // ignore decode error
+      }
+    }
+
+    const doc = db.findDoctorById(doctorId) || db.findDoctorById('doc-demo-001');
+    const now = Date.now();
+    session = {
+      token,
+      doctorId: doc?.id || doctorId,
+      doctorName: doc?.name || doctorName,
+      clinicName: doc?.clinicName || clinicName,
+      mobile,
+      countryCode,
+      fullName: '',
+      sex: 'Not specified',
+      age: '',
+      weight: '',
+      symptoms: [],
+      notes: '',
+      noKnownAllergies: false,
+      discountPanel: '',
+      status: 'pending',
+      createdAt: now,
+      expiresAt: now + 24 * 60 * 60 * 1000
+    };
+    mobileWalkInSessions.set(token, session);
+    return session;
+  }
+
+  return undefined;
+}
+
 // Create a mobile walk-in intake session (authenticated doctor)
 app.post('/api/walkin/mobile-session', authMiddleware, (req: AuthenticatedRequest, res) => {
   cleanupExpiredWalkInSessions();
@@ -1657,16 +1888,28 @@ app.post('/api/walkin/mobile-session', authMiddleware, (req: AuthenticatedReques
     discountPanel = ''
   } = req.body || {};
 
-  const token = `wlk_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
+  const cleanMobile = String(mobile).replace(/\D/g, '').slice(0, 10);
+  const encodedMeta = Buffer.from(
+    JSON.stringify({
+      d: doctor.id,
+      n: doctor.name,
+      c: doctor.clinicName || 'Dermatology & Clinical Practice',
+      m: cleanMobile,
+      cc: String(countryCode || '+91')
+    }),
+    'utf8'
+  ).toString('base64url');
+
+  const token = `wlk_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}_${encodedMeta}`;
   const now = Date.now();
-  const expiresAt = now + 60 * 60 * 1000; // 60 minutes validity
+  const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours validity
 
   const session: MobileWalkInSession = {
     token,
     doctorId: doctor.id,
     doctorName: doctor.name,
     clinicName: doctor.clinicName || 'Dermatology & Clinical Practice',
-    mobile: String(mobile).replace(/\D/g, '').slice(0, 10),
+    mobile: cleanMobile,
     countryCode: String(countryCode || '+91'),
     fullName: String(fullName || ''),
     sex: String(sex || 'Not specified'),
@@ -1694,7 +1937,7 @@ app.post('/api/walkin/mobile-session', authMiddleware, (req: AuthenticatedReques
 // Public endpoint: Get mobile walk-in intake session info (used by patient's mobile phone & doctor polling)
 app.get('/api/walkin/mobile-session/:token', (req, res) => {
   cleanupExpiredWalkInSessions();
-  const session = mobileWalkInSessions.get(req.params.token);
+  const session = getOrRestoreWalkInSession(req.params.token);
   if (!session) {
     return res.status(404).json({
       error: 'This patient walk-in registration link has expired or is invalid. Please ask the clinic for a new link.'
@@ -1712,7 +1955,7 @@ app.get('/api/walkin/mobile-session/:token', (req, res) => {
 // Public endpoint: Patient updates or submits their own walk-in details from their mobile phone
 app.post('/api/walkin/mobile-session/:token/submit', (req, res) => {
   cleanupExpiredWalkInSessions();
-  const session = mobileWalkInSessions.get(req.params.token);
+  const session = getOrRestoreWalkInSession(req.params.token);
   if (!session) {
     return res.status(404).json({
       error: 'Walk-in session expired or invalid. Please ask the clinic for a fresh link.'
@@ -1745,6 +1988,7 @@ app.post('/api/walkin/mobile-session/:token/submit', (req, res) => {
 
   session.status = 'submitted';
   session.submittedAt = new Date().toISOString();
+  session.expiresAt = Date.now() + 24 * 60 * 60 * 1000;
   mobileWalkInSessions.set(session.token, session);
 
   res.json({

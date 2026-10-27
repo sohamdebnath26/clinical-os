@@ -24,11 +24,10 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [doctor, setDoctor] = useState<Doctor | null>(null);
+  const [doctor, setDoctor] = useState<Doctor | null>(() => authStorage.getDoctor());
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    authStorage.clearToken();
     setIsLoading(false);
 
     const handleUnauthorized = () => {
@@ -44,18 +43,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     const res = await api.auth.login({ email, password });
     authStorage.setToken(res.token);
+    authStorage.setDoctor(res.doctor);
     setDoctor(res.doctor);
   };
 
   const loginWithSSO = async (params?: { organization?: string; email?: string; name?: string; department?: string }) => {
     const res = await api.auth.sso(params);
     authStorage.setToken(res.token);
+    authStorage.setDoctor(res.doctor);
     setDoctor(res.doctor);
   };
 
   const loginWithGoogle = async (params?: { email?: string; name?: string }) => {
     const res = await api.auth.google(params);
     authStorage.setToken(res.token);
+    authStorage.setDoctor(res.doctor);
     setDoctor(res.doctor);
   };
 
@@ -70,6 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }) => {
     const res = await api.auth.register(data);
     authStorage.setToken(res.token);
+    authStorage.setDoctor(res.doctor);
     setDoctor(res.doctor);
   };
 
@@ -86,6 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateDoctor = async (data: Partial<Doctor>) => {
     const res = await api.auth.updateProfile(data);
+    authStorage.setDoctor(res.doctor);
     setDoctor(res.doctor);
   };
 

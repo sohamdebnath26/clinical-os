@@ -16,30 +16,81 @@ import {
 } from '../types/index';
 
 const TOKEN_KEY = 'clinical_os_token';
-
-// Clear any legacy persistent token on load so visiting the site URL always opens the Login screen first
-try {
-  if (typeof window !== 'undefined') {
-    window.localStorage.removeItem(TOKEN_KEY);
-    window.sessionStorage.removeItem(TOKEN_KEY);
-  }
-} catch {
-  // ignore storage errors
-}
+const DOCTOR_KEY = 'clinical_os_doctor';
 
 let inMemoryToken: string | null = null;
+let inMemoryDoctor: Doctor | null = null;
 
 export const authStorage = {
-  getToken: () => inMemoryToken,
+  getToken: (): string | null => {
+    if (inMemoryToken) return inMemoryToken;
+    try {
+      if (typeof window !== 'undefined') {
+        const stored =
+          window.sessionStorage.getItem(TOKEN_KEY) ||
+          window.localStorage.getItem(TOKEN_KEY);
+        if (stored) {
+          inMemoryToken = stored;
+          return stored;
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return null;
+  },
   setToken: (token: string) => {
     inMemoryToken = token;
+    try {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(TOKEN_KEY, token);
+        window.localStorage.setItem(TOKEN_KEY, token);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  },
+  getDoctor: (): Doctor | null => {
+    if (inMemoryDoctor) return inMemoryDoctor;
+    try {
+      if (typeof window !== 'undefined') {
+        const raw =
+          window.sessionStorage.getItem(DOCTOR_KEY) ||
+          window.localStorage.getItem(DOCTOR_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as Doctor;
+          if (parsed && parsed.id) {
+            inMemoryDoctor = parsed;
+            return parsed;
+          }
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return null;
+  },
+  setDoctor: (doctor: Doctor) => {
+    inMemoryDoctor = doctor;
+    try {
+      if (typeof window !== 'undefined') {
+        const serialized = JSON.stringify(doctor);
+        window.sessionStorage.setItem(DOCTOR_KEY, serialized);
+        window.localStorage.setItem(DOCTOR_KEY, serialized);
+      }
+    } catch {
+      // ignore storage errors
+    }
   },
   clearToken: () => {
     inMemoryToken = null;
+    inMemoryDoctor = null;
     try {
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(TOKEN_KEY);
         window.sessionStorage.removeItem(TOKEN_KEY);
+        window.localStorage.removeItem(DOCTOR_KEY);
+        window.sessionStorage.removeItem(DOCTOR_KEY);
       }
     } catch {
       // ignore
@@ -47,8 +98,9 @@ export const authStorage = {
   },
 };
 
-async function fetchWithAuth<T>(url: string, options: RequestInit = {}): Promise<T> {
+async function fetchWithAuth<T>(url: string, options: RequestInit = {}, isRetry = false): Promise<T> {
   const token = authStorage.getToken();
+  const storedDoctor = authStorage.getDoctor();
   const headers = new Headers(options.headers || {});
 
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
@@ -59,12 +111,48 @@ async function fetchWithAuth<T>(url: string, options: RequestInit = {}): Promise
     headers.set('Authorization', `Bearer ${token}`);
   }
 
+  if (storedDoctor) {
+    if (storedDoctor.id) headers.set('X-Doctor-Id', storedDoctor.id);
+    if (storedDoctor.email) headers.set('X-Doctor-Email', storedDoctor.email);
+    if (storedDoctor.name) headers.set('X-Doctor-Name', storedDoctor.name);
+  }
+
   const response = await fetch(url, { ...options, headers });
 
   if (response.status === 401) {
-    authStorage.clearToken();
-    window.dispatchEvent(new Event('clinical_os_unauthorized'));
-    throw new Error('Session expired or unauthorized');
+    const isAuthCredentialRoute =
+      url.includes('/api/auth/login') ||
+      url.includes('/api/auth/register') ||
+      url.includes('/api/auth/restore');
+
+    // Transparently re-establish session if server restarted or token expired mid-workflow
+    if (!isRetry && !isAuthCredentialRoute && storedDoctor) {
+      try {
+        const restoreRes = await fetch('/api/auth/restore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(storedDoctor),
+        });
+        if (restoreRes.ok) {
+          const restoredData = (await restoreRes.json()) as { token: string; doctor: Doctor };
+          if (restoredData.token) {
+            authStorage.setToken(restoredData.token);
+          }
+          if (restoredData.doctor) {
+            authStorage.setDoctor(restoredData.doctor);
+          }
+          return fetchWithAuth<T>(url, options, true);
+        }
+      } catch {
+        // ignore restore error and fall through
+      }
+    }
+
+    if (!isAuthCredentialRoute) {
+      authStorage.clearToken();
+      window.dispatchEvent(new Event('clinical_os_unauthorized'));
+      throw new Error('Session expired or unauthorized');
+    }
   }
 
   if (!response.ok) {

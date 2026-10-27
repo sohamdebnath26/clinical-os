@@ -490,6 +490,87 @@ class DatabaseService {
       }
       if (updated) this.persist();
     }
+
+    // 4. Ensure Google Auth Default Doctor & Institutional SSO Preset Doctors with deterministic IDs
+    const presetDoctors: Array<Doctor & { defaultPass: string }> = [
+      {
+        id: 'doc-google-001',
+        name: 'Dr. Alex Mercer',
+        email: 'dr.alex.mercer@gmail.com',
+        speciality: 'Dermatologist & Laser Surgeon',
+        registrationNumber: 'G-MD-482910',
+        clinicName: 'Mercer Dermatology Practice',
+        phone: '9876543212',
+        defaultConsultationFee: 500,
+        avatarUrl: '',
+        accountType: 'individual',
+        createdAt: new Date().toISOString(),
+        defaultPass: 'Demo@1234_google_auth'
+      },
+      {
+        id: 'doc-org-002',
+        name: 'Dr. Ayesha Patel, MBChB, FRCP',
+        email: 'ayesha.patel@nhs.net',
+        speciality: 'Regional Cutaneous Oncology & Phototherapy Unit',
+        registrationNumber: 'NHS-ATT-77319',
+        clinicName: 'NHS Foundation Trust Hospitals',
+        phone: '9876543213',
+        defaultConsultationFee: 650,
+        avatarUrl: '',
+        accountType: 'organisational',
+        organizationName: 'NHS Foundation Trust Hospitals',
+        organizationDepartment: 'Regional Cutaneous Oncology & Phototherapy Unit',
+        createdAt: new Date().toISOString(),
+        defaultPass: 'Demo@1234_sso_managed'
+      },
+      {
+        id: 'doc-org-003',
+        name: 'Dr. Michael Torres, MD',
+        email: 'm.torres@stjude-health.edu',
+        speciality: 'Pediatric & General Dermatology Division',
+        registrationNumber: 'STJ-ATT-51902',
+        clinicName: 'St. Jude Academic Medical Network',
+        phone: '9876543214',
+        defaultConsultationFee: 650,
+        avatarUrl: '',
+        accountType: 'organisational',
+        organizationName: 'St. Jude Academic Medical Network',
+        organizationDepartment: 'Pediatric & General Dermatology Division',
+        createdAt: new Date().toISOString(),
+        defaultPass: 'Demo@1234_sso_managed'
+      },
+      {
+        id: 'doc-org-004',
+        name: 'Dr. James Wilson, MD',
+        email: 'jwilson@apexhealth.org',
+        speciality: 'Outpatient Dermatology & Aesthetics Center',
+        registrationNumber: 'APX-ATT-62041',
+        clinicName: 'Apex Health Enterprise System',
+        phone: '9876543215',
+        defaultConsultationFee: 650,
+        avatarUrl: '',
+        accountType: 'organisational',
+        organizationName: 'Apex Health Enterprise System',
+        organizationDepartment: 'Outpatient Dermatology & Aesthetics Center',
+        createdAt: new Date().toISOString(),
+        defaultPass: 'Demo@1234_sso_managed'
+      }
+    ];
+
+    let presetAdded = false;
+    for (const preset of presetDoctors) {
+      const existing = this.data.doctors.find(d => d.email.toLowerCase() === preset.email.toLowerCase());
+      if (!existing) {
+        const { defaultPass, ...docFields } = preset;
+        this.data.doctors.push(docFields);
+        const salt = bcrypt.genSaltSync(10);
+        this.data.doctorPasswords[docFields.id] = bcrypt.hashSync(defaultPass, salt);
+        presetAdded = true;
+      }
+    }
+    if (presetAdded) {
+      this.persist();
+    }
   }
 
   // --- Doctor & Auth methods ---
@@ -499,6 +580,7 @@ class DatabaseService {
     'hospital@metrohealth.org',
     'receptionist@clinicalos.med',
     'emily@clinicalos.med',
+    'dr.alex.mercer@gmail.com',
     'ayesha.patel@nhs.net',
     'm.torres@stjude-health.edu',
     'jwilson@apexhealth.org'
@@ -507,7 +589,11 @@ class DatabaseService {
   private static readonly DEMO_DOCTOR_IDS = new Set([
     'doc-demo-001',
     'doc-org-001',
-    'doc-rec-001'
+    'doc-rec-001',
+    'doc-google-001',
+    'doc-org-002',
+    'doc-org-003',
+    'doc-org-004'
   ]);
 
   public isDemoAccount(doctorId?: string): boolean {
@@ -542,6 +628,57 @@ class DatabaseService {
 
   public findDoctorById(id: string): Doctor | undefined {
     return this.data.doctors.find(d => d.id === id);
+  }
+
+  /**
+   * Seamlessly restores or creates a doctor account if the server/container restarted
+   * (e.g., on Render free tier spin-down or redeploy) while a doctor session token was active.
+   */
+  public restoreOrEnsureDoctor(payload: {
+    id?: string;
+    email?: string;
+    name?: string;
+    speciality?: string;
+    registrationNumber?: string;
+    clinicName?: string;
+    role?: 'doctor' | 'receptionist';
+    accountType?: 'individual' | 'organisational';
+  }): Doctor | undefined {
+    if (payload.id) {
+      const byId = this.findDoctorById(payload.id);
+      if (byId) return byId;
+    }
+    if (payload.email) {
+      const byEmail = this.findDoctorByEmail(payload.email);
+      if (byEmail) return byEmail;
+    }
+    if (!payload.id && !payload.email) {
+      return undefined;
+    }
+
+    const restoredId = payload.id || `doc-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+    const restoredEmail = (payload.email || `${restoredId}@clinicalos.med`).toLowerCase().trim();
+    const restoredDoc: Doctor = {
+      id: restoredId,
+      name: payload.name || 'Dr. Attending Physician',
+      email: restoredEmail,
+      speciality: payload.speciality || 'Dermatologist & Cosmetologist',
+      registrationNumber: payload.registrationNumber || `REG-${Math.floor(100000 + Math.random() * 900000)}`,
+      clinicName: payload.clinicName || 'Cliniq Dermatology Center',
+      phone: '9876543210',
+      defaultConsultationFee: 500,
+      role: payload.role,
+      accountType: payload.accountType || 'individual',
+      createdAt: new Date().toISOString()
+    };
+
+    this.data.doctors.push(restoredDoc);
+    if (!this.data.doctorPasswords[restoredId]) {
+      const salt = bcrypt.genSaltSync(10);
+      this.data.doctorPasswords[restoredId] = bcrypt.hashSync('Demo@1234', salt);
+    }
+    this.persist();
+    return restoredDoc;
   }
 
   public verifyPassword(doctorId: string, passwordAttempt: string): boolean {

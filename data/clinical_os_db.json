@@ -66,7 +66,37 @@
       "avatarUrl": "",
       "accountType": "individual",
       "role": "receptionist",
-      "createdAt": "2026-10-27T03:48:13.464Z"
+      "createdAt": "2026-10-27T03:52:40.145Z"
+    },
+    {
+      "id": "doc-org-002",
+      "name": "Dr. Ayesha Patel, MBChB, FRCP",
+      "email": "ayesha.patel@nhs.net",
+      "speciality": "Regional Cutaneous Oncology & Phototherapy Unit",
+      "registrationNumber": "NHS-ATT-77319",
+      "clinicName": "NHS Foundation Trust Hospitals",
+      "phone": "9876543213",
+      "defaultConsultationFee": 650,
+      "avatarUrl": "",
+      "accountType": "organisational",
+      "organizationName": "NHS Foundation Trust Hospitals",
+      "organizationDepartment": "Regional Cutaneous Oncology & Phototherapy Unit",
+      "createdAt": "2026-10-27T04:04:14.121Z"
+    },
+    {
+      "id": "doc-org-004",
+      "name": "Dr. James Wilson, MD",
+      "email": "jwilson@apexhealth.org",
+      "speciality": "Outpatient Dermatology & Aesthetics Center",
+      "registrationNumber": "APX-ATT-62041",
+      "clinicName": "Apex Health Enterprise System",
+      "phone": "9876543215",
+      "defaultConsultationFee": 650,
+      "avatarUrl": "",
+      "accountType": "organisational",
+      "organizationName": "Apex Health Enterprise System",
+      "organizationDepartment": "Outpatient Dermatology & Aesthetics Center",
+      "createdAt": "2026-10-27T04:04:14.121Z"
     }
   ],
   "doctorPasswords": {
@@ -74,7 +104,9 @@
     "doc-org-001": "$2b$10$Vwl04zn3744i.6Qf4uNNF.bvjeyfIbOh25u5N1LIzSaWXNqRy.ld.",
     "doc-mv7sr3d5-2nsr": "$2b$10$Uo.01bkHr5ZC6dTQb9mfWO19x1WkhYuTkJEUOKP2L1QMYbxVnGOkC",
     "doc-mv7sssl7-ww9t": "$2b$10$CYGFHweDjLA/RRlDYWBYLeYPjifzlgyLOPqToIGw8Y1ylcNQUq1TW",
-    "doc-rec-001": "$2b$10$Q054acJ6/1wQsj.eS4i6euwytvNz476cd/TB96AC50Ah54tgmRoHC"
+    "doc-rec-001": "$2b$10$Gm4.9eKfVCzdZ7qYCMXbou6Mzxvvhbf2oUWOljaq05emT89/5XUHC",
+    "doc-org-002": "$2b$10$d5glbVdBl2GQpPwuoo9F1urCeq8ndipWs5LzuZeAdrk6FwxbyYi3e",
+    "doc-org-004": "$2b$10$OMDNfoIWdqggIW7cPGPzlON7bckLNCo4iB9kzvKYzuflqYQASb/nO"
   },
   "patients": [
     {
@@ -1119,7 +1151,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-27T03:48:13.580Z"
+    "updatedAt": "2026-10-27T04:04:14.345Z"
   },
   "appointments": [
     {

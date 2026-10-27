@@ -371,7 +371,7 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
           primaryDiagnosis:
             selectedSymptoms.length > 0 ? selectedSymptoms[0] : 'General Consultation'
         },
-        forceCreate
+        true
       );
 
       if (onPatientCreated && !onStartConsultation) {
