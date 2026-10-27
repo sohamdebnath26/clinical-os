@@ -66,7 +66,7 @@
       "avatarUrl": "",
       "accountType": "individual",
       "role": "receptionist",
-      "createdAt": "2026-10-27T02:01:29.115Z"
+      "createdAt": "2026-10-27T03:48:13.464Z"
     }
   ],
   "doctorPasswords": {
@@ -74,7 +74,7 @@
     "doc-org-001": "$2b$10$Vwl04zn3744i.6Qf4uNNF.bvjeyfIbOh25u5N1LIzSaWXNqRy.ld.",
     "doc-mv7sr3d5-2nsr": "$2b$10$Uo.01bkHr5ZC6dTQb9mfWO19x1WkhYuTkJEUOKP2L1QMYbxVnGOkC",
     "doc-mv7sssl7-ww9t": "$2b$10$CYGFHweDjLA/RRlDYWBYLeYPjifzlgyLOPqToIGw8Y1ylcNQUq1TW",
-    "doc-rec-001": "$2b$10$nDDAG9ltBWIovvbJC43qre9b9O8IVPkv4kMEzyTso2gtOFctglkce"
+    "doc-rec-001": "$2b$10$Q054acJ6/1wQsj.eS4i6euwytvNz476cd/TB96AC50Ah54tgmRoHC"
   },
   "patients": [
     {
@@ -1119,7 +1119,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-10-27T02:01:29.228Z"
+    "updatedAt": "2026-10-27T03:48:13.580Z"
   },
   "appointments": [
     {
