@@ -6,7 +6,9 @@ import { api } from '../lib/api';
 import { PREDEFINED_DIAGNOSES } from '../data/clinicalCatalogues';
 import { AddPatientModal } from './AddPatientModal';
 import { ScheduleAppointmentModal } from './ScheduleAppointmentModal';
-import { Menu, X, ArrowRight } from 'lucide-react';
+import { CoFounderBriefModal } from './CoFounderBriefModal';
+import { downloadCoFounderRoadmapPdf } from '../utils/generateCoFounderPdf';
+import { Menu, X, ArrowRight, FileDown } from 'lucide-react';
 
 interface DashboardViewProps {
   onOpenWalkIn: () => void;
@@ -42,6 +44,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Quick action modals
   const [showAddPatientModal, setShowAddPatientModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showCoFounderModal, setShowCoFounderModal] = useState(false);
 
   // Integrated Header Search State
   const [query, setQuery] = useState('');
@@ -408,6 +411,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             )}
           </div>
 
+          {/* Co-Founder Roadmap & FAQ PDF Button */}
+          <button
+            type="button"
+            onClick={() => setShowCoFounderModal(true)}
+            title="View & Download Co-Founder Roadmap, Pricing & FAQ PDF"
+            className="px-4 py-3.5 bg-white hover:bg-[#f7faf9] border border-[#dce5e3] rounded-2xl text-sm font-bold text-[#116960] transition-colors shrink-0 cursor-pointer flex items-center gap-1.5"
+          >
+            <FileDown className="w-4 h-4" />
+            <span>Roadmap &amp; FAQ PDF</span>
+          </button>
+
           {/* Walk-in Button */}
           <button
             type="button"
@@ -709,6 +723,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             loadDashboardData();
           }}
         />
+      )}
+
+      {/* Co-Founder Roadmap & FAQ PDF Modal */}
+      {showCoFounderModal && (
+        <CoFounderBriefModal onClose={() => setShowCoFounderModal(false)} />
       )}
     </div>
   );

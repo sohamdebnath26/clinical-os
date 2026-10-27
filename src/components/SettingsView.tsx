@@ -4,7 +4,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { LanguageSelector } from './LanguageSelector';
 import { AuditLog } from '../types';
 import { api } from '../lib/api';
-import { Settings, Shield, User, Building, Save, CheckCircle2, History, Globe } from 'lucide-react';
+import { CoFounderBriefModal } from './CoFounderBriefModal';
+import { downloadCoFounderRoadmapPdf } from '../utils/generateCoFounderPdf';
+import { Settings, Shield, User, Building, Save, CheckCircle2, History, Globe, FileText, Download, Eye } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
   const { doctor, updateDoctor } = useAuth();
@@ -20,6 +22,7 @@ export const SettingsView: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showCoFounderModal, setShowCoFounderModal] = useState(false);
 
   useEffect(() => {
     api.audit.list()
@@ -75,6 +78,45 @@ export const SettingsView: React.FC = () => {
         <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
           <span>{errorMsg}</span>
         </div>
+      )}
+
+      {/* Executive Co-Founder Roadmap, Pricing & FAQ PDF Export Card */}
+      <div className="bg-[#0d3f3b] text-white p-6 rounded-2xl border border-[#195650] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[#9fe5db] flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5" />
+            Executive Strategy &amp; Partner Document
+          </span>
+          <h3 className="text-base font-extrabold text-white">
+            Co-Founder Product Roadmap, ₹ Pricing Model &amp; Non-Technical FAQ
+          </h3>
+          <p className="text-xs text-[#b5dcd6] max-w-xl">
+            Download a formatted multi-page PDF covering our live capabilities, 12-month phased roadmap, ₹ INR pricing tiers, and non-technical FAQs for Marketing, Sales &amp; Medical Co-Founders.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowCoFounderModal(true)}
+            className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>Preview</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadCoFounderRoadmapPdf()}
+            className="px-4 py-2.5 bg-[#198276] hover:bg-[#1f9688] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Download .PDF</span>
+          </button>
+        </div>
+      </div>
+
+      {showCoFounderModal && (
+        <CoFounderBriefModal onClose={() => setShowCoFounderModal(false)} />
       )}
 
       {/* Language Preferences */}
