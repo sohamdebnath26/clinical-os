@@ -1,0 +1,6 @@
+{
+  "name": "Clinical OS - Medical EMR & Clinic Workspace",
+  "description": "Production-grade Electronic Medical Record (EMR) and clinic management workspace for doctors, featuring patient management, consultations, interactive body maps, clinical imaging, timelines, and AI-assisted summaries.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
