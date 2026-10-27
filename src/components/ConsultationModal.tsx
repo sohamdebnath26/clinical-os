@@ -2085,7 +2085,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     >
                       <Plus className="w-3.5 h-3.5 text-teal-600" />
                       <span>{p.name}</span>
-                      <span className="text-slate-400 font-semibold">₹{p.defaultCost}</span>
+                      <span className="text-slate-400 font-semibold">₹{Number(p.defaultCost).toLocaleString('en-IN')}</span>
                     </button>
                   ))}
                 </div>
@@ -3687,7 +3687,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         type="text"
                         value={
                           procedures.length > 0
-                            ? procedures.map(p => `${p.name} (₹${p.cost})`).join(', ')
+                            ? procedures.map(p => `${p.name} (₹${Number(p.cost).toLocaleString('en-IN')})`).join(', ')
                             : ''
                         }
                         onChange={e => {
@@ -3699,7 +3699,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             setProcedures([{ id: 'proc-inline', name: val, cost: proceduresTotal || 0 }]);
                           }
                         }}
-                        placeholder={`None — add via Procedure tab (₹${proceduresTotal})`}
+                        placeholder={`None — add via Procedure tab (₹${Number(proceduresTotal).toLocaleString('en-IN')})`}
                         className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                       />
                       <div className="absolute right-1.5">
@@ -4544,15 +4544,15 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           <div className="flex items-center gap-6 text-xs">
             <div>
               <span className="text-[9.5px] uppercase font-bold text-[#6c857f] block tracking-wider">PROCEDURES</span>
-              <span className="font-bold text-[#0f2926] text-xs">₹{proceduresTotal}</span>
+              <span className="font-bold text-[#0f2926] text-xs">₹{Number(proceduresTotal).toLocaleString('en-IN')}</span>
             </div>
             <div>
               <span className="text-[9.5px] uppercase font-bold text-[#6c857f] block tracking-wider">CONSULTATION</span>
-              <span className="font-bold text-[#0f2926] text-xs">₹{fee}</span>
+              <span className="font-bold text-[#0f2926] text-xs">₹{Number(fee).toLocaleString('en-IN')}</span>
             </div>
             <div>
               <span className="text-[9.5px] uppercase font-bold text-[#6c857f] block tracking-wider">TOTAL</span>
-              <span className="font-extrabold text-[#115e56] text-sm">₹{grandTotal}</span>
+              <span className="font-extrabold text-[#115e56] text-sm">₹{Number(grandTotal).toLocaleString('en-IN')}</span>
             </div>
           </div>
 

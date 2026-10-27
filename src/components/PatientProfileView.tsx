@@ -1114,7 +1114,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                             </span>
                             <span>•</span>
                             <span>
-                              Fee: <strong className="text-slate-700">₹{evt.fee}</strong>
+                              Fee: <strong className="text-slate-700">₹{Number(evt.fee || 0).toLocaleString('en-IN')}</strong>
                             </span>
                             <span>•</span>
                             <span>
@@ -1233,7 +1233,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                                       className="px-3 py-1.5 bg-teal-50/60 border border-teal-200/80 rounded-lg text-[11px] text-teal-950 flex items-center gap-2"
                                     >
                                       <span className="font-semibold">{proc.name}</span>
-                                      <span className="font-mono font-bold text-teal-800">₹{proc.cost}</span>
+                                      <span className="font-mono font-bold text-teal-800">₹{Number(proc.cost || 0).toLocaleString('en-IN')}</span>
                                     </div>
                                   ))}
                                 </div>

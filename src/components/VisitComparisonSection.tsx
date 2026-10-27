@@ -891,7 +891,7 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                     {visitA.procedures.map(proc => (
                       <div key={proc.id} className="p-2 bg-white rounded-lg border border-slate-200 text-xs flex justify-between">
                         <span className="font-semibold text-slate-800">{proc.name}</span>
-                        <span className="text-slate-500">₹{proc.cost}</span>
+                        <span className="text-slate-500">₹{Number(proc.cost || 0).toLocaleString('en-IN')}</span>
                       </div>
                     ))}
                   </div>
@@ -960,7 +960,7 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                     {visitB.procedures.map(proc => (
                       <div key={proc.id} className="p-2 bg-white rounded-lg border border-slate-200 text-xs flex justify-between">
                         <span className="font-semibold text-slate-800">{proc.name}</span>
-                        <span className="text-slate-500">₹{proc.cost}</span>
+                        <span className="text-slate-500">₹{Number(proc.cost || 0).toLocaleString('en-IN')}</span>
                       </div>
                     ))}
                   </div>
