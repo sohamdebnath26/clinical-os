@@ -194,31 +194,21 @@ export const AuthView: React.FC = () => {
     }
   };
 
-  // Quick fill individual demo doctor
-  const fillIndividualDemo = () => {
-    setEmail('demo@clinicalos.med');
+  // 1-Click Instant Demo Launchers
+  const launchDemoAccount = async (demoEmail: string, label: string) => {
+    setEmail(demoEmail);
     setPassword('Demo@1234');
     setError(null);
-    setSuccessNotice('Filled Individual Doctor credentials (Dr. Demo • Cliniq Center)');
-    setTimeout(() => setSuccessNotice(null), 3500);
-  };
-
-  // Quick fill organizational demo doctor
-  const fillOrganisationalDemo = () => {
-    setEmail('hospital@metrohealth.org');
-    setPassword('Demo@1234');
-    setError(null);
-    setSuccessNotice('Filled Organisational Doctor credentials (Dr. Sarah Chen • Metro Health)');
-    setTimeout(() => setSuccessNotice(null), 3500);
-  };
-
-  // Quick fill receptionist demo
-  const fillReceptionistDemo = () => {
-    setEmail('receptionist@clinicalos.med');
-    setPassword('Demo@1234');
-    setError(null);
-    setSuccessNotice('Filled Receptionist credentials (Emily • Front Desk)');
-    setTimeout(() => setSuccessNotice(null), 3500);
+    setSuccessNotice(`Launching ${label}...`);
+    setIsLoading(true);
+    try {
+      await login(demoEmail, 'Demo@1234');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Demo login failed';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Handle forgot password request
@@ -394,37 +384,47 @@ export const AuthView: React.FC = () => {
               </button>
             </form>
 
-            {/* Quick Demo Fill Buttons for Testing Both Accounts */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            {/* 1-Click Interactive Demo Sandbox Section */}
+            <div className="p-3 bg-teal-50/60 border border-teal-200/80 rounded-xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-teal-700" />
+                  Instant Interactive Demo
+                </span>
+                <span className="text-[10px] font-semibold text-teal-700">
+                  1-Click Sandbox
+                </span>
+              </div>
               <button
                 type="button"
-                onClick={fillIndividualDemo}
-                className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-[11px] font-medium border border-slate-200 transition-colors flex items-center justify-center gap-1.5 truncate"
-                title="Prefill Individual Doctor (Private Practice)"
+                disabled={isLoading}
+                onClick={() => launchDemoAccount('demo@clinicalos.med', 'Clinic Doctor Demo')}
+                className="w-full py-2 px-3 bg-teal-800 hover:bg-teal-900 text-white rounded-lg text-xs font-bold shadow-2xs transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <User className="w-3 h-3 text-teal-700 shrink-0" />
-                <span className="truncate">Individual Demo</span>
+                <User className="w-3.5 h-3.5 shrink-0" />
+                <span>Launch Interactive Doctor Demo</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
-
-              <button
-                type="button"
-                onClick={fillOrganisationalDemo}
-                className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-[11px] font-medium border border-slate-200 transition-colors flex items-center justify-center gap-1.5 truncate"
-                title="Prefill Organisational Doctor (Hospital Network)"
-              >
-                <Building2 className="w-3 h-3 text-indigo-700 shrink-0" />
-                <span className="truncate">Hospital Demo</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={fillReceptionistDemo}
-                className="col-span-2 py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-lg text-[11px] font-medium border border-amber-200 transition-colors flex items-center justify-center gap-1.5 truncate"
-                title="Prefill Receptionist Account"
-              >
-                <User className="w-3 h-3 text-amber-700 shrink-0" />
-                <span className="truncate">Receptionist Demo (receptionist@clinicalos.med)</span>
-              </button>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => launchDemoAccount('hospital@metrohealth.org', 'Hospital Demo')}
+                  className="py-1.5 px-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-[11px] font-semibold border border-slate-200 transition-colors flex items-center justify-center gap-1.5 truncate"
+                >
+                  <Building2 className="w-3 h-3 text-indigo-700 shrink-0" />
+                  <span className="truncate">Hospital Demo</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => launchDemoAccount('receptionist@clinicalos.med', 'Receptionist Demo')}
+                  className="py-1.5 px-2 bg-white hover:bg-amber-50 text-amber-900 rounded-lg text-[11px] font-semibold border border-amber-200 transition-colors flex items-center justify-center gap-1.5 truncate"
+                >
+                  <User className="w-3 h-3 text-amber-700 shrink-0" />
+                  <span className="truncate">Receptionist Demo</span>
+                </button>
+              </div>
             </div>
 
             {/* Divider: OR */}

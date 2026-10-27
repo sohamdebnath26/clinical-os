@@ -493,10 +493,49 @@ class DatabaseService {
   }
 
   // --- Doctor & Auth methods ---
+  private static readonly DEMO_EMAILS = new Set([
+    'demo@clinicalos.med',
+    'demo@cliniq.com',
+    'hospital@metrohealth.org',
+    'receptionist@clinicalos.med',
+    'emily@clinicalos.med',
+    'ayesha.patel@nhs.net',
+    'm.torres@stjude-health.edu',
+    'jwilson@apexhealth.org'
+  ]);
+
+  private static readonly DEMO_DOCTOR_IDS = new Set([
+    'doc-demo-001',
+    'doc-org-001',
+    'doc-rec-001'
+  ]);
+
+  public isDemoAccount(doctorId?: string): boolean {
+    if (!doctorId) return true;
+    if (DatabaseService.DEMO_DOCTOR_IDS.has(doctorId)) return true;
+    const doc = this.findDoctorById(doctorId);
+    if (!doc) return false;
+    return DatabaseService.DEMO_EMAILS.has(doc.email.toLowerCase());
+  }
+
+  public canDoctorAccessPatient(patient: Patient, doctorId?: string): boolean {
+    if (!doctorId) return true;
+    const isCallerDemo = this.isDemoAccount(doctorId);
+    if (isCallerDemo) {
+      // Demo accounts see seeded/demo patients, never private real-doctor patients
+      return !patient.createdById || this.isDemoAccount(patient.createdById);
+    }
+    // Real registered doctors only see patients created under their own account
+    return patient.createdById === doctorId;
+  }
+
   public findDoctorByEmail(email: string): Doctor | undefined {
     const clean = email.trim().toLowerCase();
     if (clean === 'emily@clinicalos.med') {
       return this.data.doctors.find(d => d.email.toLowerCase() === 'receptionist@clinicalos.med');
+    }
+    if (clean === 'demo@cliniq.com') {
+      return this.data.doctors.find(d => d.email.toLowerCase() === 'demo@clinicalos.med');
     }
     return this.data.doctors.find(d => d.email.toLowerCase() === clean);
   }
@@ -570,8 +609,8 @@ class DatabaseService {
     return `P-${this.data.meta.lastPatientNumber}`;
   }
 
-  public getPatients(query?: string): Patient[] {
-    let list = [...this.data.patients];
+  public getPatients(query?: string, doctorId?: string): Patient[] {
+    let list = this.data.patients.filter(p => this.canDoctorAccessPatient(p, doctorId));
     if (query && query.trim()) {
       const q = query.toLowerCase().trim();
       list = list.filter(p =>
@@ -585,13 +624,18 @@ class DatabaseService {
     return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  public findPatientById(id: string): Patient | undefined {
-    return this.data.patients.find(p => p.id === id);
+  public findPatientById(id: string, doctorId?: string): Patient | undefined {
+    const patient = this.data.patients.find(p => p.id === id);
+    if (!patient) return undefined;
+    if (doctorId && !this.canDoctorAccessPatient(patient, doctorId)) return undefined;
+    return patient;
   }
 
-  public findPatientByMobile(mobile: string): Patient | undefined {
+  public findPatientByMobile(mobile: string, doctorId?: string): Patient | undefined {
     const clean = mobile.replace(/\D/g, '');
-    return this.data.patients.find(p => p.mobile.replace(/\D/g, '') === clean);
+    return this.data.patients.find(
+      p => p.mobile.replace(/\D/g, '') === clean && this.canDoctorAccessPatient(p, doctorId)
+    );
   }
 
   public createPatient(patientData: Omit<Patient, 'id' | 'patientCode' | 'createdAt' | 'updatedAt'>, actor: { id: string; name: string }): Patient {
@@ -827,8 +871,17 @@ class DatabaseService {
   }
 
   // --- Prescriptions methods ---
-  public getPrescriptions(patientId?: string): PrescriptionItem[] {
-    let list = [...this.data.prescriptions];
+  private getAccessiblePatientIds(doctorId?: string): Set<string> {
+    return new Set(
+      this.data.patients
+        .filter(p => this.canDoctorAccessPatient(p, doctorId))
+        .map(p => p.id)
+    );
+  }
+
+  public getPrescriptions(patientId?: string, doctorId?: string): PrescriptionItem[] {
+    const accessibleIds = doctorId ? this.getAccessiblePatientIds(doctorId) : null;
+    let list = this.data.prescriptions.filter(p => !accessibleIds || accessibleIds.has(p.patientId));
     if (patientId) {
       list = list.filter(p => p.patientId === patientId);
     }
@@ -906,8 +959,14 @@ class DatabaseService {
   }
 
   // --- Appointments methods ---
-  public getAppointments(filters?: { patientId?: string; date?: string; status?: string }): Appointment[] {
-    let list = [...(this.data.appointments || [])];
+  public getAppointments(
+    filters?: { patientId?: string; date?: string; status?: string },
+    doctorId?: string
+  ): Appointment[] {
+    const accessibleIds = doctorId ? this.getAccessiblePatientIds(doctorId) : null;
+    let list = (this.data.appointments || []).filter(
+      a => !accessibleIds || accessibleIds.has(a.patientId)
+    );
     if (filters?.patientId) {
       list = list.filter(a => a.patientId === filters.patientId);
     }
@@ -1201,12 +1260,23 @@ class DatabaseService {
   }
 
   // --- Stats & Dashboard ---
-  public getStats(): ClinicStats {
-    const totalPatients = this.data.patients.length;
+  public getStats(doctorId?: string): ClinicStats {
+    const accessibleIds = doctorId ? this.getAccessiblePatientIds(doctorId) : null;
+    const patients = accessibleIds
+      ? this.data.patients.filter(p => accessibleIds.has(p.id))
+      : this.data.patients;
+    const consultations = accessibleIds
+      ? this.data.consultations.filter(c => accessibleIds.has(c.patientId))
+      : this.data.consultations;
+    const prescriptions = accessibleIds
+      ? this.data.prescriptions.filter(rx => accessibleIds.has(rx.patientId))
+      : this.data.prescriptions;
+
+    const totalPatients = patients.length;
     const todayStr = new Date().toISOString().split('T')[0];
 
     // Visits today
-    const visitsToday = this.data.consultations.filter(c => {
+    const visitsToday = consultations.filter(c => {
       const cDate = c.consultationDate.split('T')[0];
       return cDate === todayStr && c.status === 'signed';
     }).length;
@@ -1214,22 +1284,21 @@ class DatabaseService {
     // Visits last 7 days
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const visitsLast7Days = this.data.consultations.filter(c => {
+    const visitsLast7Days = consultations.filter(c => {
       return new Date(c.consultationDate) >= sevenDaysAgo && c.status === 'signed';
     }).length;
 
     // Follow-ups due (within next 7 days or overdue)
-    const now = new Date();
     const nextWeek = new Date();
     nextWeek.setDate(nextWeek.getDate() + 7);
-    const followUpsDue = this.data.consultations.filter(c => {
+    const followUpsDue = consultations.filter(c => {
       if (!c.followUp || !c.followUp.date) return false;
       const fDate = new Date(c.followUp.date);
       return fDate <= nextWeek;
     }).length;
 
     // Active prescriptions
-    const activePrescriptions = this.data.prescriptions.length;
+    const activePrescriptions = prescriptions.length;
 
     return {
       totalPatients,
@@ -1240,22 +1309,33 @@ class DatabaseService {
     };
   }
 
-  public getRecentVisits(limit = 10): Consultation[] {
+  public getRecentVisits(limit = 10, doctorId?: string): Consultation[] {
+    const accessibleIds = doctorId ? this.getAccessiblePatientIds(doctorId) : null;
     return this.data.consultations
-      .filter(c => c.status === 'signed')
+      .filter(c => c.status === 'signed' && (!accessibleIds || accessibleIds.has(c.patientId)))
       .sort((a, b) => new Date(b.consultationDate).getTime() - new Date(a.consultationDate).getTime())
       .slice(0, limit);
   }
 
-  public getRecentPatients(limit = 10): Patient[] {
-    return [...this.data.patients]
+  public getRecentPatients(limit = 10, doctorId?: string): Patient[] {
+    const accessibleIds = doctorId ? this.getAccessiblePatientIds(doctorId) : null;
+    return this.data.patients
+      .filter(p => !accessibleIds || accessibleIds.has(p.id))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, limit);
   }
 
   // --- Revenue & Financial Analytics ---
-  public getPracticeRevenueAnalytics(): PracticeRevenueAnalytics {
-    const consultations = this.data.consultations.filter(c => (c.fee || 0) > 0 || (c.procedures && c.procedures.length > 0));
+  public getPracticeRevenueAnalytics(doctorId?: string): PracticeRevenueAnalytics {
+    const accessibleIds = doctorId ? this.getAccessiblePatientIds(doctorId) : null;
+    const accessiblePatients = accessibleIds
+      ? this.data.patients.filter(p => accessibleIds.has(p.id))
+      : this.data.patients;
+    const consultations = this.data.consultations.filter(
+      c =>
+        (!accessibleIds || accessibleIds.has(c.patientId)) &&
+        ((c.fee || 0) > 0 || (c.procedures && c.procedures.length > 0))
+    );
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
@@ -1348,7 +1428,7 @@ class DatabaseService {
 
     // Patient Itemized Breakdown
     const patientMap = new Map<string, PatientRevenueBreakdown>();
-    for (const p of this.data.patients) {
+    for (const p of accessiblePatients) {
       patientMap.set(p.id, {
         patientId: p.id,
         patientName: p.fullName,
@@ -1516,8 +1596,13 @@ class DatabaseService {
     this.persist();
   }
 
-  public getAuditLogs(limit = 100): AuditLog[] {
-    return this.data.auditLogs.slice(0, limit);
+  public getAuditLogs(limit = 100, doctorId?: string): AuditLog[] {
+    if (doctorId && !this.isDemoAccount(doctorId)) {
+      return this.data.auditLogs.filter(l => l.actorId === doctorId).slice(0, limit);
+    }
+    return this.data.auditLogs
+      .filter(l => !l.actorId || this.isDemoAccount(l.actorId))
+      .slice(0, limit);
   }
 
   // --- Clinic Subscription & AI Credit Meter ---

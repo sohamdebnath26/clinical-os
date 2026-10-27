@@ -297,23 +297,23 @@ app.put('/api/doctor/profile', authMiddleware, (req: AuthenticatedRequest, res) 
 // ==========================================
 // PATIENT ROUTES
 // ==========================================
-app.get('/api/patients', authMiddleware, (req, res) => {
+app.get('/api/patients', authMiddleware, (req: AuthenticatedRequest, res) => {
   const query = req.query.q as string | undefined;
-  const patients = db.getPatients(query);
+  const patients = db.getPatients(query, req.doctor?.id);
   res.json({ patients });
 });
 
-app.get('/api/patients/check-mobile/:mobile', authMiddleware, (req, res) => {
+app.get('/api/patients/check-mobile/:mobile', authMiddleware, (req: AuthenticatedRequest, res) => {
   const mobile = req.params.mobile;
-  const existing = db.findPatientByMobile(mobile);
+  const existing = db.findPatientByMobile(mobile, req.doctor?.id);
   if (existing) {
     return res.json({ exists: true, patient: existing });
   }
   res.json({ exists: false });
 });
 
-app.get('/api/patients/:id', authMiddleware, (req, res) => {
-  const patient = db.findPatientById(req.params.id);
+app.get('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const patient = db.findPatientById(req.params.id, req.doctor?.id);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   res.json({ patient });
 });
@@ -347,8 +347,8 @@ app.post('/api/patients', authMiddleware, (req: AuthenticatedRequest, res) => {
     return res.status(400).json({ error: 'Mobile number must be10 digits' });
   }
 
-  // Prevent accidental duplicate mobile
-  const existing = db.findPatientByMobile(cleanMobile);
+  // Prevent accidental duplicate mobile within the same doctor/clinic account
+  const existing = db.findPatientByMobile(cleanMobile, req.doctor?.id);
   if (existing && !req.query.force) {
     return res.status(409).json({
       error: 'An existing patient was found with this mobile number.',
@@ -609,9 +609,9 @@ app.put('/api/consultations/:id/sign', authMiddleware, (req: AuthenticatedReques
 // ==========================================
 // PRESCRIPTIONS ROUTES
 // ==========================================
-app.get('/api/prescriptions', authMiddleware, (req, res) => {
+app.get('/api/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) => {
   const patientId = req.query.patientId as string | undefined;
-  const prescriptions = db.getPrescriptions(patientId);
+  const prescriptions = db.getPrescriptions(patientId, req.doctor?.id);
   res.json({ prescriptions });
 });
 
@@ -1283,12 +1283,12 @@ app.delete('/api/formulary/:id', authMiddleware, (req: AuthenticatedRequest, res
 // ==========================================
 // APPOINTMENTS ROUTES (Consistent with Consultation Follow-up Date)
 // ==========================================
-app.get('/api/appointments', authMiddleware, (req, res) => {
+app.get('/api/appointments', authMiddleware, (req: AuthenticatedRequest, res) => {
   const patientId = req.query.patientId as string | undefined;
   const date = req.query.date as string | undefined;
   const status = req.query.status as string | undefined;
 
-  const appointments = db.getAppointments({ patientId, date, status });
+  const appointments = db.getAppointments({ patientId, date, status }, req.doctor?.id);
   res.json({ appointments });
 });
 
@@ -1778,18 +1778,18 @@ app.post('/api/ai/parse-clinical-note', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/api/ai/chat', authMiddleware, async (req, res) => {
+app.post('/api/ai/chat', authMiddleware, async (req: AuthenticatedRequest, res) => {
   const { question, patientId, contextType } = req.body;
   if (!question) {
     return res.status(400).json({ error: 'Question is required' });
   }
 
-  const allPatients = db.getPatients();
+  const allPatients = db.getPatients(undefined, req.doctor?.id);
   let patient = undefined;
   let history = undefined;
 
   if (patientId) {
-    patient = db.findPatientById(patientId);
+    patient = db.findPatientById(patientId, req.doctor?.id);
   } else {
     // Intelligent auto-detection of patient in query text
     const qLower = question.toLowerCase().trim();
@@ -2190,21 +2190,22 @@ app.post('/api/reports/log-whatsapp', authMiddleware, (req: AuthenticatedRequest
 // ==========================================
 // DASHBOARD & AUDIT
 // ==========================================
-app.get('/api/dashboard/stats', authMiddleware, (req, res) => {
-  const stats = db.getStats();
-  const recentVisits = db.getRecentVisits(8);
-  const recentPatients = db.getRecentPatients(8);
-  const revenue = db.getPracticeRevenueAnalytics();
+app.get('/api/dashboard/stats', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const doctorId = req.doctor?.id;
+  const stats = db.getStats(doctorId);
+  const recentVisits = db.getRecentVisits(8, doctorId);
+  const recentPatients = db.getRecentPatients(8, doctorId);
+  const revenue = db.getPracticeRevenueAnalytics(doctorId);
   res.json({ stats, recentVisits, recentPatients, revenue });
 });
 
-app.get('/api/dashboard/revenue', authMiddleware, (req, res) => {
-  const revenue = db.getPracticeRevenueAnalytics();
+app.get('/api/dashboard/revenue', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const revenue = db.getPracticeRevenueAnalytics(req.doctor?.id);
   res.json({ revenue });
 });
 
-app.get('/api/audit', authMiddleware, (req, res) => {
-  const logs = db.getAuditLogs(100);
+app.get('/api/audit', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const logs = db.getAuditLogs(100, req.doctor?.id);
   res.json({ logs });
 });
 
