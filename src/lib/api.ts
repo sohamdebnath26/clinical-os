@@ -691,6 +691,8 @@ export const api = {
       visitAId: string;
       visitBId: string;
       patientId: string;
+      doctorNotes?: string;
+      markedAreas?: string[];
     }) =>
       fetchWithAuth<{ comparison: import('../types').VisitComparisonResult }>('/api/ai/compare-visits', {
         method: 'POST',

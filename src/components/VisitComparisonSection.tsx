@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Patient, Consultation, ClinicalImage, VisitComparisonResult, ProgressionAnalysisResult } from '../types';
 import { api } from '../lib/api';
+import { VoiceDictationButton } from './VoiceDictationButton';
+import { FullScreenSideBySideModal, ImageAreaAnnotation } from './FullScreenSideBySideModal';
 import {
   ArrowLeftRight,
   GitCompare,
@@ -15,19 +17,19 @@ import {
   Check,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Plus,
   Stethoscope,
   TrendingUp,
   TrendingDown,
-  Eye,
   SlidersHorizontal,
   ChevronRight,
-  Download,
-  Share2,
   RefreshCw,
   Clock,
-  Layers,
-  ZoomIn
+  ZoomIn,
+  Pencil,
+  Save,
+  RotateCcw
 } from 'lucide-react';
 
 interface VisitComparisonSectionProps {
@@ -44,8 +46,7 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
   consultations,
   images,
   onStartConsultation,
-  onRefreshData,
-  onOpenWhatsApp
+  onRefreshData
 }) => {
   // Sort consultations chronologically (oldest to newest for intuitive timeline progression)
   const sortedConsultations = [...consultations].sort(
@@ -58,7 +59,6 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
 
   useEffect(() => {
     if (sortedConsultations.length >= 2) {
-      // Pick first and latest if not already set or invalid
       if (!visitAId || !sortedConsultations.some(c => c.id === visitAId)) {
         setVisitAId(sortedConsultations[0].id);
       }
@@ -72,6 +72,7 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
 
   const [activeTab, setActiveTab] = useState<'images' | 'reports' | 'examinations' | 'prescriptions' | 'ai_summary'>('images');
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [showSideBySideFullScreenModal, setShowSideBySideFullScreenModal] = useState(false);
   const [selectedImgA, setSelectedImgA] = useState<ClinicalImage | null>(null);
   const [selectedImgB, setSelectedImgB] = useState<ClinicalImage | null>(null);
   const [isComparingProgression, setIsComparingProgression] = useState(false);
@@ -84,28 +85,64 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
   const [isCreatingDemoVisit, setIsCreatingDemoVisit] = useState(false);
   const [zoomImage, setZoomImage] = useState<ClinicalImage | null>(null);
 
+  // New Comparison Model states:
+  // 1) Full-screen side-by-side area markings
+  const [annotations, setAnnotations] = useState<ImageAreaAnnotation[]>([]);
+  // 2) Doctor's Clinical Comparison Notes (with Mic voice dictation)
+  const [comparisonClinicalNotes, setComparisonClinicalNotes] = useState<string>('');
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [savedNotesSuccess, setSavedNotesSuccess] = useState(false);
+  // 3) Editable Visit Summary + Minor AI Suggestions (Red Flags, Severity Increased/Decreased)
+  const [editableSummaryText, setEditableSummaryText] = useState<string>('');
+  const [isEditingSummary, setIsEditingSummary] = useState<boolean>(true);
+  const [severityOverride, setSeverityOverride] = useState<
+    'Severity Increased' | 'Severity Decreased (Improving)' | 'Severity Stable' | null
+  >(null);
+  const [isSavingSummary, setIsSavingSummary] = useState(false);
+  const [savedSummarySuccess, setSavedSummarySuccess] = useState(false);
+
   const visitA = sortedConsultations.find(c => c.id === visitAId) || sortedConsultations[0];
   const visitB = sortedConsultations.find(c => c.id === visitBId) || sortedConsultations[sortedConsultations.length - 1];
 
-  // Helper to get all clinical images associated with a visit
-  const getVisitImages = (consultation?: Consultation): ClinicalImage[] => {
+  // Helper to get all clinical images associated with a visit (with smart fallback to chronological patient images so first image from each visit is always available)
+  const getVisitImages = (consultation?: Consultation, isBaselineVisit?: boolean): ClinicalImage[] => {
     if (!consultation) return [];
     const directImages = consultation.images || [];
+    const byConsultationId = images.filter(
+      img => img.consultationId === consultation.id && !directImages.some(di => di.id === img.id)
+    );
 
-    // Also match any patient clinical images uploaded on the same calendar day
     const visitDateStr = consultation.consultationDate.split('T')[0];
     const matchingGlobalImages = images.filter(img => {
       const imgDateStr = img.createdAt.split('T')[0];
-      return imgDateStr === visitDateStr && !directImages.some(di => di.id === img.id);
+      return (
+        imgDateStr === visitDateStr &&
+        !directImages.some(di => di.id === img.id) &&
+        !byConsultationId.some(ci => ci.id === img.id)
+      );
     });
 
-    return [...directImages, ...matchingGlobalImages];
+    const combined = [...directImages, ...byConsultationId, ...matchingGlobalImages];
+    if (combined.length > 0) return combined;
+
+    // Fallback: if patient has global clinical images not explicitly linked by date, provide first/latest image for comparison
+    if (images.length > 0) {
+      const chronologicalImgs = [...images].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+      if (isBaselineVisit) {
+        return [chronologicalImgs[0]];
+      }
+      return [chronologicalImgs[chronologicalImgs.length - 1]];
+    }
+
+    return [];
   };
 
-  const imagesA = getVisitImages(visitA);
-  const imagesB = getVisitImages(visitB);
+  const imagesA = getVisitImages(visitA, true);
+  const imagesB = getVisitImages(visitB, false);
 
-  // Sync selected images when visits change
+  // Sync first image from each visit when visits change
   useEffect(() => {
     if (imagesA.length > 0 && (!selectedImgA || !imagesA.some(img => img.id === selectedImgA.id))) {
       setSelectedImgA(imagesA[0]);
@@ -119,9 +156,10 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
       setSelectedImgB(null);
     }
 
-    // Reset AI outputs when visit pair changes
     setProgressionResult(null);
     setComparisonResult(null);
+    setEditableSummaryText('');
+    setSeverityOverride(null);
   }, [visitAId, visitBId, images.length]);
 
   // Interval calculation
@@ -142,6 +180,7 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
     if (!selectedImgA || !selectedImgB) return;
     setIsComparingProgression(true);
     try {
+      const markedLabels = annotations.map(a => `Visit ${a.side}: ${a.label}`).join('; ');
       const res = await api.ai.compareProgression({
         imageA: {
           base64: selectedImgA.url,
@@ -156,7 +195,7 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
           date: formatDate(visitB.consultationDate)
         },
         patientId: patient.id,
-        clinicalContext: `Comparing lesion progression between visit on ${formatDate(visitA.consultationDate)} and ${formatDate(visitB.consultationDate)}. Diagnoses: ${visitB.diagnoses.join(', ') || visitA.diagnoses.join(', ')}`
+        clinicalContext: `Comparing lesion progression between visit on ${formatDate(visitA.consultationDate)} and ${formatDate(visitB.consultationDate)}. Diagnoses: ${visitB.diagnoses.join(', ') || visitA.diagnoses.join(', ')}. ${comparisonClinicalNotes ? `Doctor Notes: ${comparisonClinicalNotes}.` : ''} ${markedLabels ? `Marked Areas: ${markedLabels}` : ''}`
       });
       setProgressionResult(res.progression);
     } catch (err) {
@@ -170,13 +209,20 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
     if (!visitA || !visitB) return;
     setIsGeneratingAIReport(true);
     try {
+      const markedAreasList = annotations.map(
+        (a, idx) => `#${idx + 1} [Visit ${a.side}] ${a.label}`
+      );
       const res = await api.ai.compareVisits({
         visitAId: visitA.id,
         visitBId: visitB.id,
-        patientId: patient.id
+        patientId: patient.id,
+        doctorNotes: comparisonClinicalNotes.trim() || undefined,
+        markedAreas: markedAreasList.length > 0 ? markedAreasList : undefined
       });
       setComparisonResult(res.comparison);
-      setActiveTab('ai_summary');
+      setEditableSummaryText(res.comparison.summaryText);
+      setSeverityOverride(res.comparison.severityChange || null);
+      setIsEditingSummary(true);
     } catch (err) {
       console.error('Visit AI comparison error:', err);
     } finally {
@@ -184,9 +230,69 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
     }
   };
 
+  const handleSaveNotesToVisit = async () => {
+    if (!visitB || !comparisonClinicalNotes.trim()) return;
+    setIsSavingNotes(true);
+    setSavedNotesSuccess(false);
+    try {
+      const existingExam = visitB.clinicalNotes?.examination || '';
+      const updatedExam = existingExam
+        ? `${existingExam}\n[Comparison Note]: ${comparisonClinicalNotes.trim()}`
+        : comparisonClinicalNotes.trim();
+      await api.consultations.sign(visitB.id, {
+        ...visitB,
+        clinicalNotes: {
+          ...visitB.clinicalNotes,
+          examination: updatedExam
+        }
+      });
+      setSavedNotesSuccess(true);
+      setTimeout(() => setSavedNotesSuccess(false), 2500);
+      if (onRefreshData) onRefreshData();
+    } catch (err) {
+      console.error('Failed to save clinical notes to visit:', err);
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
+
+  const handleSaveSummaryToVisit = async () => {
+    if (!visitB || !editableSummaryText.trim()) return;
+    setIsSavingSummary(true);
+    setSavedSummarySuccess(false);
+    try {
+      await api.consultations.sign(visitB.id, {
+        ...visitB,
+        aiSummary: editableSummaryText.trim()
+      });
+      setSavedSummarySuccess(true);
+      setTimeout(() => setSavedSummarySuccess(false), 2500);
+      if (onRefreshData) onRefreshData();
+    } catch (err) {
+      console.error('Failed to save edited comparison summary:', err);
+    } finally {
+      setIsSavingSummary(false);
+    }
+  };
+
+  const handleInsertSuggestionIntoSummary = (suggestion: string) => {
+    const clean = suggestion.trim();
+    if (!clean) return;
+    setEditableSummaryText(prev => {
+      const base = prev.trim();
+      if (!base) return clean;
+      const endsWithPunct = /[.!?]$/.test(base);
+      return `${base}${endsWithPunct ? '' : '.'} ${clean}`;
+    });
+    setIsEditingSummary(true);
+  };
+
   const handleCopyReport = () => {
     if (!visitA || !visitB) return;
     const interval = getIntervalDays();
+    const activeSeverity =
+      severityOverride || comparisonResult?.severityChange || comparisonResult?.overallStatus || 'Evaluated';
+    const summaryBody = editableSummaryText || comparisonResult?.summaryText || '';
     const text = `CLINICAL VISIT COMPARISON REPORT · ${patient.fullName} (${patient.patientCode})
 Interval: ${interval} days (${formatDate(visitA.consultationDate)} ➔ ${formatDate(visitB.consultationDate)})
 
@@ -201,13 +307,7 @@ VISIT 2 (${formatDate(visitB.consultationDate)} · Dr. ${visitB.doctorName}):
 - Symptoms: ${visitB.symptoms.join(', ') || 'None recorded'}
 - Investigations: ${visitB.tests?.join(', ') || 'None'}
 - Prescriptions: ${visitB.prescriptions.map(p => `${p.medicineName} (${p.dosage}, ${p.frequency})`).join('; ') || 'None'}
-
-${comparisonResult ? `\nAI LONGITUDINAL SYNTHESIS:
-Status: ${comparisonResult.overallStatus}
-${comparisonResult.summaryText}
-
-Recommendations:
-${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
+${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClinicalNotes.trim()}\n` : ''}${annotations.length > 0 ? `\nMARKED IMAGE AREAS (${annotations.length}):\n${annotations.map((a, i) => `${i + 1}. [Visit ${a.side}] ${a.label}`).join('\n')}\n` : ''}${summaryBody ? `\nVISIT COMPARISON SUMMARY (${activeSeverity}):\n${summaryBody}` : ''}`;
 
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -217,13 +317,11 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
   const handleCreateDemoFollowUp = async () => {
     setIsCreatingDemoVisit(true);
     try {
-      // Create a realistic follow-up visit for immediate comparison demonstration
       const res = await api.consultations.create({
         patientId: patient.id,
         symptoms: ['Mild residual redness', 'Significant reduction in pruritus / itching']
       });
 
-      // Update with clinical notes, diagnoses, tests, and prescriptions
       await api.consultations.sign(res.consultation.id, {
         status: 'signed',
         diagnoses: [
@@ -287,6 +385,69 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
     }
   };
 
+  // Render SVG markings overlay on the preview cards as well
+  const renderCardAnnotationPreview = (side: 'A' | 'B') => {
+    const marks = annotations.filter(a => a.side === side);
+    if (marks.length === 0) return null;
+    return (
+      <svg
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        className="absolute inset-0 w-full h-full pointer-events-none z-10"
+      >
+        {marks.map((mark, idx) => {
+          if (mark.tool === 'circle') {
+            return (
+              <g key={mark.id}>
+                <ellipse
+                  cx={mark.x}
+                  cy={mark.y}
+                  rx={mark.radiusX || 7}
+                  ry={mark.radiusY || 7}
+                  fill={`${mark.color}25`}
+                  stroke={mark.color}
+                  strokeWidth="0.9"
+                  strokeDasharray="1.5,1"
+                />
+                <text
+                  x={Math.max(2, mark.x - (mark.radiusX || 7))}
+                  y={Math.max(5, mark.y - (mark.radiusY || 7) - 1.5)}
+                  fill="#ffffff"
+                  fontSize="3.2"
+                  fontWeight="bold"
+                >
+                  #{idx + 1}
+                </text>
+              </g>
+            );
+          }
+          if (mark.tool === 'freehand' && mark.points && mark.points.length > 1) {
+            return (
+              <path
+                key={mark.id}
+                d={mark.points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')}
+                fill={`${mark.color}20`}
+                stroke={mark.color}
+                strokeWidth="0.9"
+              />
+            );
+          }
+          return (
+            <circle
+              key={mark.id}
+              cx={mark.x}
+              cy={mark.y}
+              r="2.5"
+              fill={mark.color}
+              stroke="#ffffff"
+              strokeWidth="0.6"
+            />
+          );
+        })}
+      </svg>
+    );
+  };
+
   // If patient has 0 or 1 visit, render a guided prompt with single-visit overview & instant follow-up creation
   if (sortedConsultations.length < 2) {
     return (
@@ -298,13 +459,13 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
             </div>
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
-                <span>Visit & Clinical Report Comparison</span>
+                <span>Visit &amp; Clinical Report Comparison</span>
                 <span className="text-[10px] normal-case font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                   {sortedConsultations.length} visit recorded
                 </span>
               </h3>
               <p className="text-xs text-slate-500">
-                Compare reports, clinical findings, investigations, and lesion photographs between two visits
+                Compare first images from each visit side-by-side in full screen (zoom &amp; mark areas), dictate clinical notes, and generate an editable visit summary
               </p>
             </div>
           </div>
@@ -322,7 +483,7 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                   : `Currently 1 visit on record (${formatDate(sortedConsultations[0].consultationDate)}).`}
               </p>
               <p className="text-slate-500 leading-relaxed">
-                Longitudinal visit comparison allows doctors to inspect side-by-side diagnostic reports, lab investigations, medication titration, and lesion photography changes over time.
+                Longitudinal visit comparison allows doctors to inspect the first clinical image from each visit side-by-side in full screen, zoom and mark areas, dictate clinical notes with the microphone, and generate an editable AI visit summary with red-flag &amp; severity indicators.
               </p>
             </div>
           </div>
@@ -360,45 +521,62 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
     );
   }
 
+  const activeSeverity =
+    severityOverride || comparisonResult?.severityChange || 'Severity Decreased (Improving)';
+
   return (
-    <div className={`bg-white rounded-2xl border border-slate-200 shadow-2xs transition-all duration-200 ${
-      isFullScreen ? 'fixed inset-4 z-50 overflow-y-auto p-6 bg-white shadow-2xl border-slate-300' : 'p-6 space-y-5'
-    }`}>
-      {/* Header with Title, Mode Switcher, and Fullscreen toggle */}
+    <div
+      className={`bg-white rounded-2xl border border-slate-200 shadow-2xs transition-all duration-200 ${
+        isFullScreen
+          ? 'fixed inset-4 z-50 overflow-y-auto p-6 bg-white shadow-2xl border-slate-300 space-y-5'
+          : 'p-6 space-y-5'
+      }`}
+    >
+      {/* Header with Title, Full-Screen Side-by-Side Image Trigger, and Summary Generator */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-100 text-teal-800 flex items-center justify-center shrink-0">
             <GitCompare className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm font-bold text-slate-900 tracking-tight">
-                Visit & Clinical Report Comparison
+                Visit &amp; Clinical Report Comparison Model
               </h3>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100/70 text-teal-900 border border-teal-200/50">
-                Longitudinal Tracking
+                Side-by-Side Zoom &amp; Mark
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Side-by-side analysis of clinical photographs, diagnostic reports, examinations, and prescriptions
+              Compare first images from each visit in full screen, zoom &amp; mark areas, dictate clinical notes, and generate an editable summary
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+          <button
+            type="button"
+            onClick={() => setShowSideBySideFullScreenModal(true)}
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition"
+            title="Open Full Screen Side-by-Side Image Viewer with Zoom & Area Marking"
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-teal-300" />
+            <span>Full Screen Side-by-Side (Zoom &amp; Mark)</span>
+          </button>
+
           <button
             type="button"
             onClick={handleGenerateAIReport}
             disabled={isGeneratingAIReport}
             className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100/80 border border-teal-200 text-teal-900 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
-            title="Generate AI Longitudinal Synthesis"
+            title="Generate Visit Summary with Minor AI Suggestions"
           >
             {isGeneratingAIReport ? (
               <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-700" />
             ) : (
               <Sparkles className="w-3.5 h-3.5 text-teal-700" />
             )}
-            <span>AI Interval Summary</span>
+            <span>Generate Visit Summary</span>
           </button>
 
           <button
@@ -414,7 +592,7 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
             type="button"
             onClick={() => setIsFullScreen(!isFullScreen)}
             className="p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-xs transition"
-            title={isFullScreen ? 'Exit Full Screen' : 'Expand Full Screen'}
+            title={isFullScreen ? 'Exit Expanded Panel' : 'Expand Comparison Panel'}
           >
             {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
@@ -499,7 +677,7 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
           }`}
         >
           <ImageIcon className="w-3.5 h-3.5" />
-          <span>Clinical Images ({imagesA.length} vs {imagesB.length})</span>
+          <span>1. Visit Images &amp; Full-Screen Mark ({imagesA.length} vs {imagesB.length})</span>
         </button>
 
         <button
@@ -512,7 +690,7 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
           }`}
         >
           <FileText className="w-3.5 h-3.5" />
-          <span>Reports & Investigations ({visitA?.tests?.length || 0} vs {visitB?.tests?.length || 0})</span>
+          <span>Reports &amp; Investigations ({visitA?.tests?.length || 0} vs {visitB?.tests?.length || 0})</span>
         </button>
 
         <button
@@ -525,7 +703,7 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
           }`}
         >
           <Stethoscope className="w-3.5 h-3.5" />
-          <span>Diagnoses & Notes</span>
+          <span>Diagnoses &amp; Notes</span>
         </button>
 
         <button
@@ -546,9 +724,8 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
           onClick={() => {
             if (!comparisonResult) {
               handleGenerateAIReport();
-            } else {
-              setActiveTab('ai_summary');
             }
+            setActiveTab('ai_summary');
           }}
           className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition shrink-0 ${
             activeTab === 'ai_summary'
@@ -557,47 +734,58 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
           }`}
         >
           <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-          <span>AI Interval Report</span>
+          <span>Visit Summary &amp; AI Pointers</span>
         </button>
       </div>
 
       {/* ======================================================== */}
-      {/* TAB 1: CLINICAL IMAGES COMPARISON */}
+      {/* TAB 1: FIRST IMAGES FROM EACH VISIT + FULL SCREEN SIDE-BY-SIDE */}
       {/* ======================================================== */}
       {activeTab === 'images' && (
         <div className="space-y-4 animate-in fade-in duration-150">
-          <div className="flex items-center justify-between text-xs text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
             <span>
-              Comparing photographic findings across a <strong>{getIntervalDays()} day</strong> interval.
+              Showing the <strong>first clinical image from each visit</strong> across a <strong>{getIntervalDays()} day</strong> interval.
             </span>
-            {selectedImgA && selectedImgB && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowImageSlider(!showImageSlider)}
-                  className={`px-2.5 py-1 rounded-lg border font-medium flex items-center gap-1 transition ${
-                    showImageSlider ? 'bg-teal-50 border-teal-300 text-teal-800' : 'bg-white border-slate-200 text-slate-600'
-                  }`}
-                >
-                  <SlidersHorizontal className="w-3 h-3" />
-                  <span>{showImageSlider ? 'Dual Screen Mode' : 'Overlay Slider Mode'}</span>
-                </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSideBySideFullScreenModal(true)}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold flex items-center gap-1.5 shadow-2xs transition"
+              >
+                <Maximize2 className="w-3.5 h-3.5 text-teal-300" />
+                <span>View Full Screen Side-by-Side (Zoom &amp; Mark Areas)</span>
+              </button>
 
-                <button
-                  type="button"
-                  onClick={handleCompareImagesWithAI}
-                  disabled={isComparingProgression}
-                  className="px-2.5 py-1 bg-teal-800 hover:bg-teal-900 text-white rounded-lg font-medium flex items-center gap-1 shadow-2xs transition"
-                >
-                  {isComparingProgression ? (
-                    <RefreshCw className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-3 h-3" />
-                  )}
-                  <span>AI Lesion Diff</span>
-                </button>
-              </div>
-            )}
+              {selectedImgA && selectedImgB && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowImageSlider(!showImageSlider)}
+                    className={`px-2.5 py-1.5 rounded-lg border font-medium flex items-center gap-1 transition ${
+                      showImageSlider ? 'bg-teal-50 border-teal-300 text-teal-800' : 'bg-white border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <SlidersHorizontal className="w-3 h-3" />
+                    <span>{showImageSlider ? 'Dual Screen Mode' : 'Overlay Slider Mode'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCompareImagesWithAI}
+                    disabled={isComparingProgression}
+                    className="px-2.5 py-1.5 bg-teal-800 hover:bg-teal-900 text-white rounded-lg font-medium flex items-center gap-1 shadow-2xs transition"
+                  >
+                    {isComparingProgression ? (
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3 h-3" />
+                    )}
+                    <span>AI Lesion Diff</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Interactive Overlay Slider Mode */}
@@ -609,13 +797,11 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                 <span>Visit B ({formatDate(visitB?.consultationDate)}) ▶</span>
               </div>
               <div className="relative h-80 w-full overflow-hidden rounded-xl bg-black flex items-center justify-center">
-                {/* Image A (underneath) */}
                 <img
                   src={selectedImgA.url}
                   alt="Visit A"
                   className="absolute inset-0 w-full h-full object-contain"
                 />
-                {/* Image B (clipped on top) */}
                 <div
                   className="absolute inset-0 overflow-hidden"
                   style={{ width: `${imageSliderPos}%`, borderRight: '2px solid #2dd4bf' }}
@@ -638,14 +824,14 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
               />
             </div>
           ) : (
-            /* Side-by-Side Dual Card View */
+            /* Side-by-Side Dual Card View (First Image from Visit A & First Image from Visit B) */
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Visit A Image Card */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/90 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    Visit A Photo ({formatDate(visitA?.consultationDate)})
+                    Visit A · First Image ({formatDate(visitA?.consultationDate)})
                   </span>
                   <span className="text-[11px] text-slate-500 font-medium">
                     {imagesA.length} photo(s)
@@ -662,52 +848,85 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="relative h-64 rounded-xl overflow-hidden bg-slate-900 border border-slate-200 flex items-center justify-center group">
+                    <div
+                      onClick={() => setShowSideBySideFullScreenModal(true)}
+                      className="relative h-64 rounded-xl overflow-hidden bg-slate-900 border border-slate-200 flex items-center justify-center group cursor-pointer"
+                      title="Click to open Full Screen Side-by-Side Zoom & Area Marking"
+                    >
                       <img
                         src={selectedImgA?.url || imagesA[0].url}
                         alt="Visit A lesion"
                         className="w-full h-full object-contain"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setZoomImage(selectedImgA || imagesA[0])}
-                        className="absolute bottom-2 right-2 p-1.5 bg-black/60 hover:bg-black text-white rounded-lg text-xs opacity-0 group-hover:opacity-100 transition"
-                        title="Zoom full image"
-                      >
-                        <ZoomIn className="w-3.5 h-3.5" />
-                      </button>
+                      {renderCardAnnotationPreview('A')}
+                      <div className="absolute bottom-2 right-2 flex items-center gap-1.5 opacity-95 group-hover:opacity-100 transition">
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setShowSideBySideFullScreenModal(true);
+                          }}
+                          className="px-2.5 py-1 bg-slate-900/90 hover:bg-black text-white rounded-lg text-[11px] font-semibold flex items-center gap-1 border border-white/15 shadow-sm"
+                        >
+                          <Maximize2 className="w-3 h-3 text-teal-300" />
+                          <span>Full Screen &amp; Mark</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setZoomImage(selectedImgA || imagesA[0]);
+                          }}
+                          className="p-1.5 bg-black/60 hover:bg-black text-white rounded-lg text-xs"
+                          title="Quick Zoom"
+                        >
+                          <ZoomIn className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Image Selector Strip if multiple */}
                     {imagesA.length > 1 && (
                       <div className="flex items-center gap-2 overflow-x-auto py-1">
-                        {imagesA.map(img => (
+                        {imagesA.map((img, idx) => (
                           <button
                             key={img.id}
                             type="button"
                             onClick={() => setSelectedImgA(img)}
-                            className={`w-12 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition ${
+                            className={`w-12 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition relative ${
                               selectedImgA?.id === img.id ? 'border-blue-500 shadow-xs' : 'border-slate-200 opacity-60 hover:opacity-100'
                             }`}
                           >
                             <img src={img.url} alt="thumbnail" className="w-full h-full object-cover" />
+                            {idx === 0 && (
+                              <span className="absolute bottom-0 inset-x-0 bg-blue-600/90 text-white text-[8px] font-bold text-center">
+                                1st
+                              </span>
+                            )}
                           </button>
                         ))}
                       </div>
                     )}
 
-                    <div className="p-2.5 rounded-lg bg-white border border-slate-200/80 text-xs text-slate-600">
-                      <div className="font-semibold text-slate-800">
-                        {selectedImgA?.caption || 'Baseline clinical photograph'}
-                      </div>
-                      {selectedImgA?.tags && selectedImgA.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {selectedImgA.tags.map(t => (
-                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                              #{t}
-                            </span>
-                          ))}
+                    <div className="p-2.5 rounded-lg bg-white border border-slate-200/80 text-xs text-slate-600 flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-slate-800">
+                          {selectedImgA?.caption || 'First clinical photograph (Visit A)'}
                         </div>
+                        {selectedImgA?.tags && selectedImgA.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {selectedImgA.tags.map(t => (
+                              <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                                #{t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {annotations.filter(a => a.side === 'A').length > 0 && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                          {annotations.filter(a => a.side === 'A').length} marked area(s)
+                        </span>
                       )}
                     </div>
                   </div>
@@ -719,7 +938,7 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    Visit B Photo ({formatDate(visitB?.consultationDate)})
+                    Visit B · First Image ({formatDate(visitB?.consultationDate)})
                   </span>
                   <span className="text-[11px] text-slate-500 font-medium">
                     {imagesB.length} photo(s)
@@ -736,57 +955,119 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="relative h-64 rounded-xl overflow-hidden bg-slate-900 border border-slate-200 flex items-center justify-center group">
+                    <div
+                      onClick={() => setShowSideBySideFullScreenModal(true)}
+                      className="relative h-64 rounded-xl overflow-hidden bg-slate-900 border border-slate-200 flex items-center justify-center group cursor-pointer"
+                      title="Click to open Full Screen Side-by-Side Zoom & Area Marking"
+                    >
                       <img
                         src={selectedImgB?.url || imagesB[0].url}
                         alt="Visit B lesion"
                         className="w-full h-full object-contain"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setZoomImage(selectedImgB || imagesB[0])}
-                        className="absolute bottom-2 right-2 p-1.5 bg-black/60 hover:bg-black text-white rounded-lg text-xs opacity-0 group-hover:opacity-100 transition"
-                        title="Zoom full image"
-                      >
-                        <ZoomIn className="w-3.5 h-3.5" />
-                      </button>
+                      {renderCardAnnotationPreview('B')}
+                      <div className="absolute bottom-2 right-2 flex items-center gap-1.5 opacity-95 group-hover:opacity-100 transition">
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setShowSideBySideFullScreenModal(true);
+                          }}
+                          className="px-2.5 py-1 bg-slate-900/90 hover:bg-black text-white rounded-lg text-[11px] font-semibold flex items-center gap-1 border border-white/15 shadow-sm"
+                        >
+                          <Maximize2 className="w-3 h-3 text-teal-300" />
+                          <span>Full Screen &amp; Mark</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setZoomImage(selectedImgB || imagesB[0]);
+                          }}
+                          className="p-1.5 bg-black/60 hover:bg-black text-white rounded-lg text-xs"
+                          title="Quick Zoom"
+                        >
+                          <ZoomIn className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Image Selector Strip if multiple */}
                     {imagesB.length > 1 && (
                       <div className="flex items-center gap-2 overflow-x-auto py-1">
-                        {imagesB.map(img => (
+                        {imagesB.map((img, idx) => (
                           <button
                             key={img.id}
                             type="button"
                             onClick={() => setSelectedImgB(img)}
-                            className={`w-12 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition ${
+                            className={`w-12 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition relative ${
                               selectedImgB?.id === img.id ? 'border-emerald-500 shadow-xs' : 'border-slate-200 opacity-60 hover:opacity-100'
                             }`}
                           >
                             <img src={img.url} alt="thumbnail" className="w-full h-full object-cover" />
+                            {idx === 0 && (
+                              <span className="absolute bottom-0 inset-x-0 bg-emerald-600/90 text-white text-[8px] font-bold text-center">
+                                1st
+                              </span>
+                            )}
                           </button>
                         ))}
                       </div>
                     )}
 
-                    <div className="p-2.5 rounded-lg bg-white border border-slate-200/80 text-xs text-slate-600">
-                      <div className="font-semibold text-slate-800">
-                        {selectedImgB?.caption || 'Follow-up clinical photograph'}
-                      </div>
-                      {selectedImgB?.tags && selectedImgB.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {selectedImgB.tags.map(t => (
-                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                              #{t}
-                            </span>
-                          ))}
+                    <div className="p-2.5 rounded-lg bg-white border border-slate-200/80 text-xs text-slate-600 flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-slate-800">
+                          {selectedImgB?.caption || 'First clinical photograph (Visit B)'}
                         </div>
+                        {selectedImgB?.tags && selectedImgB.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {selectedImgB.tags.map(t => (
+                              <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                                #{t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {annotations.filter(a => a.side === 'B').length > 0 && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                          {annotations.filter(a => a.side === 'B').length} marked area(s)
+                        </span>
                       )}
                     </div>
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Marked Areas Summary Bar (if doctor marked areas in Full Screen) */}
+          {annotations.length > 0 && (
+            <div className="p-3 rounded-xl bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-300">
+                  Marked ROI Areas ({annotations.length}):
+                </span>
+                {annotations.map((mark, idx) => (
+                  <span
+                    key={mark.id}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[11px]"
+                  >
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: mark.color }} />
+                    <span>
+                      #{idx + 1} [Visit {mark.side}] {mark.label}
+                    </span>
+                  </span>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSideBySideFullScreenModal(true)}
+                className="text-[11px] font-semibold text-teal-300 hover:underline"
+              >
+                Edit Marks in Full Screen →
+              </button>
             </div>
           )}
 
@@ -801,14 +1082,20 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
-                    progressionResult.progressionScore >= 30
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : progressionResult.progressionScore <= -15
-                      ? 'bg-rose-100 text-rose-800'
-                      : 'bg-blue-100 text-blue-800'
-                  }`}>
-                    {progressionResult.overallProgression} ({progressionResult.progressionScore > 0 ? `+${progressionResult.progressionScore}` : progressionResult.progressionScore})
+                  <span
+                    className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
+                      progressionResult.progressionScore >= 30
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : progressionResult.progressionScore <= -15
+                        ? 'bg-rose-100 text-rose-800'
+                        : 'bg-blue-100 text-blue-800'
+                    }`}
+                  >
+                    {progressionResult.overallProgression} (
+                    {progressionResult.progressionScore > 0
+                      ? `+${progressionResult.progressionScore}`
+                      : progressionResult.progressionScore}
+                    )
                   </span>
                 </div>
               </div>
@@ -817,19 +1104,25 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                 {progressionResult.treatmentResponseSummary}
               </p>
 
-              {progressionResult.visualComparisonObservations && progressionResult.visualComparisonObservations.length > 0 && (
-                <div className="space-y-1">
-                  <span className="text-[11px] font-bold text-teal-900 block">Morphological Observations:</span>
-                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-slate-600">
-                    {progressionResult.visualComparisonObservations.map((obs, i) => (
-                      <li key={i} className="flex items-start gap-1.5 bg-white/70 p-2 rounded-lg border border-teal-100">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
-                        <span>{obs}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {progressionResult.visualComparisonObservations &&
+                progressionResult.visualComparisonObservations.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-bold text-teal-900 block">
+                      Morphological Observations:
+                    </span>
+                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-slate-600">
+                      {progressionResult.visualComparisonObservations.map((obs, i) => (
+                        <li
+                          key={i}
+                          className="flex items-start gap-1.5 bg-white/70 p-2 rounded-lg border border-teal-100"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+                          <span>{obs}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
             </div>
           )}
         </div>
@@ -841,7 +1134,6 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
       {activeTab === 'reports' && (
         <div className="space-y-4 animate-in fade-in duration-150">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Visit A Reports & Tests */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/90 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
@@ -853,7 +1145,6 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                 </span>
               </div>
 
-              {/* Tests Advised */}
               <div className="space-y-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                   Diagnostic Tests Ordered:
@@ -863,7 +1154,10 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {visitA.tests.map(t => (
-                      <span key={t} className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700">
+                      <span
+                        key={t}
+                        className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700"
+                      >
                         {t}
                       </span>
                     ))}
@@ -871,17 +1165,16 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                 )}
               </div>
 
-              {/* Investigations Advised Notes */}
               <div className="space-y-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                  Investigation & Lab Notes:
+                  Investigation &amp; Lab Notes:
                 </span>
                 <div className="p-3 rounded-xl bg-white border border-slate-200/80 text-xs text-slate-700 leading-relaxed min-h-[60px]">
-                  {visitA?.clinicalNotes?.investigationsAdvised || 'No detailed lab notes recorded during this encounter.'}
+                  {visitA?.clinicalNotes?.investigationsAdvised ||
+                    'No detailed lab notes recorded during this encounter.'}
                 </div>
               </div>
 
-              {/* Procedures Conducted */}
               {visitA?.procedures && visitA.procedures.length > 0 && (
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
@@ -889,9 +1182,14 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                   </span>
                   <div className="space-y-1">
                     {visitA.procedures.map(proc => (
-                      <div key={proc.id} className="p-2 bg-white rounded-lg border border-slate-200 text-xs flex justify-between">
+                      <div
+                        key={proc.id}
+                        className="p-2 bg-white rounded-lg border border-slate-200 text-xs flex justify-between"
+                      >
                         <span className="font-semibold text-slate-800">{proc.name}</span>
-                        <span className="text-slate-500">₹{Number(proc.cost || 0).toLocaleString('en-IN')}</span>
+                        <span className="text-slate-500">
+                          ₹{Number(proc.cost || 0).toLocaleString('en-IN')}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -899,7 +1197,6 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
               )}
             </div>
 
-            {/* Visit B Reports & Tests */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/90 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
@@ -911,7 +1208,6 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                 </span>
               </div>
 
-              {/* Tests Advised */}
               <div className="space-y-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                   Diagnostic Tests Ordered:
@@ -932,7 +1228,11 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                           }`}
                         >
                           {t}
-                          {isNew && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1 rounded">NEW</span>}
+                          {isNew && (
+                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1 rounded">
+                              NEW
+                            </span>
+                          )}
                         </span>
                       );
                     })}
@@ -940,17 +1240,16 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                 )}
               </div>
 
-              {/* Investigations Advised Notes */}
               <div className="space-y-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                  Investigation & Lab Notes:
+                  Investigation &amp; Lab Notes:
                 </span>
                 <div className="p-3 rounded-xl bg-white border border-slate-200/80 text-xs text-slate-700 leading-relaxed min-h-[60px]">
-                  {visitB?.clinicalNotes?.investigationsAdvised || 'No detailed lab notes recorded during this encounter.'}
+                  {visitB?.clinicalNotes?.investigationsAdvised ||
+                    'No detailed lab notes recorded during this encounter.'}
                 </div>
               </div>
 
-              {/* Procedures Conducted */}
               {visitB?.procedures && visitB.procedures.length > 0 && (
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
@@ -958,9 +1257,14 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                   </span>
                   <div className="space-y-1">
                     {visitB.procedures.map(proc => (
-                      <div key={proc.id} className="p-2 bg-white rounded-lg border border-slate-200 text-xs flex justify-between">
+                      <div
+                        key={proc.id}
+                        className="p-2 bg-white rounded-lg border border-slate-200 text-xs flex justify-between"
+                      >
                         <span className="font-semibold text-slate-800">{proc.name}</span>
-                        <span className="text-slate-500">₹{Number(proc.cost || 0).toLocaleString('en-IN')}</span>
+                        <span className="text-slate-500">
+                          ₹{Number(proc.cost || 0).toLocaleString('en-IN')}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -977,7 +1281,6 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
       {activeTab === 'examinations' && (
         <div className="space-y-4 animate-in fade-in duration-150">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Visit A Examination */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/90 space-y-3">
               <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-blue-500" />
@@ -993,7 +1296,10 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                     <span className="text-xs text-slate-400 italic">None recorded</span>
                   ) : (
                     visitA?.diagnoses.map(d => (
-                      <span key={d} className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold">
+                      <span
+                        key={d}
+                        className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold"
+                      >
                         {d}
                       </span>
                     ))
@@ -1010,7 +1316,10 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                     <span className="text-xs text-slate-400 italic">None recorded</span>
                   ) : (
                     visitA?.symptoms.map(s => (
-                      <span key={s} className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-xs">
+                      <span
+                        key={s}
+                        className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-xs"
+                      >
                         {s}
                       </span>
                     ))
@@ -1037,7 +1346,6 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
               </div>
             </div>
 
-            {/* Visit B Examination */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/90 space-y-3">
               <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -1064,7 +1372,11 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
                           }`}
                         >
                           {d}
-                          {isNew && <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1 rounded">NEW</span>}
+                          {isNew && (
+                            <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1 rounded">
+                              NEW
+                            </span>
+                          )}
                         </span>
                       );
                     })
@@ -1128,7 +1440,6 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
       {activeTab === 'prescriptions' && (
         <div className="space-y-4 animate-in fade-in duration-150">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Visit A Prescriptions */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
               <span className="text-xs font-bold text-slate-800 flex items-center justify-between">
                 <span>Visit A ({formatDate(visitA?.consultationDate)})</span>
@@ -1139,10 +1450,15 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
 
               <div className="space-y-1.5">
                 {!visitA?.prescriptions || visitA.prescriptions.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic p-3 text-center">No medications prescribed in Visit A</p>
+                  <p className="text-xs text-slate-400 italic p-3 text-center">
+                    No medications prescribed in Visit A
+                  </p>
                 ) : (
                   visitA.prescriptions.map(rx => (
-                    <div key={rx.id} className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs space-y-0.5">
+                    <div
+                      key={rx.id}
+                      className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs space-y-0.5"
+                    >
                       <div className="font-semibold text-slate-900">{rx.medicineName}</div>
                       <div className="text-[11px] text-slate-600">
                         {rx.dosage} · {rx.frequency} · {rx.duration}
@@ -1156,7 +1472,6 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
               </div>
             </div>
 
-            {/* Visit B Prescriptions */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
               <span className="text-xs font-bold text-slate-800 flex items-center justify-between">
                 <span>Visit B ({formatDate(visitB?.consultationDate)})</span>
@@ -1167,7 +1482,9 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
 
               <div className="space-y-1.5">
                 {!visitB?.prescriptions || visitB.prescriptions.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic p-3 text-center">No medications prescribed in Visit B</p>
+                  <p className="text-xs text-slate-400 italic p-3 text-center">
+                    No medications prescribed in Visit B
+                  </p>
                 ) : (
                   visitB.prescriptions.map(rx => {
                     const isNew = !visitA?.prescriptions?.some(
@@ -1205,131 +1522,351 @@ ${comparisonResult.recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
       )}
 
       {/* ======================================================== */}
-      {/* TAB 5: AI LONGITUDINAL SUMMARY */}
+      {/* CLINICAL NOTES WITH MIC OPTION + GENERATE EDITABLE VISIT SUMMARY */}
+      {/* (Always visible in comparison model & in AI Summary tab) */}
       {/* ======================================================== */}
-      {activeTab === 'ai_summary' && (
-        <div className="space-y-4 animate-in fade-in duration-150">
-          {!comparisonResult ? (
-            <div className="p-8 text-center text-slate-500 space-y-3 bg-slate-50 rounded-2xl border border-slate-200">
-              <Sparkles className="w-8 h-8 text-teal-600 mx-auto" />
-              <p className="text-xs font-semibold text-slate-800">
-                Generate an AI longitudinal comparative synthesis between these two encounters
+      <div className="pt-2 border-t border-slate-100 space-y-4">
+        {/* 3. Clinical Notes Option with Mic Dictation */}
+        <div className="bg-slate-50/90 p-4 rounded-2xl border border-slate-200 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                <FileText className="w-3.5 h-3.5 text-teal-700" />
+                <span>Clinical Comparison Notes (with Voice Dictation / Mic)</span>
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                Type or use the microphone to dictate clinical notes while comparing visits
               </p>
-              <button
-                type="button"
-                onClick={handleGenerateAIReport}
-                disabled={isGeneratingAIReport}
-                className="px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-2xs transition inline-flex items-center gap-1.5"
-              >
-                {isGeneratingAIReport ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Synthesizing Clinical Records...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Generate Interval Comparison Report</span>
-                  </>
-                )}
-              </button>
             </div>
-          ) : (
-            <div className="p-5 rounded-2xl bg-teal-50/60 border border-teal-200 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-teal-700" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-teal-950">
-                    AI Clinical Interval Synthesis ({comparisonResult.intervalDays} Days)
-                  </span>
-                </div>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-teal-100 text-teal-900 border border-teal-200">
-                  {comparisonResult.overallStatus}
-                </span>
-              </div>
-
-              <p className="text-xs text-slate-800 leading-relaxed font-medium bg-white/70 p-3.5 rounded-xl border border-teal-100">
-                {comparisonResult.summaryText}
-              </p>
-
-              {/* Symptom remissions & evolution */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                {comparisonResult.resolvedSymptoms && comparisonResult.resolvedSymptoms.length > 0 && (
-                  <div className="p-3 bg-white/80 rounded-xl border border-emerald-100">
-                    <span className="text-[10px] uppercase font-bold text-emerald-700 block mb-1">
-                      Remitted / Resolved Symptoms:
-                    </span>
-                    <ul className="space-y-1 text-slate-700">
-                      {comparisonResult.resolvedSymptoms.map(s => (
-                        <li key={s} className="flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span>{s}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {comparisonResult.persistentSymptoms && comparisonResult.persistentSymptoms.length > 0 && (
-                  <div className="p-3 bg-white/80 rounded-xl border border-blue-100">
-                    <span className="text-[10px] uppercase font-bold text-blue-700 block mb-1">
-                      Ongoing / Persistent Complaints:
-                    </span>
-                    <ul className="space-y-1 text-slate-700">
-                      {comparisonResult.persistentSymptoms.map(s => (
-                        <li key={s} className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                          <span>{s}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* Actionable recommendations */}
-              {comparisonResult.recommendations && comparisonResult.recommendations.length > 0 && (
-                <div className="space-y-1.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-600 block">
-                    Recommended Follow-up & Management Adjustments:
-                  </span>
-                  <div className="space-y-1 text-xs text-slate-700">
-                    {comparisonResult.recommendations.map((r, i) => (
-                      <div key={i} className="flex items-start gap-2 bg-white/80 p-2.5 rounded-xl border border-teal-100">
-                        <ChevronRight className="w-3.5 h-3.5 text-teal-700 shrink-0 mt-0.5" />
-                        <span>{r}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-2 flex items-center justify-between text-[11px] text-slate-500 border-t border-teal-100">
-                <span>Evaluated across {comparisonResult.intervalDays} days of longitudinal care.</span>
+            <div className="flex items-center gap-2">
+              <VoiceDictationButton
+                value={comparisonClinicalNotes}
+                onChange={setComparisonClinicalNotes}
+                variant="prominent"
+                label="Dictate Note (Mic)"
+              />
+              {comparisonClinicalNotes.trim() && (
                 <button
                   type="button"
-                  onClick={handleCopyReport}
-                  className="font-semibold text-teal-800 hover:text-teal-950 flex items-center gap-1"
+                  onClick={handleSaveNotesToVisit}
+                  disabled={isSavingNotes}
+                  className="px-3 py-2 bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-300 text-teal-900 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition"
                 >
-                  {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                  <span>{copied ? 'Copied' : 'Copy Interval Summary'}</span>
+                  {savedNotesSuccess ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700">Saved to Visit</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5 text-teal-700" />
+                      <span>{isSavingNotes ? 'Saving...' : 'Save Note'}</span>
+                    </>
+                  )}
                 </button>
+              )}
+            </div>
+          </div>
+
+          <textarea
+            rows={2}
+            value={comparisonClinicalNotes}
+            onChange={e => setComparisonClinicalNotes(e.target.value)}
+            placeholder="Record comparative clinical observations (e.g., erythema reduced by 50%, peripheral border stable, or severity increased) — tap 'Dictate Note (Mic)' to speak..."
+            className="w-full p-3 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-teal-500 leading-relaxed"
+          />
+
+          {/* Quick Clinical Note Chips */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">
+              Quick Insert:
+            </span>
+            {[
+              'Lesion erythema and scaling reduced significantly.',
+              'Severity increased at peripheral border — rule out secondary infection.',
+              'No new red flags observed; patient tolerating topical regimen well.',
+              'Step down topical steroid to maintenance barrier therapy.'
+            ].map(chip => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() =>
+                  setComparisonClinicalNotes(prev =>
+                    prev.trim() ? `${prev.trim()} ${chip}` : chip
+                  )
+                }
+                className="px-2.5 py-1 rounded-lg bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-300 text-[11px] text-slate-600 hover:text-teal-900 transition"
+              >
+                + {chip}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 4. Generate Visit Summary with Minor AI Suggestions (Red Flags, Severity Increased) & Doctor Edit Mode */}
+        <div className="bg-teal-50/50 p-4 rounded-2xl border border-teal-200/80 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-teal-700" />
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-teal-950">
+                  Visit Comparison Summary &amp; Minor AI Suggestions
+                </h4>
+                <p className="text-[11px] text-slate-600">
+                  Generates a visit summary with minor AI suggestions (Red Flags, Severity status) that the doctor can freely edit
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGenerateAIReport}
+              disabled={isGeneratingAIReport}
+              className="px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold shadow-2xs transition flex items-center gap-1.5"
+            >
+              {isGeneratingAIReport ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Generating Summary...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{comparisonResult ? 'Regenerate Visit Summary' : 'Generate Summary'}</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {comparisonResult && (
+            <div className="space-y-3.5 animate-in fade-in duration-150">
+              {/* Minor AI Suggestions: Severity Status + Red Flags + Quick Clinical Pointers */}
+              <div className="p-3.5 rounded-xl bg-white border border-teal-200/80 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                    Minor AI Clinical Suggestions (Click any chip to insert into summary)
+                  </span>
+
+                  {/* Severity Status Pill Selector */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Severity:</span>
+                    {(
+                      [
+                        'Severity Increased',
+                        'Severity Stable',
+                        'Severity Decreased (Improving)'
+                      ] as const
+                    ).map(sev => {
+                      const isSelected = activeSeverity === sev;
+                      const isIncreased = sev === 'Severity Increased';
+                      const isDecreased = sev === 'Severity Decreased (Improving)';
+                      return (
+                        <button
+                          key={sev}
+                          type="button"
+                          onClick={() => {
+                            setSeverityOverride(sev);
+                            handleInsertSuggestionIntoSummary(`[Status: ${sev}]`);
+                          }}
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1 transition ${
+                            isSelected
+                              ? isIncreased
+                                ? 'bg-rose-100 border-rose-300 text-rose-800'
+                                : isDecreased
+                                ? 'bg-emerald-100 border-emerald-300 text-emerald-800'
+                                : 'bg-amber-100 border-amber-300 text-amber-800'
+                              : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                          }`}
+                        >
+                          {isIncreased ? (
+                            <TrendingUp className="w-3 h-3" />
+                          ) : isDecreased ? (
+                            <TrendingDown className="w-3 h-3" />
+                          ) : null}
+                          <span>{sev}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Red Flags (Minor AI Suggestions) */}
+                {comparisonResult.redFlags && comparisonResult.redFlags.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-rose-600" />
+                      Red Flags / Watch Pointers:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {comparisonResult.redFlags.map((rf, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => handleInsertSuggestionIntoSummary(`Red Flag Note: ${rf}`)}
+                          className="text-left px-2.5 py-1.5 rounded-lg bg-rose-50/80 hover:bg-rose-100 border border-rose-200 text-[11px] text-rose-900 flex items-center gap-1.5 transition"
+                          title="Click to append this red flag note into the editable summary"
+                        >
+                          <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" />
+                          <span>{rf}</span>
+                          <span className="text-[10px] font-bold text-rose-700 ml-1 shrink-0">+ Add</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Minor AI Clinical Suggestions */}
+                {comparisonResult.minorSuggestions && comparisonResult.minorSuggestions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 block">
+                      Minor AI Suggestions:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {comparisonResult.minorSuggestions.map((sug, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => handleInsertSuggestionIntoSummary(sug)}
+                          className="text-left px-2.5 py-1.5 rounded-lg bg-teal-50/70 hover:bg-teal-100 border border-teal-200 text-[11px] text-teal-950 flex items-center gap-1.5 transition"
+                          title="Click to insert into editable summary"
+                        >
+                          <ChevronRight className="w-3 h-3 text-teal-700 shrink-0" />
+                          <span>{sug}</span>
+                          <span className="text-[10px] font-bold text-teal-800 ml-1 shrink-0">+ Add</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Doctor Editable Summary Box */}
+              <div className="bg-white p-3.5 rounded-xl border border-teal-200 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Pencil className="w-3.5 h-3.5 text-teal-700" />
+                      <span>Doctor&apos;s Editable Visit Comparison Summary</span>
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold">
+                      {isEditingSummary ? 'Editing Enabled' : 'Read-Only Preview'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <VoiceDictationButton
+                      value={editableSummaryText}
+                      onChange={setEditableSummaryText}
+                      variant="button"
+                      label="Mic Edit"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingSummary(!isEditingSummary)}
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center gap-1"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      <span>{isEditingSummary ? 'Preview' : 'Edit Summary'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditableSummaryText(comparisonResult.summaryText)}
+                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-500"
+                      title="Reset to initial generated summary"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveSummaryToVisit}
+                      disabled={isSavingSummary}
+                      className="px-3 py-1 bg-teal-800 hover:bg-teal-900 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-2xs transition"
+                    >
+                      {savedSummarySuccess ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-300" />
+                          <span>Saved!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5" />
+                          <span>{isSavingSummary ? 'Saving...' : 'Save Summary'}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {isEditingSummary ? (
+                  <textarea
+                    rows={4}
+                    value={editableSummaryText}
+                    onChange={e => setEditableSummaryText(e.target.value)}
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-teal-600 focus:bg-white leading-relaxed font-medium"
+                    placeholder="Edit the generated visit comparison summary here..."
+                  />
+                ) : (
+                  <p
+                    onClick={() => setIsEditingSummary(true)}
+                    className="text-xs text-slate-800 leading-relaxed font-medium bg-slate-50 p-3.5 rounded-xl border border-slate-200 cursor-text"
+                    title="Click to edit summary"
+                  >
+                    {editableSummaryText}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                  <span>
+                    Evaluated across {comparisonResult.intervalDays} days • Doctor can freely edit or dictate changes before saving.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyReport}
+                    className="font-semibold text-teal-800 hover:text-teal-950 flex items-center gap-1"
+                  >
+                    {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    <span>{copied ? 'Copied' : 'Copy Full Comparison'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </div>
-      )}
+      </div>
 
-      {/* Image Zoom Modal */}
+      {/* Full-Screen Side-by-Side Image Zoom & Area Marking Modal */}
+      <FullScreenSideBySideModal
+        isOpen={showSideBySideFullScreenModal}
+        onClose={() => setShowSideBySideFullScreenModal(false)}
+        imageA={selectedImgA || imagesA[0] || null}
+        imageB={selectedImgB || imagesB[0] || null}
+        visitALabel="Visit A · First Image"
+        visitBLabel="Visit B · First Image"
+        visitADate={formatDate(visitA?.consultationDate)}
+        visitBDate={formatDate(visitB?.consultationDate)}
+        annotations={annotations}
+        onChangeAnnotations={setAnnotations}
+        clinicalNotes={comparisonClinicalNotes}
+        onChangeClinicalNotes={setComparisonClinicalNotes}
+        onGenerateSummaryFromModal={handleGenerateAIReport}
+      />
+
+      {/* Single Image Quick Zoom Modal */}
       {zoomImage && (
         <div
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-xs"
           onClick={() => setZoomImage(null)}
         >
-          <div className="max-w-3xl max-h-[90vh] bg-slate-900 rounded-2xl overflow-hidden shadow-2xl relative" onClick={e => e.stopPropagation()}>
+          <div
+            className="max-w-3xl max-h-[90vh] bg-slate-900 rounded-2xl overflow-hidden shadow-2xl relative"
+            onClick={e => e.stopPropagation()}
+          >
             <img src={zoomImage.url} alt="Zoomed view" className="w-full max-h-[80vh] object-contain" />
             <div className="p-3 bg-slate-800 text-white text-xs flex justify-between items-center">
-              <span>{zoomImage.caption || 'Clinical Photograph'} · {formatDate(zoomImage.createdAt)}</span>
+              <span>
+                {zoomImage.caption || 'Clinical Photograph'} · {formatDate(zoomImage.createdAt)}
+              </span>
               <button
                 type="button"
                 onClick={() => setZoomImage(null)}

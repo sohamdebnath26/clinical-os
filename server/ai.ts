@@ -2568,10 +2568,12 @@ export interface CompareVisitsParams {
   visitA: Consultation;
   visitB: Consultation;
   patient: Patient;
+  doctorNotes?: string;
+  markedAreas?: string[];
 }
 
 export function generateVisitComparisonFallback(params: CompareVisitsParams): VisitComparisonResult {
-  const { visitA, visitB, patient } = params;
+  const { visitA, visitB, patient, doctorNotes, markedAreas } = params;
   const dateA = new Date(visitA.consultationDate).getTime();
   const dateB = new Date(visitB.consultationDate).getTime();
   const intervalDays = Math.max(0, Math.round(Math.abs(dateB - dateA) / (1000 * 60 * 60 * 24)));
@@ -2611,33 +2613,79 @@ export function generateVisitComparisonFallback(params: CompareVisitsParams): Vi
     .filter(pa => !rxB.some(pb => pb.medicineName.toLowerCase().trim() === pa.medicineName.toLowerCase().trim()))
     .map(p => `${p.medicineName} (${p.dosage}, ${p.frequency})`);
 
+  const notesLower = (doctorNotes || '').toLowerCase();
+  const hasFlareKeyword = /\b(worse|worsen|increased|flare|spread|expanding|erythema increased|red flag|infection|pus|oozing|severe)\b/.test(notesLower);
+  const hasImproveKeyword = /\b(better|improv|resolv|reduc|clearing|flattening|healed|subsided)\b/.test(notesLower);
+
   let overallStatus: VisitComparisonResult['overallStatus'] = 'Moderate Improvement';
-  if (resolvedSymptoms.length > 0 && newSymptoms.length === 0) {
-    overallStatus = 'Marked Improvement';
-  } else if (newSymptoms.length > 0 && resolvedSymptoms.length === 0) {
+  let severityChange: VisitComparisonResult['severityChange'] = 'Severity Decreased (Improving)';
+
+  if (hasFlareKeyword || (newSymptoms.length > 0 && resolvedSymptoms.length === 0)) {
     overallStatus = 'Mild Progression / Worsening';
+    severityChange = 'Severity Increased';
+  } else if (hasImproveKeyword || (resolvedSymptoms.length > 0 && newSymptoms.length === 0)) {
+    overallStatus = 'Marked Improvement';
+    severityChange = 'Severity Decreased (Improving)';
   } else if (persistentSymptoms.length > 0 && newSymptoms.length === 0 && resolvedSymptoms.length === 0) {
     overallStatus = 'Stable / Unchanged';
+    severityChange = 'Severity Stable';
   }
 
+  const markedText = markedAreas && markedAreas.length > 0
+    ? ` Doctor marked ${markedAreas.length} ROI area(s) on comparison photos (${markedAreas.join('; ')}).`
+    : '';
+  const docNoteText = doctorNotes && doctorNotes.trim()
+    ? ` Clinical comparison note: "${doctorNotes.trim()}".`
+    : '';
+
   const summaryText =
-    `Longitudinal encounter comparison over a ${intervalDays}-day clinical interval for ${patient.fullName}. ` +
-    (resolvedSymptoms.length > 0 ? `Demonstrated positive therapeutic progression with remission of [${resolvedSymptoms.join(', ')}]. ` : '') +
-    (persistentSymptoms.length > 0 ? `Ongoing active symptoms noted: [${persistentSymptoms.join(', ')}]. ` : 'No ongoing baseline complaints documented. ') +
-    (newSymptoms.length > 0 ? `Newly reported findings include [${newSymptoms.join(', ')}]. ` : '') +
-    `Medication regimen includes ${addedMeds.length} adjusted/added therapeutic agent(s) and ${continuedMeds.length} maintenance agent(s).`;
+    `Visit Comparison Summary (${intervalDays}-day interval) for ${patient.fullName} (${patient.patientCode}): ` +
+    `Overall trajectory indicates ${overallStatus.toLowerCase()} (${severityChange}). ` +
+    (resolvedSymptoms.length > 0 ? `Resolved symptoms since baseline: ${resolvedSymptoms.join(', ')}. ` : '') +
+    (persistentSymptoms.length > 0 ? `Persistent symptoms: ${persistentSymptoms.join(', ')}. ` : '') +
+    (newSymptoms.length > 0 ? `Newly observed symptoms: ${newSymptoms.join(', ')}. ` : '') +
+    `Diagnoses compared: [${visitA.diagnoses.join(', ') || 'Baseline review'}] vs [${visitB.diagnoses.join(', ') || 'Follow-up review'}]. ` +
+    `Treatment adjustments: ${addedMeds.length} new/modified medication(s) and ${continuedMeds.length} continued medication(s).` +
+    markedText +
+    docNoteText;
+
+  const redFlags: string[] = [];
+  if (severityChange === 'Severity Increased') {
+    redFlags.push('Severity increased between visits — evaluate for secondary bacterial/fungal superinfection, contact sensitization, or non-adherence.');
+  }
+  if (newSymptoms.length > 0) {
+    redFlags.push(`New symptoms reported at follow-up (${newSymptoms.join(', ')}) — rule out drug eruption or advancing border progression.`);
+  }
+  if (redFlags.length === 0) {
+    redFlags.push('Watch for rebound erythema or focal border reactivation upon tapering topical anti-inflammatory therapy.');
+    redFlags.push('Rule out secondary impetiginization (honey-colored crusting, warmth, or tenderness) if barrier integrity is disrupted.');
+  }
+
+  const minorSuggestions: string[] = [
+    severityChange === 'Severity Increased'
+      ? 'Severity increased: Consider repeating KOH/skin swab or stepping up targeted anti-inflammatory regimen.'
+      : 'Severity improving: Consider stepping down potent topical agents to maintenance barrier repair.',
+    markedAreas && markedAreas.length > 0
+      ? `Correlate the ${markedAreas.length} marked image ROI area(s) with dermoscopic border inspection at next review.`
+      : 'Document standardized follow-up photography in 2 weeks to confirm complete pigment and erythema resolution.',
+    patient.allergies
+      ? `Allergy reminder: Avoid cross-reacting agents (${patient.allergies}).`
+      : 'Verify daily emollient and photoprotection compliance.'
+  ];
 
   const recommendations = [
-    'Monitor patient response to newly instituted or adjusted prescription regimen over 2-4 weeks',
-    'Verify treatment compliance and evaluate for cutaneous barrier recovery or adverse drug reactions',
-    'Review scheduled diagnostic investigations and schedule follow-up encounter accordingly'
+    ...minorSuggestions,
+    'Monitor patient response to newly instituted or adjusted prescription regimen over 2-4 weeks'
   ];
 
   return {
     id: `comp_${Date.now()}`,
     intervalDays,
     overallStatus,
+    severityChange,
     summaryText,
+    redFlags,
+    minorSuggestions,
     resolvedSymptoms,
     persistentSymptoms,
     newSymptoms,
@@ -2668,7 +2716,7 @@ export async function comparePatientVisits(params: CompareVisitsParams): Promise
 
   if (ai) {
     try {
-      const prompt = `You are a clinical decision support system assisting a physician with a comprehensive longitudinal comparison between two patient visits.
+      const prompt = `You are a clinical decision support system assisting a physician with a concise longitudinal comparison between two patient visits.
 
 PATIENT:
 Name: ${params.patient.fullName}, Age: ${params.patient.age}y, Gender: ${params.patient.gender}, ID: ${params.patient.patientCode}
@@ -2693,12 +2741,23 @@ Investigations / Lab Tests Advised: ${params.visitB.tests?.join(', ') || 'None'}
 Prescriptions: ${params.visitB.prescriptions.map(p => `${p.medicineName} ${p.dosage} ${p.frequency}`).join('; ') || 'None'}
 Plan: ${params.visitB.clinicalNotes?.plan || 'None'}
 
+DOCTOR COMPARISON NOTES: ${params.doctorNotes || 'None'}
+MARKED IMAGE AREAS: ${(params.markedAreas || []).join('; ') || 'None'}
 INTERVAL: ${fallback.intervalDays} days.
 
 Compare these encounters and return strictly valid raw JSON (no markdown formatting, no code fences):
 {
   "overallStatus": "One of: Marked Improvement, Moderate Improvement, Stable / Unchanged, Mild Progression / Worsening, Significant Flare / Deterioration",
-  "summaryText": "Concise executive synthesis comparing interval progress, treatment response, and diagnostic evolution",
+  "severityChange": "One of: Severity Increased, Severity Decreased (Improving), Severity Stable",
+  "summaryText": "Concise, editable clinical visit comparison summary synthesizing interval progress, treatment response, and doctor notes",
+  "redFlags": [
+    "Minor AI red flag pointer 1 (e.g., red flags to watch or rule out)",
+    "Minor AI red flag pointer 2"
+  ],
+  "minorSuggestions": [
+    "Brief minor AI clinical suggestion 1 (e.g., severity change note or regimen tip)",
+    "Brief minor AI clinical suggestion 2"
+  ],
   "recommendations": [
     "Actionable clinical recommendation 1",
     "Actionable clinical recommendation 2"
@@ -2720,7 +2779,10 @@ Compare these encounters and return strictly valid raw JSON (no markdown formatt
             return {
               ...fallback,
               overallStatus: parsed.overallStatus || fallback.overallStatus,
+              severityChange: parsed.severityChange || fallback.severityChange,
               summaryText: parsed.summaryText || fallback.summaryText,
+              redFlags: Array.isArray(parsed.redFlags) && parsed.redFlags.length > 0 ? parsed.redFlags : fallback.redFlags,
+              minorSuggestions: Array.isArray(parsed.minorSuggestions) && parsed.minorSuggestions.length > 0 ? parsed.minorSuggestions : fallback.minorSuggestions,
               recommendations: Array.isArray(parsed.recommendations) && parsed.recommendations.length > 0 ? parsed.recommendations : fallback.recommendations,
               isAiPowered: true,
               analyzedAt: new Date().toISOString()

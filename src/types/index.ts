@@ -253,6 +253,9 @@ export interface ProgressionAnalysisResult {
   visualComparisonObservations: string[];
   treatmentResponseSummary: string;
   recommendedAdjustments: string[];
+  severityChange?: 'Severity Increased' | 'Severity Decreased (Improving)' | 'Severity Stable';
+  redFlags?: string[];
+  minorSuggestions?: string[];
   disclaimer: string;
   isAiPowered: boolean;
   analyzedAt: string;
@@ -293,7 +296,10 @@ export interface VisitComparisonResult {
   id: string;
   intervalDays: number;
   overallStatus: 'Marked Improvement' | 'Moderate Improvement' | 'Stable / Unchanged' | 'Mild Progression / Worsening' | 'Significant Flare / Deterioration';
+  severityChange?: 'Severity Increased' | 'Severity Decreased (Improving)' | 'Severity Stable';
   summaryText: string;
+  redFlags?: string[];
+  minorSuggestions?: string[];
   resolvedSymptoms: string[];
   persistentSymptoms: string[];
   newSymptoms: string[];

@@ -2343,7 +2343,7 @@ app.post('/api/ai/assess-abcde', authMiddleware, async (req: AuthenticatedReques
 // VISIT & CLINICAL REPORT COMPARISON
 // ==========================================
 app.post('/api/ai/compare-visits', authMiddleware, async (req: AuthenticatedRequest, res) => {
-  const { visitAId, visitBId, patientId } = req.body;
+  const { visitAId, visitBId, patientId, doctorNotes, markedAreas } = req.body;
 
   if (!visitAId || !visitBId || !patientId) {
     return res.status(400).json({ error: 'visitAId, visitBId, and patientId are required' });
@@ -2365,7 +2365,9 @@ app.post('/api/ai/compare-visits', authMiddleware, async (req: AuthenticatedRequ
     const comparison = await comparePatientVisits({
       visitA,
       visitB,
-      patient
+      patient,
+      doctorNotes: typeof doctorNotes === 'string' ? doctorNotes : undefined,
+      markedAreas: Array.isArray(markedAreas) ? markedAreas : undefined
     });
 
     const doctor = req.doctor!;
