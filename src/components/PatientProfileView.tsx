@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Patient, Consultation, PrescriptionItem, BodyMarker, ClinicalImage, Appointment, PatientTestReport } from '../types';
 import { api } from '../lib/api';
 import { BodyMap } from './BodyMap';
@@ -34,7 +34,9 @@ import {
   Search,
   ArrowUpDown,
   CheckCircle2,
-  FileEdit
+  FileEdit,
+  Upload,
+  Maximize2
 } from 'lucide-react';
 
 interface PatientProfileViewProps {
@@ -46,7 +48,7 @@ interface PatientProfileViewProps {
   onNavigateToImageAnalyzer?: (patientId: string) => void;
 }
 
-export type TabType = 'overview' | 'vitals' | 'appointments' | 'bodymap' | 'timeline' | 'visits' | 'reports' | 'prescriptions';
+export type TabType = 'overview' | 'images' | 'vitals' | 'appointments' | 'bodymap' | 'timeline' | 'visits' | 'reports' | 'prescriptions';
 
 const normalizeTab = (tab?: TabType): TabType => (tab === 'visits' ? 'timeline' : tab || 'overview');
 
@@ -94,8 +96,14 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
   const [timelineStatusFilter, setTimelineStatusFilter] = useState<'all' | 'signed' | 'draft'>('all');
   const [timelineSortOrder, setTimelineSortOrder] = useState<'desc' | 'asc'>('desc');
 
-  // Lesion Progression Modal
+  // Lesion Progression / Previous vs. Current Image Modal
   const [showProgressionModal, setShowProgressionModal] = useState(false);
+  const [selectedPrevImageId, setSelectedPrevImageId] = useState<string | undefined>(undefined);
+  const [selectedCurrImageOverride, setSelectedCurrImageOverride] = useState<ClinicalImage | null>(null);
+  const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false);
+  const [uploadCaption, setUploadCaption] = useState('');
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
+  const quickCompareInputRef = useRef<HTMLInputElement>(null);
 
   // WhatsApp Medical Report Modal
   const [whatsAppData, setWhatsAppData] = useState<{
@@ -278,8 +286,76 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
     setExpandedEvents(next);
   };
 
+  const sortedPatientImages = [...images].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  const previousProfileImage =
+    sortedPatientImages.length >= 2
+      ? sortedPatientImages[sortedPatientImages.length - 2]
+      : sortedPatientImages[0] || null;
+  const currentProfileImage =
+    sortedPatientImages.length >= 2
+      ? sortedPatientImages[sortedPatientImages.length - 1]
+      : null;
+
+  const handleUploadProfileImage = (e: React.ChangeEvent<HTMLInputElement>, openComparisonAfter: boolean) => {
+    const file = e.target.files?.[0];
+    if (!file || !patient) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      return;
+    }
+
+    setIsUploadingProfileImage(true);
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      try {
+        const base64Url = reader.result as string;
+        const caption =
+          uploadCaption.trim() ||
+          `Current Visit Photo (${new Date().toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+          })})`;
+        const res = await api.patients.addImage(patient.id, {
+          url: base64Url,
+          caption
+        });
+        const newImg = res.image;
+        setImages(prev => [newImg, ...prev]);
+        setUploadCaption('');
+        if (openComparisonAfter) {
+          setSelectedCurrImageOverride(newImg);
+          setShowProgressionModal(true);
+        }
+      } catch {
+        // Fallback local image object if needed
+      } finally {
+        setIsUploadingProfileImage(false);
+        e.target.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Hidden File Inputs for Direct Patient Profile Upload */}
+      <input
+        ref={quickCompareInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={e => handleUploadProfileImage(e, true)}
+      />
+      <input
+        ref={profileImageInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={e => handleUploadProfileImage(e, false)}
+      />
+
       {/* Breadcrumb Navigation */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs text-slate-400">
@@ -297,6 +373,8 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           <span className="capitalize">
             {activeTab === 'timeline'
               ? 'Visits & Timeline'
+              : activeTab === 'images'
+              ? 'Images & Compare'
               : activeTab === 'reports'
               ? 'Report Results'
               : activeTab}
@@ -355,7 +433,11 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           )}
           <button
             type="button"
-            onClick={() => setShowProgressionModal(true)}
+            onClick={() => {
+              setSelectedPrevImageId(undefined);
+              setSelectedCurrImageOverride(null);
+              setShowProgressionModal(true);
+            }}
             className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-semibold text-indigo-900 shadow-2xs transition-colors"
             title="Compare previous visit image with current image side-by-side"
           >
@@ -451,7 +533,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
       {/* Profile Navigation Tabs */}
       <div className="border-b border-slate-200 flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-        {(['overview', 'vitals', 'appointments', 'bodymap', 'timeline', 'reports', 'prescriptions'] as TabType[]).map(tab => (
+        {(['overview', 'images', 'vitals', 'appointments', 'bodymap', 'timeline', 'reports', 'prescriptions'] as TabType[]).map(tab => (
           <button
             key={tab}
             type="button"
@@ -463,6 +545,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             }`}
           >
             {tab === 'overview' && 'Overview'}
+            {tab === 'images' && `Images & Compare (${images.length})`}
             {tab === 'vitals' && 'Vitals & Growth'}
             {tab === 'appointments' && `Appointments & Follow-ups (${appointments.length})`}
             {tab === 'bodymap' && 'Body map'}
@@ -522,6 +605,158 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               </div>
             </div>
 
+            {/* Direct Patient Profile Card: Compare Previous Image vs. Current Image */}
+            <div className="bg-white p-6 rounded-2xl border border-indigo-200/90 shadow-2xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center shrink-0">
+                    <Activity className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-bold text-slate-900">
+                        Compare Previous Image vs. Current Image
+                      </h3>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-800 border border-indigo-200">
+                        {images.length} {images.length === 1 ? 'Photo' : 'Photos'} in Profile
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Inspect previous visit photos alongside today&apos;s image with full-screen 1x–4x zoom, lesion marking, voice notes, and AI progression summary.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => quickCompareInputRef.current?.click()}
+                    disabled={isUploadingProfileImage}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{isUploadingProfileImage ? 'Uploading...' : '+ Upload Current Image'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPrevImageId(undefined);
+                      setSelectedCurrImageOverride(null);
+                      setShowProgressionModal(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-900 hover:bg-indigo-950 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5 text-indigo-200" />
+                    <span>Compare Side-by-Side</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Side-by-Side Previous vs. Current Preview right inside Patient Profile */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                {/* Slot 1: Previous Image */}
+                <div
+                  onClick={() => {
+                    setSelectedPrevImageId(previousProfileImage?.id);
+                    setSelectedCurrImageOverride(null);
+                    setShowProgressionModal(true);
+                  }}
+                  className="group relative rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex items-center gap-3.5 hover:border-indigo-300 hover:bg-indigo-50/20 transition cursor-pointer"
+                >
+                  <div className="w-20 h-20 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-slate-200">
+                    {previousProfileImage ? (
+                      <img
+                        src={previousProfileImage.url}
+                        alt={previousProfileImage.caption || 'Previous visit image'}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <ImageIcon className="w-6 h-6 text-slate-500" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200/80 text-slate-700">
+                      1. Previous Image (Baseline)
+                    </span>
+                    {previousProfileImage ? (
+                      <>
+                        <p className="text-xs font-bold text-slate-800 truncate">
+                          {previousProfileImage.caption || 'Clinical Baseline Photo'}
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          Captured {new Date(previousProfileImage.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-500">
+                        No previous image yet — click to upload baseline photo
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Slot 2: Current Image */}
+                <div
+                  onClick={() => {
+                    if (currentProfileImage) {
+                      setSelectedPrevImageId(previousProfileImage?.id);
+                      setSelectedCurrImageOverride(currentProfileImage);
+                      setShowProgressionModal(true);
+                    } else {
+                      quickCompareInputRef.current?.click();
+                    }
+                  }}
+                  className="group relative rounded-xl border border-teal-200 bg-teal-50/30 p-3 flex items-center gap-3.5 hover:border-teal-400 hover:bg-teal-50/60 transition cursor-pointer"
+                >
+                  <div className="w-20 h-20 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-teal-200">
+                    {currentProfileImage ? (
+                      <img
+                        src={currentProfileImage.url}
+                        alt={currentProfileImage.caption || 'Current visit image'}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-teal-300">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-teal-100 text-teal-900">
+                      2. Current Image (Follow-up)
+                    </span>
+                    {currentProfileImage ? (
+                      <>
+                        <p className="text-xs font-bold text-slate-800 truncate">
+                          {currentProfileImage.caption || 'Latest Follow-up Photo'}
+                        </p>
+                        <p className="text-[11px] text-teal-800 font-medium">
+                          Captured {new Date(currentProfileImage.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs font-semibold text-teal-800">
+                        + Click to upload today&apos;s current image &amp; compare
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                <span className="text-[11px] text-slate-500">
+                  Supports side-by-side full-screen zoom (1x–4x), area marking, voice notes &amp; editable AI summary.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('images')}
+                  className="font-bold text-indigo-700 hover:text-indigo-950 flex items-center gap-1 shrink-0"
+                >
+                  <span>Open Full Image Gallery ({images.length})</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
             {/* Visit & Clinical Report Comparison (Longitudinal Tracking) */}
             <VisitComparisonSection
               patient={patient}
@@ -529,7 +764,11 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               images={images}
               onStartConsultation={onStartConsultation}
               onRefreshData={loadPatientData}
-              onOpenImageComparison={() => setShowProgressionModal(true)}
+              onOpenImageComparison={() => {
+                setSelectedPrevImageId(undefined);
+                setSelectedCurrImageOverride(null);
+                setShowProgressionModal(true);
+              }}
               onOpenWhatsApp={(data) => setWhatsAppData({
                 isOpen: true,
                 reportType: 'consultation_summary',
@@ -596,19 +835,19 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setActiveTab('images')}
+                  className="bg-indigo-50/60 hover:bg-indigo-100/70 p-3 rounded-xl border border-indigo-100 hover:border-indigo-300 transition-colors cursor-pointer"
+                >
+                  <span className="text-xl font-extrabold text-indigo-900 block">{images.length}</span>
+                  <span className="text-[11px] text-indigo-800 font-semibold">Images &amp; Compare</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setActiveTab('prescriptions')}
                   className="bg-slate-50 hover:bg-teal-50/70 p-3 rounded-xl border border-slate-100 hover:border-teal-200 transition-colors cursor-pointer"
                 >
                   <span className="text-xl font-extrabold text-teal-800 block">{prescriptions.length}</span>
                   <span className="text-[11px] text-slate-500 font-medium">Prescriptions</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('bodymap')}
-                  className="bg-slate-50 hover:bg-teal-50/70 p-3 rounded-xl border border-slate-100 hover:border-teal-200 transition-colors cursor-pointer"
-                >
-                  <span className="text-xl font-extrabold text-slate-800 block">{markers.length}</span>
-                  <span className="text-[11px] text-slate-500 font-medium">Body Pins</span>
                 </button>
                 <button
                   type="button"
@@ -729,6 +968,176 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB: CLINICAL IMAGES & PREVIOUS vs. CURRENT COMPARISON */}
+      {activeTab === 'images' && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          {/* Top Comparison & Upload Banner */}
+          <div className="bg-white p-6 rounded-2xl border border-indigo-200 shadow-2xs space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-indigo-700" />
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Patient Clinical Images &amp; Previous vs. Current Comparison
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Compare any previous visit photo with the current image side-by-side (1x–4x zoom, lesion marking, voice dictation &amp; AI progression summary).
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPrevImageId(undefined);
+                    setSelectedCurrImageOverride(null);
+                    setShowProgressionModal(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-indigo-900 hover:bg-indigo-950 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+                >
+                  <Maximize2 className="w-3.5 h-3.5 text-indigo-200" />
+                  <span>Compare Previous vs. Current Image</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Direct Upload Bar inside Patient Profile */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="flex-1">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                  Upload New Clinical Photo to {patient.fullName}&apos;s Profile
+                </label>
+                <input
+                  type="text"
+                  value={uploadCaption}
+                  onChange={e => setUploadCaption(e.target.value)}
+                  placeholder="Optional caption / anatomical site (e.g., Left forearm plaque - Follow-up Visit)"
+                  className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                />
+              </div>
+              <div className="flex items-center gap-2 sm:self-end">
+                <button
+                  type="button"
+                  onClick={() => profileImageInputRef.current?.click()}
+                  disabled={isUploadingProfileImage}
+                  className="px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                >
+                  <Upload className="w-3.5 h-3.5 text-teal-700" />
+                  <span>{isUploadingProfileImage ? 'Uploading...' : 'Add to Gallery'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => quickCompareInputRef.current?.click()}
+                  disabled={isUploadingProfileImage}
+                  className="px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition cursor-pointer disabled:opacity-50"
+                >
+                  <Upload className="w-3.5 h-3.5 text-teal-200" />
+                  <span>Upload &amp; Compare Immediately</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Patient Image Gallery Grid */}
+          {sortedPatientImages.length === 0 ? (
+            <div className="bg-white p-12 rounded-2xl border border-dashed border-slate-300 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center mx-auto">
+                <ImageIcon className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-bold text-slate-700">No Clinical Images Uploaded Yet</p>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Upload a previous/baseline photo or today&apos;s current clinical image above to start side-by-side progression tracking for {patient.fullName}.
+              </p>
+              <button
+                type="button"
+                onClick={() => quickCompareInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-900 hover:bg-indigo-950 text-white rounded-xl text-xs font-bold shadow-xs transition"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Upload First Clinical Image</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...sortedPatientImages].reverse().map((img, idx) => {
+                const isLatest = idx === 0;
+                return (
+                  <div
+                    key={img.id}
+                    className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs flex flex-col justify-between hover:border-indigo-300 transition"
+                  >
+                    <div>
+                      <div className="relative h-48 bg-slate-900 overflow-hidden">
+                        <img
+                          src={img.url}
+                          alt={img.caption || 'Patient clinical photo'}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                          <span
+                            className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md shadow-xs ${
+                              isLatest
+                                ? 'bg-teal-600 text-white'
+                                : 'bg-slate-900/80 text-slate-100 backdrop-blur-xs'
+                            }`}
+                          >
+                            {isLatest ? 'Latest / Current' : 'Previous Visit'}
+                          </span>
+                        </div>
+                        <div className="absolute bottom-2.5 right-2.5 bg-slate-900/75 text-white text-[10px] font-mono px-2 py-0.5 rounded backdrop-blur-xs">
+                          {new Date(img.createdAt).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                        </div>
+                      </div>
+                      <div className="p-4 space-y-1">
+                        <p className="text-xs font-bold text-slate-900">
+                          {img.caption || 'Clinical Examination Photo'}
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          Recorded on {new Date(img.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPrevImageId(img.id);
+                          setSelectedCurrImageOverride(null);
+                          setShowProgressionModal(true);
+                        }}
+                        className="flex-1 py-1.5 px-2.5 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-700 hover:text-indigo-900 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                      >
+                        Use as Previous
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPrevImageId(
+                            previousProfileImage && previousProfileImage.id !== img.id
+                              ? previousProfileImage.id
+                              : undefined
+                          );
+                          setSelectedCurrImageOverride(img);
+                          setShowProgressionModal(true);
+                        }}
+                        className="flex-1 py-1.5 px-2.5 bg-indigo-900 hover:bg-indigo-950 text-white rounded-lg text-[11px] font-bold transition cursor-pointer"
+                      >
+                        Compare as Current
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1494,8 +1903,14 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
         <LesionProgressionModal
           patient={patient}
           images={images}
+          initialPreviousImageId={selectedPrevImageId}
+          currentImageOverride={selectedCurrImageOverride}
           onImagesUpdated={(updatedImages) => setImages(updatedImages)}
-          onClose={() => setShowProgressionModal(false)}
+          onClose={() => {
+            setShowProgressionModal(false);
+            setSelectedPrevImageId(undefined);
+            setSelectedCurrImageOverride(null);
+          }}
         />
       )}
 

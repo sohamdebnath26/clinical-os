@@ -28,6 +28,7 @@ import {
 interface LesionProgressionModalProps {
   patient: Patient;
   images: ClinicalImage[];
+  initialPreviousImageId?: string;
   currentImageOverride?: ClinicalImage | null;
   onImagesUpdated?: (images: ClinicalImage[]) => void;
   onClose: () => void;
@@ -36,6 +37,7 @@ interface LesionProgressionModalProps {
 export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
   patient,
   images: initialImages,
+  initialPreviousImageId,
   currentImageOverride,
   onImagesUpdated,
   onClose
@@ -76,8 +78,9 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
 
-  // Previous Image (Slot A) defaults to earliest/previous image; Current Image (Slot B) defaults to latest/current image
+  // Previous Image (Slot A) defaults to initialPreviousImageId or second-latest/earliest image; Current Image (Slot B) defaults to latest/current image
   const [imageAId, setImageAId] = useState<string>(() => {
+    if (initialPreviousImageId) return initialPreviousImageId;
     if (sortedImages.length >= 2) {
       return sortedImages[sortedImages.length - 2]?.id || sortedImages[0]?.id || '';
     }
