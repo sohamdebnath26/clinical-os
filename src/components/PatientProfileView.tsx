@@ -353,16 +353,15 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               <span>Analyze Image</span>
             </button>
           )}
-          {images.length >= 2 && (
-            <button
-              type="button"
-              onClick={() => setShowProgressionModal(true)}
-              className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-semibold text-indigo-900 shadow-2xs transition-colors"
-            >
-              <Activity className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Compare Progression</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setShowProgressionModal(true)}
+            className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-semibold text-indigo-900 shadow-2xs transition-colors"
+            title="Compare previous visit image with current image side-by-side"
+          >
+            <Activity className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Compare Prev vs. Current Image</span>
+          </button>
           <button
             type="button"
             onClick={() => onOpenAIWithPrompt?.('')}
@@ -530,6 +529,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               images={images}
               onStartConsultation={onStartConsultation}
               onRefreshData={loadPatientData}
+              onOpenImageComparison={() => setShowProgressionModal(true)}
               onOpenWhatsApp={(data) => setWhatsAppData({
                 isOpen: true,
                 reportType: 'consultation_summary',
@@ -1264,19 +1264,27 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
                             {evt.images && evt.images.length > 0 && (
                               <div>
-                                <span className="font-bold text-slate-700 block mb-1.5 flex items-center gap-1.5">
-                                  <ImageIcon className="w-3.5 h-3.5 text-teal-700" />
-                                  Clinical Photos Documented ({evt.images.length}):
-                                </span>
+                                <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                                  <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                                    <ImageIcon className="w-3.5 h-3.5 text-teal-700" />
+                                    Clinical Photos Documented ({evt.images.length}):
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowProgressionModal(true)}
+                                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-900 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
+                                  >
+                                    <Activity className="w-3 h-3 text-indigo-600" />
+                                    <span>Compare Prev vs. Current Image</span>
+                                  </button>
+                                </div>
                                 <div className="flex flex-wrap gap-2">
                                   {evt.images.map((img: ClinicalImage) => (
                                     <div
                                       key={img.id}
-                                      onClick={() =>
-                                        onNavigateToImageAnalyzer && onNavigateToImageAnalyzer(patient.id)
-                                      }
+                                      onClick={() => setShowProgressionModal(true)}
                                       className="group relative w-16 h-16 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 cursor-pointer hover:border-teal-500 shadow-2xs transition"
-                                      title={img.caption || 'Clinical photo'}
+                                      title={img.caption || 'Click to compare with previous / current image'}
                                     >
                                       <img
                                         src={img.url}
@@ -1284,7 +1292,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                       />
                                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold transition-opacity">
-                                        Analyze
+                                        Compare
                                       </div>
                                     </div>
                                   ))}
@@ -1481,11 +1489,12 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
         />
       )}
 
-      {/* Lesion Progression Modal */}
+      {/* Lesion Progression / Previous vs. Current Image Modal */}
       {showProgressionModal && (
         <LesionProgressionModal
           patient={patient}
           images={images}
+          onImagesUpdated={(updatedImages) => setImages(updatedImages)}
           onClose={() => setShowProgressionModal(false)}
         />
       )}

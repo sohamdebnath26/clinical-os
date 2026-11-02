@@ -10,6 +10,7 @@ import { parseClinicalNoteToStructuredSummary, ParsedClinicalNoteSummary } from 
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import { FormularyUploadModal } from './FormularyUploadModal';
 import { VoiceDictationButton } from './VoiceDictationButton';
+import { LesionProgressionModal } from './LesionProgressionModal';
 import confetti from 'canvas-confetti';
 import {
   X,
@@ -641,8 +642,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     setMedQty(String(total));
   }, [medFrequency, medDuration, medRoute, medQtyManual]);
 
-  // Prior body markers for this patient
+  // Prior body markers & prior clinical images for this patient
   const [priorMarkers, setPriorMarkers] = useState<BodyMarker[]>([]);
+  const [priorImages, setPriorImages] = useState<ClinicalImage[]>([]);
+  const [showComparePrevCurrModal, setShowComparePrevCurrModal] = useState(false);
 
   // Loading states
   const [isSigning, setIsSigning] = useState(false);
@@ -665,11 +668,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     qualityWarnings?: string[];
   } | null>(null);
 
-  // Fetch prior markers
+  // Fetch prior markers & prior patient images for Previous vs. Current comparison
   useEffect(() => {
     api.patients.getMarkers(patient.id)
       .then(res => {
         setPriorMarkers(res.markers.filter(m => m.consultationId !== consultation.id));
+      })
+      .catch(() => {});
+    api.patients.getImages(patient.id)
+      .then(res => {
+        setPriorImages(res.images || []);
       })
       .catch(() => {});
   }, [patient.id, consultation.id]);
@@ -2482,6 +2490,27 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           {/* TAB 6: CLINICAL IMAGES */}
           {activeTab === 'images' && (
             <div className="space-y-4 animate-in fade-in duration-150">
+              {/* Banner to Compare Previous Visit Image vs. Current Consultation Image */}
+              <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-xs">
+                  <span className="font-bold text-indigo-950 block">
+                    Compare Previous Visit Image with Current Image
+                  </span>
+                  <span className="text-indigo-800/80 text-[11px]">
+                    Open full-screen side-by-side comparison to zoom, mark areas, dictate clinical notes, and generate a progression summary.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => setShowComparePrevCurrModal(true)}
+                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition shrink-0 cursor-pointer"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span>Compare Previous vs. Current Image</span>
+                </button>
+              </div>
+
               <ClinicalImageUploader
                 images={images}
                 onUpload={handleImageUpload}
@@ -3750,6 +3779,15 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <button
                       type="button"
                       onMouseDown={e => e.preventDefault()}
+                      onClick={() => setShowComparePrevCurrModal(true)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-semibold transition-colors cursor-pointer"
+                    >
+                      <ImageIcon className="w-3 h-3 text-indigo-600" />
+                      <span>Compare Prev vs. Current</span>
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={e => e.preventDefault()}
                       onClick={() => handleRunSummaryAIAnalysis()}
                       disabled={isGeneratingImageSummaryAI}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#e8f5f2] hover:bg-[#d7ede8] text-[#0f5950] border border-[#bde0d9] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
@@ -4842,6 +4880,26 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           }
         }}
       />
+
+      {/* Compare Previous Image vs. Current Image Modal */}
+      {showComparePrevCurrModal && (
+        <LesionProgressionModal
+          patient={patient}
+          images={[
+            ...priorImages,
+            ...images.filter(img => !priorImages.some(pi => pi.id === img.id))
+          ]}
+          currentImageOverride={images[images.length - 1] || null}
+          onImagesUpdated={(updatedList) => {
+            setPriorImages(updatedList);
+            const newest = updatedList[updatedList.length - 1];
+            if (newest && !images.some(i => i.id === newest.id)) {
+              setImages(prev => [...prev, newest]);
+            }
+          }}
+          onClose={() => setShowComparePrevCurrModal(false)}
+        />
+      )}
     </div>
   );
 };

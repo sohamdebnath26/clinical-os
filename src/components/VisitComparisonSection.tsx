@@ -38,6 +38,7 @@ interface VisitComparisonSectionProps {
   images: ClinicalImage[];
   onStartConsultation: (patient: Patient) => void;
   onRefreshData?: () => void;
+  onOpenImageComparison?: () => void;
   onOpenWhatsApp?: (data: { consultation: Consultation }) => void;
 }
 
@@ -46,7 +47,8 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
   consultations,
   images,
   onStartConsultation,
-  onRefreshData
+  onRefreshData,
+  onOpenImageComparison
 }) => {
   // Sort consultations chronologically (oldest to newest for intuitive timeline progression)
   const sortedConsultations = [...consultations].sort(
@@ -489,6 +491,16 @@ ${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClin
           </div>
 
           <div className="pt-2 flex flex-wrap items-center gap-2.5">
+            {onOpenImageComparison && (
+              <button
+                type="button"
+                onClick={onOpenImageComparison}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition flex items-center gap-1.5"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Compare Previous vs. Current Image</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onStartConsultation(patient)}
@@ -554,6 +566,17 @@ ${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClin
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+          {onOpenImageComparison && (
+            <button
+              type="button"
+              onClick={onOpenImageComparison}
+              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-900 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+              title="Compare any previous image with current image or upload a new photo"
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Compare Prev vs. Current Photo</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowSideBySideFullScreenModal(true)}

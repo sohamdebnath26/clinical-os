@@ -6,7 +6,8 @@ import {
   ABCDEScoreResult,
   BodyMarker,
   VisualMorphologyMetrics,
-  ClinicSubscriptionState
+  ClinicSubscriptionState,
+  ClinicalImage
 } from '../types';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +19,7 @@ import { PinToBodyMapModal } from './PinToBodyMapModal';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import { VoiceDictationButton } from './VoiceDictationButton';
 import { ImageReportChatbot } from './ImageReportChatbot';
+import { LesionProgressionModal } from './LesionProgressionModal';
 import { MarkdownView, renderInlineMarkdown } from './MarkdownView';
 import {
   Camera,
@@ -68,6 +70,8 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
   const [selectedPatientId, setSelectedPatientId] = useState<string>(initialPatientId || '');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [patientHistory, setPatientHistory] = useState<Consultation[]>([]);
+  const [patientImages, setPatientImages] = useState<ClinicalImage[]>([]);
+  const [showComparePrevCurrModal, setShowComparePrevCurrModal] = useState(false);
   const [patientSearch, setPatientSearch] = useState('');
   const [showPatientDropdown, setShowPatientDropdown] = useState(false);
 
@@ -125,16 +129,18 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
       .catch(err => console.warn('Failed to load subscription:', err));
   }, []);
 
-  // When selectedPatientId changes, fetch details & timeline
+  // When selectedPatientId changes, fetch details & timeline & images
   useEffect(() => {
     if (selectedPatientId) {
-      api.patients.get(selectedPatientId)
-        .then(res => {
-          setSelectedPatient(res.patient);
-          return api.patients.getConsultations(selectedPatientId);
-        })
-        .then(consultRes => {
+      Promise.all([
+        api.patients.get(selectedPatientId),
+        api.patients.getConsultations(selectedPatientId),
+        api.patients.getImages(selectedPatientId).catch(() => ({ images: [] }))
+      ])
+        .then(([patRes, consultRes, imgRes]) => {
+          setSelectedPatient(patRes.patient);
           setPatientHistory(consultRes.consultations || []);
+          setPatientImages(imgRes.images || []);
         })
         .catch(err => {
           console.warn('Failed to fetch patient history:', err);
@@ -142,6 +148,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
     } else {
       setSelectedPatient(null);
       setPatientHistory([]);
+      setPatientImages([]);
     }
   }, [selectedPatientId]);
 
@@ -762,6 +769,15 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                     </div>
                   </div>
                 )}
+                {/* Compare Previous vs. Current Image Quick Action */}
+                <button
+                  type="button"
+                  onClick={() => setShowComparePrevCurrModal(true)}
+                  className="w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-950 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Compare Previous Image vs. Current Image</span>
+                </button>
               </div>
             )}
           </div>
@@ -1776,6 +1792,29 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Compare Previous Image vs. Current Image Modal */}
+      {showComparePrevCurrModal && selectedPatient && (
+        <LesionProgressionModal
+          patient={selectedPatient}
+          images={patientImages}
+          currentImageOverride={
+            imageSrc
+              ? {
+                  id: 'analyzer_current_image',
+                  patientId: selectedPatient.id,
+                  url: imageSrc,
+                  filename: 'current_specimen.jpg',
+                  mimeType: mimeType || 'image/jpeg',
+                  caption: anatomicalSite ? `Current Image (${anatomicalSite})` : 'Current Uploaded Image',
+                  createdAt: new Date().toISOString()
+                }
+              : null
+          }
+          onImagesUpdated={(updatedImgs) => setPatientImages(updatedImgs)}
+          onClose={() => setShowComparePrevCurrModal(false)}
+        />
       )}
     </div>
   );
