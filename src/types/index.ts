@@ -58,17 +58,33 @@ export interface BodyMarker {
   createdAt: string;
 }
 
+export type MedicalImageModality =
+  | 'Clinical Photo'
+  | 'Dermoscopy'
+  | "Wood's Lamp"
+  | 'X-Ray / Radiograph'
+  | 'CT / MRI Scan'
+  | 'Ultrasound'
+  | 'Histopathology / Slide'
+  | 'Other Medical Image';
+
 export interface ClinicalImage {
   id: string;
   patientId: string;
   consultationId?: string;
   url: string;
+  dataUrl?: string;
   thumbnailUrl?: string;
   filename: string;
   mimeType: string;
   sizeBytes: number;
   caption?: string;
   bodyArea?: string;
+  modality?: MedicalImageModality | string;
+  imageRole?: 'past' | 'current';
+  examDate?: string;
+  extractedFindings?: string;
+  visualMetrics?: VisualMorphologyMetrics;
   tags?: string[];
   bodyMarkerId?: string;
   uploadedAt?: string;
@@ -246,10 +262,27 @@ export interface AIImageAnalysisResult {
   qualityAssessmentNotes?: string[];
 }
 
+export interface ExtractedImageSnapshot {
+  label: string;
+  date: string;
+  modality?: string;
+  bodyArea?: string;
+  extractedSummary: string;
+  morphologicalFindings: string[];
+  erythemaIndex?: number;
+  pigmentationIndex?: number;
+  borderIrregularity?: number;
+  asymmetryScore?: number;
+  estimatedDiameterMm?: number;
+  dominantColors?: { hex: string; name: string; percentage: number }[];
+}
+
 export interface ProgressionAnalysisResult {
   id: string;
   overallProgression: 'Marked Improvement' | 'Moderate Improvement' | 'Stable / Unchanged' | 'Mild Progression / Worsening' | 'Significant Flare / Deterioration';
   progressionScore: number;
+  pastImageExtraction?: ExtractedImageSnapshot;
+  currentImageExtraction?: ExtractedImageSnapshot;
   visualComparisonObservations: string[];
   treatmentResponseSummary: string;
   recommendedAdjustments: string[];

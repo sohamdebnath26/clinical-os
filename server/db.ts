@@ -59,6 +59,7 @@ class DatabaseService {
     this.ensureDefaultFormulary();
     this.syncAppointmentsFromFollowUps();
     this.syncTestReportsFromConsultations();
+    this.syncClinicalImagesFromConsultations();
   }
 
   private inferTestDefaults(testName: string): {
@@ -1061,12 +1062,199 @@ class DatabaseService {
   }
 
   // --- Clinical Images methods ---
+  private generateBaselineAndFollowUpSvgPair(diagnosisText: string): {
+    pastDataUrl: string;
+    pastCaption: string;
+    pastBodyArea: string;
+    pastModality: string;
+    pastFindings: string;
+    currentDataUrl: string;
+    currentCaption: string;
+    currentFindings: string;
+  } {
+    const lower = diagnosisText.toLowerCase();
+    const toBase64Svg = (svg: string) =>
+      `data:image/svg+xml;base64,${Buffer.from(svg.trim(), 'utf8').toString('base64')}`;
+
+    if (lower.includes('acne') || lower.includes('comedon')) {
+      const pastSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+        <rect width="400" height="300" fill="#f5d2b8"/>
+        <circle cx="135" cy="110" r="36" fill="#d93829" opacity="0.72"/>
+        <circle cx="135" cy="110" r="20" fill="#b82518" opacity="0.90"/>
+        <circle cx="135" cy="110" r="9" fill="#fff8c4"/>
+        <circle cx="215" cy="155" r="46" fill="#d93829" opacity="0.76"/>
+        <circle cx="215" cy="155" r="26" fill="#b82518" opacity="0.92"/>
+        <circle cx="215" cy="155" r="12" fill="#fff9c4"/>
+        <circle cx="285" cy="120" r="34" fill="#d93829" opacity="0.68"/>
+        <circle cx="285" cy="120" r="18" fill="#b82518" opacity="0.86"/>
+        <circle cx="285" cy="120" r="8" fill="#fff8c4"/>
+        <circle cx="170" cy="210" r="28" fill="#d93829" opacity="0.78"/>
+        <circle cx="255" cy="215" r="26" fill="#d93829" opacity="0.74"/>
+        <circle cx="178" cy="126" r="3.5" fill="#2c3e50"/>
+        <circle cx="242" cy="138" r="3.2" fill="#2c3e50"/>
+      </svg>`;
+      const currentSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+        <rect width="400" height="300" fill="#f6d8c0"/>
+        <circle cx="135" cy="110" r="18" fill="#e57368" opacity="0.38"/>
+        <circle cx="215" cy="155" r="24" fill="#e57368" opacity="0.42"/>
+        <circle cx="215" cy="155" r="10" fill="#c95b50" opacity="0.45"/>
+        <circle cx="285" cy="120" r="15" fill="#e57368" opacity="0.32"/>
+        <circle cx="170" cy="210" r="14" fill="#d98276" opacity="0.35"/>
+        <circle cx="255" cy="215" r="12" fill="#d98276" opacity="0.30"/>
+      </svg>`;
+      return {
+        pastDataUrl: toBase64Svg(pastSvg),
+        pastCaption: 'Past Baseline — Bilateral Malar Cheeks (Grade III Papulopustular Acne)',
+        pastBodyArea: 'Bilateral Malar Cheeks & Jawline',
+        pastModality: 'Clinical Photo',
+        pastFindings:
+          'Multiple tense inflammatory papulopustules (8–12 mm erythema halos), central pustular cores, and open comedones across bilateral cheeks; high baseline erythema index (76/100).',
+        currentDataUrl: toBase64Svg(currentSvg),
+        currentCaption: 'Follow-Up Visit — Bilateral Cheeks Post-Peel & Minocycline Regimen',
+        currentFindings:
+          'Marked flattening of papulopustular lesions with absence of active pustular heads; residual faint post-inflammatory erythema macules (erythema index reduced to 38/100).'
+      };
+    }
+
+    const pastMoleSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+      <rect width="400" height="300" fill="#efd2b9"/>
+      <path d="M125 150 C115 88, 255 78, 275 132 C295 195, 238 232, 172 222 C115 212, 92 178, 125 150 Z" fill="#7a4421" opacity="0.82"/>
+      <path d="M142 146 C132 102, 240 92, 258 136 C272 184, 226 214, 176 206 C132 198, 114 172, 142 146 Z" fill="#3b1e0d" opacity="0.92"/>
+      <circle cx="195" cy="142" r="18" fill="#1a0c05" opacity="0.95"/>
+      <circle cx="165" cy="166" r="13" fill="#241107" opacity="0.92"/>
+    </svg>`;
+    const currentMoleSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+      <rect width="400" height="300" fill="#f1d6be"/>
+      <ellipse cx="198" cy="152" rx="52" ry="38" fill="#d99b78" opacity="0.55"/>
+      <ellipse cx="198" cy="152" rx="32" ry="22" fill="#e6b497" opacity="0.72"/>
+      <circle cx="195" cy="150" r="8" fill="#b87a56" opacity="0.45"/>
+    </svg>`;
+    return {
+      pastDataUrl: toBase64Svg(pastMoleSvg),
+      pastCaption: 'Past Baseline — Pre-RF Ablation Cutaneous Lesion / Skin Tags',
+      pastBodyArea: 'Lateral Neck & Upper Trunk',
+      pastModality: 'Dermoscopy',
+      pastFindings:
+        'Hyperkeratotic hyperpigmented papillomatous lesions prior to radiofrequency ablation; dark melanin core with peripheral tan network (pigmentation index 68/100).',
+      currentDataUrl: toBase64Svg(currentMoleSvg),
+      currentCaption: 'Follow-Up Visit — Post-RF Ablation Re-epithelialized Site',
+      currentFindings:
+        'Clean re-epithelialization following radiofrequency ablation; dark papillomatous tissue resolved with mild pink-tan remodeling macule and intact epidermal barrier.'
+    };
+  }
+
+  private syncClinicalImagesFromConsultations() {
+    if (!this.data.clinicalImages) {
+      this.data.clinicalImages = [];
+    }
+    let changed = false;
+
+    for (const patient of this.data.patients) {
+      const existingPatientImgs = this.data.clinicalImages.filter(i => i.patientId === patient.id);
+      const patientConsults = this.data.consultations
+        .filter(c => c.patientId === patient.id)
+        .sort(
+          (a, b) =>
+            new Date(a.consultationDate || a.createdAt).getTime() -
+            new Date(b.consultationDate || b.createdAt).getTime()
+        );
+
+      if (existingPatientImgs.length === 0 && patientConsults.length > 0) {
+        const firstConsult = patientConsults[0];
+        const latestConsult = patientConsults[patientConsults.length - 1];
+        const diagContext = [
+          patient.primaryDiagnosis || '',
+          ...(firstConsult.diagnoses || []),
+          ...(firstConsult.symptoms || []),
+          ...(latestConsult.diagnoses || [])
+        ].join(' ');
+
+        const pair = this.generateBaselineAndFollowUpSvgPair(diagContext);
+        const firstDate = firstConsult.consultationDate || firstConsult.createdAt;
+        const pastDateIso =
+          patientConsults.length >= 2
+            ? firstDate
+            : new Date(new Date(firstDate).getTime() - 21 * 24 * 60 * 60 * 1000).toISOString();
+        const currentDateIso = latestConsult.consultationDate || latestConsult.createdAt;
+
+        const pastImg: ClinicalImage = {
+          id: `img-past-${patient.id.slice(-6)}`,
+          patientId: patient.id,
+          consultationId: firstConsult.id,
+          url: pair.pastDataUrl,
+          dataUrl: pair.pastDataUrl,
+          filename: `past_baseline_${patient.patientCode.toLowerCase()}.svg`,
+          mimeType: 'image/svg+xml',
+          sizeBytes: pair.pastDataUrl.length,
+          caption: pair.pastCaption,
+          bodyArea: pair.pastBodyArea,
+          modality: pair.pastModality,
+          imageRole: 'past',
+          examDate: pastDateIso.split('T')[0],
+          extractedFindings: pair.pastFindings,
+          tags: ['Past Medical Image', 'Baseline'],
+          createdAt: pastDateIso
+        };
+
+        const currentImg: ClinicalImage = {
+          id: `img-curr-${patient.id.slice(-6)}`,
+          patientId: patient.id,
+          consultationId: latestConsult.id,
+          url: pair.currentDataUrl,
+          dataUrl: pair.currentDataUrl,
+          filename: `followup_${patient.patientCode.toLowerCase()}.svg`,
+          mimeType: 'image/svg+xml',
+          sizeBytes: pair.currentDataUrl.length,
+          caption: pair.currentCaption,
+          bodyArea: pair.pastBodyArea,
+          modality: pair.pastModality,
+          imageRole: 'current',
+          examDate: currentDateIso.split('T')[0],
+          extractedFindings: pair.currentFindings,
+          tags: ['Follow-up Image', 'Current'],
+          createdAt: currentDateIso
+        };
+
+        this.data.clinicalImages.push(pastImg, currentImg);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.persist();
+    }
+  }
+
   public getPatientImages(patientId: string): ClinicalImage[] {
-    return this.data.clinicalImages.filter(i => i.patientId === patientId);
+    return this.data.clinicalImages
+      .filter(i => i.patientId === patientId)
+      .map(img => ({
+        ...img,
+        url: img.dataUrl && (!img.url || img.url.startsWith('/uploads/')) ? img.dataUrl : img.url
+      }))
+      .sort(
+        (a, b) =>
+          new Date(a.examDate || a.createdAt).getTime() -
+          new Date(b.examDate || b.createdAt).getTime()
+      );
+  }
+
+  public getClinicalImageById(id: string): ClinicalImage | undefined {
+    const img = this.data.clinicalImages.find(i => i.id === id);
+    if (!img) return undefined;
+    return {
+      ...img,
+      url: img.dataUrl && (!img.url || img.url.startsWith('/uploads/')) ? img.dataUrl : img.url
+    };
   }
 
   public addClinicalImage(img: ClinicalImage): ClinicalImage {
-    this.data.clinicalImages.push(img);
+    const existingIdx = this.data.clinicalImages.findIndex(i => i.id === img.id);
+    if (existingIdx >= 0) {
+      this.data.clinicalImages[existingIdx] = img;
+    } else {
+      this.data.clinicalImages.push(img);
+    }
     if (img.consultationId) {
       const consult = this.data.consultations.find(c => c.id === img.consultationId);
       if (consult) {

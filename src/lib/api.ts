@@ -276,6 +276,32 @@ export const api = {
       }),
     getImages: (id: string) =>
       fetchWithAuth<{ images: ClinicalImage[] }>(`/api/patients/${id}/images`),
+    addImage: (
+      id: string,
+      data: {
+        url?: string;
+        dataUrl?: string;
+        filename?: string;
+        mimeType?: string;
+        caption?: string;
+        bodyArea?: string;
+        modality?: string;
+        imageRole?: 'past' | 'current';
+        examDate?: string;
+        extractedFindings?: string;
+        visualMetrics?: import('../types').VisualMorphologyMetrics;
+        consultationId?: string;
+        tags?: string[];
+      }
+    ) =>
+      fetchWithAuth<{ image: ClinicalImage }>(`/api/patients/${id}/images`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    deleteImage: (id: string, imageId: string) =>
+      fetchWithAuth<{ message: string }>(`/api/patients/${id}/images/${imageId}`, {
+        method: 'DELETE',
+      }),
     getPrescriptions: (id: string) =>
       fetchWithAuth<{ prescriptions: PrescriptionItem[] }>(
         `/api/patients/${id}/prescriptions`
@@ -393,9 +419,17 @@ export const api = {
     upload: (data: {
       patientId: string;
       consultationId?: string;
-      dataUrl: string;
+      dataUrl?: string;
+      url?: string;
       filename?: string;
+      mimeType?: string;
       caption?: string;
+      bodyArea?: string;
+      modality?: string;
+      imageRole?: 'past' | 'current';
+      examDate?: string;
+      extractedFindings?: string;
+      visualMetrics?: import('../types').VisualMorphologyMetrics;
       tags?: string[];
       bodyMarkerId?: string;
     }) =>
@@ -667,8 +701,28 @@ export const api = {
         body: JSON.stringify(data),
       }),
     compareProgression: (data: {
-      imageA: { base64: string; mimeType?: string; label?: string; date?: string };
-      imageB: { base64: string; mimeType?: string; label?: string; date?: string };
+      imageA: {
+        id?: string;
+        base64: string;
+        mimeType?: string;
+        label?: string;
+        date?: string;
+        modality?: string;
+        bodyArea?: string;
+        extractedFindings?: string;
+        visualMetrics?: import('../types').VisualMorphologyMetrics;
+      };
+      imageB: {
+        id?: string;
+        base64: string;
+        mimeType?: string;
+        label?: string;
+        date?: string;
+        modality?: string;
+        bodyArea?: string;
+        extractedFindings?: string;
+        visualMetrics?: import('../types').VisualMorphologyMetrics;
+      };
       patientId?: string;
       clinicalContext?: string;
     }) =>

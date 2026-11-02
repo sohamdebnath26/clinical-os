@@ -464,13 +464,27 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
     if (!selectedPatient || !imageSrc) return;
     setIsSavingToGallery(true);
     try {
-      await api.images.upload({
+      const extractedText = analysisResult
+        ? `${analysisResult.primaryImpression}: ${analysisResult.visualFindings.slice(0, 2).join('; ')}`
+        : undefined;
+      const res = await api.images.upload({
         patientId: selectedPatient.id,
         dataUrl: imageSrc,
+        url: imageSrc,
+        mimeType: mimeType || 'image/jpeg',
         filename: `ai_eval_${Date.now()}.jpg`,
         caption: analysisResult ? `${analysisResult.primaryImpression} (AI Evaluated)` : 'Clinical Image',
+        bodyArea: anatomicalSite || undefined,
+        modality: 'Clinical Photo',
+        imageRole: 'current',
+        examDate: new Date().toISOString().split('T')[0],
+        extractedFindings: extractedText,
+        visualMetrics: visualMetrics || undefined,
         tags: analysisResult?.differentials.map(d => d.condition) || ['AI Analyzed']
       });
+      if (res?.image) {
+        setPatientImages(prev => [res.image, ...prev.filter(i => i.id !== res.image.id)]);
+      }
       setSavedToGallery(true);
       setTimeout(() => setSavedToGallery(false), 3000);
     } catch (err) {
@@ -1794,7 +1808,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
         </div>
       )}
 
-      {/* Compare Previous Image vs. Current Image Modal */}
+      {/* Compare Stored Past Medical Image vs. Current Uploaded Image Modal */}
       {showComparePrevCurrModal && selectedPatient && (
         <LesionProgressionModal
           patient={selectedPatient}
@@ -1805,9 +1819,18 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   id: 'analyzer_current_image',
                   patientId: selectedPatient.id,
                   url: imageSrc,
+                  dataUrl: imageSrc,
                   filename: 'current_specimen.jpg',
                   mimeType: mimeType || 'image/jpeg',
                   caption: anatomicalSite ? `Current Image (${anatomicalSite})` : 'Current Uploaded Image',
+                  bodyArea: anatomicalSite || 'Target Clinical Site',
+                  modality: 'Clinical Photo',
+                  imageRole: 'current',
+                  examDate: new Date().toISOString().split('T')[0],
+                  extractedFindings: analysisResult
+                    ? `${analysisResult.primaryImpression}: ${analysisResult.visualFindings.slice(0, 2).join('; ')}`
+                    : undefined,
+                  visualMetrics: visualMetrics || undefined,
                   createdAt: new Date().toISOString()
                 }
               : null

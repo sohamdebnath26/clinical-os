@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
 import { db } from './server/db.js';
-import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI, askImageReportAssistant } from './server/ai.js';
+import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI, askImageReportAssistant, extractBufferVisualMetrics } from './server/ai.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -589,10 +589,189 @@ app.post('/api/patients/:id/markers', authMiddleware, (req: AuthenticatedRequest
   res.json({ marker });
 });
 
+// Helper to persist a clinical image (past or current) with self-contained dataUrl and extracted visual findings
+function storePatientClinicalImage(params: {
+  patientId: string;
+  consultationId?: string;
+  rawDataUrl?: string;
+  filename?: string;
+  mimeType?: string;
+  caption?: string;
+  bodyArea?: string;
+  modality?: import('./src/types/index.js').MedicalImageModality;
+  imageRole?: 'past' | 'current' | 'followup';
+  examDate?: string;
+  extractedFindings?: string;
+  visualMetrics?: import('./src/types/index.js').ImageVisualMetrics;
+  tags?: string[];
+  bodyMarkerId?: string;
+  actor?: { id: string; name: string };
+}): import('./src/types/index.js').ClinicalImage {
+  const {
+    patientId,
+    consultationId,
+    rawDataUrl,
+    filename,
+    caption,
+    bodyArea,
+    modality,
+    imageRole,
+    examDate,
+    extractedFindings,
+    visualMetrics,
+    tags,
+    bodyMarkerId,
+    actor
+  } = params;
+
+  if (!patientId || !rawDataUrl) {
+    throw new Error('patientId and image dataUrl/url are required');
+  }
+
+  let mimeType = params.mimeType || 'image/jpeg';
+  let base64Data = rawDataUrl;
+  let dataUrlToStore = rawDataUrl;
+  let buffer: Buffer;
+
+  const dataUrlMatch = rawDataUrl.match(/^data:([^;,]+)(?:;charset=[^;,]+)?;base64,([\s\S]+)$/);
+  if (dataUrlMatch) {
+    mimeType = dataUrlMatch[1];
+    base64Data = dataUrlMatch[2].replace(/\s/g, '');
+    buffer = Buffer.from(base64Data, 'base64');
+  } else if (rawDataUrl.startsWith('data:image/svg+xml')) {
+    mimeType = 'image/svg+xml';
+    const commaIdx = rawDataUrl.indexOf(',');
+    const svgContent = commaIdx >= 0 ? decodeURIComponent(rawDataUrl.slice(commaIdx + 1)) : rawDataUrl;
+    buffer = Buffer.from(svgContent, 'utf8');
+    base64Data = buffer.toString('base64');
+    dataUrlToStore = `data:image/svg+xml;base64,${base64Data}`;
+  } else {
+    buffer = Buffer.from(rawDataUrl, 'base64');
+    dataUrlToStore = `data:${mimeType};base64,${rawDataUrl}`;
+  }
+
+  if (buffer.length > 12 * 1024 * 1024) {
+    throw new Error('Image exceeds maximum allowed size of 12MB');
+  }
+
+  const ext = mimeType.includes('svg')
+    ? 'svg'
+    : mimeType.includes('png')
+    ? 'png'
+    : mimeType.includes('webp')
+    ? 'webp'
+    : 'jpg';
+  const imageId = `img-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+  const savedFilename = `${imageId}.${ext}`;
+  const filePath = path.join(UPLOADS_DIR, savedFilename);
+
+  try {
+    fs.writeFileSync(filePath, buffer);
+  } catch (writeErr) {
+    console.warn('Could not write image file to disk, relying on persistent dataUrl:', writeErr);
+  }
+
+  const computedMetrics = visualMetrics || extractBufferVisualMetrics(base64Data, mimeType);
+  const resolvedRole: 'past' | 'current' | 'followup' =
+    imageRole || (examDate && new Date(examDate).getTime() < Date.now() - 36 * 3600 * 1000 ? 'past' : 'current');
+  const resolvedModality: import('./src/types/index.js').MedicalImageModality =
+    modality || 'Clinical Photo';
+  const resolvedExamDate = examDate || new Date().toISOString().split('T')[0];
+
+  const autoExtractedFindings =
+    extractedFindings ||
+    `${resolvedRole === 'past' ? 'Past baseline' : 'Current'} ${resolvedModality.toLowerCase()} (${bodyArea || caption || 'clinical target site'}) captured on ${resolvedExamDate}: erythema index ${computedMetrics.erythemaIndex}/100, pigmentation index ${computedMetrics.pigmentationIndex}/100, border irregularity ${computedMetrics.borderIrregularity}/100, estimated diameter ~${computedMetrics.estimatedDiameterMm} mm.`;
+
+  const createdIso = examDate
+    ? (() => {
+        const parsed = new Date(examDate);
+        return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+      })()
+    : new Date().toISOString();
+
+  const clinicalImage = db.addClinicalImage({
+    id: imageId,
+    patientId,
+    consultationId,
+    url: dataUrlToStore,
+    dataUrl: dataUrlToStore,
+    filename: filename || savedFilename,
+    mimeType,
+    sizeBytes: buffer.length,
+    caption: caption || bodyArea || `${resolvedRole === 'past' ? 'Past' : 'Current'} ${resolvedModality}`,
+    bodyArea: bodyArea || caption || 'Target Lesion Site',
+    modality: resolvedModality,
+    imageRole: resolvedRole,
+    examDate: resolvedExamDate,
+    extractedFindings: autoExtractedFindings,
+    visualMetrics: computedMetrics,
+    tags: Array.from(new Set([...(tags || []), resolvedRole, resolvedModality])),
+    bodyMarkerId,
+    createdAt: createdIso
+  });
+
+  if (actor) {
+    db.logAudit({
+      actorId: actor.id,
+      actorName: actor.name,
+      action: resolvedRole === 'past' ? 'past_medical_image_stored' : 'clinical_image_uploaded',
+      resourceType: 'clinical_image',
+      resourceId: imageId,
+      metadata: {
+        patientId,
+        imageRole: resolvedRole,
+        modality: resolvedModality,
+        examDate: resolvedExamDate,
+        sizeBytes: buffer.length
+      }
+    });
+  }
+
+  return clinicalImage;
+}
+
 // Patient clinical images
 app.get('/api/patients/:id/images', authMiddleware, (req, res) => {
   const images = db.getPatientImages(req.params.id);
   res.json({ images });
+});
+
+app.post('/api/patients/:id/images', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const rawDataUrl = req.body.dataUrl || req.body.url;
+    if (!rawDataUrl) {
+      return res.status(400).json({ error: 'Image dataUrl or url is required' });
+    }
+    const doctor = req.doctor!;
+    const image = storePatientClinicalImage({
+      patientId: req.params.id,
+      consultationId: req.body.consultationId,
+      rawDataUrl,
+      filename: req.body.filename,
+      mimeType: req.body.mimeType,
+      caption: req.body.caption,
+      bodyArea: req.body.bodyArea,
+      modality: req.body.modality,
+      imageRole: req.body.imageRole,
+      examDate: req.body.examDate,
+      extractedFindings: req.body.extractedFindings,
+      visualMetrics: req.body.visualMetrics,
+      tags: req.body.tags,
+      bodyMarkerId: req.body.bodyMarkerId,
+      actor: { id: doctor.id, name: doctor.name }
+    });
+    res.status(201).json({ image });
+  } catch (err: unknown) {
+    console.error('Patient image storage error:', err);
+    const message = err instanceof Error ? err.message : 'Failed to store patient medical image';
+    res.status(400).json({ error: message });
+  }
+});
+
+app.delete('/api/patients/:id/images/:imageId', authMiddleware, (req, res) => {
+  const success = db.deleteClinicalImage(req.params.imageId);
+  if (!success) return res.status(404).json({ error: 'Medical image not found' });
+  res.json({ success: true, message: 'Medical image removed' });
 });
 
 // Patient prescriptions
@@ -1471,58 +1650,47 @@ app.delete('/api/appointments/:id', authMiddleware, (req: AuthenticatedRequest, 
 // CLINICAL IMAGES UPLOAD ROUTES
 // ==========================================
 app.post('/api/images/upload', authMiddleware, (req: AuthenticatedRequest, res) => {
-  const { patientId, consultationId, dataUrl, filename, caption, tags, bodyMarkerId } = req.body;
+  const {
+    patientId,
+    consultationId,
+    dataUrl,
+    url,
+    filename,
+    mimeType,
+    caption,
+    bodyArea,
+    modality,
+    imageRole,
+    examDate,
+    extractedFindings,
+    visualMetrics,
+    tags,
+    bodyMarkerId
+  } = req.body;
 
-  if (!patientId || !dataUrl) {
-    return res.status(400).json({ error: 'patientId and dataUrl are required' });
+  const rawDataUrl = dataUrl || url;
+  if (!patientId || !rawDataUrl) {
+    return res.status(400).json({ error: 'patientId and image dataUrl/url are required' });
   }
 
   try {
-    // Handle base64 dataUrl (from canvas, webcam, or file reader)
-    const matches = dataUrl.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) {
-      return res.status(400).json({ error: 'Invalid base64 data URL' });
-    }
-
-    const mimeType = matches[1];
-    const base64Data = matches[2];
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    // 4MB limit check
-    if (buffer.length > 4 * 1024 * 1024) {
-      return res.status(413).json({ error: 'Image exceeds maximum allowed size of 4MB' });
-    }
-
-    const ext = mimeType.includes('png') ? 'png' : 'jpg';
-    const imageId = `img-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
-    const savedFilename = `${imageId}.${ext}`;
-    const filePath = path.join(UPLOADS_DIR, savedFilename);
-
-    fs.writeFileSync(filePath, buffer);
-
-    const publicUrl = `/uploads/${savedFilename}`;
-    const clinicalImage = db.addClinicalImage({
-      id: imageId,
+    const doctor = req.doctor!;
+    const clinicalImage = storePatientClinicalImage({
       patientId,
       consultationId,
-      url: publicUrl,
-      filename: filename || savedFilename,
+      rawDataUrl,
+      filename,
       mimeType,
-      sizeBytes: buffer.length,
-      caption: caption || '',
-      tags: tags || [],
+      caption,
+      bodyArea,
+      modality,
+      imageRole,
+      examDate,
+      extractedFindings,
+      visualMetrics,
+      tags,
       bodyMarkerId,
-      createdAt: new Date().toISOString()
-    });
-
-    const doctor = req.doctor!;
-    db.logAudit({
-      actorId: doctor.id,
-      actorName: doctor.name,
-      action: 'image_uploaded',
-      resourceType: 'clinical_image',
-      resourceId: imageId,
-      metadata: { patientId, sizeBytes: buffer.length }
+      actor: { id: doctor.id, name: doctor.name }
     });
 
     res.status(201).json({ image: clinicalImage });
@@ -2253,8 +2421,54 @@ app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedReque
 app.post('/api/ai/compare-progression', authMiddleware, async (req: AuthenticatedRequest, res) => {
   const { imageA, imageB, patientId, clinicalContext } = req.body;
 
-  if (!imageA?.base64 || !imageB?.base64) {
-    return res.status(400).json({ error: 'Both imageA and imageB base64 data are required for progression analysis' });
+  if (!imageA || !imageB) {
+    return res.status(400).json({ error: 'Both past image (imageA) and current image (imageB) are required for progression analysis' });
+  }
+
+  // Helper to resolve stored past/current image from DB or /uploads/ path so comparison always extracts real data
+  const resolveComparisonImageInput = (input: {
+    id?: string;
+    base64?: string;
+    mimeType?: string;
+    label: string;
+    date: string;
+    modality?: string;
+    bodyArea?: string;
+    extractedFindings?: string;
+    visualMetrics?: import('./src/types/index.js').ImageVisualMetrics;
+  }) => {
+    const stored = input.id ? db.getClinicalImageById(input.id) : undefined;
+    let resolvedBase64 = input.base64 || stored?.dataUrl || stored?.url || '';
+    let resolvedMime = input.mimeType || stored?.mimeType || 'image/jpeg';
+
+    // If resolvedBase64 is a local /uploads/... path, read from disk or fallback to stored dataUrl
+    if (resolvedBase64.startsWith('/uploads/')) {
+      const diskPath = path.join(UPLOADS_DIR, path.basename(resolvedBase64));
+      if (fs.existsSync(diskPath)) {
+        const buf = fs.readFileSync(diskPath);
+        resolvedBase64 = `data:${resolvedMime};base64,${buf.toString('base64')}`;
+      } else if (stored?.dataUrl) {
+        resolvedBase64 = stored.dataUrl;
+      }
+    }
+
+    return {
+      base64: resolvedBase64,
+      mimeType: resolvedMime,
+      label: input.label || stored?.caption || stored?.bodyArea || 'Medical Image',
+      date: input.date || stored?.examDate || (stored?.createdAt ? stored.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+      modality: input.modality || stored?.modality || 'Clinical Photo',
+      bodyArea: input.bodyArea || stored?.bodyArea || stored?.caption,
+      extractedFindings: input.extractedFindings || stored?.extractedFindings,
+      visualMetrics: input.visualMetrics || stored?.visualMetrics
+    };
+  };
+
+  const resolvedA = resolveComparisonImageInput(imageA);
+  const resolvedB = resolveComparisonImageInput(imageB);
+
+  if (!resolvedA.base64 || !resolvedB.base64) {
+    return res.status(400).json({ error: 'Both past medical image and current medical image data are required for comparison' });
   }
 
   let patient = undefined;
@@ -2264,8 +2478,8 @@ app.post('/api/ai/compare-progression', authMiddleware, async (req: Authenticate
 
   try {
     const progression = await compareClinicalImages({
-      imageA,
-      imageB,
+      imageA: resolvedA,
+      imageB: resolvedB,
       patient,
       clinicalContext
     });
@@ -2279,6 +2493,8 @@ app.post('/api/ai/compare-progression', authMiddleware, async (req: Authenticate
       resourceId: progression.id,
       metadata: {
         patientId: patient?.id,
+        pastImageDate: resolvedA.date,
+        currentImageDate: resolvedB.date,
         overallProgression: progression.overallProgression,
         progressionScore: progression.progressionScore
       }
