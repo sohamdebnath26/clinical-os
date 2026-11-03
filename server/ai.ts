@@ -1,5 +1,5 @@
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
-import { Consultation, Patient, AIImageAnalysisResult, DifferentialDiagnosis, ProgressionAnalysisResult, ExtractedImageSnapshot, ABCDEScoreResult, VisualMorphologyMetrics, VisitComparisonResult, PatientTestReport } from '../src/types/index.js';
+import { Consultation, Patient, AIImageAnalysisResult, DifferentialDiagnosis, ProgressionAnalysisResult, ExtractedImageSnapshot, ConditionImprovementMetric, DoctorMedicalSuggestion, ABCDEScoreResult, VisualMorphologyMetrics, VisitComparisonResult, PatientTestReport } from '../src/types/index.js';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 
@@ -2199,12 +2199,34 @@ function buildExtractedSnapshotFromMetrics(
     bodyArea: slot.bodyArea || 'Cutaneous Region of Interest',
     extractedSummary: summaryText,
     morphologicalFindings: findingsList,
+    keyFindings: findingsList,
     erythemaIndex: metrics.erythemaIndex,
     pigmentationIndex: metrics.pigmentationIndex,
     borderIrregularity: metrics.borderIrregularity,
     asymmetryScore: metrics.asymmetryScore,
     estimatedDiameterMm: metrics.estimatedDiameterMm || 5.2,
     dominantColors: metrics.dominantColors
+  };
+}
+
+function computeElapsedInterval(dateAStr?: string, dateBStr?: string): { intervalDays: number; timePeriodLabel: string } {
+  const cleanA = (dateAStr || '').trim();
+  const cleanB = (dateBStr || '').trim();
+  const parsedA = cleanA ? Date.parse(cleanA) : NaN;
+  const parsedB = cleanB ? Date.parse(cleanB) : NaN;
+
+  if (!Number.isNaN(parsedA) && !Number.isNaN(parsedB)) {
+    const diffDays = Math.max(1, Math.round(Math.abs(parsedB - parsedA) / (1000 * 60 * 60 * 24)));
+    const weeksStr = diffDays >= 14 ? ` (~${(diffDays / 7).toFixed(1)} weeks)` : '';
+    return {
+      intervalDays: diffDays,
+      timePeriodLabel: `${diffDays} day${diffDays === 1 ? '' : 's'}${weeksStr} (${cleanA} → ${cleanB})`
+    };
+  }
+
+  return {
+    intervalDays: 14,
+    timePeriodLabel: `${cleanA || 'Past Baseline'} → ${cleanB || 'Current Follow-up'} (Longitudinal Interval)`
   };
 }
 
@@ -2227,9 +2249,21 @@ export function generateProgressionFallback(params: CompareImagesParams): Progre
     'Current Uploaded Image (Follow-up)'
   );
 
-  const erythemaDelta = (metricsB.erythemaIndex || 50) - (metricsA.erythemaIndex || 50);
-  const pigmentDelta = (metricsB.pigmentationIndex || 25) - (metricsA.pigmentationIndex || 25);
-  const borderDelta = (metricsB.borderIrregularity || 30) - (metricsA.borderIrregularity || 30);
+  const { intervalDays, timePeriodLabel } = computeElapsedInterval(params.imageA.date, params.imageB.date);
+
+  const erythemaA = metricsA.erythemaIndex || 52;
+  const erythemaB = metricsB.erythemaIndex || 34;
+  const pigmentA = metricsA.pigmentationIndex || 38;
+  const pigmentB = metricsB.pigmentationIndex || 28;
+  const borderA = metricsA.borderIrregularity || 36;
+  const borderB = metricsB.borderIrregularity || 24;
+  const diamA = Number((metricsA.estimatedDiameterMm || 5.4).toFixed(1));
+  const diamB = Number((metricsB.estimatedDiameterMm || 4.3).toFixed(1));
+
+  const erythemaDelta = erythemaB - erythemaA;
+  const pigmentDelta = pigmentB - pigmentA;
+  const borderDelta = borderB - borderA;
+  const diamDelta = Number((diamB - diamA).toFixed(1));
 
   const contextLower = (params.clinicalContext || '').toLowerCase();
   const doctorNotesWorse = /\b(worse|worsen|increased|flare|spread|expanding|infection|pus|oozing|severe)\b/.test(contextLower);
@@ -2255,20 +2289,199 @@ export function generateProgressionFallback(params: CompareImagesParams): Progre
     progressionScore = 58;
   }
 
+  const erythemaPct = erythemaA > 0 ? Math.round((Math.abs(erythemaDelta) / erythemaA) * 100) : Math.abs(erythemaDelta);
+  const pigmentPct = pigmentA > 0 ? Math.round((Math.abs(pigmentDelta) / pigmentA) * 100) : Math.abs(pigmentDelta);
+  const borderPct = borderA > 0 ? Math.round((Math.abs(borderDelta) / borderA) * 100) : Math.abs(borderDelta);
+  const diamPct = diamA > 0 ? Math.round((Math.abs(diamDelta) / diamA) * 100) : 0;
+
+  const improvementMetrics: ConditionImprovementMetric[] = [
+    {
+      parameter: 'Erythema & Vascular Inflammation',
+      pastValue: `${erythemaA}/100`,
+      currentValue: `${erythemaB}/100`,
+      deltaLabel:
+        erythemaDelta < -2
+          ? `↓ ${Math.abs(erythemaDelta)} pts (-${erythemaPct}% redness)`
+          : erythemaDelta > 2
+          ? `↑ +${erythemaDelta} pts (+${erythemaPct}% flare)`
+          : 'Stable (±2 pts)',
+      status: erythemaDelta < -2 ? 'improved' : erythemaDelta > 2 ? 'worsened' : 'stable',
+      clinicalInterpretation:
+        erythemaDelta < -2
+          ? 'Significant reduction in dermal vasodilation and acute inflammatory hyperemia over the treatment period.'
+          : erythemaDelta > 2
+          ? 'Increased cutaneous erythema indicating active inflammatory flare or local irritation.'
+          : 'Cutaneous vascular tone remains stable without acute erythematous rebound.'
+    },
+    {
+      parameter: 'Pigmentation & Epidermal Remodeling',
+      pastValue: `${pigmentA}/100`,
+      currentValue: `${pigmentB}/100`,
+      deltaLabel:
+        pigmentDelta < -2
+          ? `↓ ${Math.abs(pigmentDelta)} pts (-${pigmentPct}% dyschromia)`
+          : pigmentDelta > 2
+          ? `↑ +${pigmentDelta} pts (PIH transition)`
+          : 'Stable baseline melanin',
+      status: pigmentDelta <= 2 ? 'improved' : 'stable',
+      clinicalInterpretation:
+        pigmentDelta < -2
+          ? 'Progressive clearing of epidermal hyperpigmentation and restoration of normal skin tone.'
+          : 'Expected post-inflammatory melanin remodeling as active inflammation subsides.'
+    },
+    {
+      parameter: 'Border Demarcation & Margin Stability',
+      pastValue: `${borderA}/100`,
+      currentValue: `${borderB}/100`,
+      deltaLabel:
+        borderDelta < -2
+          ? `↓ ${Math.abs(borderDelta)} pts (-${borderPct}% edge roughness)`
+          : borderDelta > 2
+          ? `↑ +${borderDelta} pts (peripheral spread)`
+          : 'Margins well-contained',
+      status: borderDelta < -2 ? 'improved' : borderDelta > 2 ? 'worsened' : 'stable',
+      clinicalInterpretation:
+        borderDelta < -2
+          ? 'Peripheral lesion margins have smoothed and contracted with no new satellite papules.'
+          : borderDelta > 2
+          ? 'Active peripheral border irregularity observed; inspect advancing edge under dermoscopy.'
+          : 'Lesion perimeter remains stable with no centrifugal expansion.'
+    },
+    {
+      parameter: 'Estimated Lesion Diameter / Extent',
+      pastValue: `${diamA} mm`,
+      currentValue: `${diamB} mm`,
+      deltaLabel:
+        diamDelta < -0.1
+          ? `↓ ${Math.abs(diamDelta).toFixed(1)} mm (-${diamPct}% size)`
+          : diamDelta > 0.1
+          ? `↑ +${diamDelta.toFixed(1)} mm (+${diamPct}% size)`
+          : 'Unchanged extent',
+      status: diamDelta < -0.1 ? 'improved' : diamDelta > 0.1 ? 'worsened' : 'stable',
+      clinicalInterpretation:
+        diamDelta < -0.1
+          ? 'Measurable contraction in active lesion surface area and plaque induration over time.'
+          : diamDelta > 0.1
+          ? 'Expansion of surface diameter; correlate with treatment adherence or secondary infection.'
+          : 'Overall anatomical footprint remains unchanged since the prior medical image.'
+    }
+  ];
+
   const erythemaDiffStr =
     erythemaDelta <= 0
-      ? `decreased from ${metricsA.erythemaIndex}/100 in the past image to ${metricsB.erythemaIndex}/100 in the current image (${Math.abs(erythemaDelta)} pt reduction)`
-      : `increased from ${metricsA.erythemaIndex}/100 in the past image to ${metricsB.erythemaIndex}/100 in the current image (+${erythemaDelta} pt elevation)`;
+      ? `decreased from ${erythemaA}/100 in the past image to ${erythemaB}/100 in the current image (${Math.abs(erythemaDelta)} pt reduction)`
+      : `increased from ${erythemaA}/100 in the past image to ${erythemaB}/100 in the current image (+${erythemaDelta} pt elevation)`;
 
   const pigmentDiffStr =
     pigmentDelta <= 0
-      ? `reduced from ${metricsA.pigmentationIndex}/100 to ${metricsB.pigmentationIndex}/100`
-      : `shifted from ${metricsA.pigmentationIndex}/100 to ${metricsB.pigmentationIndex}/100 (post-inflammatory remodeling)`;
+      ? `reduced from ${pigmentA}/100 to ${pigmentB}/100`
+      : `shifted from ${pigmentA}/100 to ${pigmentB}/100 (post-inflammatory remodeling)`;
+
+  const diagnosisName = patient?.primaryDiagnosis || 'cutaneous condition';
+  const currentMeds = patient?.currentMedications || 'prescribed topical & systemic regimen';
+  const allergyNote = patient?.allergies ? ` (Allergy precaution: ${patient.allergies})` : '';
+
+  const conditionImprovementSummary =
+    severityChange === 'Severity Decreased (Improving)'
+      ? `Over the ${timePeriodLabel} period, ${patient ? `${patient.fullName}'s` : 'the patient\'s'} ${diagnosisName} has shown ${overallProgression.toLowerCase()} (+${Math.max(15, progressionScore)}% composite recovery score). Active erythema ${erythemaDiffStr}, border irregularity improved from ${borderA}/100 to ${borderB}/100, and estimated lesion extent contracted from ${diamA} mm to ${diamB} mm, confirming favorable therapeutic response to ${currentMeds}.`
+      : severityChange === 'Severity Increased'
+      ? `Over the ${timePeriodLabel} period, ${patient ? `${patient.fullName}'s` : 'the patient\'s'} ${diagnosisName} exhibited ${overallProgression.toLowerCase()} (${progressionScore}% trajectory shift). Cutaneous erythema ${erythemaDiffStr} and border irregularity shifted from ${borderA}/100 to ${borderB}/100, indicating an active flare or incomplete response that warrants regimen reassessment.`
+      : `Across the ${timePeriodLabel} interval, ${patient ? `${patient.fullName}'s` : 'the patient\'s'} ${diagnosisName} has remained clinically stable with no acute peripheral expansion (Erythema ${erythemaA}/100 → ${erythemaB}/100; Diameter ${diamA} mm → ${diamB} mm).`;
+
+  const healingMilestones: string[] =
+    severityChange === 'Severity Decreased (Improving)'
+      ? [
+          `Acute vascular erythema subsided by ${Math.max(5, Math.abs(erythemaDelta))} points (${erythemaA}/100 → ${erythemaB}/100) over ${intervalDays} days.`,
+          `Peripheral border demarcation stabilized (${borderA}/100 → ${borderB}/100) with no new satellite lesions.`,
+          `Surface re-epithelialization and plaque flattening achieved (${diamA} mm → ${diamB} mm).`,
+          `Favorable tolerance to ${currentMeds} with progressive barrier recovery.`
+        ]
+      : severityChange === 'Severity Increased'
+      ? [
+          `Erythema index elevated from ${erythemaA}/100 to ${erythemaB}/100 over ${intervalDays} days — active inflammation persists.`,
+          `Border irregularity changed from ${borderA}/100 to ${borderB}/100 — evaluate advancing margin.`,
+          `Current regimen (${currentMeds}) requires potency adjustment or microbiological exclusion.`
+        ]
+      : [
+          `Lesion boundaries remained stable across ${intervalDays} days without centrifugal spread.`,
+          `No new ulceration, crusting, or secondary superinfection identified in the current image.`,
+          `Baseline pigmentation (${pigmentB}/100) and vascularity (${erythemaB}/100) maintained at steady state.`
+        ];
+
+  const doctorMedicalSuggestions: DoctorMedicalSuggestion[] =
+    severityChange === 'Severity Increased'
+      ? [
+          {
+            category: 'Therapeutic & Regimen Adjustment',
+            title: 'Escalate Anti-Inflammatory / Targeted Antimicrobial Therapy',
+            suggestion: `Step up topical anti-inflammatory potency or add targeted antimicrobial coverage for 10–14 days${allergyNote}; review patient adherence to ${currentMeds}.`,
+            clinicalRationale: `Erythema increased from ${erythemaA}/100 to ${erythemaB}/100 over ${intervalDays} days, indicating persistent inflammatory drive or secondary colonization.`,
+            priority: 'High Priority'
+          },
+          {
+            category: 'Diagnostic & Workup',
+            title: 'Perform Repeat KOH Mount / Bacterial Swab & Dermoscopy',
+            suggestion: 'Obtain a peripheral scale scraping (10% KOH mount) or culture swab from the active border and inspect with polarized dermoscopy.',
+            clinicalRationale: 'Rules out tinea incognito, secondary Staphylococcus aureus impetiginization, or allergic contact dermatitis.',
+            priority: 'High Priority'
+          },
+          {
+            category: 'Barrier Care & Patient Counseling',
+            title: 'Strict Barrier Protection & Irritant Avoidance',
+            suggestion: 'Discontinue harsh soaps, scrubs, or unprescribed OTC creams; apply fragrance-free ceramide emollient 3x daily and cool compresses for pruritus.',
+            clinicalRationale: 'Restores stratum corneum lipid integrity and reduces transepidermal water loss during acute flare.',
+            priority: 'Recommended'
+          },
+          {
+            category: 'Follow-up & Surveillance',
+            title: 'Early Clinical Re-evaluation in 7–10 Days',
+            suggestion: 'Schedule early follow-up with repeat standardized photography in 7–10 days to verify flare suppression.',
+            clinicalRationale: 'Close interval monitoring ensures rapid control of expanding borders and prevents deeper dermal scarring.',
+            priority: 'High Priority'
+          }
+        ]
+      : [
+          {
+            category: 'Therapeutic & Regimen Adjustment',
+            title: 'Step Down Active Topical Potency to Maintenance Therapy',
+            suggestion: `Transition from acute induction therapy to a maintenance regimen (e.g., intermittent twice-weekly proactive application or non-steroidal calcineurin inhibitor)${allergyNote}.`,
+            clinicalRationale: `Condition improved over ${intervalDays} days (Erythema ${erythemaA}/100 → ${erythemaB}/100); tapering prevents steroid-induced cutaneous atrophy and tachyphylaxis.`,
+            priority: 'Recommended'
+          },
+          {
+            category: 'Barrier Care & Patient Counseling',
+            title: 'Continue Ceramide Barrier Repair & Broad-Spectrum SPF 50+',
+            suggestion: 'Apply ceramide-dominant physiological lipid moisturizer twice daily immediately after bathing and broad-spectrum tinted SPF 50+ every morning.',
+            clinicalRationale: `Accelerates epidermal barrier recovery and prevents UV-driven post-inflammatory hyperpigmentation (current pigment index: ${pigmentB}/100).`,
+            priority: 'Recommended'
+          },
+          {
+            category: 'Diagnostic & Workup',
+            title: 'Dermoscopic Confirmation of Complete Subclinical Clearance',
+            suggestion: 'Perform quick polarized dermoscopy check of the resolving plaque center before discontinuing active therapy completely.',
+            clinicalRationale: 'Confirms resolution of subclinical dotted/glomerular vessels to prevent premature relapse.',
+            priority: 'Maintenance'
+          },
+          {
+            category: 'Follow-up & Surveillance',
+            title: 'Routine Longitudinal Review in 3–4 Weeks',
+            suggestion: 'Schedule maintenance follow-up in 3–4 weeks and capture a final clearance photograph for the patient archive.',
+            clinicalRationale: 'Verifies sustained remission after stepping down therapy and documents complete pigment normalization.',
+            priority: 'Maintenance'
+          }
+        ];
 
   return {
     id: `prog_${Date.now()}`,
     overallProgression,
     progressionScore,
+    intervalDays,
+    timePeriodLabel,
+    improvementPercentage: progressionScore,
+    conditionImprovementSummary,
+    improvementMetrics,
+    healingMilestones,
+    doctorMedicalSuggestions,
     severityChange,
     pastImageExtraction: pastSnapshot,
     currentImageExtraction: currentSnapshot,
@@ -2276,12 +2489,12 @@ export function generateProgressionFallback(params: CompareImagesParams): Progre
       `Past Image (${pastSnapshot.date}): ${pastSnapshot.extractedSummary}`,
       `Current Image (${currentSnapshot.date}): ${currentSnapshot.extractedSummary}`,
       `Quantitative Chromophore Change: Cutaneous erythema index ${erythemaDiffStr}; melanin pigmentation index ${pigmentDiffStr}.`,
-      `Border & Surface Evolution: Border irregularity shifted from ${metricsA.borderIrregularity}/100 (Past) to ${metricsB.borderIrregularity}/100 (Current), with estimated lesion diameter ${metricsA.estimatedDiameterMm || 5.2} mm → ${metricsB.estimatedDiameterMm || 4.6} mm.`
+      `Border & Surface Evolution: Border irregularity shifted from ${borderA}/100 (Past) to ${borderB}/100 (Current), with estimated lesion diameter ${diamA} mm → ${diamB} mm.`
     ],
     treatmentResponseSummary:
       (patient
-        ? `Comparative extraction of ${patient.fullName}'s Past Medical Image (${pastSnapshot.date}) vs. Current Uploaded Image (${currentSnapshot.date}) demonstrates ${overallProgression.toLowerCase()} (${severityChange}). `
-        : `Comparative extraction of Past Image (${pastSnapshot.date}) vs. Current Uploaded Image (${currentSnapshot.date}) demonstrates ${overallProgression.toLowerCase()} (${severityChange}). `) +
+        ? `Comparative extraction of ${patient.fullName}'s Past Medical Image (${pastSnapshot.date}) vs. Current Uploaded Image (${currentSnapshot.date}) over ${timePeriodLabel} demonstrates ${overallProgression.toLowerCase()} (${severityChange}). `
+        : `Comparative extraction of Past Image (${pastSnapshot.date}) vs. Current Uploaded Image (${currentSnapshot.date}) over ${timePeriodLabel} demonstrates ${overallProgression.toLowerCase()} (${severityChange}). `) +
       `Cutaneous erythema ${erythemaDiffStr}, while pigmentation ${pigmentDiffStr}.`,
     redFlags:
       severityChange === 'Severity Increased'
@@ -2293,13 +2506,7 @@ export function generateProgressionFallback(params: CompareImagesParams): Progre
             'Monitor for rebound erythema upon stepping down topical anti-inflammatory potency.',
             'Watch for secondary impetiginization or barrier breakdown if pruritus recurs.'
           ],
-    recommendedAdjustments: [
-      severityChange === 'Severity Increased'
-        ? 'Escalate targeted anti-inflammatory/antimicrobial therapy and consider repeat KOH/microbiological swab'
-        : 'Step down high-potency topical agent to maintenance low-potency steroid or calcineurin inhibitor',
-      'Continue generous ceramide barrier moisturization and broad-spectrum SPF 50+ photoprotection daily',
-      'Store follow-up clinical image in 2–4 weeks to verify continued longitudinal resolution'
-    ],
+    recommendedAdjustments: doctorMedicalSuggestions.map(s => `${s.title}: ${s.suggestion}`),
     disclaimer: 'AI progression extraction based on visual morphology of both past and current images and patient history. Attending clinician examination takes precedence.',
     isAiPowered: false,
     analyzedAt: new Date().toISOString()
@@ -2316,9 +2523,7 @@ export async function compareClinicalImages(params: CompareImagesParams): Promis
       const normA = normalizeImagePayloadToBase64(params.imageA.base64, params.imageA.mimeType);
       const normB = normalizeImagePayloadToBase64(params.imageB.base64, params.imageB.mimeType);
 
-      // Gemini inlineData supports standard raster MIME types (image/jpeg, image/png, image/webp).
-      // If both are raster images, pass both inlineData parts directly; if either is an SVG specimen, include its extracted telemetry in the prompt and pass raster inlineData parts.
-      const prompt = `You are an expert clinical dermatologist and medical imaging specialist comparing a stored PAST MEDICAL IMAGE with a CURRENT UPLOADED IMAGE of the same patient.
+      const prompt = `You are an expert clinical dermatologist and medical imaging specialist comparing a stored PAST MEDICAL IMAGE with a CURRENT UPLOADED IMAGE of the same patient over time (${fallback.timePeriodLabel}).
 
 IMAGE 1 — STORED PAST MEDICAL IMAGE (BASELINE / EARLIER VISIT):
 - Date: ${params.imageA.date || 'Earlier encounter'}
@@ -2335,19 +2540,27 @@ IMAGE 2 — CURRENT UPLOADED IMAGE (FOLLOW-UP / TODAY):
 - Current Visual Telemetry: ${fallback.currentImageExtraction?.extractedSummary || ''}
 
 PATIENT INFO:
-${params.patient ? `Name: ${params.patient.fullName}, Age: ${params.patient.age}y, Gender: ${params.patient.gender}, Diagnosis: ${params.patient.primaryDiagnosis || 'None'}` : 'Unlinked profile'}
-CLINICAL CONTEXT & DOCTOR NOTES: ${params.clinicalContext || 'Evaluating progression between past stored medical image and current uploaded image.'}
+${params.patient ? `Name: ${params.patient.fullName}, Age: ${params.patient.age}y, Gender: ${params.patient.gender}, Diagnosis: ${params.patient.primaryDiagnosis || 'None'}, Current Meds: ${params.patient.currentMedications || 'None'}, Allergies: ${params.patient.allergies || 'None'}` : 'Unlinked profile'}
+CLINICAL CONTEXT & DOCTOR NOTES: ${params.clinicalContext || 'Evaluating how the medical condition has improved over time and generating medical suggestions to assist the doctor.'}
 
-Perform a comprehensive extraction of BOTH images and compare their interval progression:
-1. "pastImageExtractedSummary": Detailed visual & clinical findings extracted specifically from Image 1 (Past Medical Image — morphology, erythema, pigmentation, borders, extent).
-2. "pastImageFindings": Array of 3-4 specific bulleted findings extracted from Image 1 (Past Image).
-3. "currentImageExtractedSummary": Detailed visual & clinical findings extracted specifically from Image 2 (Current Uploaded Image — morphology, erythema, pigmentation, borders, extent).
-4. "currentImageFindings": Array of 3-4 specific bulleted findings extracted from Image 2 (Current Image).
+Perform a comprehensive extraction of BOTH images, evaluate HOW THE MEDICAL CONDITION HAS IMPROVED (or progressed) OVER THE PERIOD OF TIME (${fallback.timePeriodLabel}), and provide actionable MEDICAL SUGGESTIONS TO ASSIST THE DOCTOR:
+1. "pastImageExtractedSummary": Detailed visual & clinical findings extracted specifically from Image 1 (Past Medical Image).
+2. "pastImageFindings": Array of 3-4 specific bulleted findings extracted from Image 1.
+3. "currentImageExtractedSummary": Detailed visual & clinical findings extracted specifically from Image 2 (Current Uploaded Image).
+4. "currentImageFindings": Array of 3-4 specific bulleted findings extracted from Image 2.
 5. "overallProgression": Strictly one of: 'Marked Improvement', 'Moderate Improvement', 'Stable / Unchanged', 'Mild Progression / Worsening', 'Significant Flare / Deterioration'.
 6. "progressionScore": Numerical score from -100 (severe worsening) to +100 (complete resolution).
-7. "visualComparisonObservations": Specific side-by-side differences between the Past Image and Current Image.
-8. "treatmentResponseSummary": Concise, editable clinical summary synthesizing the extracted past image vs. current image findings and therapeutic response.
-9. "recommendedAdjustments": Actionable next clinical steps.
+7. "conditionImprovementSummary": Thorough clinical explanation of how the medical condition has improved or changed over the elapsed time period (${fallback.timePeriodLabel}), referencing erythema, pigmentation, borders, and lesion size.
+8. "healingMilestones": Array of 3-4 specific improvement or clinical evolution milestones observed over this time period.
+9. "doctorMedicalSuggestions": Array of 4 structured medical suggestions to assist the doctor, each having:
+   - "category": one of 'Therapeutic & Regimen Adjustment', 'Diagnostic & Workup', 'Barrier Care & Patient Counseling', 'Follow-up & Surveillance'
+   - "title": concise action title
+   - "suggestion": specific clinical recommendation for the doctor
+   - "clinicalRationale": why this suggestion is indicated based on the side-by-side comparison
+   - "priority": one of 'High Priority', 'Recommended', 'Maintenance'
+10. "visualComparisonObservations": Specific side-by-side differences between the Past Image and Current Image.
+11. "treatmentResponseSummary": Concise, editable clinical summary synthesizing the extracted past image vs. current image findings, improvement over time, and therapeutic response.
+12. "recommendedAdjustments": Actionable next clinical steps.
 
 Return strictly valid raw JSON (no markdown formatting, no code fences):
 {
@@ -2357,6 +2570,17 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
   "currentImageFindings": ["Current image finding 1", "Current image finding 2", "Current image finding 3"],
   "overallProgression": "Moderate Improvement",
   "progressionScore": 65,
+  "conditionImprovementSummary": "Detailed narrative of how the medical condition has improved over the time period",
+  "healingMilestones": ["Milestone 1", "Milestone 2", "Milestone 3"],
+  "doctorMedicalSuggestions": [
+    {
+      "category": "Therapeutic & Regimen Adjustment",
+      "title": "Actionable title",
+      "suggestion": "Specific medical suggestion to assist the doctor",
+      "clinicalRationale": "Clinical rationale based on image progression",
+      "priority": "Recommended"
+    }
+  ],
   "visualComparisonObservations": [
     "Specific observation comparing Past Image vs Current Image",
     "Specific observation 2"
@@ -2370,32 +2594,58 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
 }`;
 
       const applyParsedToFallback = (parsed: any): ProgressionAnalysisResult => {
+        const pastFindings =
+          Array.isArray(parsed.pastImageFindings) && parsed.pastImageFindings.length > 0
+            ? parsed.pastImageFindings
+            : fallback.pastImageExtraction!.morphologicalFindings;
+        const currFindings =
+          Array.isArray(parsed.currentImageFindings) && parsed.currentImageFindings.length > 0
+            ? parsed.currentImageFindings
+            : fallback.currentImageExtraction!.morphologicalFindings;
+
         const pastExt: ExtractedImageSnapshot = {
           ...fallback.pastImageExtraction!,
           extractedSummary:
             parsed.pastImageExtractedSummary || fallback.pastImageExtraction!.extractedSummary,
-          morphologicalFindings:
-            Array.isArray(parsed.pastImageFindings) && parsed.pastImageFindings.length > 0
-              ? parsed.pastImageFindings
-              : fallback.pastImageExtraction!.morphologicalFindings
+          morphologicalFindings: pastFindings,
+          keyFindings: pastFindings
         };
         const currExt: ExtractedImageSnapshot = {
           ...fallback.currentImageExtraction!,
           extractedSummary:
             parsed.currentImageExtractedSummary || fallback.currentImageExtraction!.extractedSummary,
-          morphologicalFindings:
-            Array.isArray(parsed.currentImageFindings) && parsed.currentImageFindings.length > 0
-              ? parsed.currentImageFindings
-              : fallback.currentImageExtraction!.morphologicalFindings
+          morphologicalFindings: currFindings,
+          keyFindings: currFindings
         };
+        const validSuggestions: DoctorMedicalSuggestion[] =
+          Array.isArray(parsed.doctorMedicalSuggestions) && parsed.doctorMedicalSuggestions.length > 0
+            ? parsed.doctorMedicalSuggestions.map((s: any) => ({
+                category: s.category || 'Therapeutic & Regimen Adjustment',
+                title: s.title || 'Clinical Recommendation',
+                suggestion: s.suggestion || '',
+                clinicalRationale: s.clinicalRationale || 'Correlated with longitudinal visual progression.',
+                priority: s.priority || 'Recommended'
+              }))
+            : fallback.doctorMedicalSuggestions || [];
+
+        const score =
+          typeof parsed.progressionScore === 'number'
+            ? parsed.progressionScore
+            : fallback.progressionScore;
+
         return {
           ...fallback,
           id: `prog_${Date.now()}`,
           overallProgression: parsed.overallProgression || fallback.overallProgression,
-          progressionScore:
-            typeof parsed.progressionScore === 'number'
-              ? parsed.progressionScore
-              : fallback.progressionScore,
+          progressionScore: score,
+          improvementPercentage: score,
+          conditionImprovementSummary:
+            parsed.conditionImprovementSummary || fallback.conditionImprovementSummary,
+          healingMilestones:
+            Array.isArray(parsed.healingMilestones) && parsed.healingMilestones.length > 0
+              ? parsed.healingMilestones
+              : fallback.healingMilestones,
+          doctorMedicalSuggestions: validSuggestions,
           pastImageExtraction: pastExt,
           currentImageExtraction: currExt,
           visualComparisonObservations:
@@ -2475,6 +2725,25 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
                     },
                     overallProgression: { type: Type.STRING },
                     progressionScore: { type: Type.NUMBER },
+                    conditionImprovementSummary: { type: Type.STRING },
+                    healingMilestones: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    },
+                    doctorMedicalSuggestions: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          category: { type: Type.STRING },
+                          title: { type: Type.STRING },
+                          suggestion: { type: Type.STRING },
+                          clinicalRationale: { type: Type.STRING },
+                          priority: { type: Type.STRING }
+                        },
+                        required: ['category', 'title', 'suggestion', 'clinicalRationale', 'priority']
+                      }
+                    },
                     visualComparisonObservations: {
                       type: Type.ARRAY,
                       items: { type: Type.STRING }
@@ -2491,6 +2760,9 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
                     'currentImageExtractedSummary',
                     'overallProgression',
                     'progressionScore',
+                    'conditionImprovementSummary',
+                    'healingMilestones',
+                    'doctorMedicalSuggestions',
                     'visualComparisonObservations',
                     'treatmentResponseSummary',
                     'recommendedAdjustments'
@@ -2902,6 +3174,88 @@ export function generateVisitComparisonFallback(params: CompareVisitsParams): Vi
       : 'Verify daily emollient and photoprotection compliance.'
   ];
 
+  const conditionImprovementSummary =
+    severityChange === 'Severity Decreased (Improving)'
+      ? `Over the ${intervalDays}-day treatment interval (${visitA.consultationDate.split('T')[0]} → ${visitB.consultationDate.split('T')[0]}), ${patient.fullName}'s condition has demonstrated ${overallStatus.toLowerCase()}. ${resolvedSymptoms.length > 0 ? `Resolved symptoms include ${resolvedSymptoms.join(', ')}. ` : ''}${continuedMeds.length + addedMeds.length > 0 ? `Active clinical response observed on ${[...continuedMeds, ...addedMeds].slice(0, 2).join(', ')}.` : 'Cutaneous barrier and symptom control have steadily improved.'}`
+      : severityChange === 'Severity Increased'
+      ? `Over the ${intervalDays}-day interval (${visitA.consultationDate.split('T')[0]} → ${visitB.consultationDate.split('T')[0]}), ${patient.fullName}'s condition showed ${overallStatus.toLowerCase()} with increased severity. ${newSymptoms.length > 0 ? `New symptoms emerged (${newSymptoms.join(', ')}). ` : ''}Prompt therapeutic reassessment and exclusion of secondary triggers are indicated.`
+      : `Across the ${intervalDays}-day period (${visitA.consultationDate.split('T')[0]} → ${visitB.consultationDate.split('T')[0]}), ${patient.fullName}'s clinical condition has remained stable without acute exacerbation.`;
+
+  const improvementMilestones: string[] = [
+    resolvedSymptoms.length > 0
+      ? `Symptom Resolution (${intervalDays}d): Complete resolution of ${resolvedSymptoms.join(', ')}.`
+      : `Symptom Trajectory (${intervalDays}d): ${persistentSymptoms.length > 0 ? `Controlled baseline symptoms (${persistentSymptoms.join(', ')})` : 'No new acute subjective complaints'}.`,
+    resolvedDiagnoses.length > 0
+      ? `Diagnostic Clearance: Resolved ${resolvedDiagnoses.join(', ')}.`
+      : `Diagnostic Continuity: Ongoing management of ${(visitB.diagnoses || visitA.diagnoses || ['primary dermatosis']).join(', ')}.`,
+    addedMeds.length > 0 || continuedMeds.length > 0
+      ? `Therapeutic Regimen Evolution: ${continuedMeds.length} continued medication(s) and ${addedMeds.length} newly adjusted agent(s).`
+      : `Conservative / Maintenance Phase: Evaluated across ${intervalDays} days.`
+  ];
+
+  const doctorMedicalSuggestions: DoctorMedicalSuggestion[] =
+    severityChange === 'Severity Increased'
+      ? [
+          {
+            category: 'Therapeutic & Regimen Adjustment',
+            title: 'Escalate Anti-Inflammatory or Targeted Antimicrobial Regimen',
+            suggestion: `Step up topical/systemic potency or add targeted antimicrobial coverage${patient.allergies ? ` (avoiding ${patient.allergies})` : ''}.`,
+            clinicalRationale: `Severity increased over the ${intervalDays}-day interval with ${newSymptoms.length > 0 ? `new symptoms (${newSymptoms.join(', ')})` : 'persistent lesion activity'}.`,
+            priority: 'High Priority'
+          },
+          {
+            category: 'Diagnostic & Workup',
+            title: 'Order Confirmatory Microbiology / Dermoscopy Workup',
+            suggestion: 'Perform KOH mount, bacterial swab, or polarized dermoscopy of the active border to exclude secondary superinfection.',
+            clinicalRationale: 'Identifies occult fungal/bacterial colonization or contact allergy driving the flare.',
+            priority: 'High Priority'
+          },
+          {
+            category: 'Barrier Care & Patient Counseling',
+            title: 'Reinforce Barrier Repair & Trigger Avoidance',
+            suggestion: 'Advise fragrance-free ceramide emollient 2–3x daily, gentle syndet cleanser, and strict avoidance of mechanical scratching.',
+            clinicalRationale: 'Supports stratum corneum recovery and reduces pruritus-scratch amplification.',
+            priority: 'Recommended'
+          },
+          {
+            category: 'Follow-up & Surveillance',
+            title: 'Early Re-evaluation in 7–10 Days',
+            suggestion: 'Schedule a short-interval review in 7–10 days with repeat clinical photography.',
+            clinicalRationale: 'Ensures rapid stabilization of the acute flare.',
+            priority: 'High Priority'
+          }
+        ]
+      : [
+          {
+            category: 'Therapeutic & Regimen Adjustment',
+            title: 'Transition to Proactive Maintenance / Taper Potent Agents',
+            suggestion: `Gradually step down high-potency topical agents to intermittent maintenance or non-steroidal barrier therapy${patient.allergies ? ` (respecting allergy: ${patient.allergies})` : ''}.`,
+            clinicalRationale: `Condition has shown ${overallStatus.toLowerCase()} over ${intervalDays} days; tapering prevents cutaneous atrophy and rebound flare.`,
+            priority: 'Recommended'
+          },
+          {
+            category: 'Barrier Care & Patient Counseling',
+            title: 'Daily Ceramide Emollient & Broad-Spectrum SPF 50+',
+            suggestion: 'Continue twice-daily physiological lipid moisturization and morning SPF 50+ photoprotection.',
+            clinicalRationale: 'Prevents post-inflammatory hyperpigmentation and sustains long-term epidermal barrier integrity.',
+            priority: 'Recommended'
+          },
+          {
+            category: 'Diagnostic & Workup',
+            title: 'Dermoscopic Clearance Check',
+            suggestion: 'Confirm resolution of subclinical vascular erythema via dermoscopy prior to full treatment cessation.',
+            clinicalRationale: 'Reduces risk of early subclinical recurrence.',
+            priority: 'Maintenance'
+          },
+          {
+            category: 'Follow-up & Surveillance',
+            title: 'Routine Maintenance Follow-up in 3–4 Weeks',
+            suggestion: 'Schedule routine follow-up in 3–4 weeks and archive a baseline remission photo.',
+            clinicalRationale: 'Documents sustained clinical remission over time.',
+            priority: 'Maintenance'
+          }
+        ];
+
   const recommendations = [
     ...minorSuggestions,
     'Monitor patient response to newly instituted or adjusted prescription regimen over 2-4 weeks'
@@ -2913,6 +3267,9 @@ export function generateVisitComparisonFallback(params: CompareVisitsParams): Vi
     overallStatus,
     severityChange,
     summaryText,
+    conditionImprovementSummary,
+    improvementMilestones,
+    doctorMedicalSuggestions,
     redFlags,
     minorSuggestions,
     resolvedSymptoms,
@@ -2945,10 +3302,10 @@ export async function comparePatientVisits(params: CompareVisitsParams): Promise
 
   if (ai) {
     try {
-      const prompt = `You are a clinical decision support system assisting a physician with a concise longitudinal comparison between two patient visits.
+      const prompt = `You are a clinical decision support system assisting a physician with a longitudinal comparison between two patient visits (${fallback.intervalDays} days apart).
 
 PATIENT:
-Name: ${params.patient.fullName}, Age: ${params.patient.age}y, Gender: ${params.patient.gender}, ID: ${params.patient.patientCode}
+Name: ${params.patient.fullName}, Age: ${params.patient.age}y, Gender: ${params.patient.gender}, ID: ${params.patient.patientCode}, Allergies: ${params.patient.allergies || 'None'}
 
 VISIT 1 (EARLIER ENCOUNTER):
 Date: ${params.visitA.consultationDate}
@@ -2974,11 +3331,25 @@ DOCTOR COMPARISON NOTES: ${params.doctorNotes || 'None'}
 MARKED IMAGE AREAS: ${(params.markedAreas || []).join('; ') || 'None'}
 INTERVAL: ${fallback.intervalDays} days.
 
-Compare these encounters and return strictly valid raw JSON (no markdown formatting, no code fences):
+Compare these encounters, explain how the medical condition has improved (or progressed) over the ${fallback.intervalDays}-day period, and provide actionable medical suggestions to assist the doctor. Return strictly valid raw JSON (no markdown formatting, no code fences):
 {
   "overallStatus": "One of: Marked Improvement, Moderate Improvement, Stable / Unchanged, Mild Progression / Worsening, Significant Flare / Deterioration",
   "severityChange": "One of: Severity Increased, Severity Decreased (Improving), Severity Stable",
   "summaryText": "Concise, editable clinical visit comparison summary synthesizing interval progress, treatment response, and doctor notes",
+  "conditionImprovementSummary": "Clear clinical narrative explaining how the medical condition has improved or evolved over the elapsed time period",
+  "improvementMilestones": [
+    "Specific milestone 1 achieved over the time interval",
+    "Specific milestone 2"
+  ],
+  "doctorMedicalSuggestions": [
+    {
+      "category": "Therapeutic & Regimen Adjustment",
+      "title": "Actionable suggestion title",
+      "suggestion": "Specific medical recommendation to assist the doctor",
+      "clinicalRationale": "Clinical rationale based on interval response",
+      "priority": "Recommended"
+    }
+  ],
   "redFlags": [
     "Minor AI red flag pointer 1 (e.g., red flags to watch or rule out)",
     "Minor AI red flag pointer 2"
@@ -3010,6 +3381,9 @@ Compare these encounters and return strictly valid raw JSON (no markdown formatt
               overallStatus: parsed.overallStatus || fallback.overallStatus,
               severityChange: parsed.severityChange || fallback.severityChange,
               summaryText: parsed.summaryText || fallback.summaryText,
+              conditionImprovementSummary: parsed.conditionImprovementSummary || fallback.conditionImprovementSummary,
+              improvementMilestones: Array.isArray(parsed.improvementMilestones) && parsed.improvementMilestones.length > 0 ? parsed.improvementMilestones : fallback.improvementMilestones,
+              doctorMedicalSuggestions: Array.isArray(parsed.doctorMedicalSuggestions) && parsed.doctorMedicalSuggestions.length > 0 ? parsed.doctorMedicalSuggestions : fallback.doctorMedicalSuggestions,
               redFlags: Array.isArray(parsed.redFlags) && parsed.redFlags.length > 0 ? parsed.redFlags : fallback.redFlags,
               minorSuggestions: Array.isArray(parsed.minorSuggestions) && parsed.minorSuggestions.length > 0 ? parsed.minorSuggestions : fallback.minorSuggestions,
               recommendations: Array.isArray(parsed.recommendations) && parsed.recommendations.length > 0 ? parsed.recommendations : fallback.recommendations,

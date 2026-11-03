@@ -1096,12 +1096,12 @@ ${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClin
 
           {/* AI Lesion Progression Insights Panel (if run) */}
           {progressionResult && (
-            <div className="p-4 rounded-xl bg-teal-50/70 border border-teal-200 space-y-3 animate-in fade-in">
-              <div className="flex items-center justify-between">
+            <div className="p-4 rounded-xl bg-teal-50/70 border border-teal-200 space-y-3.5 animate-in fade-in">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-teal-700" />
                   <span className="text-xs font-bold text-teal-950 uppercase tracking-wider">
-                    AI Multimodal Lesion Differential
+                    Side-by-Side Condition Improvement Over Time ({progressionResult.timePeriodLabel || `${getIntervalDays()}d`})
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1116,16 +1116,86 @@ ${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClin
                   >
                     {progressionResult.overallProgression} (
                     {progressionResult.progressionScore > 0
-                      ? `+${progressionResult.progressionScore}`
-                      : progressionResult.progressionScore}
+                      ? `+${progressionResult.progressionScore}%`
+                      : `${progressionResult.progressionScore}%`}
                     )
                   </span>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-700 leading-relaxed font-medium">
-                {progressionResult.treatmentResponseSummary}
-              </p>
+              <div className="p-3 rounded-xl bg-white border border-emerald-200 text-xs text-slate-800 leading-relaxed font-medium">
+                {progressionResult.conditionImprovementSummary || progressionResult.treatmentResponseSummary}
+              </div>
+
+              {progressionResult.improvementMetrics && progressionResult.improvementMetrics.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {progressionResult.improvementMetrics.map((m, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded-xl bg-white border border-teal-100 text-xs space-y-1"
+                    >
+                      <div className="flex items-center justify-between font-bold text-slate-800">
+                        <span>{m.parameter}</span>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full ${
+                            m.status === 'improved'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : m.status === 'worsened'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {m.deltaLabel}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-600">
+                        Past: <strong>{m.pastValue}</strong> → Current: <strong>{m.currentValue}</strong>
+                      </div>
+                      <p className="text-[10px] text-slate-500">{m.clinicalInterpretation}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {progressionResult.doctorMedicalSuggestions &&
+                progressionResult.doctorMedicalSuggestions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-bold text-teal-950 flex items-center gap-1.5">
+                      <Stethoscope className="w-3.5 h-3.5 text-teal-700" />
+                      Medical Suggestions to Assist the Doctor:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {progressionResult.doctorMedicalSuggestions.map((sug, idx) => (
+                        <div
+                          key={idx}
+                          className="p-2.5 rounded-xl bg-white border border-teal-200 text-[11px] space-y-1 flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[9px] font-bold uppercase text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded">
+                                {sug.category}
+                              </span>
+                              <span className="text-[9px] font-bold text-emerald-800">
+                                {sug.priority}
+                              </span>
+                            </div>
+                            <div className="font-bold text-slate-900 mt-1">{sug.title}</div>
+                            <p className="text-slate-700">{sug.suggestion}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleInsertSuggestionIntoSummary(`${sug.title}: ${sug.suggestion}`)
+                            }
+                            className="text-[10px] font-bold text-teal-800 hover:underline self-start pt-1"
+                          >
+                            + Add to Visit Summary
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
               {progressionResult.visualComparisonObservations &&
                 progressionResult.visualComparisonObservations.length > 0 && (
@@ -1762,6 +1832,110 @@ ${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClin
                     </div>
                   </div>
                 )}
+
+                {/* How the Condition Improved Over Time */}
+                {comparisonResult.conditionImprovementSummary && (
+                  <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200 space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-emerald-700" />
+                        How the Medical Condition Has Improved Over Time ({comparisonResult.intervalDays} Days):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleInsertSuggestionIntoSummary(
+                            comparisonResult.conditionImprovementSummary!
+                          )
+                        }
+                        className="text-[10px] font-bold text-emerald-800 hover:underline"
+                      >
+                        + Insert Improvement Narrative
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-800 leading-relaxed">
+                      {comparisonResult.conditionImprovementSummary}
+                    </p>
+                    {comparisonResult.improvementMilestones &&
+                      comparisonResult.improvementMilestones.length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1">
+                          {comparisonResult.improvementMilestones.map((ms, idx) => (
+                            <div
+                              key={idx}
+                              className="p-2 rounded-lg bg-white border border-emerald-100 text-[11px] text-slate-700 flex items-start gap-1.5"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                              <span>{ms}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                  </div>
+                )}
+
+                {/* Structured Medical Suggestions to Assist the Doctor */}
+                {comparisonResult.doctorMedicalSuggestions &&
+                  comparisonResult.doctorMedicalSuggestions.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
+                          <Stethoscope className="w-3.5 h-3.5 text-teal-700" />
+                          Medical Suggestions to Assist the Doctor:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const combined = comparisonResult
+                              .doctorMedicalSuggestions!.map(
+                                s => `[${s.category}] ${s.title}: ${s.suggestion}`
+                              )
+                              .join(' ');
+                            handleInsertSuggestionIntoSummary(`Medical Suggestions: ${combined}`);
+                          }}
+                          className="text-[10px] font-bold text-teal-800 hover:underline"
+                        >
+                          + Insert All Suggestions
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {comparisonResult.doctorMedicalSuggestions.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1 flex flex-col justify-between"
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
+                                  {item.category}
+                                </span>
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                  {item.priority}
+                                </span>
+                              </div>
+                              <div className="font-bold text-slate-900 mt-1">{item.title}</div>
+                              <p className="text-[11px] text-slate-700 leading-snug">
+                                {item.suggestion}
+                              </p>
+                              <p className="text-[10px] text-slate-500 italic mt-0.5">
+                                Rationale: {item.clinicalRationale}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleInsertSuggestionIntoSummary(
+                                  `${item.title}: ${item.suggestion}`
+                                )
+                              }
+                              className="text-[10px] font-bold text-teal-800 hover:underline self-start pt-1"
+                            >
+                              + Add to Doctor&apos;s Summary
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
               </div>
 
               {/* Doctor Editable Summary Box */}

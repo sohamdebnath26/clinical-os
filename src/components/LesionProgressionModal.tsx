@@ -4,7 +4,7 @@ import {
   ClinicalImage,
   ProgressionAnalysisResult,
   MedicalImageModality,
-  ImageVisualMetrics
+  VisualMorphologyMetrics
 } from '../types';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -31,7 +31,10 @@ import {
   ArrowLeftRight,
   Calendar,
   FileSearch,
-  Database
+  Database,
+  Clock,
+  Stethoscope,
+  CheckCircle2
 } from 'lucide-react';
 
 const MEDICAL_MODALITIES: MedicalImageModality[] = [
@@ -186,7 +189,7 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
         ? `Past ${chosenModality} — ${chosenSite} (${chosenDate})`
         : `Current ${chosenModality} — ${chosenSite} (${chosenDate})`;
 
-      let extractedMetrics: ImageVisualMetrics | undefined = undefined;
+      let extractedMetrics: VisualMorphologyMetrics | undefined = undefined;
       try {
         extractedMetrics = await analyzeImageVisualFeatures(dataUrl);
       } catch {
@@ -233,6 +236,7 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
           dataUrl,
           filename: file.name,
           mimeType: file.type,
+          sizeBytes: dataUrl.length,
           caption: captionLabel,
           bodyArea: chosenSite,
           modality: chosenModality,
@@ -357,10 +361,22 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
         ? `Current Image (${res.progression.currentImageExtraction.date}): ${res.progression.currentImageExtraction.extractedSummary}`
         : '';
 
+      const improvementNote = res.progression.conditionImprovementSummary
+        ? `Condition Improvement Over Time: ${res.progression.conditionImprovementSummary}`
+        : res.progression.treatmentResponseSummary;
+      const topSuggestionNote =
+        res.progression.doctorMedicalSuggestions && res.progression.doctorMedicalSuggestions.length > 0
+          ? `Suggested Action: ${res.progression.doctorMedicalSuggestions
+              .slice(0, 2)
+              .map(s => `${s.title} (${s.suggestion})`)
+              .join(' ')}`
+          : '';
+
       const initialDraft = [
-        res.progression.treatmentResponseSummary,
+        improvementNote,
         pastExtractedNote,
         currentExtractedNote,
+        topSuggestionNote,
         clinicalContext.trim() ? `Doctor Note: ${clinicalContext.trim()}.` : '',
         annotations.length > 0 ? `Marked ROI areas: ${markedText}.` : ''
       ]
@@ -391,14 +407,29 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
     const text = [
       `CLINICAL PAST vs. CURRENT MEDICAL IMAGE COMPARISON REPORT`,
       `Patient: ${patient.fullName} (${patient.patientCode})`,
-      `Comparison: ${imageA ? formatImageDisplayDate(imageA) : 'Past Image'} -> ${imageB ? formatImageDisplayDate(imageB) : 'Current Image'}`,
-      `Severity Status: ${severityStatus} (${result.overallProgression})`,
+      `Time Interval: ${result.timePeriodLabel || `${imageA ? formatImageDisplayDate(imageA) : 'Past Image'} -> ${imageB ? formatImageDisplayDate(imageB) : 'Current Image'}`}`,
+      `Severity & Trajectory: ${severityStatus} — ${result.overallProgression} (${result.progressionScore > 0 ? `+${result.progressionScore}%` : `${result.progressionScore}%`})`,
+      '',
+      result.conditionImprovementSummary
+        ? `HOW THE MEDICAL CONDITION HAS IMPROVED OVER TIME:\n${result.conditionImprovementSummary}`
+        : '',
+      result.improvementMetrics && result.improvementMetrics.length > 0
+        ? `QUANTIFIED PARAMETER CHANGES (PAST vs. CURRENT):\n${result.improvementMetrics
+            .map(m => `• ${m.parameter}: ${m.pastValue} -> ${m.currentValue} [${m.deltaLabel}] — ${m.clinicalInterpretation}`)
+            .join('\n')}`
+        : '',
       '',
       result.pastImageExtraction
         ? `EXTRACTED PAST IMAGE (${result.pastImageExtraction.date} · ${result.pastImageExtraction.modality}):\n${result.pastImageExtraction.extractedSummary}`
         : '',
       result.currentImageExtraction
         ? `EXTRACTED CURRENT IMAGE (${result.currentImageExtraction.date} · ${result.currentImageExtraction.modality}):\n${result.currentImageExtraction.extractedSummary}`
+        : '',
+      '',
+      result.doctorMedicalSuggestions && result.doctorMedicalSuggestions.length > 0
+        ? `MEDICAL SUGGESTIONS TO ASSIST THE DOCTOR:\n${result.doctorMedicalSuggestions
+            .map(s => `• [${s.category} · ${s.priority}] ${s.title}: ${s.suggestion} (Rationale: ${s.clinicalRationale})`)
+            .join('\n')}`
         : '',
       '',
       `DOCTOR'S SUMMARY:`,
@@ -952,7 +983,186 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
                 </div>
               </div>
 
-              {/* Side-by-Side Extracted Findings from Past Image vs Current Uploaded Image */}
+              {/* ==================================================================== */}
+              {/* SECTION A: HOW THE MEDICAL CONDITION HAS IMPROVED OVER TIME          */}
+              {/* ==================================================================== */}
+              <div className="p-4 bg-white rounded-xl border border-emerald-200 space-y-3.5 text-xs shadow-2xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                      <TrendingDown className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                        <span>How the Medical Condition Has Improved Over Time</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            result.progressionScore >= 15
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : result.progressionScore <= -10
+                              ? 'bg-rose-50 text-rose-800 border-rose-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}
+                        >
+                          {result.overallProgression} (
+                          {result.progressionScore > 0
+                            ? `+${result.progressionScore}%`
+                            : `${result.progressionScore}%`}
+                          )
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                        <Clock className="w-3 h-3 text-teal-600" />
+                        <span>
+                          Evaluated Time Interval:{' '}
+                          <strong className="text-slate-700">
+                            {result.timePeriodLabel ||
+                              `${imageA ? formatImageDisplayDate(imageA) : 'Past Visit'} → ${
+                                imageB ? formatImageDisplayDate(imageB) : 'Current Visit'
+                              }`}
+                          </strong>
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {result.conditionImprovementSummary && (
+                    <button
+                      type="button"
+                      onClick={() => handleInsertPointer(result.conditionImprovementSummary!)}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-[11px] font-semibold transition"
+                    >
+                      + Insert Improvement Narrative
+                    </button>
+                  )}
+                </div>
+
+                {/* Longitudinal Improvement Progress Bar */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-slate-600">
+                      Longitudinal Recovery &amp; Healing Trajectory
+                    </span>
+                    <span
+                      className={`font-bold ${
+                        result.progressionScore >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                      }`}
+                    >
+                      {result.progressionScore >= 0
+                        ? `${result.progressionScore}% Positive Recovery Index`
+                        : `${Math.abs(result.progressionScore)}% Flare / Worsening Index`}
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                    <div
+                      className={`h-full transition-all duration-500 ${
+                        result.progressionScore >= 15
+                          ? 'bg-emerald-500'
+                          : result.progressionScore <= -10
+                          ? 'bg-rose-500'
+                          : 'bg-amber-500'
+                      }`}
+                      style={{
+                        width: `${Math.max(12, Math.min(100, Math.round((result.progressionScore + 100) / 2)))}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Narrative Summary of How the Condition Improved Over Time */}
+                <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100 text-slate-800 leading-relaxed text-xs">
+                  {result.conditionImprovementSummary || result.treatmentResponseSummary}
+                </div>
+
+                {/* Parameter-by-Parameter Past vs Current Comparison Cards */}
+                {result.improvementMetrics && result.improvementMetrics.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Quantified Parameter Progression (Past Image vs. Current Image):
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {result.improvementMetrics.map((metric, idx) => {
+                        const isImp = metric.status === 'improved';
+                        const isWorse = metric.status === 'worsened';
+                        return (
+                          <div
+                            key={idx}
+                            className={`p-2.5 rounded-xl border space-y-1.5 ${
+                              isImp
+                                ? 'bg-emerald-50/30 border-emerald-200'
+                                : isWorse
+                                ? 'bg-rose-50/30 border-rose-200'
+                                : 'bg-slate-50 border-slate-200'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="font-bold text-slate-800 text-[11px]">
+                                {metric.parameter}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  isImp
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                                    : isWorse
+                                    ? 'bg-rose-100 text-rose-800 border-rose-200'
+                                    : 'bg-slate-200 text-slate-700 border-slate-300'
+                                }`}
+                              >
+                                {metric.deltaLabel}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px]">
+                              <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
+                                Past: <strong>{metric.pastValue}</strong>
+                              </span>
+                              <span className="text-slate-400 font-bold">→</span>
+                              <span className="px-2 py-0.5 rounded bg-white border border-teal-200 text-teal-900">
+                                Current: <strong>{metric.currentValue}</strong>
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 leading-snug">
+                              {metric.clinicalInterpretation}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Key Healing / Clinical Milestones Achieved Over the Time Interval */}
+                {result.healingMilestones && result.healingMilestones.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-teal-900 block">
+                      Key Clinical Milestones Observed Over This Time Period:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {result.healingMilestones.map((milestone, idx) => (
+                        <div
+                          key={idx}
+                          className="p-2 rounded-lg bg-slate-50 border border-slate-200 flex items-start justify-between gap-2 text-[11px] text-slate-700"
+                        >
+                          <div className="flex items-start gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                            <span>{milestone}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleInsertPointer(milestone)}
+                            className="text-[10px] font-bold text-teal-700 hover:underline shrink-0"
+                          >
+                            + Add
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ==================================================================== */}
+              {/* SECTION B: SIDE-BY-SIDE EXTRACTED FINDINGS (PAST vs CURRENT IMAGE)   */}
+              {/* ==================================================================== */}
               {(result.pastImageExtraction || result.currentImageExtraction) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {/* Past Image Extraction Card */}
@@ -989,7 +1199,11 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
                         </div>
                       </div>
                       <ul className="space-y-1 text-[11px] text-slate-600 pt-1">
-                        {result.pastImageExtraction.keyFindings.map((f, idx) => (
+                        {(
+                          result.pastImageExtraction.morphologicalFindings ||
+                          result.pastImageExtraction.keyFindings ||
+                          []
+                        ).map((f, idx) => (
                           <li key={idx} className="flex items-start gap-1.5">
                             <span className="text-blue-600 font-bold">•</span>
                             <span>{f}</span>
@@ -1044,7 +1258,11 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
                         </div>
                       </div>
                       <ul className="space-y-1 text-[11px] text-slate-600 pt-1">
-                        {result.currentImageExtraction.keyFindings.map((f, idx) => (
+                        {(
+                          result.currentImageExtraction.morphologicalFindings ||
+                          result.currentImageExtraction.keyFindings ||
+                          []
+                        ).map((f, idx) => (
                           <li key={idx} className="flex items-start gap-1.5">
                             <span className="text-emerald-600 font-bold">•</span>
                             <span>{f}</span>
@@ -1067,11 +1285,117 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
                 </div>
               )}
 
+              {/* ==================================================================== */}
+              {/* SECTION C: MEDICAL SUGGESTIONS TO ASSIST THE DOCTOR                  */}
+              {/* ==================================================================== */}
+              {result.doctorMedicalSuggestions && result.doctorMedicalSuggestions.length > 0 && (
+                <div className="p-4 bg-white rounded-xl border border-teal-200 space-y-3 text-xs shadow-2xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center shrink-0">
+                        <Stethoscope className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-xs">
+                          Medical Suggestions to Assist the Doctor
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          Evidence-based clinical decision support tailored to the patient&apos;s longitudinal progression
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allText = result
+                          .doctorMedicalSuggestions!.map(
+                            s => `[${s.category}] ${s.title}: ${s.suggestion}`
+                          )
+                          .join(' ');
+                        handleInsertPointer(`Medical Suggestions: ${allText}`);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-teal-800 hover:bg-teal-900 text-white text-[11px] font-semibold transition"
+                    >
+                      + Insert All Medical Suggestions into Summary
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    {result.doctorMedicalSuggestions.map((item, idx) => {
+                      const isHigh = item.priority === 'High Priority';
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-3 rounded-xl border space-y-1.5 flex flex-col justify-between ${
+                            isHigh
+                              ? 'bg-amber-50/40 border-amber-200'
+                              : 'bg-slate-50/80 border-slate-200'
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                                {item.category}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  isHigh
+                                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                    : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                }`}
+                              >
+                                {item.priority}
+                              </span>
+                            </div>
+                            <div className="font-bold text-slate-900 text-xs pt-0.5">
+                              {item.title}
+                            </div>
+                            <p className="text-[11px] text-slate-700 leading-relaxed">
+                              {item.suggestion}
+                            </p>
+                            <p className="text-[10px] text-slate-500 italic">
+                              Rationale: {item.clinicalRationale}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-1.5 border-t border-slate-200/70">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleInsertPointer(`${item.title}: ${item.suggestion}`)
+                              }
+                              className="text-[11px] font-bold text-teal-800 hover:underline inline-flex items-center gap-1"
+                            >
+                              <span>+ Add to Doctor&apos;s Summary</span>
+                            </button>
+                            <span className="text-slate-300">|</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setClinicalContext(prev =>
+                                  prev.trim()
+                                    ? `${prev.trim()} ${item.suggestion}`
+                                    : item.suggestion
+                                )
+                              }
+                              className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:underline"
+                            >
+                              + Add to Clinical Notes
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Minor AI Suggestions: Red Flags & Quick Pointers */}
               <div className="p-3 bg-white rounded-xl border border-teal-100 space-y-2.5 text-xs">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 flex items-center gap-1">
                   <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                  Minor AI Red Flag &amp; Clinical Pointers (Click to insert into summary):
+                  Red Flags &amp; Quick Clinical Pointers (Click to insert into summary):
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {derivedRedFlags.map((rf, i) => (

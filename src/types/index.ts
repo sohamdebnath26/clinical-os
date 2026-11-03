@@ -269,6 +269,7 @@ export interface ExtractedImageSnapshot {
   bodyArea?: string;
   extractedSummary: string;
   morphologicalFindings: string[];
+  keyFindings?: string[];
   erythemaIndex?: number;
   pigmentationIndex?: number;
   borderIrregularity?: number;
@@ -277,10 +278,38 @@ export interface ExtractedImageSnapshot {
   dominantColors?: { hex: string; name: string; percentage: number }[];
 }
 
+export interface ConditionImprovementMetric {
+  parameter: string;
+  pastValue: string;
+  currentValue: string;
+  deltaLabel: string;
+  status: 'improved' | 'stable' | 'worsened';
+  clinicalInterpretation: string;
+}
+
+export interface DoctorMedicalSuggestion {
+  category:
+    | 'Therapeutic & Regimen Adjustment'
+    | 'Diagnostic & Workup'
+    | 'Barrier Care & Patient Counseling'
+    | 'Follow-up & Surveillance';
+  title: string;
+  suggestion: string;
+  clinicalRationale: string;
+  priority: 'High Priority' | 'Recommended' | 'Maintenance';
+}
+
 export interface ProgressionAnalysisResult {
   id: string;
   overallProgression: 'Marked Improvement' | 'Moderate Improvement' | 'Stable / Unchanged' | 'Mild Progression / Worsening' | 'Significant Flare / Deterioration';
   progressionScore: number;
+  intervalDays?: number;
+  timePeriodLabel?: string;
+  improvementPercentage?: number;
+  conditionImprovementSummary?: string;
+  improvementMetrics?: ConditionImprovementMetric[];
+  healingMilestones?: string[];
+  doctorMedicalSuggestions?: DoctorMedicalSuggestion[];
   pastImageExtraction?: ExtractedImageSnapshot;
   currentImageExtraction?: ExtractedImageSnapshot;
   visualComparisonObservations: string[];
@@ -331,6 +360,9 @@ export interface VisitComparisonResult {
   overallStatus: 'Marked Improvement' | 'Moderate Improvement' | 'Stable / Unchanged' | 'Mild Progression / Worsening' | 'Significant Flare / Deterioration';
   severityChange?: 'Severity Increased' | 'Severity Decreased (Improving)' | 'Severity Stable';
   summaryText: string;
+  conditionImprovementSummary?: string;
+  improvementMilestones?: string[];
+  doctorMedicalSuggestions?: DoctorMedicalSuggestion[];
   redFlags?: string[];
   minorSuggestions?: string[];
   resolvedSymptoms: string[];
