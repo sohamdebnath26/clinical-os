@@ -1055,7 +1055,15 @@ class DatabaseService {
     // Also persist prescriptions
     if (updates.prescriptions && updates.prescriptions.length > 0) {
       this.data.prescriptions = this.data.prescriptions.filter(p => p.consultationId !== id);
-      this.data.prescriptions.push(...updates.prescriptions);
+      const enrichedPrescriptions = updates.prescriptions.map((rx, idx) => ({
+        ...rx,
+        id: rx.id || `rx-${id}-${idx}-${Date.now().toString(36)}`,
+        patientId: consultation.patientId,
+        consultationId: id,
+        date: rx.date || consultation.consultationDate || now,
+        createdAt: rx.createdAt || now
+      }));
+      this.data.prescriptions.push(...enrichedPrescriptions);
     }
 
     // Update patient's lastVisitAt and primaryDiagnosis
