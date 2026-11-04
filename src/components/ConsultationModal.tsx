@@ -9,7 +9,6 @@ import { parseClinicalNoteToStructuredSummary, ParsedClinicalNoteSummary } from 
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import { FormularyUploadModal } from './FormularyUploadModal';
 import { VoiceDictationButton } from './VoiceDictationButton';
-import { LesionProgressionModal } from './LesionProgressionModal';
 import confetti from 'canvas-confetti';
 import {
   X,
@@ -638,11 +637,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     setMedQty(String(total));
   }, [medFrequency, medDuration, medRoute, medQtyManual]);
 
-  // Prior body markers & prior clinical images for this patient
-  const [priorMarkers, setPriorMarkers] = useState<BodyMarker[]>([]);
-  const [priorImages, setPriorImages] = useState<ClinicalImage[]>([]);
-  const [showComparePrevCurrModal, setShowComparePrevCurrModal] = useState(false);
-
   // Loading states
   const [isSigning, setIsSigning] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
@@ -663,20 +657,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     rejectionReason?: string;
     qualityWarnings?: string[];
   } | null>(null);
-
-  // Fetch prior markers & prior patient images for Previous vs. Current comparison
-  useEffect(() => {
-    api.patients.getMarkers(patient.id)
-      .then(res => {
-        setPriorMarkers(res.markers.filter(m => m.consultationId !== consultation.id));
-      })
-      .catch(() => {});
-    api.patients.getImages(patient.id)
-      .then(res => {
-        setPriorImages(res.images || []);
-      })
-      .catch(() => {});
-  }, [patient.id, consultation.id]);
 
   // Calculate procedure cost sum
   const proceduresTotal = procedures.reduce((acc, p) => acc + (p.cost || 0), 0);
@@ -1349,7 +1329,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const handleModalKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.defaultPrevented) return;
-    if (showWhatsApp || isLibraryModalOpen || showComparePrevCurrModal || isAnalyzingImage || activeImageAnalysis) {
+    if (showWhatsApp || isLibraryModalOpen || isAnalyzingImage || activeImageAnalysis) {
       return;
     }
 
@@ -5148,26 +5128,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           }
         }}
       />
-
-      {/* Compare Previous Image vs. Current Image Modal */}
-      {showComparePrevCurrModal && (
-        <LesionProgressionModal
-          patient={patient}
-          images={[
-            ...priorImages,
-            ...images.filter(img => !priorImages.some(pi => pi.id === img.id))
-          ]}
-          currentImageOverride={images[images.length - 1] || null}
-          onImagesUpdated={(updatedList) => {
-            setPriorImages(updatedList);
-            const newest = updatedList[updatedList.length - 1];
-            if (newest && !images.some(i => i.id === newest.id)) {
-              setImages(prev => [...prev, newest]);
-            }
-          }}
-          onClose={() => setShowComparePrevCurrModal(false)}
-        />
-      )}
     </div>
   );
 };
