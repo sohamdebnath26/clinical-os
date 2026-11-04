@@ -1,794 +1,321 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useLanguage } from '../context/LanguageContext';
 import { LanguageSelector } from './LanguageSelector';
 import {
   Stethoscope,
-  Lock,
-  Mail,
-  User,
   ShieldCheck,
   ArrowRight,
   AlertCircle,
-  Eye,
-  EyeOff,
-  Landmark,
-  Building2,
-  CheckCircle2,
-  X,
-  Hospital,
-  Sparkles
+  Loader2,
+  UserCheck,
+  UserCog,
+  Mail,
+  Sparkles,
+  CheckCircle2
 } from 'lucide-react';
 
-// Institutional / Organisational preset networks for quick doctor testing
-const INSTITUTIONAL_PROVIDERS = [
-  {
-    id: 'metro-health',
-    name: 'Metro Health University Medical Center',
-    department: 'Department of Dermatology & Cutaneous Medicine',
-    doctorName: 'Dr. Sarah Chen, MD',
-    email: 'hospital@metrohealth.org',
-    badge: 'University Hospital',
-    location: 'Boston, MA'
-  },
-  {
-    id: 'nhs-trust',
-    name: 'NHS Foundation Trust Hospitals',
-    department: 'Regional Cutaneous Oncology & Phototherapy Unit',
-    doctorName: 'Dr. Ayesha Patel, MBChB, FRCP',
-    email: 'ayesha.patel@nhs.net',
-    badge: 'National Health Service',
-    location: 'London, UK'
-  },
-  {
-    id: 'st-jude',
-    name: 'St. Jude Academic Medical Network',
-    department: 'Pediatric & General Dermatology Division',
-    doctorName: 'Dr. Michael Torres, MD',
-    email: 'm.torres@stjude-health.edu',
-    badge: 'Academic Network',
-    location: 'Chicago, IL'
-  },
-  {
-    id: 'apex-health',
-    name: 'Apex Health Enterprise System',
-    department: 'Outpatient Dermatology & Aesthetics Center',
-    doctorName: 'Dr. James Wilson, MD',
-    email: 'jwilson@apexhealth.org',
-    badge: 'Enterprise Health',
-    location: 'San Francisco, CA'
-  }
-];
-
 export const AuthView: React.FC = () => {
-  const { login, loginWithSSO, loginWithGoogle, register } = useAuth();
-  const { t } = useLanguage();
-  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const { login, loginWithGoogle } = useAuth();
 
-  // Form states for login
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-
-  // SSO state
-  const [showSSOSelector, setShowSSOSelector] = useState(false);
-  const [customOrgDomain, setCustomOrgDomain] = useState('');
-
-  // Forgot password modal
-  const [showForgotModal, setShowForgotModal] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotSent, setForgotSent] = useState(false);
-
-  // Form states for registration
-  const [name, setName] = useState('');
-  const [registerAccountType, setRegisterAccountType] = useState<'individual' | 'organisational'>('individual');
-  const [speciality, setSpeciality] = useState('Dermatologist & Cosmetologist');
-  const [clinicName, setClinicName] = useState('Cliniq Dermatology Center');
-  const [regNumber, setRegNumber] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
+  // Gmail / Google login state
+  const [gmailEmail, setGmailEmail] = useState('sohamdebnath.edu@gmail.com');
+  const [doctorName, setDoctorName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [activeAction, setActiveAction] = useState<'gmail' | 'doctor-demo' | 'receptionist-demo' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
-  // Handle standard email & password login
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) {
-      setError('Please enter both email and password.');
+  // Derive doctor name from email if not explicitly provided
+  const getDerivedDoctorName = (email: string) => {
+    if (doctorName.trim()) return doctorName.trim();
+    const prefix = email.split('@')[0] || 'Doctor';
+    const cleanWords = prefix
+      .replace(/[._-]+/g, ' ')
+      .split(' ')
+      .filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+    return `Dr. ${cleanWords || 'Physician'}`;
+  };
+
+  // Sign in with Google / Gmail account
+  const handleGmailSignIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanEmail = gmailEmail.trim().toLowerCase();
+
+    if (!cleanEmail) {
+      setError('Please enter your Google / Gmail address.');
+      return;
+    }
+
+    if (!cleanEmail.includes('@')) {
+      setError('Please provide a valid email address.');
       return;
     }
 
     setIsLoading(true);
+    setActiveAction('gmail');
     setError(null);
-    try {
-      await login(email, password);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Invalid login credentials';
-      setError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  // Handle Google individual login
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    setError(null);
     try {
+      const derivedName = getDerivedDoctorName(cleanEmail);
       await loginWithGoogle({
-        name: 'Dr. Alex Mercer',
-        email: 'dr.alex.mercer@gmail.com'
+        email: cleanEmail,
+        name: derivedName
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Google authentication failed';
-      setError(message);
+      const msg = err instanceof Error ? err.message : 'Failed to sign in with Google account';
+      setError(msg);
     } finally {
       setIsLoading(false);
+      setActiveAction(null);
     }
   };
 
-  // Handle SSO / Organisational login
-  const handleSSOLogin = async (preset?: typeof INSTITUTIONAL_PROVIDERS[0]) => {
+  // 1-Click Doctor Demo
+  const handleDoctorDemo = async () => {
     setIsLoading(true);
+    setActiveAction('doctor-demo');
     setError(null);
     try {
-      if (preset) {
-        await loginWithSSO({
-          organization: preset.name,
-          email: preset.email,
-          name: preset.doctorName,
-          department: preset.department
-        });
-      } else {
-        const domain = customOrgDomain.trim() || 'hospital@metrohealth.org';
-        const orgTitle = domain.includes('@') ? domain.split('@')[1].toUpperCase() + ' Health Network' : domain;
-        await loginWithSSO({
-          organization: orgTitle,
-          email: domain.includes('@') ? domain : `staff@${domain}`,
-          name: 'Dr. Sarah Chen, MD',
-          department: 'Department of Dermatology'
-        });
-      }
-      setShowSSOSelector(false);
+      await login('demo@clinicalos.med', 'Demo@1234');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Institutional SSO sign-in failed';
-      setError(message);
+      const msg = err instanceof Error ? err.message : 'Failed to launch Doctor Demo';
+      setError(msg);
     } finally {
       setIsLoading(false);
+      setActiveAction(null);
     }
   };
 
-  // Handle Registration
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !email || !password) {
-      setError('Please fill in all required fields.');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
+  // 1-Click Receptionist Demo
+  const handleReceptionistDemo = async () => {
     setIsLoading(true);
+    setActiveAction('receptionist-demo');
     setError(null);
     try {
-      await register({
-        name,
-        email,
-        password,
-        speciality,
-        clinicName,
-        registrationNumber: regNumber || undefined
-      });
+      await login('receptionist@clinicalos.med', 'Demo@1234');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Registration failed';
-      setError(message);
+      const msg = err instanceof Error ? err.message : 'Failed to launch Receptionist Demo';
+      setError(msg);
     } finally {
       setIsLoading(false);
+      setActiveAction(null);
     }
-  };
-
-  // 1-Click Instant Demo Launchers
-  const launchDemoAccount = async (demoEmail: string, label: string) => {
-    setEmail(demoEmail);
-    setPassword('Demo@1234');
-    setError(null);
-    setSuccessNotice(`Launching ${label}...`);
-    setIsLoading(true);
-    try {
-      await login(demoEmail, 'Demo@1234');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Demo login failed';
-      setError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle forgot password request
-  const handleForgotPasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!forgotEmail) return;
-    setForgotSent(true);
-    setTimeout(() => {
-      setShowForgotModal(false);
-      setForgotSent(false);
-      setForgotEmail('');
-      setSuccessNotice('Secure reset link dispatched to your clinical mailbox.');
-      setTimeout(() => setSuccessNotice(null), 4000);
-    }, 1800);
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-x-hidden font-sans">
-      {/* Background radial medical dot pattern accent */}
-      <div className="absolute inset-0 bg-[radial-gradient(#14b8a6_1px,transparent_1px)] [background-size:24px_24px] opacity-15 pointer-events-none" />
+    <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden select-none">
+      {/* Ambient background glows */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Main Authentication Card */}
-      <div className="relative z-10 w-full max-w-[440px] bg-white rounded-2xl shadow-2xl p-7 border border-slate-200">
-        {/* Language selector in top right of card */}
-        <div className="absolute right-5 top-5">
-          <LanguageSelector variant="compact" />
-        </div>
+      {/* Language Switcher in top corner */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20">
+        <LanguageSelector />
+      </div>
 
+      <div className="w-full max-w-md relative z-10">
         {/* Brand Header */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-teal-800 text-white shadow-md mb-2.5">
-            <Stethoscope className="w-6 h-6" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-600 to-indigo-600 shadow-lg shadow-cyan-500/20 mb-3 border border-white/10">
+            <Stethoscope className="w-7 h-7 text-white" />
           </div>
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-2xl font-black tracking-tight text-slate-900 font-sans">Cliniq</span>
-            <span className="h-4 w-px bg-slate-300" />
-            <span className="text-xs font-extrabold uppercase tracking-widest text-teal-800">
-              {t('appName')}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1 font-medium">
-            Clinical Practice & Hospital Management EMR
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center justify-center gap-2">
+            Cliniq <span className="text-cyan-400 font-medium text-lg">Clinical OS</span>
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Intelligent Outpatient & Dermatology Practice Management
           </p>
         </div>
 
-        {/* Error Notification */}
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2 animate-in fade-in">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
+        {/* Main Clean Login Card */}
+        <div className="bg-slate-800/90 backdrop-blur-xl border border-slate-700/80 rounded-2xl p-6 sm:p-7 shadow-2xl shadow-black/40">
+          {/* Error Banner */}
+          {error && (
+            <div className="mb-5 p-3.5 bg-rose-500/15 border border-rose-500/30 rounded-xl flex items-start gap-3 text-rose-300 text-sm animate-in fade-in">
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-rose-400" />
+              <div className="flex-1 font-medium">{error}</div>
+            </div>
+          )}
 
-        {/* Success Notice */}
-        {successNotice && (
-          <div className="mb-4 p-3 bg-teal-50 border border-teal-200 text-teal-800 text-xs rounded-xl flex items-center gap-2 animate-in fade-in">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-teal-600" />
-            <span>{successNotice}</span>
-          </div>
-        )}
-
-        {!isRegisterMode ? (
-          /* ======================================================== */
-          /* UNIFIED LOGIN VIEW (INDIVIDUAL & ORGANISATIONAL LOGIN)   */
-          /* ======================================================== */
+          {/* SECTION 1: Doctor Sign In with Gmail */}
           <div className="space-y-4">
-            {/* Top Individual Identity: Log in with Google */}
-            <div>
-              <button
-                type="button"
-                onClick={handleGoogleLogin}
-                disabled={isLoading}
-                className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold shadow-2xs hover:shadow transition-all flex items-center justify-center gap-3 active:scale-[0.99] disabled:opacity-60"
-              >
-                {/* Official Google multicolored icon */}
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <span>Log in with Google</span>
-              </button>
-            </div>
-
-            {/* Divider: OR */}
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-slate-200"></div>
-              <span className="shrink-0 mx-3 text-[11px] font-bold text-slate-400 tracking-wider">
-                OR
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                Doctor Sign In (Gmail)
+              </label>
+              <span className="text-[11px] font-medium text-cyan-400/90 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-cyan-400" /> Verified Storage
               </span>
-              <div className="flex-grow border-t border-slate-200"></div>
             </div>
 
-            {/* Individual Standard Credentials Form */}
-            <form onSubmit={handleLogin} className="space-y-3.5">
-              {/* Email */}
+            <form onSubmit={handleGmailSignIn} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-800 mb-1.5">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="doctor@clinic.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full text-xs px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 text-slate-900 transition-all placeholder:text-slate-400"
-                />
-              </div>
-
-              {/* Password */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-slate-800">
-                    Password
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForgotEmail(email);
-                      setShowForgotModal(true);
-                    }}
-                    className="text-xs text-slate-500 hover:text-slate-800 hover:underline transition-colors"
-                  >
-                    Forgot password?
-                  </button>
-                </div>
                 <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                  </div>
                   <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    className="w-full text-xs pl-3.5 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 text-slate-900 transition-all placeholder:text-slate-400"
+                    type="email"
+                    value={gmailEmail}
+                    onChange={(e) => setGmailEmail(e.target.value)}
+                    placeholder="doctor@gmail.com"
+                    disabled={isLoading}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 focus:outline-none"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
                 </div>
+                <p className="text-[11px] text-slate-400 mt-1.5 ml-1">
+                  Signs you in to your private doctor account. All patients and prescriptions remain persistent.
+                </p>
               </div>
 
-              {/* Log in Button */}
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2.5 px-4 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-50 mt-1"
+                className="w-full flex items-center justify-center gap-2.5 px-4 py-3 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 active:scale-[0.99] text-white font-medium text-sm rounded-xl shadow-lg shadow-cyan-600/20 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <span>{isLoading ? 'Signing in...' : 'Log in'}</span>
-                <ArrowRight className="w-4 h-4" />
+                {isLoading && activeAction === 'gmail' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Signing in to Doctor Account...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path
+                        fill="#ffffff"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#ffffff"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#ffffff"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#ffffff"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                    <span>Sign in with Gmail</span>
+                    <ArrowRight className="w-4 h-4 ml-0.5 opacity-80" />
+                  </>
+                )}
               </button>
             </form>
+          </div>
 
-            {/* 1-Click Interactive Demo Sandbox Section */}
-            <div className="p-3 bg-teal-50/60 border border-teal-200/80 rounded-xl space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-teal-700" />
-                  Instant Interactive Demo
-                </span>
-                <span className="text-[10px] font-semibold text-teal-700">
-                  1-Click Sandbox
-                </span>
-              </div>
-              <button
-                type="button"
-                disabled={isLoading}
-                onClick={() => launchDemoAccount('demo@clinicalos.med', 'Clinic Doctor Demo')}
-                className="w-full py-2 px-3 bg-teal-800 hover:bg-teal-900 text-white rounded-lg text-xs font-bold shadow-2xs transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <User className="w-3.5 h-3.5 shrink-0" />
-                <span>Launch Interactive Doctor Demo</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  disabled={isLoading}
-                  onClick={() => launchDemoAccount('hospital@metrohealth.org', 'Hospital Demo')}
-                  className="py-1.5 px-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-[11px] font-semibold border border-slate-200 transition-colors flex items-center justify-center gap-1.5 truncate"
-                >
-                  <Building2 className="w-3 h-3 text-indigo-700 shrink-0" />
-                  <span className="truncate">Hospital Demo</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={isLoading}
-                  onClick={() => launchDemoAccount('receptionist@clinicalos.med', 'Receptionist Demo')}
-                  className="py-1.5 px-2 bg-white hover:bg-amber-50 text-amber-900 rounded-lg text-[11px] font-semibold border border-amber-200 transition-colors flex items-center justify-center gap-1.5 truncate"
-                >
-                  <User className="w-3 h-3 text-amber-700 shrink-0" />
-                  <span className="truncate">Receptionist Demo</span>
-                </button>
-              </div>
+          {/* Simple Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-700/80" />
             </div>
-
-            {/* Divider: OR */}
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-slate-200"></div>
-              <span className="shrink-0 mx-3 text-[11px] font-bold text-slate-400 tracking-wider">
-                OR
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-slate-800 px-3 text-slate-400 font-semibold tracking-wider">
+                Or explore demo accounts
               </span>
-              <div className="flex-grow border-t border-slate-200"></div>
             </div>
+          </div>
 
-            {/* Organisational / Institutional SSO Section */}
-            <div className="pt-0.5 space-y-2">
+          {/* SECTION 2 & 3: Doctor Demo & Receptionist Demo */}
+          <div className="space-y-3">
+            {/* Doctor Demo Button */}
+            <button
+              type="button"
+              onClick={handleDoctorDemo}
+              disabled={isLoading}
+              className="w-full text-left p-3.5 bg-slate-900/60 hover:bg-slate-900 border border-slate-700/80 hover:border-cyan-500/50 rounded-xl transition-all group cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-800">
-                  Work/university single sign-on
-                </span>
-                <span className="text-[10px] text-teal-700 font-bold bg-teal-50 border border-teal-200/60 px-1.5 py-0.5 rounded">
-                  Hospital SSO
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowSSOSelector(!showSSOSelector)}
-                disabled={isLoading}
-                className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs font-semibold shadow-2xs hover:shadow transition-all flex items-center justify-center gap-2.5 active:scale-[0.99] disabled:opacity-60"
-              >
-                <Landmark className="w-4 h-4 text-slate-700 shrink-0" />
-                <span>Log in with SSO</span>
-              </button>
-            </div>
-
-            {/* Expandable Organisational SSO Drawer / Modal Selector */}
-            {showSSOSelector && (
-              <div className="mt-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Hospital className="w-3.5 h-3.5 text-teal-700" />
-                    Select Hospital / Academic Network
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowSSOSelector(false)}
-                    className="text-slate-400 hover:text-slate-600 p-0.5"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Preconfigured Hospital Networks for 1-Click Verification */}
-                <div className="space-y-1.5">
-                  {INSTITUTIONAL_PROVIDERS.map(inst => (
-                    <button
-                      key={inst.id}
-                      type="button"
-                      onClick={() => handleSSOLogin(inst)}
-                      disabled={isLoading}
-                      className="w-full p-2 bg-white hover:bg-teal-50/70 border border-slate-200 hover:border-teal-300 rounded-lg text-left transition-all flex items-center justify-between group"
-                    >
-                      <div className="min-w-0 pr-2">
-                        <p className="text-xs font-bold text-slate-800 group-hover:text-teal-900 truncate">
-                          {inst.name}
-                        </p>
-                        <p className="text-[10px] text-slate-500 truncate">
-                          {inst.doctorName} • {inst.location}
-                        </p>
-                      </div>
-                      <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold bg-slate-100 text-slate-600 group-hover:bg-teal-100 group-hover:text-teal-800 shrink-0">
-                        {inst.badge}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover:scale-105 transition-transform">
+                    {isLoading && activeAction === 'doctor-demo' ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <UserCheck className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-white flex items-center gap-1.5">
+                      Doctor Demo
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 rounded">
+                        Dr. Demo
                       </span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Or Custom Domain Input */}
-                <div className="pt-1">
-                  <label className="block text-[10px] font-semibold text-slate-600 mb-1">
-                    Or enter work/institutional email domain:
-                  </label>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="e.g. physician@hopkinsmedicine.org"
-                      value={customOrgDomain}
-                      onChange={e => setCustomOrgDomain(e.target.value)}
-                      className="flex-1 text-xs px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleSSOLogin()}
-                      disabled={isLoading}
-                      className="px-3 py-1.5 bg-teal-800 hover:bg-teal-900 text-white rounded-lg text-xs font-bold shadow-2xs shrink-0"
-                    >
-                      Connect
-                    </button>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Full OPD timeline, AI image comparison, prescriptions & billing
+                    </p>
                   </div>
                 </div>
+                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
               </div>
-            )}
-
-            {/* Footer: Register Link */}
-            <div className="pt-3 border-t border-slate-100 text-center">
-              <p className="text-xs text-slate-600">
-                Don&apos;t have an account?{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsRegisterMode(true);
-                    setError(null);
-                  }}
-                  className="font-bold text-slate-900 hover:text-teal-800 hover:underline transition-colors"
-                >
-                  Register
-                </button>
-              </p>
-            </div>
-          </div>
-        ) : (
-          /* ======================================================== */
-          /* REGISTRATION VIEW                                        */
-          /* ======================================================== */
-          <form onSubmit={handleRegister} className="space-y-3.5">
-            {/* Account Type Selector: Individual vs Organisational */}
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                Account Type
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRegisterAccountType('individual');
-                    setClinicName('Cliniq Private Practice');
-                  }}
-                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                    registerAccountType === 'individual'
-                      ? 'border-teal-700 bg-teal-50 text-teal-900 shadow-2xs'
-                      : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  <User className="w-3.5 h-3.5" />
-                  <span>Individual Doctor</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRegisterAccountType('organisational');
-                    setClinicName('University Hospital Health System');
-                  }}
-                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                    registerAccountType === 'organisational'
-                      ? 'border-indigo-700 bg-indigo-50 text-indigo-900 shadow-2xs'
-                      : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" />
-                  <span>Organisational / Hospital</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Full Name */}
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Full Physician Name *
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Dr. Sarah Jenkins, MD"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
-              </div>
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                {registerAccountType === 'organisational' ? 'Work / Hospital Email *' : 'Email Address *'}
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="email"
-                  required
-                  placeholder={registerAccountType === 'organisational' ? 'doctor@hospital.org' : 'doctor@practice.com'}
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
-              </div>
-            </div>
-
-            {/* Speciality & Practice / Hospital Name */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Speciality
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Dermatology"
-                  value={speciality}
-                  onChange={e => setSpeciality(e.target.value)}
-                  className="w-full text-xs px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  {registerAccountType === 'organisational' ? 'Hospital / System' : 'Clinic Name'}
-                </label>
-                <input
-                  type="text"
-                  placeholder={registerAccountType === 'organisational' ? 'e.g. Metro Hospital' : 'e.g. Metro Clinic'}
-                  value={clinicName}
-                  onChange={e => setClinicName(e.target.value)}
-                  className="w-full text-xs px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
-              </div>
-            </div>
-
-            {/* Registration License / ID */}
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Medical License / Registration No. (Optional)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. MED-REG-104829"
-                value={regNumber}
-                onChange={e => setRegNumber(e.target.value)}
-                className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500"
-              />
-            </div>
-
-            {/* Passwords */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Password *
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="w-full text-xs px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Confirm *
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  className="w-full text-xs px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-2.5 px-4 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
-            >
-              <span>{isLoading ? 'Creating Account...' : 'REGISTER & SIGN IN'}</span>
-              <ArrowRight className="w-4 h-4" />
             </button>
 
-            <div className="pt-3 border-t border-slate-100 text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsRegisterMode(false);
-                  setError(null);
-                }}
-                className="text-xs font-semibold text-slate-600 hover:text-teal-800 transition-colors"
-              >
-                Already have an account? Sign in
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-
-      {/* Forgot Password Recovery Modal */}
-      {showForgotModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 border border-slate-200 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Lock className="w-4 h-4 text-teal-700" />
-                Reset Physician Password
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowForgotModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-              Enter your clinical email address. We will verify your credentials and dispatch a secure password reset link.
-            </p>
-
-            {forgotSent ? (
-              <div className="p-3 bg-teal-50 border border-teal-200 text-teal-800 rounded-xl text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />
-                <span>Reset link sent! Please check your email inbox.</span>
+            {/* Receptionist Demo Button */}
+            <button
+              type="button"
+              onClick={handleReceptionistDemo}
+              disabled={isLoading}
+              className="w-full text-left p-3.5 bg-slate-900/60 hover:bg-slate-900 border border-slate-700/80 hover:border-emerald-500/50 rounded-xl transition-all group cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
+                    {isLoading && activeAction === 'receptionist-demo' ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <UserCog className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-white flex items-center gap-1.5">
+                      Receptionist Demo
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded">
+                        Emily
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Front-desk walk-in registration & OPD clinic patient queue
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
               </div>
-            ) : (
-              <form onSubmit={handleForgotPasswordSubmit} className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="doctor@clinic.com"
-                    value={forgotEmail}
-                    onChange={e => setForgotEmail(e.target.value)}
-                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowForgotModal(false)}
-                    className="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-2xs"
-                  >
-                    Send Reset Link
-                  </button>
-                </div>
-              </form>
-            )}
+            </button>
           </div>
         </div>
-      )}
 
-      {/* Security & Vault Compliance Footer */}
-      <p className="relative z-10 text-[11px] text-slate-400 mt-6 text-center">
-        Clinical OS • Encrypted Physician Authentication • Individual & Organisational SSO
-      </p>
+        {/* Security & Compliance Footer */}
+        <div className="mt-6 text-center text-xs text-slate-500 flex items-center justify-center gap-4">
+          <span className="flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400/80" /> 256-bit AES Encrypted
+          </span>
+          <span>•</span>
+          <span className="flex items-center gap-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-cyan-400/80" /> HIPAA / GDPR Architecture
+          </span>
+        </div>
+      </div>
     </div>
   );
 };

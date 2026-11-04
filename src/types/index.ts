@@ -78,11 +78,11 @@ export interface ClinicalImage {
   thumbnailUrl?: string;
   filename: string;
   mimeType: string;
-  sizeBytes: number;
+  sizeBytes?: number;
   caption?: string;
   bodyArea?: string;
   modality?: MedicalImageModality | string;
-  imageRole?: 'past' | 'current';
+  imageRole?: 'past' | 'current' | 'followup';
   examDate?: string;
   extractedFindings?: string;
   visualMetrics?: VisualMorphologyMetrics;
@@ -91,6 +91,8 @@ export interface ClinicalImage {
   uploadedAt?: string;
   createdAt: string;
 }
+
+export type ImageVisualMetrics = VisualMorphologyMetrics;
 
 export interface ProcedureItem {
   id: string;

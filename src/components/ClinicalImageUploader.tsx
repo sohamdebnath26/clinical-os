@@ -634,7 +634,7 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
               <div>
                 <span className="text-sm font-semibold text-slate-800">{previewImage.filename}</span>
                 <span className="text-xs text-slate-500 block">
-                  {new Date(previewImage.createdAt).toLocaleString()} · {(previewImage.sizeBytes / 1024).toFixed(0)} KB
+                  {new Date(previewImage.createdAt).toLocaleString()} · {(((previewImage.sizeBytes || 0) / 1024)).toFixed(0)} KB
                 </span>
               </div>
               <div className="flex items-center gap-2">
