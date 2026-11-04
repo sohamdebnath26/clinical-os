@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Consultation, Patient, ProcedureItem, BodyMarker, ClinicalImage, PrescriptionItem, AIImageAnalysisResult, DoctorFormularyItem } from '../types';
 import { PREDEFINED_DIAGNOSES, PREDEFINED_TESTS, PREDEFINED_PROCEDURES, COMMON_MEDICATIONS } from '../data/clinicalCatalogues';
-import { BodyMap } from './BodyMap';
 import { ClinicalImageUploader } from './ClinicalImageUploader';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -52,7 +51,6 @@ export type TabType =
   | 'tests'
   | 'procedure'
   | 'notes'
-  | 'bodymap'
   | 'images'
   | 'followup'
   | 'aisummary';
@@ -62,7 +60,6 @@ export const TAB_ORDER: TabType[] = [
   'tests',
   'procedure',
   'notes',
-  'bodymap',
   'images',
   'followup',
   'aisummary'
@@ -72,8 +69,7 @@ export const TAB_NEXT_LABELS: Record<TabType, string> = {
   diagnosis: 'Skin Tests',
   tests: 'Procedures',
   procedure: 'Clinical Notes',
-  notes: 'Body Map',
-  bodymap: 'Clinical Images',
+  notes: 'Clinical Images',
   images: 'Follow-up & Rx',
   followup: 'AI Summary & Sign',
   aisummary: 'Sign & Finish'
@@ -1227,8 +1223,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               clinicalNotes.investigationsAdvised.trim() &&
               clinicalNotes.plan.trim()
           );
-        case 'bodymap':
-          return bodyMarkers.length > 0;
         case 'images':
           return images.length > 0;
         case 'followup':
@@ -1921,25 +1915,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   <Check className="w-2.5 h-2.5" />
                 </span>
               )}
-            </button>
-
-            <button
-              type="button"
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => handleTabChange('bodymap')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
-                activeTab === 'bodymap'
-                  ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
-                  : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
-              }`}
-            >
-              <User className="w-3.5 h-3.5" />
-              <span>Body map</span>
-              {bodyMarkers.length > 0 ? (
-                <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
-                  {bodyMarkers.length}
-                </span>
-              ) : null}
             </button>
 
             <button
@@ -2671,7 +2646,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     )}
                   </label>
                   <span className="text-[10px] text-slate-400 font-medium">
-                    Press Enter ↵ for Plan (or Body Map when all 3 are filled)
+                    Press Enter ↵ for Plan (or Clinical Images when all 3 are filled)
                   </span>
                 </div>
                 <div className="relative">
@@ -2714,7 +2689,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   </label>
                   <span className="text-[10px] text-slate-400 font-medium">
                     {isTabComplete('notes')
-                      ? '✓ All 3 notes filled — Press Enter ↵ to move to Body Map'
+                      ? '✓ All 3 notes filled — Press Enter ↵ to move to Clinical Images'
                       : 'Press Enter ↵ when complete'}
                   </span>
                 </div>
@@ -2771,10 +2746,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   <button
                     type="button"
                     onMouseDown={e => e.preventDefault()}
-                    onClick={() => handleTabChange('bodymap')}
+                    onClick={() => handleTabChange('images')}
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                   >
-                    <span>Continue to Body Map</span>
+                    <span>Continue to Clinical Images</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -2782,51 +2757,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             </div>
           )}
 
-          {/* TAB 5: BODY MAP */}
-          {activeTab === 'bodymap' && (
-            <div className="space-y-4 animate-in fade-in duration-150">
-              <BodyMap
-                markers={bodyMarkers}
-                onAddMarker={handleAddMarker}
-                onRemoveMarker={handleRemoveMarker}
-                patientId={patient.id}
-                consultationId={consultation.id}
-                priorMarkers={priorMarkers}
-                onAnalyzeMarkerWithAI={(marker) => {
-                  const linkedImage = images.find(img => img.bodyMarkerId === marker.id) || images[0];
-                  if (linkedImage) {
-                    handleAnalyzeConsultationImage(linkedImage);
-                  } else {
-                    handleTabChange('images');
-                  }
-                }}
-              />
-
-              {/* Step Navigation */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={() => handleTabChange('notes')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Back to Notes</span>
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={() => handleTabChange('images')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-                >
-                  <span>Continue to Clinical Images</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 6: CLINICAL IMAGES */}
+          {/* TAB 5: CLINICAL IMAGES */}
           {activeTab === 'images' && (
             <div className="space-y-4 animate-in fade-in duration-150">
               {/* Banner to Compare Previous Visit Image vs. Current Consultation Image */}
@@ -2879,11 +2810,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <button
                   type="button"
                   onMouseDown={e => e.preventDefault()}
-                  onClick={() => handleTabChange('bodymap')}
+                  onClick={() => handleTabChange('notes')}
                   className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Back to Body Map</span>
+                  <span>Back to Clinical Notes</span>
                 </button>
                 <button
                   type="button"

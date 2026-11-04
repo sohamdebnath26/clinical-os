@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Patient, Consultation, PrescriptionItem, BodyMarker, ClinicalImage, Appointment, PatientTestReport, MedicalImageModality, ImageVisualMetrics } from '../types';
 import { api } from '../lib/api';
 import { analyzeImageVisualFeatures } from '../utils/visualImageAnalyzer';
-import { BodyMap } from './BodyMap';
 import { PrintRxModal } from './PrintRxModal';
 import { EditPatientModal } from './EditPatientModal';
 import { ScheduleAppointmentModal } from './ScheduleAppointmentModal';
@@ -49,7 +48,7 @@ interface PatientProfileViewProps {
   onNavigateToImageAnalyzer?: (patientId: string) => void;
 }
 
-export type TabType = 'overview' | 'images' | 'vitals' | 'appointments' | 'bodymap' | 'timeline' | 'visits' | 'reports' | 'prescriptions';
+export type TabType = 'overview' | 'images' | 'vitals' | 'appointments' | 'timeline' | 'visits' | 'reports' | 'prescriptions';
 
 const normalizeTab = (tab?: TabType): TabType => (tab === 'visits' ? 'timeline' : tab || 'overview');
 
@@ -81,7 +80,6 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
     'images',
     'vitals',
     'appointments',
-    'bodymap',
     'timeline',
     'reports',
     'prescriptions'
@@ -92,7 +90,6 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
     images: 'Images & Compare',
     vitals: 'Vitals & Growth',
     appointments: 'Appointments & Follow-ups',
-    bodymap: 'Body Map',
     timeline: 'Visits & Timeline',
     visits: 'Visits & Timeline',
     reports: 'Report Results',
@@ -712,7 +709,6 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                 {tab === 'images' && <ImageIcon className="w-3.5 h-3.5" />}
                 {tab === 'vitals' && <Activity className="w-3.5 h-3.5" />}
                 {tab === 'appointments' && <Calendar className="w-3.5 h-3.5" />}
-                {tab === 'bodymap' && <ScanEye className="w-3.5 h-3.5" />}
                 {tab === 'timeline' && <Clock className="w-3.5 h-3.5" />}
                 {tab === 'reports' && <FileText className="w-3.5 h-3.5" />}
                 {tab === 'prescriptions' && <Pill className="w-3.5 h-3.5" />}
@@ -721,7 +717,6 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                   {tab === 'images' && `Images & Compare (${images.length})`}
                   {tab === 'vitals' && 'Vitals & Growth'}
                   {tab === 'appointments' && `Appointments (${appointments.length})`}
-                  {tab === 'bodymap' && 'Body Map'}
                   {tab === 'timeline' && `Visits & Timeline (${totalUnifiedCount})`}
                   {tab === 'reports' && `Report Results (${testReports.length})`}
                   {tab === 'prescriptions' && `Prescriptions (${prescriptions.length})`}
@@ -1585,35 +1580,6 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('bodymap')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
-            >
-              <span>Next: Body Map</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: BODY MAP */}
-      {activeTab === 'bodymap' && (
-        <div className="space-y-4 animate-in fade-in duration-150">
-          <BodyMap
-            markers={markers}
-            readOnly={true}
-            patientId={patient.id}
-            onAnalyzeMarkerWithAI={(marker) => onNavigateToImageAnalyzer && onNavigateToImageAnalyzer(patient.id)}
-          />
-          <div className="flex justify-between items-center pt-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('appointments')}
-              className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
-            >
-              ← Appointments
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveTab('timeline')}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
             >
@@ -2023,10 +1989,10 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           <div className="p-4 bg-white rounded-2xl border border-slate-200 flex justify-between items-center">
             <button
               type="button"
-              onClick={() => setActiveTab('bodymap')}
+              onClick={() => setActiveTab('appointments')}
               className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
             >
-              ← Body Map
+              ← Appointments
             </button>
             <button
               type="button"
