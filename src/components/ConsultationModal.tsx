@@ -2760,27 +2760,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           {/* TAB 5: CLINICAL IMAGES */}
           {activeTab === 'images' && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              {/* Banner to Compare Previous Visit Image vs. Current Consultation Image */}
-              <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="text-xs">
-                  <span className="font-bold text-indigo-950 block">
-                    Compare Previous Visit Image with Current Image
-                  </span>
-                  <span className="text-indigo-800/80 text-[11px]">
-                    Open full-screen side-by-side comparison to zoom, mark areas, dictate clinical notes, and generate a progression summary.
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={() => setShowComparePrevCurrModal(true)}
-                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition shrink-0 cursor-pointer"
-                >
-                  <ImageIcon className="w-3.5 h-3.5" />
-                  <span>Compare Previous vs. Current Image</span>
-                </button>
-              </div>
-
               <ClinicalImageUploader
                 images={images}
                 onUpload={handleImageUpload}
@@ -4074,15 +4053,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <span className="text-[#6c857f] font-medium">
                       {images.length > 0 ? `${images.length} images attached` : '2 images attached'}
                     </span>
-                    <button
-                      type="button"
-                      onMouseDown={e => e.preventDefault()}
-                      onClick={() => setShowComparePrevCurrModal(true)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-semibold transition-colors cursor-pointer"
-                    >
-                      <ImageIcon className="w-3 h-3 text-indigo-600" />
-                      <span>Compare Prev vs. Current</span>
-                    </button>
                     <button
                       type="button"
                       onMouseDown={e => e.preventDefault()}
