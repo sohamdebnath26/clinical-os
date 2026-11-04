@@ -107,7 +107,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`bg-[#0d3f3b] text-white border-r border-white/10 flex flex-col justify-between h-screen shrink-0 select-none transition-all duration-200 ease-in-out ${
+      className={`bg-[#0d3f3b] text-white border-r border-white/10 flex flex-col justify-between h-screen shrink-0 select-none sticky top-0 z-30 transition-all duration-200 ease-in-out ${
         isRail ? 'w-[80px]' : 'w-[188px]'
       }`}
     >

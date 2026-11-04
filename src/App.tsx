@@ -164,9 +164,9 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#f2f6f5] text-[#0f2926] antialiased selection:bg-teal-600 selection:text-white">
-      {/* Desktop Persistent Left Sidebar */}
-      <div className="hidden md:block shrink-0">
+    <div className="h-screen w-full overflow-hidden flex bg-[#f2f6f5] text-[#0f2926] antialiased selection:bg-teal-600 selection:text-white">
+      {/* Desktop Persistent Left Sidebar (rigidly locked in place; does not scroll with page content) */}
+      <div className="hidden md:block shrink-0 h-screen sticky top-0 z-30">
         <Sidebar
           currentRoute={activePatientId ? 'patients' : currentRoute}
           onNavigate={handleNavigate}
@@ -205,21 +205,23 @@ function MainApp() {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Top Navbar (shown on inner views; Dashboard has its own integrated header) */}
         {(activePatientId || currentRoute !== 'dashboard') && (
-          <Navbar
-            onOpenWalkIn={() => setShowWalkInModal(true)}
-            onOpenAIAssistant={() => handleOpenAIAssistant()}
-            onSelectPatient={handleSelectPatient}
-            onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
-            onToggleSidebar={toggleSidebar}
-            isSidebarCollapsed={isSidebarCollapsed}
-          />
+          <div className="shrink-0 z-20">
+            <Navbar
+              onOpenWalkIn={() => setShowWalkInModal(true)}
+              onOpenAIAssistant={() => handleOpenAIAssistant()}
+              onSelectPatient={handleSelectPatient}
+              onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
+              onToggleSidebar={toggleSidebar}
+              isSidebarCollapsed={isSidebarCollapsed}
+            />
+          </div>
         )}
 
         {/* Dynamic Route Viewport */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-8">
           <div className="max-w-7xl mx-auto">
             <ErrorBoundary
               key={activePatientId ? `patient-${activePatientId}` : `route-${currentRoute}`}
