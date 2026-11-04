@@ -284,7 +284,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     differentials: initialDerm.differentials,
     workup: initialDerm.workup
   });
-  const [selectedSummarySpecimen, setSelectedSummarySpecimen] = useState<'all' | 'left' | 'right' | string>('all');
+  const [selectedSummarySpecimen, setSelectedSummarySpecimen] = useState<'left' | 'right' | string>('left');
   const [inlineMedSummary, setInlineMedSummary] = useState('');
   const [topicalsAdvice, setTopicalsAdvice] = useState('');
   const [customSymptomInput, setCustomSymptomInput] = useState('');
@@ -4021,7 +4021,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     </span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#e8f5f2] border border-[#bde0d9] text-[#0f5950] text-[10px] font-bold">
                       <Sparkles className="w-2.5 h-2.5 text-[#157a6e]" />
-                      Side-by-Side AI Summary
+                      AI Specimen Summary
                     </span>
                     {summaryRefreshFeedback && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
@@ -4149,11 +4149,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           {/* Default Left cheek dermatology lesion tile */}
                           <div
                             onMouseDown={e => e.preventDefault()}
-                            onClick={() =>
-                              setSelectedSummarySpecimen(selectedSummarySpecimen === 'left' ? 'all' : 'left')
-                            }
+                            onClick={() => setSelectedSummarySpecimen('left')}
                             className={`w-[78px] h-[78px] rounded-xl border overflow-hidden relative cursor-pointer shrink-0 bg-gradient-to-br from-[#eab896] via-[#df9f76] to-[#ce875c] transition-all ${
-                              selectedSummarySpecimen === 'left' || selectedSummarySpecimen === 'all'
+                              selectedSummarySpecimen === 'left'
                                 ? 'border-[#157a6e] ring-2 ring-[#157a6e]/25 shadow-xs'
                                 : 'border-[#dce6e3] opacity-85 hover:opacity-100'
                             }`}
@@ -4173,11 +4171,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           {/* Default Right cheek dermatology lesion tile */}
                           <div
                             onMouseDown={e => e.preventDefault()}
-                            onClick={() =>
-                              setSelectedSummarySpecimen(selectedSummarySpecimen === 'right' ? 'all' : 'right')
-                            }
+                            onClick={() => setSelectedSummarySpecimen('right')}
                             className={`w-[78px] h-[78px] rounded-xl border overflow-hidden relative cursor-pointer shrink-0 bg-gradient-to-br from-[#eab896] via-[#df9f76] to-[#ce875c] transition-all ${
-                              selectedSummarySpecimen === 'right' || selectedSummarySpecimen === 'all'
+                              selectedSummarySpecimen === 'right'
                                 ? 'border-[#157a6e] ring-2 ring-[#157a6e]/25 shadow-xs'
                                 : 'border-[#dce6e3] opacity-85 hover:opacity-100'
                             }`}
@@ -4218,26 +4214,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                     {/* Specimen filter pills */}
                     <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#e5eeeb] text-[10.5px]">
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onMouseDown={e => e.preventDefault()}
-                          onClick={() => setSelectedSummarySpecimen('all')}
-                          className={`px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
-                            selectedSummarySpecimen === 'all'
-                              ? 'bg-[#157a6e] text-white'
-                              : 'bg-white text-[#5c7470] border border-[#dce6e3]'
-                          }`}
-                        >
-                          Side-by-Side (Both)
-                        </button>
-                        {images.length === 0 && (
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {images.length === 0 ? (
                           <>
                             <button
                               type="button"
                               onMouseDown={e => e.preventDefault()}
                               onClick={() => setSelectedSummarySpecimen('left')}
-                              className={`px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                              className={`px-2.5 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
                                 selectedSummarySpecimen === 'left'
                                   ? 'bg-[#157a6e] text-white'
                                   : 'bg-white text-[#5c7470] border border-[#dce6e3]'
@@ -4249,7 +4233,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                               type="button"
                               onMouseDown={e => e.preventDefault()}
                               onClick={() => setSelectedSummarySpecimen('right')}
-                              className={`px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                              className={`px-2.5 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
                                 selectedSummarySpecimen === 'right'
                                   ? 'bg-[#157a6e] text-white'
                                   : 'bg-white text-[#5c7470] border border-[#dce6e3]'
@@ -4258,6 +4242,25 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                               Right cheek
                             </button>
                           </>
+                        ) : (
+                          images.map((img, i) => (
+                            <button
+                              key={img.id}
+                              type="button"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => {
+                                setSelectedSummarySpecimen(img.id);
+                                handleRunSummaryAIAnalysis(img, { openOverlayModal: false });
+                              }}
+                              className={`px-2.5 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                                selectedSummarySpecimen === img.id
+                                  ? 'bg-[#157a6e] text-white'
+                                  : 'bg-white text-[#5c7470] border border-[#dce6e3]'
+                              }`}
+                            >
+                              {img.bodyArea || img.caption || `Specimen ${i + 1}`}
+                            </button>
+                          ))
                         )}
                       </div>
                     </div>
@@ -4355,41 +4358,24 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </button>
                     </div>
 
-                    {/* Side-by-Side Per-Specimen AI Summary Result Cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {(selectedSummarySpecimen === 'all' ||
-                        selectedSummarySpecimen === 'left' ||
-                        images.some(img => img.id === selectedSummarySpecimen)) && (
-                        <div className="bg-white/95 border border-[#d6e7e3] rounded-lg p-2.5">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#115e56] flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#157a6e]" />
-                              {aiImageSummaryResult.leftSpecimenTitle} — AI Summary
-                            </span>
-                            <span className="text-[9.5px] font-semibold text-[#6c857f]">Specimen 1</span>
-                          </div>
-                          <p className="text-[11px] text-[#1e3a36] leading-relaxed">
-                            {aiImageSummaryResult.leftSpecimenSummary}
-                          </p>
-                        </div>
-                      )}
-
-                      {(selectedSummarySpecimen === 'all' ||
-                        selectedSummarySpecimen === 'right' ||
-                        images.some(img => img.id === selectedSummarySpecimen)) && (
-                        <div className="bg-white/95 border border-[#d6e7e3] rounded-lg p-2.5">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#115e56] flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#157a6e]" />
-                              {aiImageSummaryResult.rightSpecimenTitle} — AI Summary
-                            </span>
-                            <span className="text-[9.5px] font-semibold text-[#6c857f]">Specimen 2</span>
-                          </div>
-                          <p className="text-[11px] text-[#1e3a36] leading-relaxed">
-                            {aiImageSummaryResult.rightSpecimenSummary}
-                          </p>
-                        </div>
-                      )}
+                    {/* Per-Specimen AI Summary Result Card */}
+                    <div className="bg-white/95 border border-[#d6e7e3] rounded-lg p-2.5">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#115e56] flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#157a6e]" />
+                          {selectedSummarySpecimen === 'right'
+                            ? aiImageSummaryResult.rightSpecimenTitle
+                            : aiImageSummaryResult.leftSpecimenTitle} — AI Summary
+                        </span>
+                        <span className="text-[9.5px] font-semibold text-[#6c857f]">
+                          {selectedSummarySpecimen === 'right' ? 'Specimen 2' : 'Specimen 1'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#1e3a36] leading-relaxed">
+                        {selectedSummarySpecimen === 'right'
+                          ? aiImageSummaryResult.rightSpecimenSummary
+                          : aiImageSummaryResult.leftSpecimenSummary}
+                      </p>
                     </div>
 
                     {/* Differentials & Workup Footer inside AI Result Card */}
@@ -4608,7 +4594,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         markDoctorEdited('derm.aiObservation');
                         setDermMorphology({ ...dermMorphology, aiObservation: e.target.value });
                       }}
-                      placeholder="Morphological description from clinical / dermoscopic images — pigment network, vascular pattern, comparison with prior visit photos..."
+                      placeholder="Morphological description from clinical / dermoscopic images — pigment network, vascular pattern, lesion borders..."
                       className="w-full px-3 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e] resize-y"
                     />
                   </div>
