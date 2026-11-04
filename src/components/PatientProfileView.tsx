@@ -11,6 +11,7 @@ import { WhatsAppShareModal, WhatsAppIcon, WhatsAppReportType } from './WhatsApp
 import { PatientVitalsChart } from './PatientVitalsChart';
 import { VisitComparisonSection } from './VisitComparisonSection';
 import { PatientReportsSection } from './PatientReportsSection';
+import { MobileQrUploadModal } from './MobileQrUploadModal';
 import { useAuth } from '../context/AuthContext';
 import {
   ArrowLeft,
@@ -36,6 +37,7 @@ import {
   CheckCircle2,
   FileEdit,
   Upload,
+  QrCode,
   Maximize2
 } from 'lucide-react';
 
@@ -141,6 +143,18 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
     reportType: WhatsAppReportType;
     data: any;
   } | null>(null);
+
+  // Mobile QR Code upload modal for comparison
+  const [showProfileQrModal, setShowProfileQrModal] = useState(false);
+
+  const handleProfileQrImageUploaded = (newImg: ClinicalImage) => {
+    setImages(prev => {
+      if (prev.some(i => i.id === newImg.id)) return prev;
+      return [...prev, newImg];
+    });
+    setSelectedCurrImageOverride(newImg);
+    setShowProgressionModal(true);
+  };
 
   const loadPatientData = async () => {
     setIsLoading(true);
@@ -798,6 +812,15 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setShowProfileQrModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-900 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer"
+                    title="Scan QR code with phone camera to snap lesion photo for comparison"
+                  >
+                    <QrCode className="w-3.5 h-3.5 text-teal-700" />
+                    <span>Scan QR from Mobile</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => pastImageInputRef.current?.click()}
@@ -2192,6 +2215,18 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           data={whatsAppData.data}
         />
       )}
+
+      {/* Mobile QR Code Scanner Modal for Patient Profile & Comparison */}
+      <MobileQrUploadModal
+        isOpen={showProfileQrModal}
+        onClose={() => setShowProfileQrModal(false)}
+        patientId={patient?.id}
+        patientName={patient?.fullName}
+        title="Scan QR to Upload for Comparison"
+        subtitle="Direct Mobile-to-Comparison Sync"
+        slotLabel="Comparison Medical Image"
+        onImageUploaded={handleProfileQrImageUploaded}
+      />
     </div>
   );
 };

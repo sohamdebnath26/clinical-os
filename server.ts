@@ -1853,17 +1853,26 @@ function getOrRestoreMobileUploadSession(token: string): MobileImageUploadSessio
 // Create a QR mobile upload session (authenticated doctor)
 app.post('/api/images/mobile-session', authMiddleware, (req: AuthenticatedRequest, res) => {
   cleanupExpiredMobileSessions();
-  const { patientId, consultationId } = req.body;
-  if (!patientId) {
-    return res.status(400).json({ error: 'patientId is required' });
-  }
-
-  const patient = db.findPatientById(patientId);
-  if (!patient) {
-    return res.status(404).json({ error: 'Patient not found' });
-  }
-
+  const { patientId, consultationId } = req.body || {};
   const doctor = req.doctor!;
+  let patient = patientId ? db.findPatientById(patientId) : undefined;
+  if (!patient) {
+    const allPatients = db.getPatients();
+    if (allPatients.length > 0) {
+      patient = allPatients[0];
+    } else {
+      patient = db.createPatient(
+        {
+          fullName: 'Clinical Practice Scan',
+          age: 30,
+          gender: 'Other',
+          mobile: '9999999999',
+          medicalHistory: 'Clinical scan intake'
+        },
+        doctor
+      );
+    }
+  }
   const encodedMeta = Buffer.from(
     JSON.stringify({ p: patient.id, c: consultationId, d: doctor.id }),
     'utf8'

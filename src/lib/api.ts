@@ -612,7 +612,7 @@ export const api = {
       fetchWithAuth<{ message: string }>(`/api/images/${id}`, {
         method: 'DELETE',
       }),
-    createMobileSession: (data: { patientId: string; consultationId?: string }) =>
+    createMobileSession: (data: { patientId?: string; consultationId?: string }) =>
       fetchWithAuth<{
         session: {
           token: string;
