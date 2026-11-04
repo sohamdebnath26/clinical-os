@@ -480,10 +480,11 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
         ];
 
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-xs"
-    >
+    <>
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-xs"
+      >
       <div
         onClick={e => e.stopPropagation()}
         className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
@@ -525,8 +526,12 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
             {(imageA || imageB) && (
               <button
                 type="button"
-                onClick={() => setShowFullScreenSideBySide(true)}
-                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+                onClick={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowFullScreenSideBySide(true);
+                }}
+                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
                 <span>Full Screen Side-by-Side (Zoom &amp; Mark)</span>
@@ -534,8 +539,12 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
             )}
             <button
               type="button"
-              onClick={onClose}
-              className="text-slate-400 hover:text-white p-1 rounded-lg"
+              onClick={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
+              className="text-slate-400 hover:text-white p-1 rounded-lg transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1551,6 +1560,7 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
           )}
         </div>
       </div>
+    </div>
 
       {/* Full Screen Side-by-Side Zoom & Mark Modal */}
       <FullScreenSideBySideModal
@@ -1604,6 +1614,6 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
         }
         onImageUploaded={handleQrImageUploaded}
       />
-    </div>
+    </>
   );
 };

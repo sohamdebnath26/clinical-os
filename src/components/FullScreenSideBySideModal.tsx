@@ -1,8 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ClinicalImage } from '../types';
 import { VoiceDictationButton } from './VoiceDictationButton';
 import {
   X,
+  ArrowLeft,
   ZoomIn,
   ZoomOut,
   RotateCcw,
@@ -99,6 +101,20 @@ export const FullScreenSideBySideModal: React.FC<FullScreenSideBySideModalProps>
     initialPanX: number;
     initialPanY: number;
   } | null>(null);
+
+  // Keyboard shortcut: Escape cleanly exits Full Screen view and returns to comparison modal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [isOpen, onClose]);
 
   const containerARef = useRef<HTMLDivElement>(null);
   const containerBRef = useRef<HTMLDivElement>(null);
@@ -394,12 +410,30 @@ export const FullScreenSideBySideModal: React.FC<FullScreenSideBySideModalProps>
     );
   };
 
-  return (
-    <div className="fixed inset-0 z-[70] bg-slate-950 text-white flex flex-col overflow-hidden animate-in fade-in duration-150">
+  if (!isOpen) return null;
+
+  const modalContent = (
+    <div
+      onClick={e => e.stopPropagation()}
+      className="fixed inset-0 z-[100] bg-slate-950 text-white flex flex-col overflow-hidden animate-in fade-in duration-150 select-none"
+    >
       {/* Top Clinical Toolbar */}
-      <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+      <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              onClose();
+            }}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-teal-300 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+            title="Exit full-screen inspection and return to Comparison modal"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Exit Full Screen</span>
+          </button>
+          <div className="w-8 h-8 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 flex items-center justify-center shrink-0">
             <Maximize2 className="w-4 h-4" />
           </div>
           <div>
@@ -473,11 +507,13 @@ export const FullScreenSideBySideModal: React.FC<FullScreenSideBySideModalProps>
           {onGenerateSummaryFromModal && (
             <button
               type="button"
-              onClick={() => {
+              onClick={e => {
+                e.preventDefault();
+                e.stopPropagation();
                 onGenerateSummaryFromModal();
                 onClose();
               }}
-              className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+              className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>Save Marks &amp; Generate Summary</span>
@@ -485,17 +521,25 @@ export const FullScreenSideBySideModal: React.FC<FullScreenSideBySideModalProps>
           )}
           <button
             type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+            onClick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              onClose();
+            }}
+            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
           >
             <Check className="w-3.5 h-3.5 text-emerald-400" />
             <span>Done</span>
           </button>
           <button
             type="button"
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg"
-            title="Close Full Screen"
+            onClick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              onClose();
+            }}
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"
+            title="Exit Full Screen"
           >
             <X className="w-5 h-5" />
           </button>
@@ -744,4 +788,6 @@ export const FullScreenSideBySideModal: React.FC<FullScreenSideBySideModalProps>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
