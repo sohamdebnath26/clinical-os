@@ -192,7 +192,8 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
 
   // Phone input handler with duplicate check
   const handleMobileChange = async (val: string) => {
-    const cleaned = val.replace(/\D/g, '').slice(0, 10);
+    const rawDigits = val.replace(/\D/g, '');
+    const cleaned = rawDigits.length > 10 ? rawDigits.slice(-10) : rawDigits.slice(0, 10);
     setMobile(cleaned);
     setExistingDuplicatePatient(null);
 
@@ -322,18 +323,23 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
     setCustomSymptom('');
   };
 
-  // Create patient (and start consultation if invoked as Walk-In)
-  const handleSavePatient = async (forceCreate = false) => {
+  // Create patient (and optionally start consultation if invoked as Walk-In)
+  const handleSavePatient = async (
+    forceCreate = false,
+    actionMode: 'auto' | 'save_only' | 'start_consultation' = 'auto'
+  ) => {
     if (!fullName.trim()) {
       setError("Please enter the patient's full name.");
       return;
     }
-    if (!age || Number(age) <= 0 || Number(age) > 130) {
-      setError('Please enter a valid age in years (1–130).');
+    const parsedAge = age.trim() !== '' ? Number(age) : 0;
+    if (age.trim() !== '' && (Number.isNaN(parsedAge) || parsedAge < 0 || parsedAge > 130)) {
+      setError('Please enter a valid age in years (0–130).');
       return;
     }
-    if (mobile.length !== 10) {
-      setError('Please enter a valid 10-digit mobile number.');
+    const cleanPhone = mobile.replace(/\D/g, '');
+    if (cleanPhone.length > 0 && cleanPhone.length !== 10) {
+      setError('Please enter a valid 10-digit mobile number (or leave phone blank).');
       return;
     }
 
@@ -341,7 +347,13 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
     setError(null);
 
     const resolvedGender: Gender =
-      sex === 'Female' ? 'Female' : sex === 'Male' ? 'Male' : sex === 'Other' ? 'Other' : 'Male';
+      sex === 'Female'
+        ? 'Female'
+        : sex === 'Male'
+        ? 'Male'
+        : sex === 'Other'
+        ? 'Other'
+        : 'Prefer not to say';
 
     const combinedNotes = [
       notes.trim(),
@@ -360,9 +372,9 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
       const patientRes = await api.patients.create(
         {
           fullName: fullName.trim(),
-          age: Number(age),
+          age: parsedAge,
           gender: resolvedGender,
-          mobile: mobile.trim(),
+          mobile: cleanPhone,
           countryCode,
           weight: weight ? Number(weight) : undefined,
           notes: combinedNotes || undefined,
@@ -374,19 +386,24 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
         true
       );
 
-      if (onPatientCreated && !onStartConsultation) {
-        onPatientCreated(patientRes.patient);
+      const shouldOnlySave =
+        actionMode === 'save_only' || (!onStartConsultation && actionMode === 'auto');
+
+      if (shouldOnlySave) {
+        onPatientCreated?.(patientRes.patient);
         onClose();
         return;
       }
 
       if (onStartConsultation) {
+        onPatientCreated?.(patientRes.patient);
         const consultationRes = await api.consultations.create({
           patientId: patientRes.patient.id,
           symptoms: selectedSymptoms
         });
         onStartConsultation(consultationRes.consultation, patientRes.patient);
       } else {
+        onPatientCreated?.(patientRes.patient);
         onClose();
       }
     } catch (err: unknown) {
@@ -1493,12 +1510,24 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
             )}
           </div>
 
-          {/* Footer Action Row: Cancel | Hand to patient | Add patient */}
-          <div className="pt-3 flex items-center justify-end gap-2.5">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center justify-between">
+              <span className="flex items-center gap-2 font-medium">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {error}
+              </span>
+              <button type="button" onClick={() => setError(null)}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Footer Action Row: Cancel | Hand to patient | Save / Add patient */}
+          <div className="pt-3 flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl text-[13.5px] font-semibold text-slate-700 hover:bg-slate-200/60 transition-colors"
+              className="px-3.5 py-2.5 rounded-xl text-[13px] font-semibold text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -1509,20 +1538,41 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                 setError(null);
                 setMode('patient');
               }}
-              className="px-4 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-[13.5px] font-semibold shadow-2xs transition-all inline-flex items-center gap-2"
+              className="px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-[13px] font-semibold shadow-2xs transition-all inline-flex items-center gap-1.5 cursor-pointer"
             >
               <Smartphone className="w-4 h-4 text-slate-600" />
               Hand to patient
             </button>
 
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => handleSavePatient(false)}
-              className="px-5 py-2.5 rounded-xl bg-[#3f6f66] hover:bg-[#335c54] text-white text-[13.5px] font-semibold shadow-xs transition-all disabled:opacity-50"
-            >
-              {isSubmitting ? 'Saving...' : 'Add patient'}
-            </button>
+            {onStartConsultation ? (
+              <>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => handleSavePatient(false, 'save_only')}
+                  className="px-4 py-2.5 rounded-xl border border-[#3f6f66] bg-white hover:bg-teal-50/70 text-[#3f6f66] text-[13px] font-semibold shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmitting ? 'Saving...' : 'Save patient'}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => handleSavePatient(false, 'start_consultation')}
+                  className="px-4 py-2.5 rounded-xl bg-[#3f6f66] hover:bg-[#335c54] text-white text-[13px] font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmitting ? 'Saving...' : 'Add & Consult'}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleSavePatient(false, 'save_only')}
+                className="px-5 py-2.5 rounded-xl bg-[#3f6f66] hover:bg-[#335c54] text-white text-[13.5px] font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmitting ? 'Saving...' : 'Add patient'}
+              </button>
+            )}
           </div>
 
           {/* Bottom Caption */}

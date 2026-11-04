@@ -81,7 +81,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+    const handlePatientsUpdated = () => {
+      loadDashboardData();
+    };
+    window.addEventListener('clinical_os_patients_updated', handlePatientsUpdated);
+    return () => window.removeEventListener('clinical_os_patients_updated', handlePatientsUpdated);
+  }, [doctor?.id]);
 
   // Global keyboard shortcut: Cmd+K / Ctrl+K to focus search
   useEffect(() => {

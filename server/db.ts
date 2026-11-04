@@ -597,6 +597,12 @@ class DatabaseService {
     'doc-org-004'
   ]);
 
+  public getDeterministicDoctorId(email: string): string {
+    const clean = email.trim().toLowerCase();
+    const slug = clean.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    return `doc-acct-${slug || 'physician'}`;
+  }
+
   public isDemoAccount(doctorId?: string): boolean {
     if (!doctorId) return true;
     if (DatabaseService.DEMO_DOCTOR_IDS.has(doctorId)) return true;
@@ -607,13 +613,30 @@ class DatabaseService {
 
   public canDoctorAccessPatient(patient: Patient, doctorId?: string): boolean {
     if (!doctorId) return true;
+    const callerDoc = this.findDoctorById(doctorId);
+    const callerEmail = callerDoc?.email?.trim().toLowerCase();
+    const patientOwnerEmail =
+      patient.createdByEmail?.trim().toLowerCase() ||
+      (patient.createdById ? this.findDoctorById(patient.createdById)?.email?.trim().toLowerCase() : undefined);
+
+    // Direct ownership match by ID, email, or deterministic account ID
+    if (patient.createdById && patient.createdById === doctorId) {
+      return true;
+    }
+    if (callerEmail && patientOwnerEmail && callerEmail === patientOwnerEmail) {
+      return true;
+    }
+    if (callerEmail && patient.createdById === this.getDeterministicDoctorId(callerEmail)) {
+      return true;
+    }
+
     const isCallerDemo = this.isDemoAccount(doctorId);
     if (isCallerDemo) {
       // Demo accounts see seeded/demo patients, never private real-doctor patients
       return !patient.createdById || this.isDemoAccount(patient.createdById);
     }
-    // Real registered doctors only see patients created under their own account
-    return patient.createdById === doctorId;
+
+    return false;
   }
 
   public findDoctorByEmail(email: string): Doctor | undefined {
@@ -645,20 +668,23 @@ class DatabaseService {
     role?: 'doctor' | 'receptionist';
     accountType?: 'individual' | 'organisational';
   }): Doctor | undefined {
-    if (payload.id) {
-      const byId = this.findDoctorById(payload.id);
-      if (byId) return byId;
-    }
     if (payload.email) {
       const byEmail = this.findDoctorByEmail(payload.email);
       if (byEmail) return byEmail;
+    }
+    if (payload.id) {
+      const byId = this.findDoctorById(payload.id);
+      if (byId) return byId;
     }
     if (!payload.id && !payload.email) {
       return undefined;
     }
 
-    const restoredId = payload.id || `doc-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
-    const restoredEmail = (payload.email || `${restoredId}@clinicalos.med`).toLowerCase().trim();
+    const cleanEmail = payload.email ? payload.email.toLowerCase().trim() : '';
+    const restoredId =
+      payload.id ||
+      (cleanEmail ? this.getDeterministicDoctorId(cleanEmail) : `doc-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`);
+    const restoredEmail = cleanEmail || `${restoredId}@clinicalos.med`;
     const restoredDoc: Doctor = {
       id: restoredId,
       name: payload.name || 'Dr. Attending Physician',
@@ -692,6 +718,7 @@ class DatabaseService {
   }
 
   public createDoctor(params: {
+    id?: string;
     name: string;
     email: string;
     password: string;
@@ -700,11 +727,25 @@ class DatabaseService {
     clinicName?: string;
     phone?: string;
   }): Doctor {
-    const id = `doc-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+    const cleanEmail = params.email.trim().toLowerCase();
+    const existing = this.findDoctorByEmail(cleanEmail);
+    if (existing) {
+      const salt = bcrypt.genSaltSync(10);
+      this.data.doctorPasswords[existing.id] = bcrypt.hashSync(params.password, salt);
+      if (params.name) existing.name = params.name;
+      if (params.speciality) existing.speciality = params.speciality;
+      if (params.clinicName) existing.clinicName = params.clinicName;
+      if (params.registrationNumber) existing.registrationNumber = params.registrationNumber;
+      if (params.phone) existing.phone = params.phone;
+      this.persist();
+      return existing;
+    }
+
+    const id = params.id || this.getDeterministicDoctorId(cleanEmail);
     const doctor: Doctor = {
       id,
       name: params.name,
-      email: params.email.toLowerCase(),
+      email: cleanEmail,
       speciality: params.speciality || 'General Practitioner',
       registrationNumber: params.registrationNumber || `REG-${Math.floor(100000 + Math.random() * 900000)}`,
       clinicName: params.clinicName || 'Clinical OS Medical Practice',
@@ -771,26 +812,49 @@ class DatabaseService {
 
   public findPatientByMobile(mobile: string, doctorId?: string): Patient | undefined {
     const clean = mobile.replace(/\D/g, '');
+    if (!clean) return undefined;
     return this.data.patients.find(
       p => p.mobile.replace(/\D/g, '') === clean && this.canDoctorAccessPatient(p, doctorId)
     );
   }
 
-  public createPatient(patientData: Omit<Patient, 'id' | 'patientCode' | 'createdAt' | 'updatedAt'>, actor: { id: string; name: string }): Patient {
-    const id = `pat-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
-    const patientCode = this.generatePatientCode();
+  public createPatient(
+    patientData: Omit<Patient, 'id' | 'patientCode' | 'createdAt' | 'updatedAt'> & {
+      id?: string;
+      patientCode?: string;
+      createdAt?: string;
+      updatedAt?: string;
+    },
+    actor: { id: string; name: string; email?: string }
+  ): Patient {
+    const id =
+      patientData.id ||
+      `pat-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+    const patientCode = patientData.patientCode || this.generatePatientCode();
     const now = new Date().toISOString();
+    const actorEmail =
+      actor.email ||
+      patientData.createdByEmail ||
+      this.findDoctorById(actor.id)?.email ||
+      undefined;
 
+    const existingIdx = this.data.patients.findIndex(p => p.id === id);
     const newPatient: Patient = {
       ...patientData,
       mobile: String(patientData.mobile || '').replace(/\D/g, '').slice(-10),
+      createdById: patientData.createdById || actor.id,
+      createdByEmail: actorEmail ? actorEmail.toLowerCase().trim() : undefined,
       id,
       patientCode,
-      createdAt: now,
-      updatedAt: now
+      createdAt: patientData.createdAt || now,
+      updatedAt: patientData.updatedAt || now
     };
 
-    this.data.patients.push(newPatient);
+    if (existingIdx >= 0) {
+      this.data.patients[existingIdx] = newPatient;
+    } else {
+      this.data.patients.push(newPatient);
+    }
     this.persist();
 
     this.logAudit({
@@ -805,12 +869,77 @@ class DatabaseService {
     return newPatient;
   }
 
+  public syncDoctorPatients(
+    incomingPatients: Partial<Patient>[],
+    doctor: Doctor
+  ): Patient[] {
+    if (!Array.isArray(incomingPatients) || incomingPatients.length === 0) {
+      return this.getPatients(undefined, doctor.id);
+    }
+
+    let changed = false;
+    const now = new Date().toISOString();
+    const cleanDoctorEmail = doctor.email.toLowerCase().trim();
+
+    for (const raw of incomingPatients) {
+      if (!raw || !raw.fullName) continue;
+      const existingById = raw.id ? this.data.patients.find(p => p.id === raw.id) : undefined;
+      if (existingById) {
+        if (!existingById.createdById) existingById.createdById = doctor.id;
+        if (!existingById.createdByEmail) existingById.createdByEmail = cleanDoctorEmail;
+        changed = true;
+        continue;
+      }
+
+      const id =
+        raw.id ||
+        `pat-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+      const patientCode = raw.patientCode || this.generatePatientCode();
+
+      const syncedPatient: Patient = {
+        id,
+        patientCode,
+        fullName: String(raw.fullName).trim(),
+        age: Number(raw.age) || 0,
+        gender: (raw.gender as Patient['gender']) || 'Prefer not to say',
+        mobile: String(raw.mobile || '').replace(/\D/g, '').slice(-10),
+        countryCode: raw.countryCode || '+91',
+        weight: raw.weight !== undefined ? Number(raw.weight) : undefined,
+        notes: raw.notes || '',
+        discountPanel: raw.discountPanel || '',
+        primaryDiagnosis: raw.primaryDiagnosis || 'General Consultation',
+        dateOfBirth: raw.dateOfBirth || '',
+        bloodGroup: raw.bloodGroup || '',
+        address: raw.address || '',
+        emergencyContact: raw.emergencyContact || '',
+        allergies: raw.allergies || '',
+        currentMedications: raw.currentMedications || '',
+        medicalHistory: raw.medicalHistory || '',
+        createdById: doctor.id,
+        createdByEmail: cleanDoctorEmail,
+        createdAt: raw.createdAt || now,
+        updatedAt: raw.updatedAt || now,
+        lastVisitAt: raw.lastVisitAt
+      };
+
+      this.data.patients.push(syncedPatient);
+      changed = true;
+    }
+
+    if (changed) {
+      this.persist();
+    }
+
+    return this.getPatients(undefined, doctor.id);
+  }
+
   public updatePatient(id: string, updates: Partial<Patient>, actor: { id: string; name: string }): Patient | null {
     const p = this.data.patients.find(item => item.id === id);
     if (!p) return null;
 
     if (updates.mobile !== undefined) {
-      updates.mobile = String(updates.mobile).replace(/\D/g, '').slice(-10);
+      const cleaned = String(updates.mobile).replace(/\D/g, '');
+      updates.mobile = cleaned.length > 10 ? cleaned.slice(-10) : cleaned;
     }
 
     Object.assign(p, updates, { updatedAt: new Date().toISOString() });

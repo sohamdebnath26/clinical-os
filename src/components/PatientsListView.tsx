@@ -54,6 +54,14 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  useEffect(() => {
+    const handlePatientsUpdated = () => {
+      fetchPatients(searchQuery);
+    };
+    window.addEventListener('clinical_os_patients_updated', handlePatientsUpdated);
+    return () => window.removeEventListener('clinical_os_patients_updated', handlePatientsUpdated);
+  }, [searchQuery]);
+
   const filteredPatients = patients.filter(p => {
     if (genderFilter !== 'all' && p.gender !== genderFilter) return false;
     return true;

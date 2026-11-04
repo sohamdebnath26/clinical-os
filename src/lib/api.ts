@@ -98,6 +98,84 @@ export const authStorage = {
   },
 };
 
+const PATIENT_VAULT_PREFIX = 'clinical_os_doctor_patients_v2_';
+
+export const patientVaultStorage = {
+  getVaultKeys: (doctor?: Doctor | null): string[] => {
+    const doc = doctor || authStorage.getDoctor();
+    if (!doc) return [];
+    const keys: string[] = [];
+    if (doc.email) {
+      keys.push(`${PATIENT_VAULT_PREFIX}email_${doc.email.trim().toLowerCase()}`);
+    }
+    if (doc.id) {
+      keys.push(`${PATIENT_VAULT_PREFIX}id_${doc.id.trim()}`);
+    }
+    return keys;
+  },
+
+  getPatientsForCurrentDoctor: (doctor?: Doctor | null): Patient[] => {
+    if (typeof window === 'undefined') return [];
+    const keys = patientVaultStorage.getVaultKeys(doctor);
+    const map = new Map<string, Patient>();
+    for (const key of keys) {
+      try {
+        const raw = window.localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw) as Patient[];
+        if (Array.isArray(parsed)) {
+          for (const pat of parsed) {
+            if (pat && pat.id && pat.fullName) {
+              map.set(pat.id, pat);
+            }
+          }
+        }
+      } catch {
+        // ignore storage parse error
+      }
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  },
+
+  savePatient: (patient: Patient, doctor?: Doctor | null) => {
+    if (typeof window === 'undefined' || !patient || !patient.id) return;
+    const doc = doctor || authStorage.getDoctor();
+    const enriched: Patient = {
+      ...patient,
+      createdById: patient.createdById || doc?.id,
+      createdByEmail: patient.createdByEmail || doc?.email?.toLowerCase()
+    };
+    const keys = patientVaultStorage.getVaultKeys(doc);
+    for (const key of keys) {
+      try {
+        const existingRaw = window.localStorage.getItem(key);
+        const existing: Patient[] = existingRaw ? JSON.parse(existingRaw) : [];
+        const list = Array.isArray(existing) ? existing : [];
+        const idx = list.findIndex(p => p.id === enriched.id);
+        if (idx >= 0) {
+          list[idx] = enriched;
+        } else {
+          list.unshift(enriched);
+        }
+        window.localStorage.setItem(key, JSON.stringify(list.slice(0, 500)));
+      } catch {
+        // ignore storage quota errors
+      }
+    }
+  },
+
+  savePatientsList: (patients: Patient[], doctor?: Doctor | null) => {
+    if (typeof window === 'undefined' || !Array.isArray(patients)) return;
+    for (const p of patients) {
+      if (p && p.id) {
+        patientVaultStorage.savePatient(p, doctor);
+      }
+    }
+  }
+};
+
 async function fetchWithAuth<T>(url: string, options: RequestInit = {}, isRetry = false): Promise<T> {
   const token = authStorage.getToken();
   const storedDoctor = authStorage.getDoctor();
@@ -210,28 +288,121 @@ export const api = {
   },
 
   patients: {
-    list: (query?: string) =>
-      fetchWithAuth<{ patients: Patient[] }>(
+    list: async (query?: string) => {
+      const res = await fetchWithAuth<{ patients: Patient[] }>(
         `/api/patients${query ? `?q=${encodeURIComponent(query)}` : ''}`
-      ),
-    get: (id: string) => fetchWithAuth<{ patient: Patient }>(`/api/patients/${id}`),
+      );
+      const serverPatients = Array.isArray(res.patients) ? res.patients : [];
+      const currentDoctor = authStorage.getDoctor();
+
+      // Check if local doctor vault has stored patients not yet present on the server (e.g. after Render container spin-down)
+      const vaultPatients = patientVaultStorage.getPatientsForCurrentDoctor(currentDoctor);
+      const serverIds = new Set(serverPatients.map(p => p.id));
+      const missingOnServer = vaultPatients.filter(vp => !serverIds.has(vp.id));
+
+      let mergedPatients = [...serverPatients];
+
+      if (missingOnServer.length > 0) {
+        try {
+          const syncRes = await fetchWithAuth<{ patients: Patient[] }>('/api/patients/sync', {
+            method: 'POST',
+            body: JSON.stringify({ patients: missingOnServer }),
+          });
+          if (Array.isArray(syncRes.patients)) {
+            mergedPatients = syncRes.patients;
+          }
+        } catch {
+          // If sync fails transiently, merge locally so the doctor always sees their stored patients
+          const combinedMap = new Map<string, Patient>();
+          for (const p of [...missingOnServer, ...serverPatients]) {
+            combinedMap.set(p.id, p);
+          }
+          mergedPatients = Array.from(combinedMap.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        }
+      }
+
+      // Persist owned patients in the current doctor's vault
+      if (!query) {
+        patientVaultStorage.savePatientsList(mergedPatients, currentDoctor);
+      }
+
+      if (query && query.trim()) {
+        const q = query.toLowerCase().trim();
+        mergedPatients = mergedPatients.filter(
+          p =>
+            p.fullName.toLowerCase().includes(q) ||
+            p.patientCode.toLowerCase().includes(q) ||
+            (p.mobile && p.mobile.includes(q)) ||
+            (p.primaryDiagnosis && p.primaryDiagnosis.toLowerCase().includes(q))
+        );
+      }
+
+      return { patients: mergedPatients };
+    },
+    get: async (id: string) => {
+      try {
+        const res = await fetchWithAuth<{ patient: Patient }>(`/api/patients/${id}`);
+        if (res.patient) {
+          patientVaultStorage.savePatient(res.patient);
+        }
+        return res;
+      } catch (err) {
+        // Fallback: check if the patient is in the doctor's local vault and sync to server
+        const vaultPatients = patientVaultStorage.getPatientsForCurrentDoctor();
+        const found = vaultPatients.find(p => p.id === id);
+        if (found) {
+          try {
+            await fetchWithAuth<{ patients: Patient[] }>('/api/patients/sync', {
+              method: 'POST',
+              body: JSON.stringify({ patients: [found] }),
+            });
+          } catch {
+            // ignore
+          }
+          return { patient: found };
+        }
+        throw err;
+      }
+    },
     checkMobile: (mobile: string) =>
       fetchWithAuth<{ exists: boolean; patient?: Patient }>(
         `/api/patients/check-mobile/${encodeURIComponent(mobile)}`
       ),
-    create: (data: Partial<Patient>, force = false) =>
-      fetchWithAuth<{ patient: Patient }>(
+    create: async (data: Partial<Patient>, force = false) => {
+      const res = await fetchWithAuth<{ patient: Patient }>(
         `/api/patients${force ? '?force=true' : ''}`,
         {
           method: 'POST',
-          body: JSON.stringify(data),
+          body: JSON.stringify({ ...data, forceCreate: force }),
         }
-      ),
-    update: (id: string, data: Partial<Patient>) =>
-      fetchWithAuth<{ patient: Patient }>(`/api/patients/${id}`, {
+      );
+      if (res.patient) {
+        patientVaultStorage.savePatient(res.patient);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('clinical_os_patients_updated', { detail: { patient: res.patient } })
+          );
+        }
+      }
+      return res;
+    },
+    update: async (id: string, data: Partial<Patient>) => {
+      const res = await fetchWithAuth<{ patient: Patient }>(`/api/patients/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
-      }),
+      });
+      if (res.patient) {
+        patientVaultStorage.savePatient(res.patient);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('clinical_os_patients_updated', { detail: { patient: res.patient } })
+          );
+        }
+      }
+      return res;
+    },
     getConsultations: (id: string) =>
       fetchWithAuth<{ consultations: Consultation[] }>(
         `/api/patients/${id}/consultations`
@@ -776,13 +947,26 @@ export const api = {
   },
 
   dashboard: {
-    getStats: () =>
-      fetchWithAuth<{
+    getStats: async () => {
+      const currentDoctor = authStorage.getDoctor();
+      const vaultPatients = patientVaultStorage.getPatientsForCurrentDoctor(currentDoctor);
+      if (vaultPatients.length > 0) {
+        try {
+          await fetchWithAuth<{ patients: Patient[] }>('/api/patients/sync', {
+            method: 'POST',
+            body: JSON.stringify({ patients: vaultPatients }),
+          });
+        } catch {
+          // ignore
+        }
+      }
+      return fetchWithAuth<{
         stats: ClinicStats;
         recentVisits: Consultation[];
         recentPatients: Patient[];
         revenue?: import('../types').PracticeRevenueAnalytics;
-      }>('/api/dashboard/stats'),
+      }>('/api/dashboard/stats');
+    },
     getRevenue: () =>
       fetchWithAuth<{
         revenue: import('../types').PracticeRevenueAnalytics;

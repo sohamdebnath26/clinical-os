@@ -298,6 +298,11 @@ function MainApp() {
       {showWalkInModal && (
         <WalkInModal
           onClose={() => setShowWalkInModal(false)}
+          onPatientCreated={(patient) => {
+            setShowWalkInModal(false);
+            showToast(`Patient ${patient.fullName} saved to your account`);
+            handleSelectPatient(patient.id);
+          }}
           onStartConsultation={(consultation, patient) => {
             setShowWalkInModal(false);
             showToast('Patient added to walk-in queue');

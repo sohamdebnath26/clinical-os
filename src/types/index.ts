@@ -37,6 +37,7 @@ export interface Patient {
   currentMedications?: string;
   medicalHistory?: string;
   createdById?: string;
+  createdByEmail?: string;
   createdAt: string;
   updatedAt: string;
   lastVisitAt?: string;
