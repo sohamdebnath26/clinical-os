@@ -1200,8 +1200,76 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     }
   };
 
+  // Refs for smooth keyboard focus across fields and tabs
+  const diagnosisSearchRef = React.useRef<HTMLInputElement>(null);
+  const testSearchRef = React.useRef<HTMLInputElement>(null);
+  const procedureInputRef = React.useRef<HTMLInputElement>(null);
+  const examInputRef = React.useRef<HTMLTextAreaElement>(null);
+  const investInputRef = React.useRef<HTMLTextAreaElement>(null);
+  const planInputRef = React.useRef<HTMLTextAreaElement>(null);
+  const followUpDateRef = React.useRef<HTMLInputElement>(null);
+  const followUpInstructionsRef = React.useRef<HTMLInputElement>(null);
+  const [tabAdvanceNotice, setTabAdvanceNotice] = useState<string | null>(null);
+
+  // Check if all required/primary fields in a given tab are filled
+  const isTabComplete = React.useCallback(
+    (tab: TabType): boolean => {
+      switch (tab) {
+        case 'diagnosis':
+          return diagnoses.length > 0 || customDiagnosis.trim().length > 0;
+        case 'tests':
+          return tests.length > 0 || customTest.trim().length > 0;
+        case 'procedure':
+          return procedures.length > 0 || customProcedureName.trim().length > 0;
+        case 'notes':
+          return Boolean(
+            clinicalNotes.examination.trim() &&
+              clinicalNotes.investigationsAdvised.trim() &&
+              clinicalNotes.plan.trim()
+          );
+        case 'bodymap':
+          return bodyMarkers.length > 0;
+        case 'images':
+          return images.length > 0;
+        case 'followup':
+          return Boolean(
+            followUp.date &&
+              followUp.instructions?.trim() &&
+              (prescriptions.length > 0 || medName.trim().length > 0)
+          );
+        case 'aisummary':
+          return Boolean(
+            diagnoses.length > 0 &&
+              symptoms.length > 0 &&
+              clinicalNotes.examination.trim() &&
+              clinicalNotes.plan.trim()
+          );
+        default:
+          return false;
+      }
+    },
+    [
+      diagnoses.length,
+      customDiagnosis,
+      tests.length,
+      customTest,
+      procedures.length,
+      customProcedureName,
+      clinicalNotes.examination,
+      clinicalNotes.investigationsAdvised,
+      clinicalNotes.plan,
+      bodyMarkers.length,
+      images.length,
+      followUp.date,
+      followUp.instructions,
+      prescriptions.length,
+      medName,
+      symptoms.length
+    ]
+  );
+
   // Switch to tab cleanly, committing any pending inline inputs
-  const handleTabChange = (tab: TabType) => {
+  const handleTabChange = (tab: TabType, showKeyboardToast = false) => {
     setIsMedDropdownOpen(false);
     setRxFeedbackHint(null);
     setProcFeedbackHint(null);
@@ -1251,16 +1319,55 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       });
     }
 
+    if (showKeyboardToast) {
+      const label = TAB_NEXT_LABELS[activeTab] || tab;
+      setTabAdvanceNotice(`Moved to ${label}`);
+      setTimeout(() => setTabAdvanceNotice(null), 2200);
+    }
+
     setActiveTab(tab);
+
+    // Smoothly focus first primary field of the newly opened tab
+    setTimeout(() => {
+      if (tab === 'diagnosis') diagnosisSearchRef.current?.focus();
+      else if (tab === 'tests') testSearchRef.current?.focus();
+      else if (tab === 'procedure') procedureInputRef.current?.focus();
+      else if (tab === 'notes') examInputRef.current?.focus();
+      else if (tab === 'followup') {
+        if (!followUp.date) followUpDateRef.current?.focus();
+        else if (!followUp.instructions?.trim()) followUpInstructionsRef.current?.focus();
+        else medNameInputRef.current?.focus();
+      }
+    }, 60);
   };
 
   const currentTabIndex = TAB_ORDER.indexOf(activeTab);
   const nextTab = currentTabIndex < TAB_ORDER.length - 1 ? TAB_ORDER[currentTabIndex + 1] : null;
   const prevTab = currentTabIndex > 0 ? TAB_ORDER[currentTabIndex - 1] : null;
 
-  const advanceToNextTab = () => {
+  const advanceToNextTab = (viaKeyboard = false) => {
     if (nextTab) {
-      handleTabChange(nextTab);
+      handleTabChange(nextTab, viaKeyboard);
+    }
+  };
+
+  // Global modal Enter key handler: when all fields in the current tab are filled, pressing Enter advances to next tab
+  const handleModalKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.defaultPrevented) return;
+    if (showWhatsApp || isLibraryModalOpen || showComparePrevCurrModal || isAnalyzingImage || activeImageAnalysis) {
+      return;
+    }
+
+    const target = e.target as HTMLElement;
+    const tagName = target?.tagName?.toLowerCase();
+
+    // Do not hijack Enter on explicit buttons unless all fields are filled and it's not a specific action button
+    if (tagName === 'button') return;
+
+    if (isTabComplete(activeTab) && nextTab) {
+      e.preventDefault();
+      advanceToNextTab(true);
     }
   };
 
@@ -1272,12 +1379,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     );
   };
 
-  const addCustomDiagnosis = () => {
+  const addCustomDiagnosis = (andAdvanceIfComplete = false) => {
     const trimmed = customDiagnosis.trim();
-    if (!trimmed) return;
-    markDoctorEdited('summary.primaryDiagnosis');
-    setDiagnoses(prev => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
-    setCustomDiagnosis('');
+    if (trimmed) {
+      markDoctorEdited('summary.primaryDiagnosis');
+      setDiagnoses(prev => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+      setCustomDiagnosis('');
+      if (andAdvanceIfComplete && nextTab) {
+        setTimeout(() => handleTabChange('tests', true), 30);
+      }
+    } else if (andAdvanceIfComplete && diagnoses.length > 0 && nextTab) {
+      advanceToNextTab(true);
+    }
   };
 
   // Test handlers
@@ -1288,12 +1401,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     );
   };
 
-  const addCustomTest = () => {
+  const addCustomTest = (andAdvanceIfComplete = false) => {
     const trimmed = customTest.trim();
-    if (!trimmed) return;
-    markDoctorEdited('summary.tests');
-    setTests(prev => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
-    setCustomTest('');
+    if (trimmed) {
+      markDoctorEdited('summary.tests');
+      setTests(prev => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+      setCustomTest('');
+      if (andAdvanceIfComplete && nextTab) {
+        setTimeout(() => handleTabChange('procedure', true), 30);
+      }
+    } else if (andAdvanceIfComplete && tests.length > 0 && nextTab) {
+      advanceToNextTab(true);
+    }
   };
 
   // Procedure handlers
@@ -1407,8 +1526,22 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   };
 
   // Prescription handler
-  const handleAddPrescription = () => {
+  const handleAddPrescription = (viaEnterKey = false) => {
     if (!medName.trim()) {
+      if (viaEnterKey) {
+        if (prescriptions.length > 0 && followUp.date && followUp.instructions?.trim()) {
+          handleTabChange('aisummary', true);
+          return;
+        }
+        if (!followUp.date) {
+          followUpDateRef.current?.focus();
+          return;
+        }
+        if (!followUp.instructions?.trim()) {
+          followUpInstructionsRef.current?.focus();
+          return;
+        }
+      }
       setIsMedDropdownOpen(true);
       medNameInputRef.current?.focus();
       setRxFeedbackHint('Please select a drug from the catalogue or type a medication name to add.');
@@ -1457,6 +1590,17 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     setMedName('');
     setMedQtyManual(false);
     setIsMedDropdownOpen(false);
+
+    // If triggered via Enter key and all Follow-up & Rx fields are filled, move to the next tab (Visit Summary)
+    if (viaEnterKey) {
+      if (followUp.date && followUp.instructions?.trim()) {
+        setTimeout(() => handleTabChange('aisummary', true), 40);
+      } else if (!followUp.date) {
+        followUpDateRef.current?.focus();
+      } else if (!followUp.instructions?.trim()) {
+        followUpInstructionsRef.current?.focus();
+      }
+    }
   };
 
   const handleRemovePrescription = (id: string) => {
@@ -1622,12 +1766,26 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div
+      onKeyDown={handleModalKeyDown}
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+    >
       <div className="bg-[#fafcfb] rounded-3xl w-full max-w-[920px] shadow-2xl flex flex-col max-h-[95vh] border border-[#d6e2df] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Deep Forest Teal Modal Header */}
         <div className="px-6 py-4 bg-gradient-to-r from-[#0e423d] via-[#13534c] to-[#17645c] flex items-center justify-between shrink-0 text-white">
           <div>
-            <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">Consultation</h2>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">Consultation</h2>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/15 border border-white/20 text-[10.5px] font-bold text-teal-100">
+                Step {currentTabIndex + 1} of {TAB_ORDER.length}
+              </span>
+              {tabAdvanceNotice && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-400/25 border border-emerald-300/40 text-[11px] font-bold text-emerald-100 animate-in fade-in duration-150">
+                  <Check className="w-3 h-3 text-emerald-200" />
+                  <span>{tabAdvanceNotice}</span>
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2 mt-1 text-[13px] text-[#b8dad5] font-medium flex-wrap">
               <span className="text-white/95 font-medium">{patient.fullName}</span>
               <span>·</span>
@@ -1686,135 +1844,177 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs Bar */}
-        <div className="flex items-center gap-1 px-6 border-b border-[#e2ebe8] bg-white overflow-x-auto shrink-0 scrollbar-none">
-          <button
-            type="button"
-            onMouseDown={e => e.preventDefault()}
-            onClick={() => handleTabChange('diagnosis')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
-              activeTab === 'diagnosis'
-                ? 'border-[#157a6e] text-[#115e56] font-semibold'
-                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
-            }`}
-          >
-            <Stethoscope className="w-3.5 h-3.5" />
-            <span>Diagnosis</span>
-            {diagnoses.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
-                {diagnoses.length}
-              </span>
-            )}
-          </button>
+        {/* Navigation Tabs Bar with Completion Indicators & Enter Hint */}
+        <div className="flex items-center justify-between gap-2 px-6 border-b border-[#e2ebe8] bg-white overflow-x-auto shrink-0 scrollbar-none">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => handleTabChange('diagnosis')}
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+                activeTab === 'diagnosis'
+                  ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
+                  : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
+              }`}
+            >
+              <Stethoscope className="w-3.5 h-3.5" />
+              <span>Diagnosis</span>
+              {diagnoses.length > 0 ? (
+                <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
+                  {diagnoses.length}
+                </span>
+              ) : null}
+            </button>
 
-          <button
-            type="button"
-            onMouseDown={e => e.preventDefault()}
-            onClick={() => handleTabChange('tests')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
-              activeTab === 'tests'
-                ? 'border-[#157a6e] text-[#115e56] font-semibold'
-                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
-            }`}
-          >
-            <FlaskConical className="w-3.5 h-3.5" />
-            <span>Tests</span>
-            {tests.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
-                {tests.length}
-              </span>
-            )}
-          </button>
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => handleTabChange('tests')}
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+                activeTab === 'tests'
+                  ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
+                  : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
+              }`}
+            >
+              <FlaskConical className="w-3.5 h-3.5" />
+              <span>Tests</span>
+              {tests.length > 0 ? (
+                <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
+                  {tests.length}
+                </span>
+              ) : null}
+            </button>
 
-          <button
-            type="button"
-            onMouseDown={e => e.preventDefault()}
-            onClick={() => handleTabChange('procedure')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
-              activeTab === 'procedure'
-                ? 'border-[#157a6e] text-[#115e56] font-semibold'
-                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
-            }`}
-          >
-            <Scissors className="w-3.5 h-3.5" />
-            <span>Procedure</span>
-            {procedures.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
-                {procedures.length}
-              </span>
-            )}
-          </button>
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => handleTabChange('procedure')}
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+                activeTab === 'procedure'
+                  ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
+                  : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
+              }`}
+            >
+              <Scissors className="w-3.5 h-3.5" />
+              <span>Procedure</span>
+              {procedures.length > 0 ? (
+                <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
+                  {procedures.length}
+                </span>
+              ) : null}
+            </button>
 
-          <button
-            type="button"
-            onMouseDown={e => e.preventDefault()}
-            onClick={() => handleTabChange('notes')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
-              activeTab === 'notes'
-                ? 'border-[#157a6e] text-[#115e56] font-semibold'
-                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Clinical notes</span>
-          </button>
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => handleTabChange('notes')}
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+                activeTab === 'notes'
+                  ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
+                  : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Clinical notes</span>
+              {isTabComplete('notes') && (
+                <span className="w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center font-bold">
+                  <Check className="w-2.5 h-2.5" />
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            onMouseDown={e => e.preventDefault()}
-            onClick={() => handleTabChange('bodymap')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
-              activeTab === 'bodymap'
-                ? 'border-[#157a6e] text-[#115e56] font-semibold'
-                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
-            }`}
-          >
-            <User className="w-3.5 h-3.5" />
-            <span>Body map</span>
-            {bodyMarkers.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
-                {bodyMarkers.length}
-              </span>
-            )}
-          </button>
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => handleTabChange('bodymap')}
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+                activeTab === 'bodymap'
+                  ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
+                  : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Body map</span>
+              {bodyMarkers.length > 0 ? (
+                <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
+                  {bodyMarkers.length}
+                </span>
+              ) : null}
+            </button>
 
-          <button
-            type="button"
-            onMouseDown={e => e.preventDefault()}
-            onClick={() => handleTabChange('images')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
-              activeTab === 'images'
-                ? 'border-[#157a6e] text-[#115e56] font-semibold'
-                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
-            }`}
-          >
-            <ImageIcon className="w-3.5 h-3.5" />
-            <span>Clinical images</span>
-            {images.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
-                {images.length}
-              </span>
-            )}
-          </button>
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => handleTabChange('images')}
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+                activeTab === 'images'
+                  ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
+                  : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+              <span>Clinical images</span>
+              {images.length > 0 ? (
+                <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
+                  {images.length}
+                </span>
+              ) : null}
+            </button>
 
-          <button
-            type="button"
-            onMouseDown={e => e.preventDefault()}
-            onClick={() => handleTabChange('followup')}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
-              activeTab === 'followup'
-                ? 'border-[#157a6e] text-[#115e56] font-semibold'
-                : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
-            }`}
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Follow up & Rx</span>
-            {prescriptions.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
-                {prescriptions.length}
-              </span>
-            )}
-          </button>
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => handleTabChange('followup')}
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+                activeTab === 'followup'
+                  ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
+                  : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Follow up & Rx</span>
+              {prescriptions.length > 0 ? (
+                <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
+                  {prescriptions.length}
+                </span>
+              ) : null}
+            </button>
+          </div>
+
+          {/* Live Enter-to-Next-Tab Status Indicator */}
+          {nextTab && (
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => advanceToNextTab(true)}
+              className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer border ${
+                isTabComplete(activeTab)
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 shadow-2xs'
+                  : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+              }`}
+              title={
+                isTabComplete(activeTab)
+                  ? `All fields filled! Press Enter or click to move to ${TAB_NEXT_LABELS[activeTab]}`
+                  : `Fill fields or click to move to ${TAB_NEXT_LABELS[activeTab]}`
+              }
+            >
+              {isTabComplete(activeTab) ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Ready · Press</span>
+                  <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-white text-emerald-900 border border-emerald-300 rounded shadow-2xs">
+                    Enter ↵
+                  </kbd>
+                  <span>→ {TAB_NEXT_LABELS[activeTab]}</span>
+                </>
+              ) : (
+                <>
+                  <span>Next: {TAB_NEXT_LABELS[activeTab]}</span>
+                  <ArrowRight className="w-3 h-3" />
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Tab Body Content */}
@@ -1829,9 +2029,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           {/* TAB 1: DIAGNOSIS */}
           {activeTab === 'diagnosis' && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              <p className="text-xs text-slate-500">
-                Tap to add a diagnosis. Selected diagnoses appear above.
-              </p>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="text-xs text-slate-500">
+                  Tap to add a diagnosis. Once selected, press <strong className="text-teal-800">Enter ↵</strong> to move to Skin Tests.
+                </p>
+                {isTabComplete('diagnosis') && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                    <Check className="w-3 h-3" /> Diagnosis selected · Press Enter ↵ for Skin Tests
+                  </span>
+                )}
+              </div>
 
               {/* Selected Diagnoses Box */}
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl min-h-[56px] flex flex-wrap items-center gap-2">
@@ -1863,10 +2070,26 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               {/* Search input */}
               <div className="relative flex items-center">
                 <input
+                  ref={diagnosisSearchRef}
                   type="text"
-                  placeholder="Search all 93 dermatology diagnoses..."
+                  placeholder="Search all 93 dermatology diagnoses (press Enter to select or advance)..."
                   value={diagnosisSearch}
                   onChange={e => setDiagnosisSearch(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (diagnosisSearch.trim() && filteredDiagnoses.length > 0) {
+                        const match = filteredDiagnoses[0];
+                        if (!diagnoses.includes(match)) {
+                          toggleDiagnosis(match);
+                        }
+                        setDiagnosisSearch('');
+                        setTimeout(() => handleTabChange('tests', true), 40);
+                      } else if (diagnoses.length > 0) {
+                        advanceToNextTab(true);
+                      }
+                    }
+                  }}
                   className="w-full text-xs pl-3.5 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs"
                 />
                 <div className="absolute right-1.5">
@@ -1905,10 +2128,15 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
                 <input
                   type="text"
-                  placeholder="Add a custom diagnosis (press Enter or speak)"
+                  placeholder="Add a custom diagnosis (press Enter to add & continue to Skin Tests)"
                   value={customDiagnosis}
                   onChange={e => setCustomDiagnosis(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomDiagnosis())}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addCustomDiagnosis(true);
+                    }
+                  }}
                   className="flex-1 text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500"
                 />
                 <VoiceDictationButton
@@ -1920,7 +2148,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <button
                   type="button"
                   onMouseDown={e => e.preventDefault()}
-                  onClick={addCustomDiagnosis}
+                  onClick={() => addCustomDiagnosis(false)}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                 >
                   Add
@@ -1930,7 +2158,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               {/* Step Navigation */}
               <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                 <span className="text-xs text-slate-500 font-medium">
-                  {diagnoses.length > 0 ? `${diagnoses.length} diagnosis selected` : 'Select or enter diagnoses'}
+                  {diagnoses.length > 0 ? `${diagnoses.length} diagnosis selected · Press Enter ↵ to continue` : 'Select or enter diagnoses'}
                 </span>
                 <button
                   type="button"
@@ -1948,9 +2176,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           {/* TAB 2: TESTS */}
           {activeTab === 'tests' && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              <p className="text-xs text-slate-500">
-                Select all skin-related tests you're ordering for this patient.
-              </p>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="text-xs text-slate-500">
+                  Select skin-related tests for this patient. Once selected, press <strong className="text-teal-800">Enter ↵</strong> to move to Procedures.
+                </p>
+                {isTabComplete('tests') && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                    <Check className="w-3 h-3" /> Tests selected · Press Enter ↵ for Procedures
+                  </span>
+                )}
+              </div>
 
               {/* Selected Tests Box */}
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl min-h-[56px] flex flex-wrap items-center gap-2">
@@ -1982,10 +2217,26 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               {/* Search input */}
               <div className="relative flex items-center">
                 <input
+                  ref={testSearchRef}
                   type="text"
-                  placeholder="Search all 46 skin tests & investigations..."
+                  placeholder="Search all 46 skin tests & investigations (press Enter to select or advance)..."
                   value={testSearch}
                   onChange={e => setTestSearch(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (testSearch.trim() && filteredTests.length > 0) {
+                        const match = filteredTests[0];
+                        if (!tests.includes(match)) {
+                          toggleTest(match);
+                        }
+                        setTestSearch('');
+                        setTimeout(() => handleTabChange('procedure', true), 40);
+                      } else if (tests.length > 0) {
+                        advanceToNextTab(true);
+                      }
+                    }
+                  }}
                   className="w-full text-xs pl-3.5 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs"
                 />
                 <div className="absolute right-1.5">
@@ -2024,10 +2275,15 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
                 <input
                   type="text"
-                  placeholder="Add a custom test (press Enter or speak)"
+                  placeholder="Add a custom test (press Enter to add & continue to Procedures)"
                   value={customTest}
                   onChange={e => setCustomTest(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomTest())}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addCustomTest(true);
+                    }
+                  }}
                   className="flex-1 text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500"
                 />
                 <VoiceDictationButton
@@ -2039,7 +2295,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <button
                   type="button"
                   onMouseDown={e => e.preventDefault()}
-                  onClick={addCustomTest}
+                  onClick={() => addCustomTest(false)}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                 >
                   Add
@@ -2073,9 +2329,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           {/* TAB 3: PROCEDURE */}
           {activeTab === 'procedure' && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              <p className="text-xs text-slate-500">
-                Add every procedure performed (or to be performed) today. Add a charge to bill it.
-              </p>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="text-xs text-slate-500">
+                  Add procedures performed today. Once added, press <strong className="text-teal-800">Enter ↵</strong> to move to Clinical Notes.
+                </p>
+                {isTabComplete('procedure') && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                    <Check className="w-3 h-3" /> Procedure added · Press Enter ↵ for Clinical Notes
+                  </span>
+                )}
+              </div>
 
               {/* Common procedure catalogue chips */}
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
@@ -2103,18 +2366,24 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <input
+                    ref={procedureInputRef}
                     type="text"
-                    placeholder="Custom procedure name (type or speak)..."
+                    placeholder="Custom procedure name (press Enter to add & continue to Clinical Notes)..."
                     value={customProcedureName}
                     onChange={e => {
                       setCustomProcedureName(e.target.value);
                       if (procFeedbackHint) setProcFeedbackHint(null);
                     }}
                     onKeyDown={e => {
-                      if (e.key === 'Enter' && customProcedureName.trim()) {
+                      if (e.key === 'Enter') {
                         e.preventDefault();
-                        addProcedure(customProcedureName.trim(), customProcedureCost);
-                        setCustomProcedureName('');
+                        if (customProcedureName.trim()) {
+                          addProcedure(customProcedureName.trim(), customProcedureCost);
+                          setCustomProcedureName('');
+                          setTimeout(() => handleTabChange('notes', true), 40);
+                        } else if (procedures.length > 0) {
+                          advanceToNextTab(true);
+                        }
                       }
                     }}
                     className="flex-2 text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-teal-500"
@@ -2134,6 +2403,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       placeholder="Cost"
                       value={customProcedureCost}
                       onChange={e => setCustomProcedureCost(Number(e.target.value))}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (customProcedureName.trim()) {
+                            addProcedure(customProcedureName.trim(), customProcedureCost);
+                            setCustomProcedureName('');
+                            setTimeout(() => handleTabChange('notes', true), 40);
+                          } else if (procedures.length > 0) {
+                            advanceToNextTab(true);
+                          }
+                        }
+                      }}
                       className="w-16 text-xs font-medium focus:outline-none"
                     />
                   </div>
@@ -2307,6 +2588,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     rows={3}
                     value={singleVoiceNote}
                     onChange={e => handleSingleVoiceNoteChange(e.target.value, false)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        if (isTabComplete('notes')) {
+                          e.preventDefault();
+                          advanceToNextTab(true);
+                        }
+                      }
+                    }}
                     placeholder="Tap 'Dictate Clinical Notes' above or type here in one box (e.g. 'Erythematous papules and open comedones over cheeks and forehead. Skin scraping for KOH mount advised if scaling persists. Start topical adapalene gel at night, non-comedogenic cleanser and daily mineral sunscreen. Review in 2 weeks.') — AI automatically populates all fields in the Visit Summary..."
                     className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 font-normal transition-all"
                   />
@@ -2335,13 +2624,17 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
                     <span>1. Examination Findings:</span>
+                    {clinicalNotes.examination.trim() && (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    )}
                   </label>
                   <span className="text-[10px] text-slate-400 font-medium">
-                    Auto-filled from Voice-to-Text · Editable by Doctor
+                    Press Enter ↵ for next field (or next tab when all 3 are filled) · Shift+Enter for new line
                   </span>
                 </div>
                 <div className="relative">
                   <textarea
+                    ref={examInputRef}
                     rows={3}
                     value={clinicalNotes.examination}
                     onChange={e => {
@@ -2349,6 +2642,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       hasUserEditedNotesRef.current = true;
                       markDoctorEdited('notes.examination');
                       setClinicalNotes(prev => ({ ...prev, examination: val }));
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (isTabComplete('notes')) {
+                          advanceToNextTab(true);
+                        } else if (!clinicalNotes.investigationsAdvised.trim()) {
+                          investInputRef.current?.focus();
+                        } else if (!clinicalNotes.plan.trim()) {
+                          planInputRef.current?.focus();
+                        }
+                      }
                     }}
                     placeholder="e.g. Erythematous papules and open comedones over cheeks and forehead. No pustules or scarring noted."
                     className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
@@ -2361,13 +2666,17 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
                     <span>2. Investigations Advised:</span>
+                    {clinicalNotes.investigationsAdvised.trim() && (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    )}
                   </label>
                   <span className="text-[10px] text-slate-400 font-medium">
-                    Auto-filled from Voice-to-Text · Editable by Doctor
+                    Press Enter ↵ for Plan (or Body Map when all 3 are filled)
                   </span>
                 </div>
                 <div className="relative">
                   <textarea
+                    ref={investInputRef}
                     rows={2}
                     value={clinicalNotes.investigationsAdvised}
                     onChange={e => {
@@ -2375,6 +2684,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       hasUserEditedNotesRef.current = true;
                       markDoctorEdited('notes.investigationsAdvised');
                       setClinicalNotes(prev => ({ ...prev, investigationsAdvised: val }));
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (isTabComplete('notes')) {
+                          advanceToNextTab(true);
+                        } else if (!clinicalNotes.plan.trim()) {
+                          planInputRef.current?.focus();
+                        } else if (!clinicalNotes.examination.trim()) {
+                          examInputRef.current?.focus();
+                        }
+                      }
                     }}
                     placeholder="e.g. Skin scraping for KOH mount advised if scaling persists."
                     className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
@@ -2387,13 +2708,19 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
                     <span>3. Clinical Plan & Discussion:</span>
+                    {clinicalNotes.plan.trim() && (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    )}
                   </label>
                   <span className="text-[10px] text-slate-400 font-medium">
-                    Auto-filled from Voice-to-Text · Editable by Doctor
+                    {isTabComplete('notes')
+                      ? '✓ All 3 notes filled — Press Enter ↵ to move to Body Map'
+                      : 'Press Enter ↵ when complete'}
                   </span>
                 </div>
                 <div className="relative">
                   <textarea
+                    ref={planInputRef}
                     rows={3}
                     value={clinicalNotes.plan}
                     onChange={e => {
@@ -2401,6 +2728,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       hasUserEditedNotesRef.current = true;
                       markDoctorEdited('notes.plan');
                       setClinicalNotes(prev => ({ ...prev, plan: val }));
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (isTabComplete('notes')) {
+                          advanceToNextTab(true);
+                        } else if (!clinicalNotes.examination.trim()) {
+                          examInputRef.current?.focus();
+                        } else if (!clinicalNotes.investigationsAdvised.trim()) {
+                          investInputRef.current?.focus();
+                        }
+                      }
                     }}
                     placeholder="e.g. Start topical adapalene gel at night. Advised non-comedogenic foaming cleanser and daily mineral sunscreen."
                     className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs font-normal transition-all"
@@ -2570,7 +2909,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     Follow-Up Schedule & Appointment Sync
                   </h4>
                   <span className="text-[10px] text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full font-semibold">
-                    Auto-syncs to Appointments
+                    {isTabComplete('followup')
+                      ? '✓ All Follow-Up & Rx fields filled · Press Enter ↵ for Summary'
+                      : 'Auto-syncs to Appointments'}
                   </span>
                 </div>
 
@@ -2601,11 +2942,24 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   <div className="flex items-center gap-2 ml-auto">
                     <span className="text-xs font-semibold text-slate-600">Date:</span>
                     <input
+                      ref={followUpDateRef}
                       type="date"
                       value={followUp.date}
                       onChange={e => {
                         markDoctorEdited('summary.followUpDate');
                         setFollowUp(prev => ({ ...prev, date: e.target.value }));
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (isTabComplete('followup')) {
+                            advanceToNextTab(true);
+                          } else if (!followUp.instructions?.trim()) {
+                            followUpInstructionsRef.current?.focus();
+                          } else {
+                            medNameInputRef.current?.focus();
+                          }
+                        }
                       }}
                       className="text-xs px-2.5 py-1 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-teal-500"
                     />
@@ -2628,12 +2982,25 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     />
                   </div>
                   <input
+                    ref={followUpInstructionsRef}
                     type="text"
                     placeholder="e.g. Review in OPD with biopsy report; SOS if swelling increases."
                     value={followUp.instructions}
                     onChange={e => {
                       markDoctorEdited('summary.followUpInstructions');
                       setFollowUp(prev => ({ ...prev, instructions: e.target.value }));
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (isTabComplete('followup')) {
+                          advanceToNextTab(true);
+                        } else if (!followUp.date) {
+                          followUpDateRef.current?.focus();
+                        } else {
+                          medNameInputRef.current?.focus();
+                        }
+                      }
                     }}
                     className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-teal-500"
                   />
@@ -2869,7 +3236,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleAddPrescription();
+                                handleAddPrescription(true);
                               } else if (e.key === 'Escape') {
                                 setIsMedDropdownOpen(false);
                               }
@@ -3047,7 +3414,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           onKeyDown={e => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
-                              handleAddPrescription();
+                              handleAddPrescription(true);
                             }
                           }}
                           className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
@@ -3097,7 +3464,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleAddPrescription();
+                                handleAddPrescription(true);
                               }
                             }}
                             className="w-full text-xs px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
@@ -3131,7 +3498,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           onKeyDown={e => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
-                              handleAddPrescription();
+                              handleAddPrescription(true);
                             }
                           }}
                           className="w-full text-xs px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
@@ -3154,7 +3521,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           onKeyDown={e => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
-                              handleAddPrescription();
+                              handleAddPrescription(true);
                             }
                           }}
                           className="w-full text-xs px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 text-center font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
@@ -3239,7 +3606,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleAddPrescription();
+                                handleAddPrescription(true);
                               }
                             }}
                             className="w-full text-xs px-3 py-2 bg-transparent border-0 text-slate-800 placeholder:text-slate-400 focus:outline-hidden"
@@ -3257,7 +3624,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       <button
                         type="button"
                         onMouseDown={e => e.preventDefault()}
-                        onClick={handleAddPrescription}
+                        onClick={() => handleAddPrescription(false)}
                         className="px-5 py-2 bg-[#5b87eb] hover:bg-[#4672dc] text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 h-[36px] cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Patient, Gender, Consultation } from '../types';
 import { PREDEFINED_SYMPTOMS } from '../data/clinicalCatalogues';
 import { api } from '../lib/api';
@@ -101,6 +101,73 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
   // Validation & Loading
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Tabbed workflow inside 'register' (Doctor mode): 1. Details -> 2. Symptoms & Notes -> 3. Mobile / Self Check-In
+  type RegisterTab = 'details' | 'clinical' | 'mobile';
+  const [registerTab, setRegisterTab] = useState<RegisterTab>('details');
+  const [tabAdvanceNotice, setTabAdvanceNotice] = useState<string | null>(null);
+
+  // Refs for smooth Enter-to-next-field & Enter-to-next-tab navigation
+  const fullNameInputRef = useRef<HTMLInputElement>(null);
+  const sexSelectRef = useRef<HTMLSelectElement>(null);
+  const ageInputRef = useRef<HTMLInputElement>(null);
+  const mobileInputRef = useRef<HTMLInputElement>(null);
+  const symptomSearchInputRef = useRef<HTMLInputElement>(null);
+  const customSymptomInputRef = useRef<HTMLInputElement>(null);
+  const notesInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const isDetailsTabComplete =
+    fullName.trim().length >= 2 &&
+    sex !== 'Not specified' &&
+    age.trim() !== '' &&
+    Number(age) > 0 &&
+    mobile.replace(/\D/g, '').length === 10;
+
+  const isClinicalTabComplete =
+    selectedSymptoms.length > 0 && notes.trim().length > 0;
+
+  const handleSwitchRegisterTab = (next: RegisterTab, viaEnter = false) => {
+    setRegisterTab(next);
+    if (viaEnter) {
+      const label =
+        next === 'details'
+          ? '1. Patient Details'
+          : next === 'clinical'
+          ? '2. Symptoms & Notes'
+          : '3. Mobile / Check-In';
+      setTabAdvanceNotice(`Moved to ${label}`);
+      setTimeout(() => setTabAdvanceNotice(null), 2200);
+    }
+    setTimeout(() => {
+      if (next === 'details') {
+        fullNameInputRef.current?.focus();
+      } else if (next === 'clinical') {
+        symptomSearchInputRef.current?.focus();
+      }
+    }, 40);
+  };
+
+  // Smart Enter handler in Tab 1 (Patient Details):
+  // If all fields in Tab 1 are filled, pressing Enter moves to Tab 2 (Symptoms & Notes).
+  // Otherwise, pressing Enter moves focus to the next unfilled field in Tab 1.
+  const handleDetailsEnterKey = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (isDetailsTabComplete) {
+      handleSwitchRegisterTab('clinical', true);
+      return;
+    }
+    if (fullName.trim().length < 2) {
+      fullNameInputRef.current?.focus();
+    } else if (sex === 'Not specified') {
+      sexSelectRef.current?.focus();
+    } else if (!age.trim() || Number(age) <= 0) {
+      ageInputRef.current?.focus();
+    } else if (mobile.replace(/\D/g, '').length !== 10) {
+      mobileInputRef.current?.focus();
+    }
+  };
 
   // Step 1: Search patients as user types in the initial "Walk-in patient" popup
   useEffect(() => {
@@ -983,13 +1050,27 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
   }
 
   // ============================================================================
-  // STEP 2, MODE A: DOCTOR / CLINIC "ADD PATIENT" WINDOW (Matches Image 2 + Mobile Link)
+  // STEP 2, MODE A: DOCTOR / CLINIC "ADD PATIENT" WINDOW (Tabbed + Enter-to-Next-Tab)
   // ============================================================================
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      onKeyDown={e => {
+        if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+        const target = e.target as HTMLElement | null;
+        if (target?.tagName === 'BUTTON') return;
+        if (registerTab === 'details' && isDetailsTabComplete) {
+          e.preventDefault();
+          handleSwitchRegisterTab('clinical', true);
+        } else if (registerTab === 'clinical' && isClinicalTabComplete) {
+          e.preventDefault();
+          handleSwitchRegisterTab('mobile', true);
+        }
+      }}
+    >
       <div className="bg-[#f9f8f6] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200/90 animate-in fade-in zoom-in-95 duration-200 my-auto">
         {/* Header */}
-        <div className="px-7 pt-7 pb-3 flex items-start justify-between">
+        <div className="px-7 pt-6 pb-3 flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
               {initialStep === 'search' && (
@@ -1005,9 +1086,15 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
               <h2 className="text-[22px] font-bold text-slate-900 tracking-tight leading-snug">
                 Add patient
               </h2>
+              {tabAdvanceNotice && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-700 text-white text-[11px] font-bold shadow-xs animate-in fade-in zoom-in-95 duration-150">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-300" />
+                  {tabAdvanceNotice}
+                </span>
+              )}
             </div>
-            <p className="text-[13.5px] text-slate-500 mt-1 leading-relaxed">
-              Save a new patient record. You can start a consultation for them afterwards.
+            <p className="text-[13px] text-slate-500 mt-0.5 leading-relaxed">
+              Fill fields in each tab — pressing <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-mono font-bold text-slate-700">Enter ↵</kbd> moves to the next tab when complete.
             </p>
           </div>
           <button
@@ -1019,8 +1106,114 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
           </button>
         </div>
 
+        {/* Segmented Tab Bar */}
+        <div className="px-7 pb-2">
+          <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/75 rounded-xl border border-slate-200/90">
+            <button
+              type="button"
+              onClick={() => handleSwitchRegisterTab('details')}
+              className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                registerTab === 'details'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : isDetailsTabComplete
+                  ? 'text-emerald-800 hover:bg-white/60'
+                  : 'text-slate-600 hover:bg-white/50'
+              }`}
+            >
+              {isDetailsTabComplete ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              ) : (
+                <span className="w-4 h-4 rounded-full bg-slate-300/80 text-slate-700 text-[10px] flex items-center justify-center font-bold shrink-0">
+                  1
+                </span>
+              )}
+              <span className="truncate">Details</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSwitchRegisterTab('clinical')}
+              className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                registerTab === 'clinical'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : isClinicalTabComplete
+                  ? 'text-emerald-800 hover:bg-white/60'
+                  : 'text-slate-600 hover:bg-white/50'
+              }`}
+            >
+              {isClinicalTabComplete ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              ) : (
+                <span className="w-4 h-4 rounded-full bg-slate-300/80 text-slate-700 text-[10px] flex items-center justify-center font-bold shrink-0">
+                  2
+                </span>
+              )}
+              <span className="truncate">Symptoms &amp; Notes</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                handleSwitchRegisterTab('mobile');
+                if (!mobileSessionToken) {
+                  ensureMobileSessionLink();
+                }
+              }}
+              className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                registerTab === 'mobile'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : patientIntakeCompleted
+                  ? 'text-emerald-800 hover:bg-white/60'
+                  : 'text-slate-600 hover:bg-white/50'
+              }`}
+            >
+              {patientIntakeCompleted ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              ) : (
+                <span className="w-4 h-4 rounded-full bg-slate-300/80 text-slate-700 text-[10px] flex items-center justify-center font-bold shrink-0">
+                  3
+                </span>
+              )}
+              <span className="truncate">Mobile / Review</span>
+            </button>
+          </div>
+
+          {/* Live Ready / Press Enter Banner */}
+          {registerTab === 'details' && isDetailsTabComplete && (
+            <div className="mt-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-between text-[11px] text-emerald-900 font-semibold animate-in fade-in duration-150">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                All patient details filled!
+              </span>
+              <button
+                type="button"
+                onClick={() => handleSwitchRegisterTab('clinical', true)}
+                className="inline-flex items-center gap-1 text-emerald-800 hover:text-emerald-950 font-bold cursor-pointer"
+              >
+                <span>Press Enter ↵ → Symptoms &amp; Notes</span>
+              </button>
+            </div>
+          )}
+
+          {registerTab === 'clinical' && isClinicalTabComplete && (
+            <div className="mt-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-between text-[11px] text-emerald-900 font-semibold animate-in fade-in duration-150">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                Symptoms &amp; notes complete!
+              </span>
+              <button
+                type="button"
+                onClick={() => handleSwitchRegisterTab('mobile', true)}
+                className="inline-flex items-center gap-1 text-emerald-800 hover:text-emerald-950 font-bold cursor-pointer"
+              >
+                <span>Press Enter ↵ → Mobile / Review</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Form Body */}
-        <div className="px-7 pb-6 pt-2 space-y-4 max-h-[82vh] overflow-y-auto">
+        <div className="px-7 pb-6 pt-2 space-y-4 max-h-[78vh] overflow-y-auto">
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center justify-between">
               <span className="flex items-center gap-2">
@@ -1056,139 +1249,452 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
             </div>
           )}
 
-          {/* 1. Patient name */}
-          <div>
-            <label className="block text-[13px] font-semibold text-slate-800 mb-1.5">
-              Patient name
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                autoFocus
-                placeholder="Patient's full name"
-                value={fullName}
-                onChange={e => setFullName(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
-              />
-            </div>
-
-            {/* Quick matching existing patients dropdown if found */}
-            {matchingPatients.length > 0 && !patientIntakeCompleted && (
-              <div className="mt-1.5 bg-white border border-slate-200 rounded-xl shadow-sm divide-y divide-slate-100 overflow-hidden">
-                <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Existing patients matching &ldquo;{fullName}&rdquo; — click to start consultation
-                </div>
-                {matchingPatients.map(pat => (
-                  <button
-                    key={pat.id}
-                    type="button"
-                    onClick={() => handleSelectExistingPatient(pat)}
-                    className="w-full px-3 py-2 text-left hover:bg-teal-50/60 flex items-center justify-between text-xs transition-colors"
-                  >
-                    <div>
-                      <span className="font-semibold text-slate-800">{pat.fullName}</span>
-                      <span className="text-slate-400 ml-2">
-                        {pat.patientCode} • {pat.mobile} • {pat.age}y {pat.gender}
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-semibold text-[#3f6f66]">
-                      Select →
+          {/* ================================================================= */}
+          {/* TAB 1: PATIENT DETAILS (Name, Sex, Age, Phone)                    */}
+          {/* ================================================================= */}
+          {registerTab === 'details' && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              {/* 1. Patient name */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[13px] font-semibold text-slate-800">
+                    Patient name <span className="text-rose-500">*</span>
+                  </label>
+                  {fullName.trim().length >= 2 && (
+                    <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-0.5">
+                      <Check className="w-3 h-3" /> Filled
                     </span>
-                  </button>
-                ))}
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    ref={fullNameInputRef}
+                    type="text"
+                    autoFocus
+                    placeholder="Patient's full name (Press Enter for next field)"
+                    value={fullName}
+                    onChange={e => setFullName(e.target.value)}
+                    onKeyDown={handleDetailsEnterKey}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
+                  />
+                </div>
+
+                {/* Quick matching existing patients dropdown if found */}
+                {matchingPatients.length > 0 && !patientIntakeCompleted && (
+                  <div className="mt-1.5 bg-white border border-slate-200 rounded-xl shadow-sm divide-y divide-slate-100 overflow-hidden">
+                    <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Existing patients matching &ldquo;{fullName}&rdquo; — click to start consultation
+                    </div>
+                    {matchingPatients.map(pat => (
+                      <button
+                        key={pat.id}
+                        type="button"
+                        onClick={() => handleSelectExistingPatient(pat)}
+                        className="w-full px-3 py-2 text-left hover:bg-teal-50/60 flex items-center justify-between text-xs transition-colors"
+                      >
+                        <div>
+                          <span className="font-semibold text-slate-800">{pat.fullName}</span>
+                          <span className="text-slate-400 ml-2">
+                            {pat.patientCode} • {pat.mobile} • {pat.age}y {pat.gender}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-semibold text-[#3f6f66]">
+                          Select →
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* 2. Sex & Age (years) side-by-side */}
-          <div className="grid grid-cols-2 gap-3.5">
-            <div>
-              <label className="block text-[13px] font-semibold text-slate-800 mb-1.5">
-                Sex
-              </label>
-              <select
-                value={sex}
-                onChange={e =>
-                  setSex(e.target.value as 'Not specified' | 'Female' | 'Male' | 'Other')
-                }
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-800 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
-              >
-                <option value="Not specified">Not specified</option>
-                <option value="Female">Female</option>
-                <option value="Male">Male</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
+              {/* 2. Sex & Age (years) side-by-side */}
+              <div className="grid grid-cols-2 gap-3.5">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[13px] font-semibold text-slate-800">
+                      Sex <span className="text-rose-500">*</span>
+                    </label>
+                    {sex !== 'Not specified' && (
+                      <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-0.5">
+                        <Check className="w-3 h-3" />
+                      </span>
+                    )}
+                  </div>
+                  <select
+                    ref={sexSelectRef}
+                    value={sex}
+                    onChange={e =>
+                      setSex(e.target.value as 'Not specified' | 'Female' | 'Male' | 'Other')
+                    }
+                    onKeyDown={handleDetailsEnterKey}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-800 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
+                  >
+                    <option value="Not specified">Not specified</option>
+                    <option value="Female">Female</option>
+                    <option value="Male">Male</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
 
-            <div>
-              <label className="block text-[13px] font-semibold text-slate-800 mb-1.5">
-                Age (years)
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="125"
-                placeholder="Age in years"
-                value={age}
-                onChange={e => setAge(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
-              />
-            </div>
-          </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[13px] font-semibold text-slate-800">
+                      Age (years) <span className="text-rose-500">*</span>
+                    </label>
+                    {age.trim() !== '' && Number(age) > 0 && (
+                      <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-0.5">
+                        <Check className="w-3 h-3" />
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    ref={ageInputRef}
+                    type="number"
+                    min="0"
+                    max="125"
+                    placeholder="Age in years"
+                    value={age}
+                    onChange={e => setAge(e.target.value)}
+                    onKeyDown={handleDetailsEnterKey}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
+                  />
+                </div>
+              </div>
 
-          {/* 3. Patient phone + Send Link to Patient's Mobile */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-[13px] font-semibold text-slate-800">
-                Patient phone
-              </label>
-              <button
-                type="button"
-                onClick={handleOpenSendLinkPanel}
-                className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#3f6f66] hover:text-[#2f564f] underline underline-offset-2"
-              >
-                <Send className="w-3 h-3" />
-                Send walk-in link to patient&apos;s mobile
-              </button>
-            </div>
-            <div className="flex items-stretch gap-2">
-              <select
-                value={countryCode}
-                onChange={e => setCountryCode(e.target.value)}
-                className="w-24 px-3 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-800 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
-              >
-                {COUNTRY_CODES.map(c => (
-                  <option key={c.code} value={c.code}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+              {/* 3. Patient phone */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[13px] font-semibold text-slate-800">
+                    Patient phone <span className="text-rose-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSwitchRegisterTab('mobile');
+                      handleOpenSendLinkPanel();
+                    }}
+                    className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#3f6f66] hover:text-[#2f564f] underline underline-offset-2"
+                  >
+                    <Send className="w-3 h-3" />
+                    Send walk-in link to patient&apos;s mobile
+                  </button>
+                </div>
+                <div className="flex items-stretch gap-2">
+                  <select
+                    value={countryCode}
+                    onChange={e => setCountryCode(e.target.value)}
+                    className="w-24 px-3 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-800 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
+                  >
+                    {COUNTRY_CODES.map(c => (
+                      <option key={c.code} value={c.code}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
 
-              <div className="relative flex-1 flex items-center">
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]{10}"
-                  placeholder="9876543210 (10 digits)"
-                  value={mobile}
-                  onChange={e => handleMobileChange(e.target.value)}
-                  maxLength={10}
-                  className="w-full pl-3.5 pr-12 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
-                />
-                {mobile.length > 0 && (
-                  <span className="absolute right-3 text-[11px] font-mono text-slate-400 pointer-events-none">
-                    {mobile.length}/10
-                  </span>
+                  <div className="relative flex-1 flex items-center">
+                    <input
+                      ref={mobileInputRef}
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]{10}"
+                      placeholder="9876543210 (10 digits — Enter advances tab)"
+                      value={mobile}
+                      onChange={e => handleMobileChange(e.target.value)}
+                      onKeyDown={handleDetailsEnterKey}
+                      maxLength={10}
+                      className="w-full pl-3.5 pr-12 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
+                    />
+                    {mobile.length > 0 && (
+                      <span className="absolute right-3 text-[11px] font-mono text-slate-400 pointer-events-none">
+                        {mobile.length}/10
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11.5px] text-slate-500 mt-1.5 leading-snug">
+                  Defaults to India (+91) — once all 4 fields above are filled, press <strong className="text-slate-700">Enter ↵</strong> to jump to Symptoms &amp; Notes.
+                </p>
+
+                {existingDuplicatePatient && (
+                  <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2 text-xs">
+                    <div className="text-amber-900">
+                      Phone matches <span className="font-bold">{existingDuplicatePatient.fullName}</span> ({existingDuplicatePatient.patientCode})
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectExistingPatient(existingDuplicatePatient)}
+                      className="px-2.5 py-1 bg-[#3f6f66] text-white rounded-lg font-semibold hover:bg-[#335c54] shrink-0"
+                    >
+                      Use Existing
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
-            <p className="text-[11.5px] text-slate-500 mt-1.5 leading-snug">
-              Defaults to India (+91) — pick another country code for NRI/international patients.
-            </p>
+          )}
 
-            {/* Mobile Link Share Panel (Opens Walk-In Screen on Patient's Mobile via WhatsApp / SMS / QR) */}
-            {(showMobileLinkPanel || mobile.length === 10) && (
-              <div className="mt-2.5 p-3.5 bg-teal-50/70 border border-teal-200/90 rounded-xl space-y-2.5">
+          {/* ================================================================= */}
+          {/* TAB 2: SYMPTOMS, CLINICAL NOTES & DISCOUNT/WEIGHT                 */}
+          {/* ================================================================= */}
+          {registerTab === 'clinical' && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              {/* Symptoms / Reason */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11.5px] font-bold uppercase tracking-wider text-slate-500">
+                    SYMPTOMS / REASON FOR VISIT
+                  </label>
+                  {selectedSymptoms.length > 0 && (
+                    <span className="text-[11px] font-semibold text-[#3f6f66] bg-teal-50 px-2 py-0.5 rounded-full">
+                      {selectedSymptoms.length} selected
+                    </span>
+                  )}
+                </div>
+
+                {selectedSymptoms.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 p-2 bg-teal-50/60 rounded-xl border border-teal-100">
+                    {selectedSymptoms.map(sym => (
+                      <span
+                        key={sym}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#3f6f66] text-white"
+                      >
+                        {sym}
+                        <button
+                          type="button"
+                          onClick={() => toggleSymptom(sym)}
+                          className="hover:text-teal-200"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    ref={symptomSearchInputRef}
+                    type="text"
+                    placeholder={`Search ${PREDEFINED_SYMPTOMS.length} symptoms (Press Enter to select or advance)...`}
+                    value={symptomSearch}
+                    onChange={e => setSymptomSearch(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (symptomSearch.trim() && filteredSymptoms.length > 0) {
+                          const topSym = filteredSymptoms[0];
+                          if (!selectedSymptoms.includes(topSym)) {
+                            setSelectedSymptoms(prev => [...prev, topSym]);
+                          }
+                          setSymptomSearch('');
+                        } else if (isClinicalTabComplete) {
+                          handleSwitchRegisterTab('mobile', true);
+                        } else if (selectedSymptoms.length > 0 && !notes.trim()) {
+                          notesInputRef.current?.focus();
+                        }
+                      }
+                    }}
+                    className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300/90 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
+                  />
+                  {symptomSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setSymptomSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto py-0.5">
+                  {(symptomSearch.trim() ? filteredSymptoms : filteredSymptoms.slice(0, 16)).map(sym => {
+                    const isSelected = selectedSymptoms.includes(sym);
+                    return (
+                      <button
+                        key={sym}
+                        type="button"
+                        onClick={() => toggleSymptom(sym)}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                          isSelected
+                            ? 'bg-[#3f6f66] text-white border-[#3f6f66] font-semibold shadow-2xs'
+                            : 'bg-slate-50/80 text-slate-700 border-slate-200/90 hover:border-slate-300 hover:bg-slate-100/70'
+                        }`}
+                      >
+                        {sym}
+                      </button>
+                    );
+                  })}
+                  {filteredSymptoms.length === 0 && (
+                    <span className="text-xs text-slate-400 py-1">
+                      No matching symptom found. Add it below as a custom symptom.
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={customSymptomInputRef}
+                    type="text"
+                    placeholder="Add a custom symptom (press Enter)"
+                    value={customSymptom}
+                    onChange={e => setCustomSymptom(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (customSymptom.trim()) {
+                          handleAddCustomSymptom();
+                        } else if (isClinicalTabComplete) {
+                          handleSwitchRegisterTab('mobile', true);
+                        } else {
+                          notesInputRef.current?.focus();
+                        }
+                      }
+                    }}
+                    className="flex-1 px-3 py-2 bg-white border border-slate-300/90 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomSymptom}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl inline-flex items-center gap-1 transition-colors shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[13px] font-semibold text-slate-800">
+                    Notes / Allergies
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    Press Enter ↵ to advance to Mobile / Review tab
+                  </span>
+                </div>
+                <textarea
+                  ref={notesInputRef}
+                  rows={2}
+                  placeholder="Anything worth recording — e.g. allergies mentioned, preferred language"
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (isClinicalTabComplete) {
+                        handleSwitchRegisterTab('mobile', true);
+                      } else if (selectedSymptoms.length === 0) {
+                        symptomSearchInputRef.current?.focus();
+                      }
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all resize-none"
+                />
+              </div>
+
+              {/* Collapsible "> Add discount / panel" */}
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowDiscountPanel(prev => !prev)}
+                  className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                >
+                  {showDiscountPanel ? (
+                    <ChevronDown className="w-4 h-4 text-slate-500" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-slate-500" />
+                  )}
+                  Add discount / panel &amp; weight
+                </button>
+
+                {showDiscountPanel && (
+                  <div className="mt-2.5 pl-1 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in duration-150">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Discount / Corporate Panel
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. CGHS, Senior Citizen 10%, Staff"
+                        value={discountPanel}
+                        onChange={e => setDiscountPanel(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Weight (kg) <span className="font-normal text-slate-400">(optional)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="300"
+                        step="0.5"
+                        placeholder="e.g. 65"
+                        value={weight}
+                        onChange={e => setWeight(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66]"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 3: MOBILE SELF CHECK-IN LINK & PATIENT SUMMARY REVIEW         */}
+          {/* ================================================================= */}
+          {registerTab === 'mobile' && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              {/* Summary Card of Entered Details */}
+              <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Patient Registration Summary
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRegisterTab('details')}
+                    className="text-[11px] font-semibold text-[#3f6f66] hover:underline"
+                  >
+                    Edit details
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Full Name</span>
+                    <span className="font-bold text-slate-900">{fullName.trim() || 'Not entered'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Sex &amp; Age</span>
+                    <span className="font-semibold text-slate-800">
+                      {sex} • {age ? `${age} yrs` : 'Age not set'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Mobile</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      {mobile ? `${countryCode} ${mobile}` : 'Not entered'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Symptoms</span>
+                    <span className="font-semibold text-teal-800">
+                      {selectedSymptoms.length > 0 ? selectedSymptoms.join(', ') : 'General Consultation'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile Link Share Panel */}
+              <div className="p-3.5 bg-teal-50/70 border border-teal-200/90 rounded-xl space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Smartphone className="w-4 h-4 text-[#3f6f66]" />
@@ -1270,8 +1776,8 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                   )}
                 </div>
 
-                {/* Optional QR Code & Direct Preview Link when expanded */}
-                {showMobileLinkPanel && mobileWalkInUrl && (
+                {/* Optional QR Code & Direct Preview Link */}
+                {mobileWalkInUrl && (
                   <div
                     className={`pt-2.5 border-t border-teal-200/70 transition-all duration-150 ease-out ${
                       isQrExpanded
@@ -1325,259 +1831,85 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                   </div>
                 )}
               </div>
-            )}
-
-            {existingDuplicatePatient && (
-              <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2 text-xs">
-                <div className="text-amber-900">
-                  Phone matches <span className="font-bold">{existingDuplicatePatient.fullName}</span> ({existingDuplicatePatient.patientCode})
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleSelectExistingPatient(existingDuplicatePatient)}
-                  className="px-2.5 py-1 bg-[#3f6f66] text-white rounded-lg font-semibold hover:bg-[#335c54] shrink-0"
-                >
-                  Use Existing
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* 4. Symptoms / Reason (optional) */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <label className="block text-[11.5px] font-bold uppercase tracking-wider text-slate-500">
-                SYMPTOMS / REASON <span className="font-normal normal-case text-slate-400">(optional)</span>
-              </label>
-              {selectedSymptoms.length > 0 && (
-                <span className="text-[11px] font-semibold text-[#3f6f66] bg-teal-50 px-2 py-0.5 rounded-full">
-                  {selectedSymptoms.length} selected
-                </span>
-              )}
-            </div>
-
-            {selectedSymptoms.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 p-2 bg-teal-50/60 rounded-xl border border-teal-100">
-                {selectedSymptoms.map(sym => (
-                  <span
-                    key={sym}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#3f6f66] text-white"
-                  >
-                    {sym}
-                    <button
-                      type="button"
-                      onClick={() => toggleSymptom(sym)}
-                      className="hover:text-teal-200"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                placeholder={`Search all ${PREDEFINED_SYMPTOMS.length} symptoms...`}
-                value={symptomSearch}
-                onChange={e => setSymptomSearch(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300/90 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
-              />
-              {symptomSearch && (
-                <button
-                  type="button"
-                  onClick={() => setSymptomSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto py-0.5">
-              {(symptomSearch.trim() ? filteredSymptoms : filteredSymptoms.slice(0, 16)).map(sym => {
-                const isSelected = selectedSymptoms.includes(sym);
-                return (
-                  <button
-                    key={sym}
-                    type="button"
-                    onClick={() => toggleSymptom(sym)}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                      isSelected
-                        ? 'bg-[#3f6f66] text-white border-[#3f6f66] font-semibold shadow-2xs'
-                        : 'bg-slate-50/80 text-slate-700 border-slate-200/90 hover:border-slate-300 hover:bg-slate-100/70'
-                    }`}
-                  >
-                    {sym}
-                  </button>
-                );
-              })}
-              {filteredSymptoms.length === 0 && (
-                <span className="text-xs text-slate-400 py-1">
-                  No matching symptom found. Add it below as a custom symptom.
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Add a custom symptom (press Enter)"
-                value={customSymptom}
-                onChange={e => setCustomSymptom(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddCustomSymptom();
-                  }
-                }}
-                className="flex-1 px-3 py-2 bg-white border border-slate-300/90 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all"
-              />
-              <button
-                type="button"
-                onClick={handleAddCustomSymptom}
-                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl inline-flex items-center gap-1 transition-colors shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add
-              </button>
-            </div>
-          </div>
-
-          {/* 5. Notes (optional) */}
-          <div>
-            <label className="block text-[13px] font-semibold text-slate-800 mb-1.5">
-              Notes (optional)
-            </label>
-            <textarea
-              rows={2}
-              placeholder="Anything worth recording — e.g. allergies mentioned, preferred language"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-white border border-slate-300/90 rounded-xl text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66] focus:ring-2 focus:ring-[#3f6f66]/15 transition-all resize-none"
-            />
-            <p className="text-[11.5px] text-slate-500 mt-1.5 leading-snug">
-              Anything worth recording now. The patient confirms allergies on the intake form.
-            </p>
-          </div>
-
-          {/* 5. Collapsible "> Add discount / panel" */}
-          <div className="pt-0.5">
-            <button
-              type="button"
-              onClick={() => setShowDiscountPanel(prev => !prev)}
-              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              {showDiscountPanel ? (
-                <ChevronDown className="w-4 h-4 text-slate-500" />
-              ) : (
-                <ChevronRight className="w-4 h-4 text-slate-500" />
-              )}
-              Add discount / panel
-            </button>
-
-            {showDiscountPanel && (
-              <div className="mt-2.5 pl-1 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in duration-150">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Discount / Corporate Panel
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. CGHS, Senior Citizen 10%, Staff"
-                    value={discountPanel}
-                    onChange={e => setDiscountPanel(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Weight (kg) <span className="font-normal text-slate-400">(optional)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="300"
-                    step="0.5"
-                    placeholder="e.g. 65"
-                    value={weight}
-                    onChange={e => setWeight(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#3f6f66]"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center justify-between">
-              <span className="flex items-center gap-2 font-medium">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                {error}
-              </span>
-              <button type="button" onClick={() => setError(null)}>
-                <X className="w-4 h-4" />
-              </button>
             </div>
           )}
 
-          {/* Footer Action Row: Cancel | Hand to patient | Save / Add patient */}
-          <div className="pt-3 flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-2.5 rounded-xl text-[13px] font-semibold text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
+          {/* Footer Action Row: Cancel | Hand to patient | Next Tab / Save / Add patient */}
+          <div className="pt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/80">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 rounded-xl text-[12.5px] font-semibold text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setError(null);
-                setMode('patient');
-              }}
-              className="px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-[13px] font-semibold shadow-2xs transition-all inline-flex items-center gap-1.5 cursor-pointer"
-            >
-              <Smartphone className="w-4 h-4 text-slate-600" />
-              Hand to patient
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setMode('patient');
+                }}
+                className="px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-[12.5px] font-semibold shadow-2xs transition-all inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-slate-600" />
+                Hand to patient
+              </button>
+            </div>
 
-            {onStartConsultation ? (
-              <>
+            <div className="flex items-center gap-2">
+              {registerTab !== 'mobile' && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSwitchRegisterTab(
+                      registerTab === 'details' ? 'clinical' : 'mobile',
+                      true
+                    )
+                  }
+                  className="px-3.5 py-2 rounded-xl border border-teal-200 bg-teal-50/80 hover:bg-teal-100 text-teal-900 text-[12.5px] font-bold transition-all inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Next Tab</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {onStartConsultation ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => handleSavePatient(false, 'save_only')}
+                    className="px-3.5 py-2 rounded-xl border border-[#3f6f66] bg-white hover:bg-teal-50/70 text-[#3f6f66] text-[12.5px] font-semibold shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmitting ? 'Saving...' : 'Save patient'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => handleSavePatient(false, 'start_consultation')}
+                    className="px-4 py-2 rounded-xl bg-[#3f6f66] hover:bg-[#335c54] text-white text-[12.5px] font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmitting ? 'Saving...' : 'Add & Consult'}
+                  </button>
+                </>
+              ) : (
                 <button
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => handleSavePatient(false, 'save_only')}
-                  className="px-4 py-2.5 rounded-xl border border-[#3f6f66] bg-white hover:bg-teal-50/70 text-[#3f6f66] text-[13px] font-semibold shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-[#3f6f66] hover:bg-[#335c54] text-white text-[13px] font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmitting ? 'Saving...' : 'Save patient'}
+                  {isSubmitting ? 'Saving...' : 'Add patient'}
                 </button>
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => handleSavePatient(false, 'start_consultation')}
-                  className="px-4 py-2.5 rounded-xl bg-[#3f6f66] hover:bg-[#335c54] text-white text-[13px] font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? 'Saving...' : 'Add & Consult'}
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => handleSavePatient(false, 'save_only')}
-                className="px-5 py-2.5 rounded-xl bg-[#3f6f66] hover:bg-[#335c54] text-white text-[13.5px] font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-              >
-                {isSubmitting ? 'Saving...' : 'Add patient'}
-              </button>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Bottom Caption */}
-          <p className="text-center text-[11.5px] text-slate-500 pt-1">
-            New walk-in? Hand the device over or send a mobile link and the patient can fill in their own details.
+          <p className="text-center text-[11px] text-slate-500 pt-0.5">
+            Tip: When all fields in a tab are filled, pressing <strong>Enter ↵</strong> automatically moves to the next tab.
           </p>
         </div>
       </div>

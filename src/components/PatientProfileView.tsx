@@ -72,8 +72,32 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
   const [testReports, setTestReports] = useState<PatientTestReport[]>([]);
 
   const [activeTab, setActiveTab] = useState<TabType>(normalizeTab(initialTab));
+  const [tabAdvanceToast, setTabAdvanceToast] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const PROFILE_TAB_ORDER: TabType[] = [
+    'overview',
+    'images',
+    'vitals',
+    'appointments',
+    'bodymap',
+    'timeline',
+    'reports',
+    'prescriptions'
+  ];
+
+  const PROFILE_TAB_LABELS: Record<TabType, string> = {
+    overview: 'Overview',
+    images: 'Images & Compare',
+    vitals: 'Vitals & Growth',
+    appointments: 'Appointments & Follow-ups',
+    bodymap: 'Body Map',
+    timeline: 'Visits & Timeline',
+    visits: 'Visits & Timeline',
+    reports: 'Report Results',
+    prescriptions: 'Prescriptions'
+  };
 
   useEffect(() => {
     if (initialTab) {
@@ -410,8 +434,40 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
     reader.readAsDataURL(file);
   };
 
+  const currentTabIndex = PROFILE_TAB_ORDER.indexOf(activeTab);
+  const nextProfileTab =
+    currentTabIndex >= 0 && currentTabIndex < PROFILE_TAB_ORDER.length - 1
+      ? PROFILE_TAB_ORDER[currentTabIndex + 1]
+      : PROFILE_TAB_ORDER[0];
+
+  const handleAdvanceProfileTab = () => {
+    setActiveTab(nextProfileTab);
+    setTabAdvanceToast(`Moved to ${PROFILE_TAB_LABELS[nextProfileTab]}`);
+    setTimeout(() => setTabAdvanceToast(null), 2000);
+  };
+
   return (
-    <div className="space-y-6">
+    <div
+      className="space-y-6 outline-hidden"
+      tabIndex={-1}
+      onKeyDown={e => {
+        if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (showEditModal || showScheduleModal || showPrintRx || showProgressionModal || whatsAppData?.isOpen) {
+          return;
+        }
+        const target = e.target as HTMLElement | null;
+        if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.tagName === 'SELECT')) {
+          return;
+        }
+        if (target && target.tagName === 'INPUT') {
+          const inp = target as HTMLInputElement;
+          // If an input has text or is on a tab where fields are complete, pressing Enter advances to the next tab
+          if (!inp.value.trim()) return;
+        }
+        e.preventDefault();
+        handleAdvanceProfileTab();
+      }}
+    >
       {/* Hidden File Inputs for Direct Patient Profile Upload (Past or Current Medical Image) */}
       <input
         ref={quickCompareInputRef}
@@ -611,28 +667,69 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
       </div>
 
       {/* Profile Navigation Tabs */}
-      <div className="border-b border-slate-200 flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-        {(['overview', 'images', 'vitals', 'appointments', 'bodymap', 'timeline', 'reports', 'prescriptions'] as TabType[]).map(tab => (
+      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+        <div className="flex items-center justify-between px-2 pt-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Patient Chart Sections ({currentTabIndex + 1}/{PROFILE_TAB_ORDER.length})
+            </span>
+            {tabAdvanceToast && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-700 text-white text-[10px] font-bold animate-in fade-in duration-150">
+                <CheckCircle2 className="w-3 h-3 text-emerald-300" />
+                {tabAdvanceToast}
+              </span>
+            )}
+          </div>
           <button
-            key={tab}
             type="button"
-            onClick={() => setActiveTab(tab)}
-            className={`py-3 px-4 text-xs font-bold transition-all border-b-2 shrink-0 ${
-              activeTab === tab
-                ? 'border-teal-700 text-teal-800'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
+            onClick={handleAdvanceProfileTab}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-[11px] font-semibold text-teal-900 transition-colors cursor-pointer"
+            title="Press Enter when fields are filled to jump to the next tab"
           >
-            {tab === 'overview' && 'Overview'}
-            {tab === 'images' && `Images & Compare (${images.length})`}
-            {tab === 'vitals' && 'Vitals & Growth'}
-            {tab === 'appointments' && `Appointments & Follow-ups (${appointments.length})`}
-            {tab === 'bodymap' && 'Body map'}
-            {tab === 'timeline' && `Visits & Timeline (${totalUnifiedCount})`}
-            {tab === 'reports' && `Report Results (${testReports.length})`}
-            {tab === 'prescriptions' && `Prescriptions (${prescriptions.length})`}
+            <span>Press</span>
+            <kbd className="px-1.5 py-0.5 bg-white border border-teal-300 rounded text-[10px] font-mono font-bold text-teal-900 shadow-2xs">
+              Enter ↵
+            </kbd>
+            <span>→ {PROFILE_TAB_LABELS[nextProfileTab]}</span>
           </button>
-        ))}
+        </div>
+
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          {PROFILE_TAB_ORDER.map(tab => {
+            const isActive = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`py-2.5 px-3.5 text-xs font-bold rounded-xl transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                  isActive
+                    ? 'bg-teal-700 text-white shadow-xs'
+                    : 'bg-slate-50/70 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                {tab === 'overview' && <User className="w-3.5 h-3.5" />}
+                {tab === 'images' && <ImageIcon className="w-3.5 h-3.5" />}
+                {tab === 'vitals' && <Activity className="w-3.5 h-3.5" />}
+                {tab === 'appointments' && <Calendar className="w-3.5 h-3.5" />}
+                {tab === 'bodymap' && <ScanEye className="w-3.5 h-3.5" />}
+                {tab === 'timeline' && <Clock className="w-3.5 h-3.5" />}
+                {tab === 'reports' && <FileText className="w-3.5 h-3.5" />}
+                {tab === 'prescriptions' && <Pill className="w-3.5 h-3.5" />}
+                <span>
+                  {tab === 'overview' && 'Overview'}
+                  {tab === 'images' && `Images & Compare (${images.length})`}
+                  {tab === 'vitals' && 'Vitals & Growth'}
+                  {tab === 'appointments' && `Appointments (${appointments.length})`}
+                  {tab === 'bodymap' && 'Body Map'}
+                  {tab === 'timeline' && `Visits & Timeline (${totalUnifiedCount})`}
+                  {tab === 'reports' && `Report Results (${testReports.length})`}
+                  {tab === 'prescriptions' && `Prescriptions (${prescriptions.length})`}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* TAB 1: OVERVIEW */}
