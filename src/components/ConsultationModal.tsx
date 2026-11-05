@@ -3776,92 +3776,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </div>
               </div>
 
-              {/* 3. DIAGNOSIS */}
+              {/* 3. CLINICAL NOTES (EXAMINATION & PLAN) */}
               <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
                     3
-                  </span>
-                  <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
-                    DIAGNOSIS
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
-                      PRIMARY DIAGNOSIS
-                    </label>
-                    <div className="relative flex items-center">
-                      <input
-                        type="text"
-                        value={diagnoses[0] || ''}
-                        onChange={e => {
-                          markDoctorEdited('summary.primaryDiagnosis');
-                          const val = e.target.value;
-                          if (!val.trim() && diagnoses.length <= 1) {
-                            setDiagnoses([]);
-                          } else {
-                            setDiagnoses([val, ...diagnoses.slice(1)]);
-                          }
-                        }}
-                        placeholder="Select in Diagnosis tab or type here..."
-                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
-                      />
-                      <div className="absolute right-1.5">
-                        <VoiceDictationButton
-                          value={diagnoses[0] || ''}
-                          onChange={val => {
-                            markDoctorEdited('summary.primaryDiagnosis');
-                            if (!val.trim() && diagnoses.length <= 1) {
-                              setDiagnoses([]);
-                            } else {
-                              setDiagnoses([val, ...diagnoses.slice(1)]);
-                            }
-                          }}
-                          variant="badge"
-                          className="border-0 shadow-none bg-transparent"
-                          title="Dictate primary diagnosis"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
-                      DIFFERENTIAL / SECONDARY
-                    </label>
-                    <div className="relative flex items-center">
-                      <input
-                        type="text"
-                        value={secondaryDiagnosis}
-                        onChange={e => {
-                          markDoctorEdited('summary.secondaryDiagnosis');
-                          setSecondaryDiagnosis(e.target.value);
-                        }}
-                        placeholder="Optional secondary / rule-out diagnosis"
-                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
-                      />
-                      <div className="absolute right-1.5">
-                        <VoiceDictationButton
-                          value={secondaryDiagnosis}
-                          onChange={val => {
-                            markDoctorEdited('summary.secondaryDiagnosis');
-                            setSecondaryDiagnosis(val);
-                          }}
-                          variant="badge"
-                          className="border-0 shadow-none bg-transparent"
-                          title="Dictate differential / secondary diagnosis"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 4. CLINICAL NOTES (EXAMINATION & PLAN) */}
-              <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
-                    4
                   </span>
                   <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
                     CLINICAL NOTES (EXAMINATION & PLAN)
@@ -3923,11 +3842,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </div>
               </div>
 
-              {/* 5. INVESTIGATIONS & PROCEDURES */}
+              {/* 4. INVESTIGATIONS & PROCEDURES */}
               <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
-                    5
+                    4
                   </span>
                   <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
                     INVESTIGATIONS & PROCEDURES
@@ -4009,12 +3928,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </div>
               </div>
 
-              {/* 6. DERMATOLOGY IMAGE SUMMARY */}
+              {/* 5. DERMATOLOGY IMAGE SUMMARY */}
               <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs space-y-3.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
-                      6
+                      5
                     </span>
                     <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
                       DERMATOLOGY IMAGE SUMMARY
@@ -4654,12 +4573,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </div>
               </div>
 
-              {/* 7. FOLLOW-UP & PRESCRIPTION (RX) */}
+              {/* 6. FOLLOW-UP & PRESCRIPTION (RX) */}
               <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
-                      7
+                      6
                     </span>
                     <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
                       FOLLOW-UP & PRESCRIPTION (RX)
