@@ -1744,24 +1744,24 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       onKeyDown={handleModalKeyDown}
       className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
     >
-      <div className="bg-[#fafcfb] rounded-3xl w-full max-w-[920px] shadow-2xl flex flex-col max-h-[95vh] border border-[#d6e2df] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-[#fafcfb] rounded-3xl w-full max-w-[1060px] shadow-2xl flex flex-col max-h-[95vh] border border-[#d6e2df] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Deep Forest Teal Modal Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-[#0e423d] via-[#13534c] to-[#17645c] flex items-center justify-between shrink-0 text-white">
-          <div>
+        <div className="px-6 py-4 bg-gradient-to-r from-[#0e423d] via-[#13534c] to-[#17645c] flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0 text-white">
+          <div className="min-w-0">
             <div className="flex items-center gap-2.5 flex-wrap">
               <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">Consultation</h2>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/15 border border-white/20 text-[10.5px] font-bold text-teal-100">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/15 border border-white/20 text-[10.5px] font-bold text-teal-100 whitespace-nowrap">
                 Step {currentTabIndex + 1} of {TAB_ORDER.length}
               </span>
               {tabAdvanceNotice && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-400/25 border border-emerald-300/40 text-[11px] font-bold text-emerald-100 animate-in fade-in duration-150">
-                  <Check className="w-3 h-3 text-emerald-200" />
-                  <span>{tabAdvanceNotice}</span>
+                  <Check className="w-3 h-3 text-emerald-200 shrink-0" />
+                  <span className="truncate max-w-[260px]">{tabAdvanceNotice}</span>
                 </span>
               )}
             </div>
             <div className="flex items-center gap-2 mt-1 text-[13px] text-[#b8dad5] font-medium flex-wrap">
-              <span className="text-white/95 font-medium">{patient.fullName}</span>
+              <span className="text-white/95 font-semibold">{patient.fullName}</span>
               <span>·</span>
               <span>{patient.age}y</span>
               <span>·</span>
@@ -1778,12 +1778,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             <button
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => handleTabChange('aisummary')}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border shadow-2xs shrink-0 cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border shadow-2xs shrink-0 cursor-pointer whitespace-nowrap ${
                 activeTab === 'aisummary'
                   ? 'bg-white text-[#0f2926] border-white ring-2 ring-teal-300/60'
                   : 'bg-white/15 hover:bg-white/25 text-white border-white/25'
@@ -1794,8 +1794,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <span>View Summary</span>
             </button>
 
-            <div className="flex items-center gap-2.5 bg-white/12 border border-white/20 px-3.5 py-1.5 rounded-xl">
-              <span className="text-xs font-medium text-[#d4ece8]">Consultation fee</span>
+            <div className="flex items-center gap-2 bg-white/12 border border-white/20 px-3 py-1.5 rounded-xl shrink-0">
+              <span className="text-xs font-medium text-[#d4ece8] whitespace-nowrap">Consultation fee</span>
               <span className="text-xs font-semibold text-white/80">₹</span>
               <input
                 type="number"
@@ -1811,7 +1811,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-white/12 hover:bg-white/20 border border-white/15 flex items-center justify-center text-white/90 hover:text-white transition-colors cursor-pointer"
+              className="w-8 h-8 rounded-lg bg-white/12 hover:bg-white/20 border border-white/15 flex items-center justify-center text-white/90 hover:text-white transition-colors cursor-pointer shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1819,19 +1819,19 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         </div>
 
         {/* Navigation Tabs Bar with Completion Indicators & Enter Hint */}
-        <div className="flex items-center justify-between gap-2 px-6 border-b border-[#e2ebe8] bg-white overflow-x-auto shrink-0 scrollbar-none">
-          <div className="flex items-center gap-1">
+        <div className="flex items-center justify-between gap-3 px-6 border-b border-[#e2ebe8] bg-white overflow-x-auto shrink-0 scrollbar-none">
+          <div className="flex items-center gap-1 min-w-max">
             <button
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => handleTabChange('diagnosis')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                 activeTab === 'diagnosis'
                   ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
                   : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
               }`}
             >
-              <Stethoscope className="w-3.5 h-3.5" />
+              <Stethoscope className="w-3.5 h-3.5 shrink-0" />
               <span>Diagnosis</span>
               {diagnoses.length > 0 ? (
                 <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
@@ -1844,13 +1844,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => handleTabChange('tests')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                 activeTab === 'tests'
                   ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
                   : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
               }`}
             >
-              <FlaskConical className="w-3.5 h-3.5" />
+              <FlaskConical className="w-3.5 h-3.5 shrink-0" />
               <span>Tests</span>
               {tests.length > 0 ? (
                 <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
@@ -1863,13 +1863,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => handleTabChange('procedure')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                 activeTab === 'procedure'
                   ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
                   : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
               }`}
             >
-              <Scissors className="w-3.5 h-3.5" />
+              <Scissors className="w-3.5 h-3.5 shrink-0" />
               <span>Procedure</span>
               {procedures.length > 0 ? (
                 <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
@@ -1882,13 +1882,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => handleTabChange('notes')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                 activeTab === 'notes'
                   ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
                   : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
               }`}
             >
-              <FileText className="w-3.5 h-3.5" />
+              <FileText className="w-3.5 h-3.5 shrink-0" />
               <span>Clinical notes</span>
               {isTabComplete('notes') && (
                 <span className="w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center font-bold">
@@ -1901,13 +1901,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => handleTabChange('images')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                 activeTab === 'images'
                   ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
                   : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
               }`}
             >
-              <ImageIcon className="w-3.5 h-3.5" />
+              <ImageIcon className="w-3.5 h-3.5 shrink-0" />
               <span>Clinical images</span>
               {images.length > 0 ? (
                 <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
@@ -1920,14 +1920,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => handleTabChange('followup')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 cursor-pointer ${
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                 activeTab === 'followup'
                   ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
                   : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Follow up & Rx</span>
+              <Calendar className="w-3.5 h-3.5 shrink-0" />
+              <span>Follow up &amp; Rx</span>
               {prescriptions.length > 0 ? (
                 <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
                   {prescriptions.length}
@@ -1942,7 +1942,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => advanceToNextTab(true)}
-              className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer border ${
+              className={`hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 whitespace-nowrap cursor-pointer border ${
                 isTabComplete(activeTab)
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 shadow-2xs'
                   : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
@@ -1956,7 +1956,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               {isTabComplete(activeTab) ? (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Ready · Press</span>
+                  <span>Ready ·</span>
                   <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-white text-emerald-900 border border-emerald-300 rounded shadow-2xs">
                     Enter ↵
                   </kbd>
@@ -3058,12 +3058,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </div>
                     )}
 
-                    {/* Row 1: DRUG NAME | DOSE / STRENGTH | ROUTE | FREQUENCY | DURATION | QTY */}
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                    {/* Row 1: DRUG NAME (col-span-5) | DOSE / STRENGTH (col-span-2) | ROUTE (col-span-2) | FREQUENCY (col-span-3) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 items-end">
                       {/* DRUG NAME */}
-                      <div ref={medDropdownContainerRef} className="sm:col-span-4 relative">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                      <div ref={medDropdownContainerRef} className="sm:col-span-2 lg:col-span-5 relative">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 truncate">
                             DRUG NAME <span className="font-normal lowercase text-teal-700">(auto-lookup)</span>
                           </label>
                           {medName.trim() && (
@@ -3071,11 +3071,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                               type="button"
                               onMouseDown={e => e.preventDefault()}
                               onClick={() => handleSaveCurrentMedToLibrary()}
-                              className="text-[10px] font-bold text-teal-700 hover:text-teal-900 flex items-center gap-0.5 cursor-pointer"
+                              className="text-[10px] font-bold text-teal-700 hover:text-teal-900 flex items-center gap-0.5 shrink-0 cursor-pointer"
                               title="Save or update this drug and dosage in your personal library"
                             >
                               <Plus className="w-2.5 h-2.5" />
-                              <span>Save to My Library</span>
+                              <span>Save to Library</span>
                             </button>
                           )}
                         </div>
@@ -3084,7 +3084,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           <input
                             ref={medNameInputRef}
                             type="text"
-                            placeholder="Type to auto-lookup or add new..."
+                            placeholder="Type drug name to auto-lookup..."
                             value={medName}
                             onChange={e => {
                               const val = e.target.value;
@@ -3131,9 +3131,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                 setIsMedDropdownOpen(false);
                               }
                             }}
-                            className="w-full text-xs pl-2 pr-8 py-2 bg-transparent border-0 text-slate-800 placeholder:text-slate-400 focus:outline-hidden"
+                            className="flex-1 min-w-0 text-xs pl-2 pr-2 py-2 bg-transparent border-0 text-slate-800 placeholder:text-slate-400 focus:outline-hidden"
                           />
-                          <div className="flex items-center pr-1">
+                          <div className="flex items-center pr-1.5 shrink-0">
                             <VoiceDictationButton
                               value=""
                               onTranscript={spoken => {
@@ -3166,7 +3166,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-64 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
                             <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between sticky top-0 z-10 border-b border-slate-100">
                               <span>
-                                {doctor?.name || 'Doctor'}'s Library (
+                                {doctor?.name || 'Doctor'}&apos;s Library (
                                 {
                                   allDoctorMedications.filter(m => {
                                     const q = medName.toLowerCase().trim();
@@ -3190,11 +3190,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                               </button>
                             </div>
 
-                            {/* Instant "+ Save to My Personal Library" action when typing a custom or uncatalogued drug */}
                             {medName.trim().length >= 2 && (
                               <div className="p-2 bg-teal-50/70 border-b border-teal-100 flex items-center justify-between gap-2">
                                 <div className="text-[11px] text-teal-900 truncate">
-                                  <span className="font-bold">"{medName.trim()}"</span> · {medDosage} · {medFrequency}
+                                  <span className="font-bold">&ldquo;{medName.trim()}&rdquo;</span> · {medDosage} · {medFrequency}
                                 </div>
                                 <button
                                   type="button"
@@ -3291,8 +3290,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </div>
 
                       {/* DOSE / STRENGTH */}
-                      <div className="sm:col-span-2">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                      <div className="lg:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 truncate">
                           DOSE / STRENGTH
                         </label>
                         <input
@@ -3312,8 +3311,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </div>
 
                       {/* ROUTE */}
-                      <div className="sm:col-span-2">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                      <div className="lg:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 truncate">
                           ROUTE
                         </label>
                         <select
@@ -3336,15 +3335,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </div>
 
                       {/* FREQUENCY */}
-                      <div className="sm:col-span-2">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                          FREQUENCY <span className="font-normal lowercase text-slate-400">type 101</span>
-                        </label>
+                      <div className="lg:col-span-3">
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 truncate">
+                            FREQUENCY
+                          </label>
+                          <span className="text-[10px] text-slate-400 shrink-0">e.g. 1-0-1 or 101</span>
+                        </div>
                         <div className="relative flex items-center">
                           <input
                             type="text"
                             list="rx-frequency-options"
-                            placeholder="1-0-1 or type 101"
+                            placeholder="1-0-1"
                             value={medFrequency}
                             onFocus={() => setIsMedDropdownOpen(false)}
                             onChange={e => {
@@ -3357,7 +3359,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                 handleAddPrescription(true);
                               }
                             }}
-                            className="w-full text-xs px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                            className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                           />
                           <datalist id="rx-frequency-options">
                             <option value="1-0-0" />
@@ -3370,12 +3372,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           </datalist>
                         </div>
                       </div>
+                    </div>
 
+                    {/* Row 2: DURATION (col-span-3) | QTY (col-span-2) | INSTRUCTIONS (col-span-5) | ADD BUTTON (col-span-2) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 items-end">
                       {/* DURATION */}
-                      <div className="sm:col-span-1">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 whitespace-nowrap">
-                          DURATION <span className="font-normal lowercase text-slate-400">5d·2w·1m</span>
-                        </label>
+                      <div className="lg:col-span-3">
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 truncate">
+                            DURATION
+                          </label>
+                          <span className="text-[10px] text-slate-400 shrink-0">5d · 2w · 1m</span>
+                        </div>
                         <input
                           type="text"
                           placeholder="5 days"
@@ -3391,15 +3399,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                               handleAddPrescription(true);
                             }
                           }}
-                          className="w-full text-xs px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                          className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                         />
                       </div>
 
                       {/* QTY */}
-                      <div className="sm:col-span-1">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 whitespace-nowrap">
-                          QTY <span className="font-normal lowercase text-slate-400">auto</span>
-                        </label>
+                      <div className="lg:col-span-2">
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 truncate">
+                            QTY
+                          </label>
+                          <span className="text-[10px] text-slate-400 shrink-0">auto</span>
+                        </div>
                         <input
                           type="text"
                           value={medQty}
@@ -3414,16 +3425,64 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                               handleAddPrescription(true);
                             }
                           }}
-                          className="w-full text-xs px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 text-center font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                          className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 text-center font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                         />
+                      </div>
+
+                      {/* INSTRUCTIONS */}
+                      <div className="sm:col-span-2 lg:col-span-5">
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 truncate">
+                            INSTRUCTIONS
+                          </label>
+                          <span className="text-[10px] text-slate-400 shrink-0">Enter ↵ adds medicine</span>
+                        </div>
+                        <div className="flex items-center bg-white border border-slate-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-600">
+                          <input
+                            type="text"
+                            placeholder="After meals"
+                            value={medInstructions}
+                            onFocus={() => setIsMedDropdownOpen(false)}
+                            onChange={e => setMedInstructions(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddPrescription(true);
+                              }
+                            }}
+                            className="flex-1 min-w-0 text-xs px-3 py-2 bg-transparent border-0 text-slate-800 placeholder:text-slate-400 focus:outline-hidden"
+                          />
+                          <div className="pr-1.5 shrink-0">
+                            <VoiceDictationButton
+                              value={medInstructions}
+                              onChange={setMedInstructions}
+                              variant="badge"
+                              className="border-0 shadow-none bg-transparent"
+                              title="Dictate instructions"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ADD MEDICINE BUTTON */}
+                      <div className="sm:col-span-2 lg:col-span-2">
+                        <button
+                          type="button"
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => handleAddPrescription(false)}
+                          className="w-full px-4 py-2 bg-[#157a6e] hover:bg-[#115e56] text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 h-[36px] cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5 shrink-0" />
+                          <span>Add Rx</span>
+                        </button>
                       </div>
                     </div>
 
-                    {/* Row 2: Quick Frequency & Duration Preset Chips */}
-                    <div className="flex flex-wrap items-center gap-y-2 gap-x-4 pt-0.5">
+                    {/* Row 3: Quick Frequency & Duration Preset Chips */}
+                    <div className="flex flex-wrap items-center gap-y-2 gap-x-5 pt-1 border-t border-slate-200/70">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">
-                          FREQUENCY
+                          TIMING
                         </span>
                         {['1-0-0', '0-1-0', '0-0-1', '1-0-1', '1-1-1', '1-1-1-1', 'SOS'].map(freq => (
                           <button
@@ -3437,7 +3496,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             }}
                             className={`px-2 py-1 text-[11px] font-medium rounded-md border transition-colors cursor-pointer ${
                               medFrequency === freq
-                                ? 'bg-blue-50 border-blue-400 text-blue-700 font-semibold'
+                                ? 'bg-teal-50 border-teal-500 text-teal-800 font-semibold'
                                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
                             }`}
                           >
@@ -3470,7 +3529,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             className={`px-2 py-1 text-[11px] font-medium rounded-md border transition-colors cursor-pointer ${
                               medDuration.toLowerCase() === dur.value.toLowerCase() ||
                               medDuration.toLowerCase() === dur.label
-                                ? 'bg-blue-50 border-blue-400 text-blue-700 font-semibold'
+                                ? 'bg-teal-50 border-teal-500 text-teal-800 font-semibold'
                                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
                             }`}
                           >
@@ -3478,48 +3537,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           </button>
                         ))}
                       </div>
-                    </div>
-
-                    {/* Row 3: INSTRUCTIONS + Add Button */}
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 pt-1">
-                      <div className="flex-1">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                          INSTRUCTIONS <span className="font-normal lowercase text-slate-400">Enter adds the row</span>
-                        </label>
-                        <div className="flex items-center bg-white border border-slate-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-600">
-                          <input
-                            type="text"
-                            placeholder="After meals"
-                            value={medInstructions}
-                            onFocus={() => setIsMedDropdownOpen(false)}
-                            onChange={e => setMedInstructions(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleAddPrescription(true);
-                              }
-                            }}
-                            className="w-full text-xs px-3 py-2 bg-transparent border-0 text-slate-800 placeholder:text-slate-400 focus:outline-hidden"
-                          />
-                          <VoiceDictationButton
-                            value={medInstructions}
-                            onChange={setMedInstructions}
-                            variant="badge"
-                            className="border-0 shadow-none bg-transparent mr-1"
-                            title="Dictate instructions"
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onMouseDown={e => e.preventDefault()}
-                        onClick={() => handleAddPrescription(false)}
-                        className="px-5 py-2 bg-[#5b87eb] hover:bg-[#4672dc] text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 h-[36px] cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Add</span>
-                      </button>
                     </div>
 
                     {/* Row 4: Quick Instruction Chips */}
@@ -3560,7 +3577,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                             }}
                             className={`px-2.5 py-1 text-[11px] rounded-md border transition-colors cursor-pointer ${
                               isSelected
-                                ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
+                                ? 'bg-teal-50 border-teal-400 text-teal-800 font-medium'
                                 : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                             }`}
                           >
@@ -3573,28 +3590,45 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                   {/* Prescribed Items List or Empty State */}
                   {prescriptions.length === 0 ? (
-                    <div className="py-5 text-center text-xs text-slate-400 font-medium">
-                      No prescriptions added yet
+                    <div className="py-5 text-center text-xs text-slate-400 font-medium border border-dashed border-slate-200 rounded-xl bg-slate-50/40">
+                      No prescriptions added yet — select or type a medicine above and click Add Rx
                     </div>
                   ) : (
-                    <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
-                      {prescriptions.map(p => (
-                        <div key={p.id} className="p-3 flex items-center justify-between text-xs gap-3 bg-white hover:bg-slate-50/60 transition-colors">
-                          <div className="flex-1">
-                            <p className="font-bold text-slate-800">{p.medicineName}</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              {p.dosage} · <span className="font-semibold text-slate-700">{p.frequency}</span> · {p.duration}
-                              {p.instructions && ` (${p.instructions})`}
-                            </p>
+                    <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-white">
+                      {prescriptions.map((p, idx) => (
+                        <div key={p.id} className="p-3.5 flex items-center justify-between text-xs gap-3 hover:bg-slate-50/70 transition-colors">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            <span className="w-6 h-6 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-slate-900">{p.medicineName}</span>
+                                <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200/70 text-[10.5px] font-semibold">
+                                  {p.dosage}
+                                </span>
+                                <span className="px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200/70 font-mono text-[10.5px] font-bold">
+                                  {p.frequency}
+                                </span>
+                                <span className="text-[11px] font-medium text-slate-600">
+                                  for {p.duration}
+                                </span>
+                              </div>
+                              {p.instructions && (
+                                <p className="text-[11px] text-slate-500 mt-1">
+                                  Instructions: <span className="text-slate-700 font-medium">{p.instructions}</span>
+                                </p>
+                              )}
+                            </div>
                           </div>
                           <button
                             type="button"
                             onMouseDown={e => e.preventDefault()}
                             onClick={() => handleRemovePrescription(p.id)}
-                            className="text-slate-400 hover:text-red-600 p-1 cursor-pointer"
+                            className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0 cursor-pointer"
                             title="Remove prescription"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       ))}
@@ -3659,7 +3693,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5">
+                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5 min-w-0">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] block">
                       PATIENT
                     </span>
@@ -3667,28 +3701,28 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       {patient.fullName} · {patient.age}y · {patient.gender}
                     </span>
                   </div>
-                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5">
+                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5 min-w-0">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] block">
                       PATIENT ID
                     </span>
-                    <span className="text-[12.5px] font-bold text-[#0f2926] font-mono mt-0.5 block">
+                    <span className="text-[12.5px] font-bold text-[#0f2926] font-mono mt-0.5 block truncate">
                       {patient.patientCode}
                     </span>
                   </div>
-                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5">
+                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5 min-w-0">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] block">
                       VISIT DATE
                     </span>
-                    <span className="text-[12.5px] font-bold text-[#0f2926] font-mono mt-0.5 block">
+                    <span className="text-[12.5px] font-bold text-[#0f2926] font-mono mt-0.5 block truncate">
                       {consultation.consultationDate.split('T')[0]}
                     </span>
                   </div>
-                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5">
+                  <div className="bg-[#f6f9f8] border border-[#e5eeeb] rounded-xl px-3.5 py-2.5 min-w-0">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] block">
                       CONSULTING DOCTOR
                     </span>
                     <span className="text-[12.5px] font-bold text-[#0f2926] mt-0.5 block truncate">
-                      {doctor?.fullName || 'Dr. Sarah Chen'}
+                      {doctor?.name || 'Dr. Sarah Chen'}
                     </span>
                   </div>
                 </div>
@@ -3698,7 +3732,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                    <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center shrink-0">
                       2
                     </span>
                     <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
@@ -3779,16 +3813,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               {/* 3. CLINICAL NOTES (EXAMINATION & PLAN) */}
               <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                  <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center shrink-0">
                     3
                   </span>
                   <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
-                    CLINICAL NOTES (EXAMINATION & PLAN)
+                    CLINICAL NOTES (EXAMINATION &amp; PLAN)
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f]">
                         EXAMINATION FINDINGS
                       </label>
@@ -3814,7 +3848,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     />
                   </div>
                   <div>
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f]">
                         TREATMENT PLAN
                       </label>
@@ -3845,19 +3879,19 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               {/* 4. INVESTIGATIONS & PROCEDURES */}
               <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                  <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center shrink-0">
                     4
                   </span>
                   <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
-                    INVESTIGATIONS & PROCEDURES
+                    INVESTIGATIONS &amp; PROCEDURES
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1.5 block">
                       TESTS ORDERED
                     </label>
-                    <div className="relative flex items-center">
+                    <div className="flex items-center bg-white border border-[#dce6e3] rounded-lg focus-within:border-[#157a6e] focus-within:ring-2 focus-within:ring-[#157a6e]/15">
                       <input
                         type="text"
                         value={tests.join(', ')}
@@ -3867,9 +3901,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           setTests(val ? val.split(',').map(s => s.trim()).filter(Boolean) : []);
                         }}
                         placeholder="None ordered — add via Tests tab or type here"
-                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                        className="flex-1 min-w-0 px-3 py-2 text-xs bg-transparent border-0 text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                       />
-                      <div className="absolute right-1.5">
+                      <div className="pr-1.5 shrink-0">
                         <VoiceDictationButton
                           value={tests.join(', ')}
                           onChange={val => {
@@ -3884,10 +3918,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1.5 block">
                       PROCEDURES PERFORMED
                     </label>
-                    <div className="relative flex items-center">
+                    <div className="flex items-center bg-white border border-[#dce6e3] rounded-lg focus-within:border-[#157a6e] focus-within:ring-2 focus-within:ring-[#157a6e]/15">
                       <input
                         type="text"
                         value={
@@ -3905,9 +3939,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           }
                         }}
                         placeholder={`None — add via Procedure tab (₹${Number(proceduresTotal).toLocaleString('en-IN')})`}
-                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                        className="flex-1 min-w-0 px-3 py-2 text-xs bg-transparent border-0 text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                       />
-                      <div className="absolute right-1.5">
+                      <div className="pr-1.5 shrink-0">
                         <VoiceDictationButton
                           value={procedures.map(p => p.name).join(', ')}
                           onChange={val => {
@@ -3932,7 +3966,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs space-y-3.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                    <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center shrink-0">
                       5
                     </span>
                     <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
@@ -3948,9 +3982,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-[11px]">
+                  <div className="flex items-center gap-2.5 text-[11px] flex-wrap">
                     <span className="text-[#6c857f] font-medium">
-                      {images.length > 0 ? `${images.length} images attached` : '2 images attached'}
+                      {images.length > 0 ? `${images.length} images attached` : '2 specimens ready'}
                     </span>
                     <button
                       type="button"
@@ -3973,7 +4007,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   </div>
                 </div>
 
-                {/* Live Specimen & Lighting Gatekeeper Status Bar inside Section 6 */}
+                {/* Live Specimen & Lighting Gatekeeper Status Bar inside Section 5 */}
                 {summarySpecimenGatekeeper && (
                   <div
                     className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
@@ -4025,8 +4059,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 {/* Top Side-by-Side Layout: Attached Dermatology Images (Left) + AI Image Summary Result (Right) */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-stretch">
                   {/* LEFT COLUMN: Dermatology Image Specimens & Upload */}
-                  <div className="lg:col-span-5 bg-[#f8fbfa] border border-[#dce6e3] rounded-xl p-3 flex flex-col justify-between gap-2.5">
-                    <div className="flex items-center justify-between">
+                  <div className="lg:col-span-5 bg-[#f8fbfa] border border-[#dce6e3] rounded-xl p-3.5 flex flex-col justify-between gap-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#4a635e]">
                         CLINICAL / DERMOSCOPIC SPECIMENS
                       </span>
@@ -4194,8 +4228,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 flex-wrap">
-                      <div>
-                        <div className="flex items-center gap-1.5">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span
                             className={`inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider ${
                               summarySpecimenGatekeeper && !summarySpecimenGatekeeper.isValidSkinSpecimen
@@ -4279,12 +4313,15 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                     {/* Per-Specimen AI Summary Result Card */}
                     <div className="bg-white/95 border border-[#d6e7e3] rounded-lg p-2.5">
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-[#115e56] flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#157a6e]" />
-                          {selectedSummarySpecimen === 'right'
-                            ? aiImageSummaryResult.rightSpecimenTitle
-                            : aiImageSummaryResult.leftSpecimenTitle} — AI Summary
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#157a6e] shrink-0" />
+                          <span>
+                            {selectedSummarySpecimen === 'right'
+                              ? aiImageSummaryResult.rightSpecimenTitle
+                              : aiImageSummaryResult.leftSpecimenTitle}{' '}
+                            — AI Summary
+                          </span>
                         </span>
                         <span className="text-[9.5px] font-semibold text-[#6c857f]">
                           {selectedSummarySpecimen === 'right' ? 'Specimen 2' : 'Specimen 1'}
@@ -4322,11 +4359,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   </div>
                 </div>
 
-                {/* 6-Field Dashed Morphology Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
+                {/* 6-Field Morphology Grid (Clean non-overlapping labels + inputs) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="border border-[#dce6e3] bg-[#fafcfb] rounded-xl p-2.5 flex flex-col justify-between gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-[#4a635e] truncate">
                         LESION TYPE
                       </label>
                       <VoiceDictationButton
@@ -4336,7 +4373,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           setDermMorphology({ ...dermMorphology, lesionType: val });
                         }}
                         variant="badge"
-                        className="p-1 border-0 shadow-none bg-transparent"
+                        className="p-0.5 border-0 shadow-none bg-transparent shrink-0"
                         title="Dictate lesion type"
                       />
                     </div>
@@ -4348,12 +4385,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         setDermMorphology({ ...dermMorphology, lesionType: e.target.value });
                       }}
                       placeholder="e.g. Macule, papule, plaque, patch"
-                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                      className="w-full text-xs px-2.5 py-1.5 bg-white border border-[#e2ebe8] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                     />
                   </div>
-                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
+                  <div className="border border-[#dce6e3] bg-[#fafcfb] rounded-xl p-2.5 flex flex-col justify-between gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-[#4a635e] truncate">
                         COLOUR / PIGMENTATION
                       </label>
                       <VoiceDictationButton
@@ -4363,7 +4400,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           setDermMorphology({ ...dermMorphology, colour: val });
                         }}
                         variant="badge"
-                        className="p-1 border-0 shadow-none bg-transparent"
+                        className="p-0.5 border-0 shadow-none bg-transparent shrink-0"
                         title="Dictate colour / pigmentation"
                       />
                     </div>
@@ -4375,12 +4412,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         setDermMorphology({ ...dermMorphology, colour: e.target.value });
                       }}
                       placeholder="e.g. Hyperpigmented, erythematous"
-                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                      className="w-full text-xs px-2.5 py-1.5 bg-white border border-[#e2ebe8] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                     />
                   </div>
-                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
+                  <div className="border border-[#dce6e3] bg-[#fafcfb] rounded-xl p-2.5 flex flex-col justify-between gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-[#4a635e] truncate">
                         DISTRIBUTION / SITE
                       </label>
                       <VoiceDictationButton
@@ -4390,7 +4427,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           setDermMorphology({ ...dermMorphology, distribution: val });
                         }}
                         variant="badge"
-                        className="p-1 border-0 shadow-none bg-transparent"
+                        className="p-0.5 border-0 shadow-none bg-transparent shrink-0"
                         title="Dictate distribution / site"
                       />
                     </div>
@@ -4402,13 +4439,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         setDermMorphology({ ...dermMorphology, distribution: e.target.value });
                       }}
                       placeholder="e.g. Malar cheeks, bilateral, centrofacial"
-                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                      className="w-full text-xs px-2.5 py-1.5 bg-white border border-[#e2ebe8] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                     />
                   </div>
-                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
-                        SIZE & EXTENT
+                  <div className="border border-[#dce6e3] bg-[#fafcfb] rounded-xl p-2.5 flex flex-col justify-between gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-[#4a635e] truncate">
+                        SIZE &amp; EXTENT
                       </label>
                       <VoiceDictationButton
                         value={dermMorphology.sizeExtent}
@@ -4417,7 +4454,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           setDermMorphology({ ...dermMorphology, sizeExtent: val });
                         }}
                         variant="badge"
-                        className="p-1 border-0 shadow-none bg-transparent"
+                        className="p-0.5 border-0 shadow-none bg-transparent shrink-0"
                         title="Dictate size & extent"
                       />
                     </div>
@@ -4429,13 +4466,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         setDermMorphology({ ...dermMorphology, sizeExtent: e.target.value });
                       }}
                       placeholder="e.g. 2–4 cm confluent patches"
-                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                      className="w-full text-xs px-2.5 py-1.5 bg-white border border-[#e2ebe8] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                     />
                   </div>
-                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
-                        BORDERS & SURFACE
+                  <div className="border border-[#dce6e3] bg-[#fafcfb] rounded-xl p-2.5 flex flex-col justify-between gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-[#4a635e] truncate">
+                        BORDERS &amp; SURFACE
                       </label>
                       <VoiceDictationButton
                         value={dermMorphology.borders}
@@ -4444,7 +4481,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           setDermMorphology({ ...dermMorphology, borders: val });
                         }}
                         variant="badge"
-                        className="p-1 border-0 shadow-none bg-transparent"
+                        className="p-0.5 border-0 shadow-none bg-transparent shrink-0"
                         title="Dictate borders & surface"
                       />
                     </div>
@@ -4456,13 +4493,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         setDermMorphology({ ...dermMorphology, borders: e.target.value });
                       }}
                       placeholder="e.g. Irregular, well-demarcated, non-scaly"
-                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                      className="w-full text-xs px-2.5 py-1.5 bg-white border border-[#e2ebe8] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                     />
                   </div>
-                  <div className="border border-dashed border-[#cfdeda] bg-[#fafcfb] rounded-xl px-3 py-2">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-[9.5px] font-bold uppercase tracking-wider text-[#6c857f]">
-                        SEVERITY / WOOD'S LAMP
+                  <div className="border border-[#dce6e3] bg-[#fafcfb] rounded-xl p-2.5 flex flex-col justify-between gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-[#4a635e] truncate">
+                        SEVERITY / WOOD&apos;S LAMP
                       </label>
                       <VoiceDictationButton
                         value={dermMorphology.severity}
@@ -4471,7 +4508,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           setDermMorphology({ ...dermMorphology, severity: val });
                         }}
                         variant="badge"
-                        className="p-1 border-0 shadow-none bg-transparent"
+                        className="p-0.5 border-0 shadow-none bg-transparent shrink-0"
                         title="Dictate severity / Wood's lamp findings"
                       />
                     </div>
@@ -4483,16 +4520,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         setDermMorphology({ ...dermMorphology, severity: e.target.value });
                       }}
                       placeholder="e.g. Moderate · mixed epidermal-dermal"
-                      className="w-full text-xs bg-transparent text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
+                      className="w-full text-xs px-2.5 py-1.5 bg-white border border-[#e2ebe8] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
                     />
                   </div>
                 </div>
 
                 {/* Bottom Side-by-Side Row: Visual / Dermoscopic Observations (Left) & AI Image Summary Result (Right) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   {/* Left: Visual / Dermoscopic Observations */}
                   <div className="bg-[#fafcfb] border border-[#dce6e3] rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-[#4a635e]">
                         VISUAL / DERMOSCOPIC OBSERVATIONS
                       </label>
@@ -4520,7 +4557,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                   {/* Right (Side-by-Side): AI Image Summary Result */}
                   <div className="bg-[#f2f9f7] border border-[#c6dfd9] rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-1.5 gap-2">
+                    <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-[#0f5950] flex items-center gap-1.5">
                         <Sparkles className="w-3 h-3 text-[#157a6e]" />
                         <span>AI IMAGE SUMMARY RESULT</span>
@@ -4577,11 +4614,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="bg-white border border-[#dce6e3] rounded-2xl p-4 shadow-2xs">
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center">
+                    <span className="w-5 h-5 rounded-full bg-[#e3f2ef] text-[#115e56] text-[11px] font-bold flex items-center justify-center shrink-0">
                       6
                     </span>
                     <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#4a635e]">
-                      FOLLOW-UP & PRESCRIPTION (RX)
+                      FOLLOW-UP &amp; PRESCRIPTION (RX)
                     </span>
                   </div>
                   <span className="text-[11px] text-[#6c857f] font-medium">
@@ -4589,12 +4626,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-3">
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1.5 block">
                       MEDICATIONS (DRUG · DOSE · FREQUENCY · DURATION)
                     </label>
-                    <div className="relative flex items-center">
+                    <div className="flex items-center bg-white border border-[#dce6e3] rounded-lg focus-within:border-[#157a6e] focus-within:ring-2 focus-within:ring-[#157a6e]/15">
                       <input
                         type="text"
                         value={
@@ -4610,9 +4647,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           setInlineMedSummary(e.target.value);
                         }}
                         placeholder="No medicines added — use Follow up & Rx tab or type here"
-                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                        className="flex-1 min-w-0 px-3 py-2 text-xs bg-transparent border-0 text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                       />
-                      <div className="absolute right-1.5">
+                      <div className="pr-1.5 shrink-0">
                         <VoiceDictationButton
                           value={
                             doctorEditedFieldsRef.current.has('summary.medications')
@@ -4634,10 +4671,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
-                      TOPICALS / SKINCARE & INSTRUCTIONS
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1.5 block">
+                      TOPICALS / SKINCARE &amp; INSTRUCTIONS
                     </label>
-                    <div className="relative flex items-center">
+                    <div className="flex items-center bg-white border border-[#dce6e3] rounded-lg focus-within:border-[#157a6e] focus-within:ring-2 focus-within:ring-[#157a6e]/15">
                       <input
                         type="text"
                         value={topicalsAdvice}
@@ -4646,9 +4683,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           setTopicalsAdvice(e.target.value);
                         }}
                         placeholder="Sunscreen SPF 50+, gentle cleanser, application order..."
-                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                        className="flex-1 min-w-0 px-3 py-2 text-xs bg-transparent border-0 text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                       />
-                      <div className="absolute right-1.5">
+                      <div className="pr-1.5 shrink-0">
                         <VoiceDictationButton
                           value={topicalsAdvice}
                           onChange={val => {
@@ -4664,12 +4701,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1.5 block">
                       NEXT FOLLOW-UP
                     </label>
-                    <div className="relative flex items-center">
+                    <div className="flex items-center bg-white border border-[#dce6e3] rounded-lg focus-within:border-[#157a6e] focus-within:ring-2 focus-within:ring-[#157a6e]/15">
                       <input
                         type="text"
                         value={followUp.instructions || ''}
@@ -4678,9 +4715,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           setFollowUp({ ...followUp, instructions: e.target.value });
                         }}
                         placeholder="e.g. Review in 4 weeks with repeat clinical photos"
-                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                        className="flex-1 min-w-0 px-3 py-2 text-xs bg-transparent border-0 text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                       />
-                      <div className="absolute right-1.5">
+                      <div className="pr-1.5 shrink-0">
                         <VoiceDictationButton
                           value={followUp.instructions || ''}
                           onChange={val => {
@@ -4695,10 +4732,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1 block">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1.5 block">
                       RED-FLAG / PATIENT ADVICE
                     </label>
-                    <div className="relative flex items-center">
+                    <div className="flex items-center bg-white border border-[#dce6e3] rounded-lg focus-within:border-[#157a6e] focus-within:ring-2 focus-within:ring-[#157a6e]/15">
                       <input
                         type="text"
                         value={followUp.notes || ''}
@@ -4707,9 +4744,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                           setFollowUp({ ...followUp, notes: e.target.value });
                         }}
                         placeholder="Discontinue if irritation; avoid mid-day sun..."
-                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#dce6e3] rounded-lg text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none focus:border-[#157a6e]"
+                        className="flex-1 min-w-0 px-3 py-2 text-xs bg-transparent border-0 text-[#0f2926] placeholder:text-[#8fa39e] focus:outline-none"
                       />
-                      <div className="absolute right-1.5">
+                      <div className="pr-1.5 shrink-0">
                         <VoiceDictationButton
                           value={followUp.notes || ''}
                           onChange={val => {

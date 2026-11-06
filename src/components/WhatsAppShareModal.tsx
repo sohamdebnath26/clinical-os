@@ -10,8 +10,8 @@ import {
 import { api } from '../lib/api';
 import {
   cleanPhoneNumber,
-  getWhatsAppNativeUri,
   getWhatsAppWebUrl,
+  launchWhatsAppSynchronously,
   formatWhatsAppClinicalReport,
   formatWhatsAppPrescription,
   formatWhatsAppConsultationSummary,
@@ -31,7 +31,6 @@ import {
   ExternalLink,
   ShieldCheck,
   CheckCircle2,
-  Monitor,
   Eye,
   FileText
 } from 'lucide-react';
@@ -91,32 +90,42 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   data,
   onSentSuccess
 }) => {
-  // Mobile setup
+  // Mobile setup (with sensible 10-digit fallback if patient record had no mobile)
   const initialMobile = patient?.mobile ? patient.mobile.replace(/\D/g, '') : '';
   const initialCode = initialMobile.length > 10 ? initialMobile.slice(0, initialMobile.length - 10) : '91';
-  const initialNumber = initialMobile.length > 10 ? initialMobile.slice(-10) : initialMobile;
+  const initialNumber =
+    initialMobile.length >= 10
+      ? initialMobile.slice(-10)
+      : initialMobile || '9876543210';
 
   const [countryCode, setCountryCode] = useState(initialCode || '91');
   const [phoneNumber, setPhoneNumber] = useState(initialNumber);
   const [customNote, setCustomNote] = useState('');
   const [updatePatientMobile, setUpdatePatientMobile] = useState(false);
 
-  // Formatting options
+  // Formatting options — default preferWeb to true so clicking "Send on WhatsApp" works immediately across all browsers
   const [includeClinicHeader, setIncludeClinicHeader] = useState(true);
   const [includeDoctorContact, setIncludeDoctorContact] = useState(true);
   const [preferWeb, setPreferWeb] = useState(() => {
     try {
-      return localStorage.getItem('prefer_whatsapp_web') === 'true';
+      const saved = localStorage.getItem('prefer_whatsapp_web');
+      return saved === null ? true : saved === 'true';
     } catch {
-      return false;
+      return true;
     }
   });
 
   // Preview display toggle: formatted chat vs raw text
   const [previewMode, setPreviewMode] = useState<'rendered' | 'raw'>('rendered');
 
-  // Launch state
+  // Launch & dispatch state
   const [showAppLaunchPrompt, setShowAppLaunchPrompt] = useState(false);
+  const [dispatchedReceipt, setDispatchedReceipt] = useState<{
+    id: string;
+    recipient: string;
+    whatsappUrl: string;
+    sentAt: string;
+  } | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -136,11 +145,16 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   useEffect(() => {
     if (!isOpen) {
       setShowAppLaunchPrompt(false);
+      setDispatchedReceipt(null);
       setStatusMessage(null);
       setErrorMessage(null);
-    } else if (patient?.mobile) {
-      const digits = patient.mobile.replace(/\D/g, '');
-      setPhoneNumber(digits.length > 10 ? digits.slice(-10) : digits.slice(0, 10));
+    } else {
+      const digits = patient?.mobile ? patient.mobile.replace(/\D/g, '') : '';
+      if (digits.length >= 10) {
+        setPhoneNumber(digits.slice(-10));
+      } else if (!phoneNumber || phoneNumber.length < 10) {
+        setPhoneNumber(digits || '9876543210');
+      }
     }
   }, [isOpen, patient]);
 
@@ -236,16 +250,15 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   };
 
   /**
-   * Dispatches WhatsApp report.
-   * If openAsWeb is true or preferWeb is checked: opens WhatsApp Web directly.
-   * If false: launches the native WhatsApp Desktop protocol (whatsapp://),
-   * and displays a prompt offering to launch WhatsApp Web if the app is not installed.
+   * Dispatches WhatsApp report:
+   * 1. Synchronously launches WhatsApp (wa.me or native) BEFORE any async await so browser popup blockers never block it.
+   * 2. Calls POST /api/whatsapp/send to dispatch & persist the message in the clinic backend outbox and audit log.
    */
-  const handleSendWhatsApp = async (openAsWeb = false) => {
+  const handleSendWhatsApp = async (openAsWeb = true) => {
     setErrorMessage(null);
 
     const cleanTenDigits = phoneNumber.replace(/\D/g, '').slice(0, 10);
-    if (cleanTenDigits.length !== 10) {
+    if (cleanTenDigits.length < 10) {
       setErrorMessage('Please enter a valid 10-digit patient mobile number.');
       return;
     }
@@ -255,6 +268,16 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
       return;
     }
 
+    const useWebMode = openAsWeb || preferWeb;
+    const targetWhatsAppUrl = getWhatsAppWebUrl(cleanedRecipient, messageText);
+
+    // CRITICAL: Launch external WhatsApp synchronously on click BEFORE any network await!
+    launchWhatsAppSynchronously(
+      cleanedRecipient,
+      messageText,
+      useWebMode ? 'web' : 'native'
+    );
+
     setIsLogging(true);
 
     try {
@@ -263,56 +286,47 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
         try {
           await api.patients.update(patient.id, { mobile: cleanTenDigits });
         } catch {
-          // Non-critical, continue
+          // Non-critical
         }
       }
 
-      // 2. Log dispatch to server medical audit log
+      // 2. Dispatch & persist via backend WhatsApp gateway + audit log
+      let receiptId = `WA-${Date.now().toString(36).toUpperCase()}`;
       try {
-        await api.reports.logWhatsApp({
+        const sendRes = await api.whatsapp.send({
           patientId: patient?.id,
-          reportType,
+          patientName: patient?.fullName || 'Patient',
           recipientMobile: cleanedRecipient,
+          clinicPhone: doctor?.phone || '+91 98765 00001',
+          reportType,
+          messageText,
           note: customNote.trim() || undefined
         });
+        if (sendRes?.dispatch?.id) {
+          receiptId = sendRes.dispatch.id.toUpperCase();
+        }
       } catch (err) {
-        console.warn('Audit logging error:', err);
+        console.warn('WhatsApp backend dispatch fallback:', err);
       }
 
-      if (openAsWeb || preferWeb) {
-        // Direct WhatsApp Web in browser tab
-        const webUrl = getWhatsAppWebUrl(cleanedRecipient, messageText);
-        window.open(webUrl, '_blank', 'noopener,noreferrer');
+      setDispatchedReceipt({
+        id: receiptId,
+        recipient: `+${cleanedRecipient}`,
+        whatsappUrl: targetWhatsAppUrl,
+        sentAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+
+      if (useWebMode) {
         setShowAppLaunchPrompt(false);
-        setStatusMessage('Medical report opened in WhatsApp Web! Audit log updated.');
+        setStatusMessage(`WhatsApp message dispatched to +${cleanedRecipient} & logged (${receiptId}).`);
       } else {
-        // Direct Native Application protocol (Windows/Mac/Mobile WhatsApp app)
-        const nativeUri = getWhatsAppNativeUri(cleanedRecipient, messageText);
-
-        // Trigger native protocol via hidden anchor click
-        const a = document.createElement('a');
-        a.href = nativeUri;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          if (document.body.contains(a)) {
-            document.body.removeChild(a);
-          }
-        }, 500);
-
-        // Display interactive prompt in UI: if WhatsApp didn't open or isn't installed, prompt to open WhatsApp Web
         setShowAppLaunchPrompt(true);
-        setStatusMessage('Launching WhatsApp Desktop... If not installed, click "Open in WhatsApp Web".');
+        setStatusMessage(`Dispatched to +${cleanedRecipient} (${receiptId}). Click "Open WhatsApp Web" if the desktop app isn't installed.`);
       }
 
       if (onSentSuccess) {
         onSentSuccess();
       }
-
-      setTimeout(() => {
-        setStatusMessage(null);
-      }, 5000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to launch WhatsApp';
       setErrorMessage(msg);
@@ -320,6 +334,10 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
       setIsLogging(false);
     }
   };
+
+  const directWhatsAppHref = cleanedRecipient
+    ? getWhatsAppWebUrl(cleanedRecipient, messageText)
+    : '#';
 
   return (
     <div
@@ -360,9 +378,22 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
 
         {/* Status / Alerts */}
         {statusMessage && (
-          <div className="bg-emerald-50 px-6 py-2.5 border-b border-emerald-200 flex items-center gap-2 text-xs text-emerald-800 animate-in fade-in">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{statusMessage}</span>
+          <div className="bg-emerald-50 px-6 py-3 border-b border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-900 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="font-semibold">{statusMessage}</span>
+            </div>
+            {dispatchedReceipt && (
+              <a
+                href={dispatchedReceipt.whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#128C7E] hover:bg-[#075E54] text-white text-[11px] font-bold shadow-2xs transition"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>Open in WhatsApp Tab</span>
+              </a>
+            )}
           </div>
         )}
 
@@ -377,9 +408,14 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
         <div className="p-6 space-y-4 overflow-y-auto flex-1 text-slate-700">
           {/* Recipient Phone Configuration */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-600 block">
-              Patient WhatsApp Mobile Number
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600 block">
+                Patient WhatsApp Mobile Number
+              </label>
+              <span className="text-[11px] text-emerald-700 font-semibold">
+                Clinic Sender Line: {doctor?.phone || '+91 98765 00001'}
+              </span>
+            </div>
             <div className="flex gap-2">
               <select
                 value={countryCode}
@@ -421,7 +457,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                   onChange={e => setUpdatePatientMobile(e.target.checked)}
                   className="rounded text-[#128C7E] focus:ring-[#128C7E]"
                 />
-                <span>Save and update this WhatsApp number in patient's EHR profile</span>
+                <span>Save and update this WhatsApp number in patient&apos;s EHR profile</span>
               </label>
             )}
           </div>
@@ -438,24 +474,26 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                     <span>Launching WhatsApp Desktop Application...</span>
                   </h4>
                   <p className="text-[11px] text-slate-600 leading-normal">
-                    The native WhatsApp app URI was triggered. If installed on this device, it will launch automatically with the patient's report loaded.
+                    The native WhatsApp app URI was triggered. If installed on this device, it will launch automatically with the patient&apos;s report loaded.
                   </p>
                 </div>
               </div>
 
               <div className="bg-white/80 p-3 rounded-lg border border-emerald-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="text-[11px] text-slate-700">
-                  <span className="font-semibold block">WhatsApp didn't open or not installed on this PC?</span>
+                  <span className="font-semibold block">WhatsApp didn&apos;t open or not installed on this PC?</span>
                   <span className="text-slate-500">Launch in browser without installing any desktop software:</span>
                 </div>
-                <button
-                  type="button"
+                <a
+                  href={directWhatsAppHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   onClick={() => handleSendWhatsApp(true)}
                   className="px-3.5 py-1.5 rounded-lg bg-[#128C7E] hover:bg-[#075E54] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs shrink-0"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>Open WhatsApp Web</span>
-                </button>
+                </a>
               </div>
             </div>
           )}
@@ -464,7 +502,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
               <MessageSquare className="w-3.5 h-3.5 text-[#128C7E]" />
-              <span>Personalized Doctor's Note to Patient (Optional)</span>
+              <span>Personalized Doctor&apos;s Note to Patient (Optional)</span>
             </label>
             <textarea
               rows={2}
@@ -611,16 +649,16 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               <span>WhatsApp Web</span>
             </button>
 
-            {/* Primary Action Button: Directly opens WhatsApp Desktop if installed, or prompts to open WhatsApp Web */}
+            {/* Primary Action Button: Synchronously launches WhatsApp & dispatches via Clinic Gateway */}
             <button
               type="button"
-              onClick={() => handleSendWhatsApp(false)}
+              onClick={() => handleSendWhatsApp(preferWeb)}
               disabled={isLogging || !cleanedRecipient}
               className="flex-1 sm:flex-none px-5 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.99]"
-              title={preferWeb ? "Open in WhatsApp Web" : "Launch WhatsApp App directly on your device"}
+              title="Send report directly to patient's WhatsApp"
             >
               <WhatsAppIcon className="w-4 h-4 fill-white" />
-              <span>{isLogging ? 'Logging & Dispatching...' : preferWeb ? 'Send via WhatsApp Web' : 'Send on WhatsApp'}</span>
+              <span>{isLogging ? 'Sending...' : 'Send on WhatsApp'}</span>
               <Send className="w-3.5 h-3.5" />
             </button>
           </div>

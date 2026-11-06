@@ -998,6 +998,56 @@ export const api = {
       ),
   },
 
+  whatsapp: {
+    send: (data: {
+      patientId?: string;
+      patientName?: string;
+      recipientMobile: string;
+      clinicPhone?: string;
+      reportType?: string;
+      messageText: string;
+      note?: string;
+    }) =>
+      fetchWithAuth<{
+        success: boolean;
+        whatsappUrl: string;
+        message: string;
+        timestamp: string;
+        dispatch: {
+          id: string;
+          patientId?: string;
+          patientName: string;
+          recipientMobile: string;
+          clinicPhone: string;
+          reportType: string;
+          messageText: string;
+          deliveryMode: 'cloud_api' | 'whatsapp_gateway';
+          status: 'sent' | 'delivered';
+          whatsappUrl: string;
+          sentAt: string;
+        };
+      }>('/api/whatsapp/send', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    list: (patientId?: string) =>
+      fetchWithAuth<{
+        messages: Array<{
+          id: string;
+          patientId?: string;
+          patientName: string;
+          recipientMobile: string;
+          clinicPhone: string;
+          reportType: string;
+          messageText: string;
+          deliveryMode: 'cloud_api' | 'whatsapp_gateway';
+          status: 'sent' | 'delivered';
+          whatsappUrl: string;
+          sentAt: string;
+        }>;
+      }>(`/api/whatsapp/messages${patientId ? `?patientId=${encodeURIComponent(patientId)}` : ''}`),
+  },
+
   audit: {
     list: () => fetchWithAuth<{ logs: AuditLog[] }>('/api/audit'),
   },

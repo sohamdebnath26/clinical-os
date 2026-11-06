@@ -317,13 +317,50 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
       setError('Please enter a valid 10-digit patient phone number first to send the mobile link.');
       return;
     }
-    const url = await ensureMobileSessionLink();
-    if (!url) return;
 
     const dialPrefix = countryCode.replace(/\D/g, '') || '91';
+    const recipient = `${dialPrefix}${cleanPhone}`;
+
+    // If token is already ready, launch synchronously; otherwise open tab synchronously first so popup blocker never blocks it
+    if (mobileSessionToken) {
+      const existingUrl = `${window.location.origin}/?walkInToken=${encodeURIComponent(mobileSessionToken)}`;
+      const message = `Hello${fullName.trim() ? ` ${fullName.trim()}` : ''}, please complete your walk-in patient check-in details (Name, Age, Gender, Weight & Symptoms) on your mobile using this secure link:\n\n${existingUrl}`;
+      const whatsappUrl = `https://wa.me/${recipient}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+      api.whatsapp
+        .send({
+          patientName: fullName.trim() || 'Walk-in Patient',
+          recipientMobile: recipient,
+          reportType: 'walkin_registration_link',
+          messageText: message
+        })
+        .catch(() => {});
+      return;
+    }
+
+    const pendingPopup = window.open('about:blank', '_blank');
+    const url = await ensureMobileSessionLink();
+    if (!url) {
+      if (pendingPopup && !pendingPopup.closed) pendingPopup.close();
+      return;
+    }
+
     const message = `Hello${fullName.trim() ? ` ${fullName.trim()}` : ''}, please complete your walk-in patient check-in details (Name, Age, Gender, Weight & Symptoms) on your mobile using this secure link:\n\n${url}`;
-    const whatsappUrl = `https://wa.me/${dialPrefix}${cleanPhone}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    const whatsappUrl = `https://wa.me/${recipient}?text=${encodeURIComponent(message)}`;
+    if (pendingPopup && !pendingPopup.closed) {
+      pendingPopup.location.href = whatsappUrl;
+    } else {
+      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    }
+
+    api.whatsapp
+      .send({
+        patientName: fullName.trim() || 'Walk-in Patient',
+        recipientMobile: recipient,
+        reportType: 'walkin_registration_link',
+        messageText: message
+      })
+      .catch(() => {});
   };
 
   const handleSendSmsToPatient = async () => {

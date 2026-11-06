@@ -30,10 +30,16 @@ export function cleanPhoneNumber(rawPhone: string, defaultCountryCode: string = 
     digits = digits.replace(/^0+/, '');
   }
 
+  const cleanCC = defaultCountryCode.replace(/\D/g, '') || '91';
+
   // If phone is 10 digits (common for India, US), attach default country code if missing
   if (digits.length === 10) {
-    const cleanCC = defaultCountryCode.replace(/\D/g, '');
     return `${cleanCC}${digits}`;
+  }
+
+  // If phone has more than 12 digits (e.g. duplicated country code), normalize to countryCode + last 10 digits
+  if (digits.length > 12) {
+    return `${cleanCC}${digits.slice(-10)}`;
   }
 
   return digits;
@@ -48,19 +54,63 @@ export function getWhatsAppNativeUri(cleanPhone: string, messageText: string): s
 }
 
 /**
- * Direct WhatsApp Web URL (opens in browser tab)
+ * Universal WhatsApp Web / App URL (opens reliably across Desktop, Web, and Mobile without dropping message text)
  */
 export function getWhatsAppWebUrl(cleanPhone: string, messageText: string): string {
+  const normalized = cleanPhoneNumber(cleanPhone);
   const encoded = encodeURIComponent(messageText);
-  return `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encoded}`;
+  return `https://wa.me/${normalized}?text=${encoded}`;
 }
 
 /**
  * Universal web-dispatch URL (wa.me / api.whatsapp.com)
  */
 export function getWhatsAppUniversalUrl(cleanPhone: string, messageText: string): string {
+  const normalized = cleanPhoneNumber(cleanPhone);
   const encoded = encodeURIComponent(messageText);
-  return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encoded}`;
+  return `https://api.whatsapp.com/send?phone=${normalized}&text=${encoded}`;
+}
+
+/**
+ * Synchronously launches WhatsApp in a new browser tab directly from a user click handler
+ * (MUST be called BEFORE any async/await calls so browser popup blockers never block it).
+ */
+export function launchWhatsAppSynchronously(
+  cleanPhone: string,
+  messageText: string,
+  mode: 'web' | 'native' = 'web'
+): string {
+  const targetUrl =
+    mode === 'native'
+      ? getWhatsAppNativeUri(cleanPhone, messageText)
+      : getWhatsAppWebUrl(cleanPhone, messageText);
+
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    try {
+      const a = document.createElement('a');
+      a.href = targetUrl;
+      if (mode !== 'native') {
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      }
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
+      }, 300);
+    } catch {
+      try {
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      } catch {
+        // Ignore if sandboxed
+      }
+    }
+  }
+
+  return targetUrl;
 }
 
 /**
@@ -69,7 +119,7 @@ export function getWhatsAppUniversalUrl(cleanPhone: string, messageText: string)
 export function generateWhatsAppLink(
   cleanPhone: string,
   messageText: string,
-  target: 'app' | 'web' | 'universal' | boolean = 'app'
+  target: 'app' | 'web' | 'universal' | boolean = 'web'
 ): string {
   if (target === true || target === 'web') {
     return getWhatsAppWebUrl(cleanPhone, messageText);

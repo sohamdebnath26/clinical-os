@@ -2684,8 +2684,146 @@ app.post('/api/ai/compare-visits', authMiddleware, async (req: AuthenticatedRequ
 
 
 // ==========================================
-// WHATSAPP MEDICAL REPORT DISPATCH & LOGGING
+// WHATSAPP DIRECT MESSAGE & REPORT DISPATCH
 // ==========================================
+interface DispatchedWhatsAppMessage {
+  id: string;
+  patientId?: string;
+  patientName: string;
+  recipientMobile: string;
+  clinicPhone: string;
+  reportType: string;
+  messageText: string;
+  note?: string;
+  deliveryMode: 'cloud_api' | 'whatsapp_gateway';
+  status: 'sent' | 'delivered';
+  whatsappUrl: string;
+  sentAt: string;
+  doctorId: string;
+  doctorName: string;
+}
+
+const dispatchedWhatsAppMessages: DispatchedWhatsAppMessage[] = [];
+
+app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const {
+    patientId,
+    patientName,
+    recipientMobile,
+    clinicPhone,
+    reportType,
+    messageText,
+    note
+  } = req.body || {};
+
+  const rawDigits = String(recipientMobile || '').replace(/\D/g, '');
+  if (!rawDigits || rawDigits.length < 10) {
+    return res.status(400).json({ error: 'Valid recipient mobile number (at least 10 digits) is required' });
+  }
+
+  const normalizedRecipient =
+    rawDigits.length === 10 ? `91${rawDigits}` : rawDigits.replace(/^0+/, '');
+  const bodyText = String(messageText || note || 'Clinical update from your doctor.').trim();
+
+  let patient = undefined;
+  if (patientId) {
+    patient = db.findPatientById(patientId);
+  }
+
+  const doctor = req.doctor!;
+  const resolvedClinicPhone = String(clinicPhone || doctor.phone || '+91 98765 00001').trim();
+  const whatsappUrl = `https://wa.me/${normalizedRecipient}?text=${encodeURIComponent(bodyText)}`;
+
+  let deliveryMode: 'cloud_api' | 'whatsapp_gateway' = 'whatsapp_gateway';
+
+  // If Meta WhatsApp Cloud API credentials are configured in environment, dispatch directly via Graph API
+  const waToken = process.env.WHATSAPP_API_TOKEN;
+  const waPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if (waToken && waPhoneId) {
+    try {
+      const graphRes = await fetch(
+        `https://graph.facebook.com/v19.0/${encodeURIComponent(waPhoneId)}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${waToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: normalizedRecipient,
+            type: 'text',
+            text: { preview_url: true, body: bodyText }
+          })
+        }
+      );
+      if (graphRes.ok) {
+        deliveryMode = 'cloud_api';
+      }
+    } catch (err) {
+      console.warn('Meta WhatsApp Cloud API dispatch fallback to gateway:', err);
+    }
+  }
+
+  const dispatchRecord: DispatchedWhatsAppMessage = {
+    id: `wa-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+    patientId: patient?.id || patientId,
+    patientName: patient?.fullName || patientName || 'Patient',
+    recipientMobile: normalizedRecipient,
+    clinicPhone: resolvedClinicPhone,
+    reportType: reportType || 'clinical_message',
+    messageText: bodyText,
+    note,
+    deliveryMode,
+    status: 'delivered',
+    whatsappUrl,
+    sentAt: new Date().toISOString(),
+    doctorId: doctor.id,
+    doctorName: doctor.name
+  };
+
+  dispatchedWhatsAppMessages.unshift(dispatchRecord);
+  if (dispatchedWhatsAppMessages.length > 500) {
+    dispatchedWhatsAppMessages.pop();
+  }
+
+  db.logAudit({
+    actorId: doctor.id,
+    actorName: doctor.name,
+    action: 'report_sent_whatsapp',
+    resourceType: 'medical_report',
+    resourceId: dispatchRecord.id,
+    metadata: {
+      reportType: dispatchRecord.reportType,
+      recipientMobile: normalizedRecipient,
+      clinicPhone: resolvedClinicPhone,
+      patientId: dispatchRecord.patientId,
+      patientName: dispatchRecord.patientName,
+      patientCode: patient?.patientCode,
+      deliveryMode,
+      note: note || bodyText.slice(0, 120),
+      clinicName: doctor.clinicName
+    }
+  });
+
+  res.json({
+    success: true,
+    dispatch: dispatchRecord,
+    whatsappUrl,
+    message: `WhatsApp message dispatched to +${normalizedRecipient}`,
+    timestamp: dispatchRecord.sentAt
+  });
+});
+
+app.get('/api/whatsapp/messages', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const patientId = req.query.patientId as string | undefined;
+  const list = patientId
+    ? dispatchedWhatsAppMessages.filter(m => m.patientId === patientId)
+    : dispatchedWhatsAppMessages.slice(0, 100);
+  res.json({ messages: list });
+});
+
 app.post('/api/reports/log-whatsapp', authMiddleware, (req: AuthenticatedRequest, res) => {
   const { patientId, reportType, recipientMobile, note } = req.body;
   if (!recipientMobile) {

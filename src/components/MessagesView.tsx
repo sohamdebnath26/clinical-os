@@ -7,7 +7,8 @@ import { VoiceDictationButton } from './VoiceDictationButton';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import {
   cleanPhoneNumber,
-  getWhatsAppWebUrl
+  getWhatsAppWebUrl,
+  launchWhatsAppSynchronously
 } from '../lib/whatsappUtils';
 import {
   Search,
@@ -636,18 +637,20 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     const messageText = textToSend.trim();
     const cleanPhone = cleanPhoneNumber(activeThread.phone);
 
-    // Open external WhatsApp Web tab immediately on user click so browser popup blockers never interfere
+    // Open external WhatsApp tab synchronously on click BEFORE any network await so popup blockers never interfere
     if (alwaysOpenWhatsAppWeb) {
-      const webUrl = getWhatsAppWebUrl(cleanPhone, messageText);
-      window.open(webUrl, '_blank', 'noopener,noreferrer');
+      launchWhatsAppSynchronously(cleanPhone, messageText, 'web');
     }
 
     try {
-      await api.reports
-        .logWhatsApp({
+      await api.whatsapp
+        .send({
           patientId: activeThread.patientId || activeThread.id,
-          reportType: 'chat_message',
+          patientName: activeThread.name,
           recipientMobile: cleanPhone,
+          clinicPhone,
+          reportType: 'chat_message',
+          messageText,
           note: `[From Clinic ${clinicPhone}] ${messageText.slice(0, 100)}`
         })
         .catch(() => {});
@@ -661,14 +664,14 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
           return {
             ...t,
             stage: 'resolved',
-            statusLabel: 'Resolved · Sent via WhatsApp Web',
+            statusLabel: 'Resolved · Sent via WhatsApp',
             messages: [
               ...t.messages,
               {
                 sender: 'doctor',
                 text: messageText,
                 time: 'Just now',
-                status: `WhatsApp Web (${clinicPhone})`
+                status: `Sent via WhatsApp (${clinicPhone})`
               }
             ],
             preview: `You: ${messageText}`,
@@ -682,7 +685,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
     setCustomReply('');
     setIsDispatching(false);
-    showToast(`Opened WhatsApp Web for ${activeThread.name} (${activeThread.phone}) & marked resolved.`);
+    showToast(`Sent WhatsApp message to ${activeThread.name} (${activeThread.phone}) & marked resolved.`);
   };
 
   // Batch approve all safe drafts in pipeline
@@ -693,13 +696,26 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
       return;
     }
 
-    // Open WhatsApp Web for the first ready thread or current active draft thread
+    // Open WhatsApp Web synchronously for the active or first ready draft thread
     const targetThread =
       readyThreads.find(t => t.id === activeThread.id) || readyThreads[0];
     if (targetThread) {
       const cleanPhone = cleanPhoneNumber(targetThread.phone);
-      const webUrl = getWhatsAppWebUrl(cleanPhone, targetThread.draftReply);
-      window.open(webUrl, '_blank', 'noopener,noreferrer');
+      launchWhatsAppSynchronously(cleanPhone, targetThread.draftReply, 'web');
+    }
+
+    for (const rt of readyThreads) {
+      const cleanPhone = cleanPhoneNumber(rt.phone);
+      api.whatsapp
+        .send({
+          patientId: rt.patientId || rt.id,
+          patientName: rt.name,
+          recipientMobile: cleanPhone,
+          clinicPhone,
+          reportType: 'batch_draft_reply',
+          messageText: rt.draftReply
+        })
+        .catch(() => {});
     }
 
     setThreads(prev =>
@@ -715,7 +731,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                 sender: 'doctor',
                 text: t.draftReply,
                 time: 'Just now',
-                status: `WhatsApp Web (${clinicPhone})`
+                status: `Sent via WhatsApp (${clinicPhone})`
               }
             ],
             preview: `You: ${t.draftReply}`,
@@ -726,7 +742,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         return t;
       })
     );
-    showToast(`Approved ${readyThreads.length} drafts & opened WhatsApp Web.`);
+    showToast(`Approved & dispatched ${readyThreads.length} WhatsApp drafts.`);
   };
 
   // Mark thread resolved or reopen
