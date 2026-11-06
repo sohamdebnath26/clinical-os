@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Patient } from '../types';
@@ -24,7 +24,11 @@ import {
   ChevronRight,
   CheckCheck,
   AlertCircle,
-  Clock
+  Clock,
+  Edit2,
+  ArrowRight,
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
 
 type PipelineStage = 'needs_review' | 'draft_ready' | 'resolved';
@@ -83,13 +87,29 @@ export const MessagesView: React.FC = () => {
   const { doctor } = useAuth();
   const { t } = useLanguage();
 
+  // Clinic Linked Phone Number State (Editable inline badge, persisted in localStorage)
+  const [clinicPhone, setClinicPhone] = useState<string>(() => {
+    try {
+      return localStorage.getItem('clinical_os_clinic_phone') || '+91 98765 00001';
+    } catch {
+      return '+91 98765 00001';
+    }
+  });
+  const [isEditingClinicPhone, setIsEditingClinicPhone] = useState(false);
+  const [clinicPhoneDraft, setClinicPhoneDraft] = useState(clinicPhone);
+
+  // Filter, Search & Active Thread State
   const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'draft_ready' | 'resolved' | 'whatsapp' | 'sms'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedThreadId, setSelectedThreadId] = useState<string>('t-1');
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(0);
   const [isGeneratingAiReply, setIsGeneratingAiReply] = useState<boolean>(false);
+  const [isPolishingDictation, setIsPolishingDictation] = useState<boolean>(false);
   const [realPatients, setRealPatients] = useState<Patient[]>([]);
   const [isLoadingPatients, setIsLoadingPatients] = useState(false);
+
+  // Voice Dictation Language ('en-US' for English, 'pa-IN' for Punjabi)
+  const [dictationLang, setDictationLang] = useState<'en-US' | 'pa-IN'>('en-US');
 
   // Modals & Drawers
   const [broadcastModalOpen, setBroadcastModalOpen] = useState(false);
@@ -102,6 +122,9 @@ export const MessagesView: React.FC = () => {
   const [customReply, setCustomReply] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDispatching, setIsDispatching] = useState(false);
+
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const composerInputRef = useRef<HTMLInputElement>(null);
 
   // Broadcast state
   const [broadcastFilter, setBroadcastFilter] = useState('All active patients');
@@ -136,6 +159,23 @@ export const MessagesView: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  const handleSaveClinicPhone = () => {
+    const trimmed = clinicPhoneDraft.trim();
+    if (!trimmed) {
+      setClinicPhoneDraft(clinicPhone);
+      setIsEditingClinicPhone(false);
+      return;
+    }
+    setClinicPhone(trimmed);
+    try {
+      localStorage.setItem('clinical_os_clinic_phone', trimmed);
+    } catch {
+      // ignore storage errors
+    }
+    setIsEditingClinicPhone(false);
+    showToast(`Clinic WhatsApp & SMS line updated to ${trimmed}`);
+  };
+
   const [threads, setThreads] = useState<Thread[]>([
     {
       id: 't-1',
@@ -159,13 +199,13 @@ export const MessagesView: React.FC = () => {
         }
       ],
       draftReply:
-        'Rohit, please stop any newly started medication immediately and visit the nearest emergency room or call our clinic hotline (+91 98765 43210) right away for an urgent evaluation of your chest tightness and rash.',
+        'Rohit, please stop any newly started medication immediately and visit the nearest emergency room or call our clinic hotline right away for an urgent evaluation of your chest tightness and rash.',
       suggestedReplies: [
         {
           id: 's-1a',
           label: 'Urgent ER & Stop Meds',
           intent: 'Immediate safety escalation',
-          text: 'Rohit, please stop any newly started medication immediately and visit the nearest emergency room or call our clinic hotline (+91 98765 43210) right away for an urgent evaluation of your chest tightness and rash.'
+          text: 'Rohit, please stop any newly started medication immediately and visit the nearest emergency room or call our clinic hotline right away for an urgent evaluation of your chest tightness and rash.'
         },
         {
           id: 's-1b',
@@ -355,6 +395,12 @@ export const MessagesView: React.FC = () => {
           label: '1-Week Photo Check-In Request',
           intent: 'Visual progress tracking',
           text: 'Hi Meera, great! Please share a clear daylight photo of the treated area after 7 days so we can assess your pigmentation improvement.'
+        },
+        {
+          id: 's-5c',
+          label: 'Confirm 7-Day Review Slot',
+          intent: 'Routine follow-up',
+          text: 'Hi Meera, glad your skin is tolerating the cream well. We will check in with you next week for your 7-day progress review.'
         }
       ]
     },
@@ -392,6 +438,12 @@ export const MessagesView: React.FC = () => {
           label: 'Approve Brand Substitution',
           intent: 'Allow generic equivalent',
           text: 'Batch #RX-8842 is authorized. If the primary topical brand is out of stock, you may dispense the equivalent strength ceramide formulation.'
+        },
+        {
+          id: 's-6c',
+          label: 'Request Patient Call Before Dispense',
+          intent: 'Dosage verification',
+          text: 'Please hold batch #RX-8842 briefly and have the pharmacist call our clinic desk at ' + clinicPhone + ' to confirm the strength.'
         }
       ]
     }
@@ -413,10 +465,38 @@ export const MessagesView: React.FC = () => {
 
   const activeThread = threads.find(t => t.id === selectedThreadId) || threads[0];
 
-  // Reset selected suggestion index when switching threads
+  // Reset selected suggestion index & scroll when switching threads
   useEffect(() => {
     setSelectedSuggestionIndex(0);
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = 0;
+    }
   }, [selectedThreadId]);
+
+  // Keyboard shortcuts (1 / 2 / 3 to quickly select AI resolution strategy when not typing in an input)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.key === '1' || e.key === '2' || e.key === '3') {
+        const idx = parseInt(e.key, 10) - 1;
+        if (activeThread?.suggestedReplies && activeThread.suggestedReplies[idx]) {
+          setSelectedSuggestionIndex(idx);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeThread]);
 
   // Pipeline counts
   const urgentCount = threads.filter(t => t.priority === 'urgent' && t.stage !== 'resolved').length;
@@ -433,7 +513,7 @@ export const MessagesView: React.FC = () => {
       [...activeThread.messages].reverse().find(m => m.sender === 'patient')?.text ||
       activeThread.preview;
 
-    const prompt = `Act as Dr. ${doctor?.name || 'Sarah Chen'} (Dermatologist). Draft a direct, compassionate, and clinically sound WhatsApp/SMS reply (2-3 sentences max, plain text, no markdown headers) to resolve this patient's issue:
+    const prompt = `Act as Dr. ${doctor?.name || 'Sarah Chen'} (Dermatologist, Clinic Phone: ${clinicPhone}). Draft a direct, compassionate, and clinically sound WhatsApp/SMS reply (2-3 sentences max, plain text, no markdown headers) to resolve this patient's issue:
 Patient Name: ${activeThread.name} (${activeThread.subtitle})
 Clinical Context: ${activeThread.aiSummary}
 Patient's Latest Message: "${lastPatientMsg}"
@@ -453,7 +533,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
 
       const newSuggestion: SuggestedResolution = {
         id: `ai-gen-${Date.now()}`,
-        label: clinicalAngle || 'AI Tailored Resolution',
+        label: clinicalAngle ? clinicalAngle.split(' ').slice(0, 4).join(' ') : 'AI Tailored Resolution',
         intent: 'Live AI clinical synthesis',
         text: cleanedReply
       };
@@ -461,7 +541,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
       setThreads(prev =>
         prev.map(t => {
           if (t.id === activeThread.id) {
-            const updatedSuggestions = [newSuggestion, ...(t.suggestedReplies || [])].slice(0, 4);
+            const updatedSuggestions = [newSuggestion, ...(t.suggestedReplies || [])].slice(0, 3);
             return {
               ...t,
               draftReply: cleanedReply,
@@ -474,50 +554,105 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
       setSelectedSuggestionIndex(0);
       showToast('Generated new AI clinical reply for ' + activeThread.name);
     } catch {
-      const fallbackText = `Hi ${activeThread.name}, I have reviewed your message regarding "${lastPatientMsg.slice(
-        0,
-        40
-      )}...". Please continue your prescribed regimen and let us know if symptoms change so we can prioritize a clinic review.`;
+      const fallbackText =
+        clinicalAngle?.toLowerCase().includes('punjabi')
+          ? `Hi ${activeThread.name}, ਤੁਹਾਡੇ ਸੁਨੇਹੇ ਦੀ ਜਾਂਚ ਕੀਤੀ ਗਈ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਆਪਣੀ ਦੱਸੀ ਹੋਈ ਦਵਾਈ ਜਾਰੀ ਰੱਖੋ ਅਤੇ ਲੋੜ ਪੈਣ 'ਤੇ ਕਲੀਨਿਕ ਵਿਖੇ ਸੰਪਰਕ ਕਰੋ। (We reviewed your message; please continue your prescribed regimen.)`
+          : `Hi ${activeThread.name}, I have reviewed your message regarding "${lastPatientMsg.slice(
+              0,
+              40
+            )}...". Please continue your prescribed regimen and let us know if symptoms change so we can prioritize a clinic review.`;
+      const fallbackSuggestion: SuggestedResolution = {
+        id: `ai-fallback-${Date.now()}`,
+        label: clinicalAngle ? clinicalAngle.split(' ').slice(0, 3).join(' ') : 'Updated Clinical Reply',
+        intent: 'Clinical guidance',
+        text: fallbackText
+      };
       setThreads(prev =>
-        prev.map(t => (t.id === activeThread.id ? { ...t, draftReply: fallbackText } : t))
+        prev.map(t =>
+          t.id === activeThread.id
+            ? {
+                ...t,
+                draftReply: fallbackText,
+                suggestedReplies: [fallbackSuggestion, ...(t.suggestedReplies || [])].slice(0, 3)
+              }
+            : t
+        )
       );
+      setSelectedSuggestionIndex(0);
       showToast('Updated clinical reply suggestion.');
     } finally {
       setIsGeneratingAiReply(false);
     }
   };
 
-  // Dispatch a message & advance pipeline stage to 'resolved'
-  const handleSendMessage = async (textToSend: string, openInWhatsAppTab = false) => {
+  // Polish dictated or rough text in the composer using AI (supports English & Punjabi)
+  const handlePolishDictatedReply = async () => {
+    if (!customReply.trim() || !activeThread || isPolishingDictation) return;
+    setIsPolishingDictation(true);
+
+    const isPunjabiMode = dictationLang === 'pa-IN';
+    const prompt = `Act as Dr. ${doctor?.name || 'Sarah Chen'} (Dermatologist). The doctor dictated or typed this rough note for patient ${activeThread.name}:
+"${customReply.trim()}"
+Clinical Context: ${activeThread.aiSummary}
+Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to the patient${
+      isPunjabiMode
+        ? ' in bilingual Punjabi (Gurmukhi) + English so the patient understands clearly.'
+        : ' in clear professional English.'
+    } Output ONLY the message text with no quotes or markdown.`;
+
+    try {
+      const res = await api.ai.chat({
+        question: prompt,
+        patientId: activeThread.patientId,
+        contextType: 'followup'
+      });
+      const polished = res.answer
+        .replace(/^["']|["']$/g, '')
+        .replace(/\*\*/g, '')
+        .trim();
+      if (polished) {
+        setCustomReply(polished);
+        showToast(isPunjabiMode ? 'Polished reply in Punjabi & English' : 'Polished dictated reply with AI');
+      }
+    } catch {
+      const capitalized =
+        customReply.trim().charAt(0).toUpperCase() + customReply.trim().slice(1);
+      setCustomReply(
+        `Hi ${activeThread.name}, ${capitalized}${/[.!?]$/.test(capitalized) ? '' : '.'} — Dr. ${
+          doctor?.name || 'Sarah Chen'
+        }`
+      );
+      showToast('Formatted reply for ' + activeThread.name);
+    } finally {
+      setIsPolishingDictation(false);
+    }
+  };
+
+  // Dispatch a message & ALWAYS open external WhatsApp Web tab on send, log reply, and mark resolved
+  const handleSendMessage = async (textToSend: string, alwaysOpenWhatsAppWeb = true) => {
     if (!textToSend.trim() || !activeThread) return;
     setIsDispatching(true);
 
     const messageText = textToSend.trim();
     const cleanPhone = cleanPhoneNumber(activeThread.phone);
 
-    if (activeThread.channel === 'WhatsApp' || openInWhatsAppTab) {
-      try {
-        await api.reports
-          .logWhatsApp({
-            patientId: activeThread.patientId || activeThread.id,
-            reportType: 'chat_message',
-            recipientMobile: cleanPhone,
-            note: messageText.slice(0, 100)
-          })
-          .catch(() => {});
+    // Open external WhatsApp Web tab immediately on user click so browser popup blockers never interfere
+    if (alwaysOpenWhatsAppWeb) {
+      const webUrl = getWhatsAppWebUrl(cleanPhone, messageText);
+      window.open(webUrl, '_blank', 'noopener,noreferrer');
+    }
 
-        if (openInWhatsAppTab) {
-          const webUrl = getWhatsAppWebUrl(cleanPhone, messageText);
-          window.open(webUrl, '_blank');
-          showToast(`Opened WhatsApp Web for ${activeThread.name} and logged reply.`);
-        } else {
-          showToast(`Reply sent and logged to ${activeThread.name}'s WhatsApp thread.`);
-        }
-      } catch {
-        showToast(`Dispatched message to ${activeThread.name}`);
-      }
-    } else {
-      showToast(`Message sent via ${activeThread.channel} to ${activeThread.name}`);
+    try {
+      await api.reports
+        .logWhatsApp({
+          patientId: activeThread.patientId || activeThread.id,
+          reportType: 'chat_message',
+          recipientMobile: cleanPhone,
+          note: `[From Clinic ${clinicPhone}] ${messageText.slice(0, 100)}`
+        })
+        .catch(() => {});
+    } catch {
+      // ignore logging error
     }
 
     setThreads(prev =>
@@ -526,10 +661,15 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
           return {
             ...t,
             stage: 'resolved',
-            statusLabel: 'Resolved · Sent just now',
+            statusLabel: 'Resolved · Sent via WhatsApp Web',
             messages: [
               ...t.messages,
-              { sender: 'doctor', text: messageText, time: 'Just now', status: 'dispatched' }
+              {
+                sender: 'doctor',
+                text: messageText,
+                time: 'Just now',
+                status: `WhatsApp Web (${clinicPhone})`
+              }
             ],
             preview: `You: ${messageText}`,
             timestamp: 'Just now',
@@ -542,6 +682,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
 
     setCustomReply('');
     setIsDispatching(false);
+    showToast(`Opened WhatsApp Web for ${activeThread.name} (${activeThread.phone}) & marked resolved.`);
   };
 
   // Batch approve all safe drafts in pipeline
@@ -550,6 +691,15 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
     if (readyThreads.length === 0) {
       showToast('All queued drafts have already been approved and sent.');
       return;
+    }
+
+    // Open WhatsApp Web for the first ready thread or current active draft thread
+    const targetThread =
+      readyThreads.find(t => t.id === activeThread.id) || readyThreads[0];
+    if (targetThread) {
+      const cleanPhone = cleanPhoneNumber(targetThread.phone);
+      const webUrl = getWhatsAppWebUrl(cleanPhone, targetThread.draftReply);
+      window.open(webUrl, '_blank', 'noopener,noreferrer');
     }
 
     setThreads(prev =>
@@ -561,7 +711,12 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
             statusLabel: 'Resolved · Batch approved',
             messages: [
               ...t.messages,
-              { sender: 'doctor', text: t.draftReply, time: 'Just now', status: 'dispatched' }
+              {
+                sender: 'doctor',
+                text: t.draftReply,
+                time: 'Just now',
+                status: `WhatsApp Web (${clinicPhone})`
+              }
             ],
             preview: `You: ${t.draftReply}`,
             timestamp: 'Just now',
@@ -571,7 +726,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
         return t;
       })
     );
-    showToast(`Approved and dispatched ${readyThreads.length} patient drafts.`);
+    showToast(`Approved ${readyThreads.length} drafts & opened WhatsApp Web.`);
   };
 
   // Mark thread resolved or reopen
@@ -634,7 +789,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
       messages: [
         {
           sender: 'ai',
-          text: `Connected to ${patient.fullName}'s EHR record (${patient.patientCode}).`,
+          text: `Linked clinic line (${clinicPhone}) to ${patient.fullName}'s EHR record (${patient.patientCode}).`,
           time: 'Just now'
         }
       ],
@@ -656,9 +811,9 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
         },
         {
           id: `s-${patient.id}-3`,
-          label: 'Schedule Review Visit',
-          intent: 'Appointment reminder',
-          text: `Hello ${patient.fullName}, your dermatology follow-up review is due this week. Please let us know your preferred day and time to book a slot.`
+          label: 'Bilingual Follow-Up (EN + Punjabi)',
+          intent: 'Patient native comfort',
+          text: `Hello ${patient.fullName}, ਤੁਹਾਡੀ ਚਮੜੀ ਦੇ ਇਲਾਜ ਦਾ ਕੀ ਹਾਲ ਹੈ? ਜੇ ਕੋਈ ਸਵਾਲ ਹੋਵੇ ਤਾਂ ਦੱਸੋ। (Checking in on your skin treatment progress—let us know how you are feeling.)`
         }
       ]
     };
@@ -715,7 +870,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
   const activeReplyText = currentSuggestion ? currentSuggestion.text : activeThread.draftReply;
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-150 pb-12">
+    <div className="space-y-4 animate-in fade-in duration-150 pb-12">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 bg-[#0d3f3b] text-white px-4 py-3 rounded-xl shadow-lg border border-teal-500/30 flex items-center gap-2.5 animate-in slide-in-from-top-2 duration-150">
@@ -724,18 +879,83 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
         </div>
       )}
 
-      {/* Clean Header & Primary Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Patient Inbox &amp; Triage Pipeline
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Review incoming patient queries, select AI-suggested clinical resolutions, and dispatch via WhatsApp or SMS.
+      {/* Top Header with Editable Clinic Phone Badge & Primary Actions */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+              Patient Inbox &amp; AI Triage
+            </h1>
+
+            {/* Simple Clinic Phone Badge with Manual Number Edit */}
+            <div className="inline-flex items-center gap-2 bg-emerald-50/90 border border-emerald-200 px-3 py-1 rounded-lg">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="text-[11px] font-semibold text-emerald-900">
+                Clinic WhatsApp/SMS Line:
+              </span>
+              {isEditingClinicPhone ? (
+                <div className="inline-flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={clinicPhoneDraft}
+                    onChange={e => setClinicPhoneDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSaveClinicPhone();
+                      if (e.key === 'Escape') {
+                        setClinicPhoneDraft(clinicPhone);
+                        setIsEditingClinicPhone(false);
+                      }
+                    }}
+                    autoFocus
+                    className="text-xs font-mono font-bold text-slate-900 bg-white border border-emerald-400 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="+91 98765 00001"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveClinicPhone}
+                    className="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold rounded cursor-pointer"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClinicPhoneDraft(clinicPhone);
+                      setIsEditingClinicPhone(false);
+                    }}
+                    className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5">
+                  <span className="text-xs font-mono font-bold text-emerald-950 tabular-nums">
+                    {clinicPhone}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClinicPhoneDraft(clinicPhone);
+                      setIsEditingClinicPhone(true);
+                    }}
+                    className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700 hover:text-emerald-950 underline decoration-emerald-400/70 underline-offset-2 ml-1 cursor-pointer"
+                    title="Edit clinic WhatsApp/SMS phone number"
+                  >
+                    <Edit2 className="w-2.5 h-2.5" />
+                    <span>Edit</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500">
+            Select a patient thread, pick an AI-suggested resolution or dictate in English/Punjabi, and click send to launch WhatsApp Web directly.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <button
             type="button"
             onClick={() => setShowNewMessageModal(true)}
@@ -773,7 +993,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
             const firstUrgent = threads.find(t => t.priority === 'urgent' && t.stage !== 'resolved');
             if (firstUrgent) setSelectedThreadId(firstUrgent.id);
           }}
-          className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+          className={`text-left p-3.5 rounded-2xl border transition-all cursor-pointer ${
             activeFilter === 'urgent'
               ? 'bg-rose-50/90 border-rose-300 ring-2 ring-rose-500/20'
               : 'bg-white border-slate-200 hover:border-rose-200'
@@ -785,8 +1005,10 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
             </span>
             <AlertCircle className="w-4 h-4 text-rose-600" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900 font-mono">{urgentCount}</span>
+          <div className="mt-1.5 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
+              {urgentCount}
+            </span>
             <span className="text-xs text-slate-500">red flag cases</span>
           </div>
         </button>
@@ -798,7 +1020,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
             const firstDraft = threads.find(t => t.stage === 'draft_ready');
             if (firstDraft) setSelectedThreadId(firstDraft.id);
           }}
-          className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+          className={`text-left p-3.5 rounded-2xl border transition-all cursor-pointer ${
             activeFilter === 'draft_ready'
               ? 'bg-amber-50/90 border-amber-300 ring-2 ring-amber-500/20'
               : 'bg-white border-slate-200 hover:border-amber-200'
@@ -810,16 +1032,18 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
             </span>
             <Clock className="w-4 h-4 text-amber-600" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900 font-mono">{draftReadyCount}</span>
-            <span className="text-xs text-slate-500">awaiting 1-click sign-off</span>
+          <div className="mt-1.5 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
+              {draftReadyCount}
+            </span>
+            <span className="text-xs text-slate-500">awaiting 1-click send</span>
           </div>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveFilter('all')}
-          className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+          className={`text-left p-3.5 rounded-2xl border transition-all cursor-pointer ${
             activeFilter === 'all'
               ? 'bg-teal-50/70 border-teal-300 ring-2 ring-teal-500/20'
               : 'bg-white border-slate-200 hover:border-teal-200'
@@ -831,8 +1055,8 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
             </span>
             <MessageSquare className="w-4 h-4 text-teal-700" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900 font-mono">
+          <div className="mt-1.5 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
               {needsReviewCount + draftReadyCount}
             </span>
             <span className="text-xs text-slate-500">active conversations</span>
@@ -842,7 +1066,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
         <button
           type="button"
           onClick={() => setActiveFilter('resolved')}
-          className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+          className={`text-left p-3.5 rounded-2xl border transition-all cursor-pointer ${
             activeFilter === 'resolved'
               ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-500/20'
               : 'bg-white border-slate-200 hover:border-emerald-200'
@@ -854,8 +1078,10 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
             </span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900 font-mono">{resolvedCount}</span>
+          <div className="mt-1.5 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
+              {resolvedCount}
+            </span>
             <span className="text-xs text-slate-500">completed today</span>
           </div>
         </button>
@@ -864,7 +1090,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
       {/* Main Split-Pane Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* LEFT COLUMN: Clean Queue List (4 Cols) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[720px]">
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[760px]">
           {/* Search & Segmented Filter Controls */}
           <div className="p-3.5 border-b border-slate-200 space-y-2.5 bg-slate-50/50">
             <div className="relative">
@@ -874,8 +1100,17 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                 placeholder="Filter by patient name or phone..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full text-xs pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                className="w-full text-xs pl-8 pr-7 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-600 focus:outline-none"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Clean Segmented Filter Bar */}
@@ -923,11 +1158,18 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
           {/* Thread Queue Items */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
             {filteredThreads.length === 0 ? (
-              <div className="p-8 text-center space-y-2">
+              <div className="p-8 text-center space-y-2.5">
                 <p className="text-xs font-semibold text-slate-700">No conversations in this filter</p>
                 <p className="text-[11px] text-slate-400">
-                  Switch filters above or start a new message with a patient.
+                  Switch filters above or start a new message with a registered patient.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveFilter('all')}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Show All Conversations
+                </button>
               </div>
             ) : (
               filteredThreads.map(th => {
@@ -976,12 +1218,13 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                             <span className="w-2 h-2 rounded-full bg-teal-600 shrink-0" />
                           )}
                         </div>
-                        <span className="text-[10px] text-slate-400 shrink-0">{th.timestamp}</span>
+                        <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0">
+                          {th.timestamp}
+                        </span>
                       </div>
 
-                      {/* Clean unboxed metadata line */}
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5 truncate">
-                        <span>{th.channel}</span>
+                        <span className="font-mono text-[10.5px] text-slate-500">{th.phone}</span>
                         <span aria-hidden="true">·</span>
                         <span
                           className={
@@ -1008,21 +1251,26 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
         </div>
 
         {/* RIGHT COLUMN: Focused Conversation & AI Resolution Workspace (8 Cols) */}
-        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[720px]">
-          {/* Active Patient Top Bar */}
+        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[760px]">
+          {/* Active Patient Top Bar + Clinic ↔ Patient Phone Routing */}
           <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap bg-white">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm font-bold text-slate-900 truncate">{activeThread.name}</h2>
-                <span className="text-xs text-slate-400" aria-hidden="true">
-                  ·
+                <span className="text-xs text-slate-300" aria-hidden="true">
+                  |
                 </span>
-                <span className="text-xs font-mono text-slate-600">{activeThread.phone}</span>
+                {/* Explicit Clinic Number ↔ Patient Number Routing Relationship */}
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                  <span className="text-teal-800 font-semibold">Clinic {clinicPhone}</span>
+                  <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span className="font-bold text-slate-900">Patient {activeThread.phone}</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
                 <span>{activeThread.subtitle}</span>
                 <span aria-hidden="true">·</span>
-                <span>Via {activeThread.channel}</span>
+                <span>Channel: {activeThread.channel}</span>
               </div>
             </div>
 
@@ -1059,27 +1307,11 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                 <FileText className="w-3.5 h-3.5 text-teal-700" />
                 <span>Send Rx / Report</span>
               </button>
-
-              <a
-                href={getWhatsAppWebUrl(
-                  cleanPhoneNumber(activeThread.phone),
-                  customReply ||
-                    activeReplyText ||
-                    `Hello ${activeThread.name}, this is Dr. ${doctor?.name || 'Sarah Chen'}.`
-                )}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
-                title="Open conversation in WhatsApp Web"
-              >
-                <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
-                <span>WhatsApp Web</span>
-              </a>
             </div>
           </div>
 
           {/* Clinical Context Strip */}
-          <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between gap-2 text-xs">
+          <div className="px-5 py-2 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-semibold text-slate-700 shrink-0">Clinical Context:</span>
               <span className="text-slate-600 truncate">{activeThread.aiSummary}</span>
@@ -1088,7 +1320,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
               Stage:{' '}
               <strong className="text-slate-700">
                 {activeThread.stage === 'needs_review'
-                  ? 'Needs Review'
+                  ? 'Needs Doctor'
                   : activeThread.stage === 'draft_ready'
                   ? 'Draft Ready'
                   : 'Resolved'}
@@ -1096,48 +1328,54 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
             </span>
           </div>
 
-          {/* Conversation History + AI Suggested Replies Panel */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#f9fbfa]">
-            {activeThread.messages.map((m, idx) => (
-              <div
-                key={idx}
-                className={`flex ${
-                  m.sender === 'patient'
-                    ? 'justify-start'
-                    : m.sender === 'ai'
-                    ? 'justify-center'
-                    : 'justify-end'
-                }`}
-              >
-                {m.sender === 'ai' ? (
-                  <div className="text-[11px] text-slate-500 bg-slate-100/80 px-3 py-1 rounded-md">
-                    {m.text}
-                  </div>
-                ) : (
-                  <div
-                    className={`max-w-lg px-4 py-3 rounded-2xl text-xs ${
-                      m.sender === 'patient'
-                        ? 'bg-white text-slate-800 border border-slate-200 rounded-tl-xs'
-                        : 'bg-[#0d3f3b] text-white rounded-tr-xs'
-                    }`}
-                  >
-                    <p className="leading-relaxed">{m.text}</p>
+          {/* Scrollable Conversation History + AI Suggested Replies Panel */}
+          <div
+            ref={messagesContainerRef}
+            className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#f9fbfa]"
+          >
+            {/* Chat Message Bubbles */}
+            <div className="space-y-3">
+              {activeThread.messages.map((m, idx) => (
+                <div
+                  key={idx}
+                  className={`flex ${
+                    m.sender === 'patient'
+                      ? 'justify-start'
+                      : m.sender === 'ai'
+                      ? 'justify-center'
+                      : 'justify-end'
+                  }`}
+                >
+                  {m.sender === 'ai' ? (
+                    <div className="text-[11px] text-slate-500 bg-slate-100/80 px-3 py-1 rounded-md">
+                      {m.text}
+                    </div>
+                  ) : (
                     <div
-                      className={`flex items-center justify-end gap-1.5 mt-1.5 text-[10px] ${
-                        m.sender === 'patient' ? 'text-slate-400' : 'text-teal-200/90'
+                      className={`max-w-lg px-4 py-2.5 rounded-2xl text-xs ${
+                        m.sender === 'patient'
+                          ? 'bg-white text-slate-800 border border-slate-200 rounded-tl-xs'
+                          : 'bg-[#0d3f3b] text-white rounded-tr-xs'
                       }`}
                     >
-                      <span>{m.time}</span>
-                      {m.status && (
-                        <span className="flex items-center gap-0.5">
-                          · <CheckCheck className="w-3 h-3 inline" /> {m.status}
-                        </span>
-                      )}
+                      <p className="leading-relaxed">{m.text}</p>
+                      <div
+                        className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] ${
+                          m.sender === 'patient' ? 'text-slate-400' : 'text-teal-200/90'
+                        }`}
+                      >
+                        <span className="font-mono tabular-nums">{m.time}</span>
+                        {m.status && (
+                          <span className="flex items-center gap-0.5">
+                            · <CheckCheck className="w-3 h-3 inline" /> {m.status}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                  )}
+                </div>
+              ))}
+            </div>
 
             {/* AI Suggested Replies Panel to Resolve Patient's Issue */}
             <div className="bg-white border border-teal-700/25 rounded-xl p-4 shadow-2xs space-y-3">
@@ -1155,7 +1393,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Select a clinical resolution strategy below, edit in the composer, or approve to send immediately.
+                    Pick an option below (or press keys 1, 2, 3) and click send to open WhatsApp Web with the reply ready.
                   </p>
                 </div>
 
@@ -1172,7 +1410,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                 </button>
               </div>
 
-              {/* Selectable Resolution Strategy Tabs */}
+              {/* Selectable Resolution Strategy Cards */}
               {activeSuggestions.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {activeSuggestions.map((sug, idx) => {
@@ -1204,13 +1442,13 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
               )}
 
               {/* Selected Suggested Reply Preview Box */}
-              <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200/90 space-y-2">
+              <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200/90 space-y-2.5">
                 <p className="text-xs text-slate-800 leading-relaxed">
                   {activeReplyText}
                 </p>
 
                 {/* Quick AI Refinement Actions */}
-                <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-slate-200/60">
+                <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-slate-200/60">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mr-1">
                       AI Tailor:
@@ -1218,7 +1456,8 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                     {[
                       { label: 'More Reassuring', angle: 'Warm, reassuring bedside manner with clear comfort measures' },
                       { label: 'Request Photo', angle: 'Ask patient to send a clear daylight close-up photo of the skin area' },
-                      { label: 'Advise Clinic Visit', angle: 'Recommend an in-person dermatology examination at the clinic today or tomorrow' }
+                      { label: 'Advise Clinic Visit', angle: 'Recommend an in-person dermatology examination at the clinic today or tomorrow' },
+                      { label: 'Bilingual (EN + Punjabi)', angle: 'Write in both Punjabi (Gurmukhi) and English for patient comfort' }
                     ].map(action => (
                       <button
                         key={action.label}
@@ -1236,7 +1475,8 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                     type="button"
                     onClick={() => {
                       setCustomReply(activeReplyText);
-                      showToast('Loaded suggested reply into the message composer below.');
+                      composerInputRef.current?.focus();
+                      showToast('Loaded suggested reply into the composer below for editing.');
                     }}
                     className="text-[11px] font-semibold text-teal-700 hover:text-teal-950 cursor-pointer"
                   >
@@ -1245,32 +1485,22 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                 </div>
               </div>
 
-              {/* Primary 1-Click Resolution Actions */}
+              {/* Primary 1-Click Resolution Action (Always Opens WhatsApp Web + Logs & Resolves) */}
               <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
                 <span className="text-[11px] text-slate-500">
-                  Sending automatically logs the response and marks this issue resolved.
+                  Opens WhatsApp Web pre-filled for <strong className="text-slate-700 font-mono">{activeThread.phone}</strong> &amp; marks issue resolved.
                 </span>
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
                     disabled={isDispatching || !activeReplyText}
-                    onClick={() => handleSendMessage(activeReplyText, false)}
-                    className="px-3.5 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                    onClick={() => handleSendMessage(activeReplyText, true)}
+                    className="px-4 py-2 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-2xs"
                   >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Use Reply &amp; Resolve Issue</span>
+                    <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                    <span>Use Reply &amp; Open WhatsApp Web</span>
+                    <ExternalLink className="w-3 h-3 opacity-90" />
                   </button>
-                  {activeThread.channel === 'WhatsApp' && (
-                    <button
-                      type="button"
-                      disabled={isDispatching || !activeReplyText}
-                      onClick={() => handleSendMessage(activeReplyText, true)}
-                      className="px-3.5 py-2 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-                    >
-                      <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
-                      <span>Send via WhatsApp Web</span>
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
@@ -1298,6 +1528,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                       onClick={() => {
                         setCustomReply(tpl.text);
                         setShowTemplateDrawer(false);
+                        composerInputRef.current?.focus();
                       }}
                       className="text-left p-2.5 rounded-lg bg-slate-50 hover:bg-teal-50/70 border border-slate-200/80 hover:border-teal-300 transition-colors cursor-pointer"
                     >
@@ -1310,9 +1541,9 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
             )}
           </div>
 
-          {/* Unified Composer Footer */}
+          {/* Unified Composer Footer with Bilingual (English & Punjabi) Voice Dictation */}
           <div className="p-3.5 border-t border-slate-200 bg-white space-y-2.5">
-            {/* Subtle Quick-Insert Actions */}
+            {/* Top Composer Bar: Quick Templates + Voice Dictation Language Switcher */}
             <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <button
@@ -1344,43 +1575,101 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                 >
                   + Consent Link
                 </button>
+                {customReply.trim().length > 3 && (
+                  <button
+                    type="button"
+                    disabled={isPolishingDictation}
+                    onClick={handlePolishDictatedReply}
+                    className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 rounded-md text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    title="Let AI refine your spoken or typed note into a polished reply"
+                  >
+                    <Sparkles className="w-3 h-3 text-teal-700" />
+                    <span>{isPolishingDictation ? 'Polishing...' : 'AI Polish Reply'}</span>
+                  </button>
+                )}
               </div>
-              <span className="text-[11px] text-slate-400 hidden sm:inline">
-                Press Enter to log &amp; send
-              </span>
+
+              {/* Bilingual Voice Dictation Language Selector (English / Punjabi) */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-slate-500 font-medium">Voice Mic Language:</span>
+                <div className="inline-flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDictationLang('en-US');
+                      showToast('Voice dictation set to English');
+                    }}
+                    className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold transition-colors cursor-pointer ${
+                      dictationLang === 'en-US'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    EN (English)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDictationLang('pa-IN');
+                      showToast('Voice dictation set to Punjabi (ਪੰਜਾਬੀ)');
+                    }}
+                    className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold transition-colors cursor-pointer ${
+                      dictationLang === 'pa-IN'
+                        ? 'bg-white text-teal-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    ਪੰਜਾਬੀ (Punjabi)
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Input & Dispatch Controls */}
+            {/* Input, Bilingual Voice Dictation Button & WhatsApp Web Dispatch Controls */}
             <div className="flex items-center gap-2">
               <input
+                ref={composerInputRef}
                 type="text"
-                placeholder={`Write or edit a custom reply to ${activeThread.name}...`}
+                placeholder={
+                  dictationLang === 'pa-IN'
+                    ? `${activeThread.name} ਲਈ ਪੰਜਾਬੀ ਵਿੱਚ ਬੋਲੋ ਜਾਂ ਟਾਈਪ ਕਰੋ (Speak or type in Punjabi)...`
+                    : `Type or dictate a reply to ${activeThread.name} (Press Enter to send via WhatsApp Web)...`
+                }
                 value={customReply}
                 onChange={e => setCustomReply(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && customReply.trim()) {
                     e.preventDefault();
-                    handleSendMessage(customReply, false);
+                    handleSendMessage(customReply, true);
                   }
                 }}
                 className="flex-1 text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
               />
 
+              {/* Prominent Bilingual Voice Dictation Button */}
               <VoiceDictationButton
                 value={customReply}
                 onChange={setCustomReply}
-                variant="badge"
-                title="Dictate reply with microphone"
+                language={dictationLang}
+                variant="button"
+                label={dictationLang === 'pa-IN' ? 'Speak ਪੰਜਾਬੀ' : 'Dictate EN'}
+                title={
+                  dictationLang === 'pa-IN'
+                    ? 'Click to dictate reply in Punjabi (ਪੰਜਾਬੀ)'
+                    : 'Click to dictate reply in English'
+                }
               />
 
               <button
                 type="button"
                 disabled={isDispatching || !customReply.trim()}
-                onClick={() => handleSendMessage(customReply, false)}
-                className="px-4 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40"
+                onClick={() => handleSendMessage(customReply, true)}
+                className="px-4 py-2.5 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 shrink-0 shadow-2xs"
+                title="Send reply and open WhatsApp Web"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>Send</span>
+                <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                <span>Send via WhatsApp</span>
+                <Send className="w-3 h-3" />
               </button>
             </div>
           </div>
@@ -1395,10 +1684,10 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
               Pending Prescription Refill Authorizations
             </h3>
             <p className="text-xs text-slate-500">
-              One-click verification dispatches refill confirmation directly to the patient&apos;s thread.
+              One-click verification opens WhatsApp Web with the refill confirmation pre-filled for the patient.
             </p>
           </div>
-          <span className="text-xs font-semibold text-slate-500">
+          <span className="text-xs font-semibold text-slate-500 font-mono tabular-nums">
             {refillQueue.filter(r => r.status === 'pending').length} pending review
           </span>
         </div>
@@ -1437,6 +1726,18 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                   <button
                     type="button"
                     onClick={() => {
+                      const targetThread = threads.find(t => t.id === item.threadId);
+                      const refillMsg = `Hello ${item.name}, your prescription refill for ${item.medication} has been authorized by Dr. ${
+                        doctor?.name || 'Sarah Chen'
+                      }.`;
+                      if (targetThread) {
+                        const cleanPhone = cleanPhoneNumber(targetThread.phone);
+                        window.open(
+                          getWhatsAppWebUrl(cleanPhone, refillMsg),
+                          '_blank',
+                          'noopener,noreferrer'
+                        );
+                      }
                       setRefillQueue(prev =>
                         prev.map(r => (r.id === item.id ? { ...r, status: 'approved' } : r))
                       );
@@ -1451,20 +1752,20 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                                   ...t.messages,
                                   {
                                     sender: 'doctor',
-                                    text: `Refill authorized for ${item.medication}.`,
+                                    text: refillMsg,
                                     time: 'Just now',
-                                    status: 'dispatched'
+                                    status: `WhatsApp Web (${clinicPhone})`
                                   }
                                 ]
                               }
                             : t
                         )
                       );
-                      showToast(`Refill authorized and sent to ${item.name}.`);
+                      showToast(`Refill authorized & opened WhatsApp Web for ${item.name}.`);
                     }}
                     className="px-3.5 py-1.5 bg-[#0d3f3b] hover:bg-[#135650] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                   >
-                    Authorize Refill
+                    Authorize &amp; Send on WhatsApp
                   </button>
                 )}
               </div>
@@ -1481,7 +1782,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
               <div>
                 <h3 className="text-base font-bold text-slate-900">Message a Registered Patient</h3>
                 <p className="text-xs text-slate-500">
-                  Select any patient from your clinic EHR to open a direct WhatsApp thread
+                  Select any patient from your clinic EHR to open a direct thread linked to {clinicPhone}
                 </p>
               </div>
               <button
@@ -1554,7 +1855,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
               <div>
                 <h3 className="text-base font-bold text-slate-900">Patient Broadcast Campaign</h3>
                 <p className="text-xs text-slate-500">
-                  Send follow-up reminders or clinic announcements to a filtered patient group
+                  Send follow-up reminders or clinic announcements from {clinicPhone}
                 </p>
               </div>
               <button
@@ -1603,7 +1904,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
                   type="button"
                   onClick={() => {
                     setBroadcastModalOpen(false);
-                    showToast(`Broadcast queued for ${broadcastFilter}.`);
+                    showToast(`Broadcast queued from ${clinicPhone} for ${broadcastFilter}.`);
                   }}
                   className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl font-semibold cursor-pointer flex items-center gap-1.5"
                 >
