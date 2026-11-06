@@ -792,30 +792,33 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
             {/* Direct Patient Profile Card: Compare Previous Image vs. Current Image */}
             <div className="bg-white p-6 rounded-2xl border border-indigo-200/90 shadow-2xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-col gap-3.5">
+                {/* Header Row: Icon, Title & Badge, Description */}
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center shrink-0 mt-0.5">
                     <Activity className="w-5 h-5" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-bold text-slate-900">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className="text-sm sm:text-base font-bold text-slate-900">
                         Compare Previous Image vs. Current Image
                       </h3>
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-800 border border-indigo-200">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 whitespace-nowrap">
                         {images.length} {images.length === 1 ? 'Photo' : 'Photos'} in Profile
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-2xl">
                       Inspect previous visit photos alongside today&apos;s image with full-screen 1x–4x zoom, lesion marking, voice notes, and AI progression summary.
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+
+                {/* Actions Toolbar Row: Clean responsive flow with no text squishing */}
+                <div className="flex items-center gap-2 flex-wrap pt-2.5 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setShowProfileQrModal(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-900 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-900 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer"
                     title="Scan QR code with phone camera to snap lesion photo for comparison"
                   >
                     <QrCode className="w-3.5 h-3.5 text-teal-700" />
@@ -825,7 +828,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                     type="button"
                     onClick={() => pastImageInputRef.current?.click()}
                     disabled={isUploadingProfileImage}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-900 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-900 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
                   >
                     <Upload className="w-3.5 h-3.5 text-blue-600" />
                     <span>{isUploadingProfileImage ? 'Storing...' : '+ Store Past Medical Image'}</span>
@@ -834,7 +837,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                     type="button"
                     onClick={() => quickCompareInputRef.current?.click()}
                     disabled={isUploadingProfileImage}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
                   >
                     <Upload className="w-3.5 h-3.5 text-indigo-600" />
                     <span>{isUploadingProfileImage ? 'Uploading...' : '+ Upload Current Image'}</span>
@@ -846,7 +849,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                       setSelectedCurrImageOverride(null);
                       setShowProgressionModal(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-900 hover:bg-indigo-950 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-900 hover:bg-indigo-950 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer sm:ml-auto"
                   >
                     <Maximize2 className="w-3.5 h-3.5 text-indigo-200" />
                     <span>Compare Past vs. Current</span>
@@ -877,7 +880,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                     )}
                   </div>
                   <div className="min-w-0 flex-1 space-y-1">
-                    <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200/80 text-slate-700">
+                    <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200/80 text-slate-700 whitespace-nowrap">
                       1. Previous Image (Baseline)
                     </span>
                     {previousProfileImage ? (
@@ -924,7 +927,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                     )}
                   </div>
                   <div className="min-w-0 flex-1 space-y-1">
-                    <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-teal-100 text-teal-900">
+                    <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-teal-100 text-teal-900 whitespace-nowrap">
                       2. Current Image (Follow-up)
                     </span>
                     {currentProfileImage ? (
