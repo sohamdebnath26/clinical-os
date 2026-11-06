@@ -7,40 +7,27 @@ import { VoiceDictationButton } from './VoiceDictationButton';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import {
   cleanPhoneNumber,
-  getWhatsAppWebUrl,
-  getWhatsAppNativeUri,
-  generateWhatsAppLink
+  getWhatsAppWebUrl
 } from '../lib/whatsappUtils';
 import {
   Search,
-  Sparkles,
   Phone,
-  Video,
   Send,
-  Paperclip,
   CheckCircle2,
-  AlertTriangle,
-  Clock,
   User,
-  Building,
   Check,
   RefreshCw,
   FileText,
-  CreditCard,
-  FileCheck,
   MessageSquare,
-  Shield,
-  Calendar,
-  ArrowRight,
   Plus,
-  ExternalLink,
-  Share2,
-  Copy,
   X,
-  Stethoscope,
   ChevronRight,
-  CheckCheck
+  CheckCheck,
+  AlertCircle,
+  Clock
 } from 'lucide-react';
+
+type PipelineStage = 'needs_review' | 'draft_ready' | 'resolved';
 
 interface Thread {
   id: string;
@@ -48,11 +35,12 @@ interface Thread {
   subtitle: string;
   category: 'patients' | 'pharmacies' | 'collaborations';
   channel: 'WhatsApp' | 'SMS' | 'Email' | 'App';
+  priority: 'urgent' | 'routine';
+  stage: PipelineStage;
   preview: string;
   timestamp: string;
   unread: boolean;
-  tag?: string;
-  tagColor?: string;
+  statusLabel: string;
   phone: string;
   aiSummary: string;
   patientId?: string;
@@ -63,27 +51,22 @@ interface Thread {
 const CLINICAL_TEMPLATES = [
   {
     title: 'Post-Procedure Care',
-    label: 'Post-Op',
     text: 'Keep the treated area clean and dry for 24 hours. Apply the prescribed soothing ointment twice daily. Avoid direct sun exposure and do not pick at scabs or peeling skin.'
   },
   {
     title: 'Prescription & Dosage Guide',
-    label: 'Rx Guide',
     text: 'Please take your medications as prescribed after meals. If using topical cream, apply a pea-sized amount evenly to affected areas at bedtime.'
   },
   {
     title: 'Follow-Up Visit Booking',
-    label: 'Follow-Up',
     text: 'Doctor advises an in-clinic follow-up visit in 2 weeks to evaluate healing progression. Please reply with your preferred day or book via our clinic portal.'
   },
   {
     title: 'Lab Test Preparation',
-    label: 'Lab Prep',
     text: 'For your advised skin biopsy/blood tests, please arrive at the clinic lab fasting for 8 hours (water allowed). Bring your previous report copies.'
   },
   {
     title: 'Red Flag Emergency Alert',
-    label: 'Red Flag',
     text: 'If you develop rapid swelling, fever above 100°F, spreading pain, or bleeding from the lesion site, please visit our clinic immediately or call emergency triage.'
   }
 ];
@@ -91,9 +74,8 @@ const CLINICAL_TEMPLATES = [
 export const MessagesView: React.FC = () => {
   const { doctor } = useAuth();
   const { t } = useLanguage();
-  const isReceptionist = doctor?.role === 'receptionist';
 
-  const [activeTab, setActiveTab] = useState<'all' | 'urgent' | 'whatsapp' | 'sms' | 'doubts' | 'refills' | 'patients'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'draft_ready' | 'resolved' | 'whatsapp' | 'sms'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedThreadId, setSelectedThreadId] = useState<string>('t-1');
   const [realPatients, setRealPatients] = useState<Patient[]>([]);
@@ -101,7 +83,6 @@ export const MessagesView: React.FC = () => {
 
   // Modals & Drawers
   const [broadcastModalOpen, setBroadcastModalOpen] = useState(false);
-  const [showDigestModal, setShowDigestModal] = useState(false);
   const [showNewMessageModal, setShowNewMessageModal] = useState(false);
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
   const [showWhatsAppReportModal, setShowWhatsAppReportModal] = useState(false);
@@ -114,7 +95,31 @@ export const MessagesView: React.FC = () => {
 
   // Broadcast state
   const [broadcastFilter, setBroadcastFilter] = useState('All active patients');
-  const [broadcastText, setBroadcastText] = useState('Hi [name], this is Dr. ' + (doctor?.name || 'Sarah Chen') + ' from Dermacare. Please remember to apply SPF 50+ sunscreen daily and let us know if you need to schedule your follow-up check.');
+  const [broadcastText, setBroadcastText] = useState(
+    'Hi [name], this is Dr. ' +
+      (doctor?.name || 'Sarah Chen') +
+      ' from Dermacare. Please remember to apply SPF 50+ sunscreen daily and let us know if you need to schedule your follow-up check.'
+  );
+
+  // Refill queue state
+  const [refillQueue, setRefillQueue] = useState([
+    {
+      id: 'ref-1',
+      threadId: 't-3',
+      name: 'Simran Kaur',
+      medication: 'Antihistamine tablet, 30 days',
+      note: 'Seen 3 weeks ago · No interactions · Dose unchanged',
+      status: 'pending' as 'pending' | 'approved'
+    },
+    {
+      id: 'ref-2',
+      threadId: 't-5',
+      name: 'Meera Patel',
+      medication: 'Topical cream, 2 tubes',
+      note: 'Review due next week · Standard maintenance refill',
+      status: 'pending' as 'pending' | 'approved'
+    }
+  ]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -125,109 +130,149 @@ export const MessagesView: React.FC = () => {
     {
       id: 't-1',
       name: 'Rohit Sharma',
-      subtitle: '28y • P-24621 • WhatsApp • English',
+      subtitle: '28y · P-24621 · English',
       category: 'patients',
       channel: 'WhatsApp',
+      priority: 'urgent',
+      stage: 'needs_review',
       preview: 'Chest feels tight since morning with red rash',
       timestamp: '2 min ago',
       unread: true,
-      tag: 'Red flag - Call or WhatsApp',
-      tagColor: 'bg-rose-100 text-rose-800 border-rose-200',
+      statusLabel: 'Red flag · Immediate review',
       phone: '+91 98765 43210',
-      aiSummary: 'Patient reports acute rash extension with chest tightness. High priority clinical triage advised immediately.',
+      aiSummary: 'Patient reports acute rash extension with chest tightness. Immediate clinical triage advised.',
       messages: [
-        { sender: 'patient', text: 'Doctor, my chest feels tight and the rash is spreading since morning. Is this normal?', time: '9:30 AM' }
+        {
+          sender: 'patient',
+          text: 'Doctor, my chest feels tight and the rash is spreading since morning. Is this normal?',
+          time: '9:30 AM'
+        }
       ],
-      draftReply: 'Rohit, please call the clinic hotline (+91 98765 43210) or visit the nearest emergency room immediately for an urgent evaluation.'
+      draftReply:
+        'Rohit, please call the clinic hotline (+91 98765 43210) or visit the nearest emergency room immediately for an urgent evaluation.'
     },
     {
       id: 't-2',
       name: 'Harman Preet',
-      subtitle: '25y • P-24618 • WhatsApp • English and Punjabi',
+      subtitle: '25y · P-24618 · English & Punjabi',
       category: 'patients',
       channel: 'WhatsApp',
+      priority: 'routine',
+      stage: 'draft_ready',
       preview: 'Itching more at night, is it normal?',
       timestamp: '40 min ago',
       unread: true,
-      tag: 'Doubt - draft ready',
-      tagColor: 'bg-amber-100 text-amber-800 border-amber-200',
+      statusLabel: 'Patient question · AI draft ready',
       phone: '+91 98765 11223',
-      aiSummary: 'Less redness, more night itching. Clinical photo shows improvement. No fever or swelling mentioned.',
+      aiSummary: 'Less redness, mild night itching. Clinical photo shows barrier healing. No fever or swelling.',
       messages: [
-        { sender: 'patient', text: 'Doctor, the redness is better but the itching is more at night. Is this normal?', time: '9:41 AM', status: 'photo attached' },
-        { sender: 'doctor', text: 'Hi Harman. I received your message and photo. I will reply with advice shortly.', time: '9:45 AM', status: 'read' }
+        {
+          sender: 'patient',
+          text: 'Doctor, the redness is better but the itching is more at night. Is this normal?',
+          time: '9:41 AM',
+          status: 'photo attached'
+        },
+        {
+          sender: 'doctor',
+          text: 'Hi Harman. I received your message and photo. I will reply with advice shortly.',
+          time: '9:45 AM',
+          status: 'read'
+        }
       ],
-      draftReply: 'Mild itching at night is common as the epidermal barrier repairs. Keep the area moisturised with your prescribed cream, avoid scratching, and message us if you notice fever or pain.'
+      draftReply:
+        'Mild itching at night is common as the skin barrier repairs. Keep the area moisturised with your prescribed cream, avoid scratching, and message us if you notice fever or pain.'
     },
     {
       id: 't-3',
       name: 'Simran Kaur',
-      subtitle: '31y • P-24619 • WhatsApp • Refill request',
+      subtitle: '31y · P-24619 · Refill request',
       category: 'patients',
       channel: 'WhatsApp',
+      priority: 'routine',
+      stage: 'draft_ready',
       preview: 'Need refill for my prescribed tablets',
       timestamp: '3 h ago',
       unread: false,
-      tag: 'Refill - safe',
-      tagColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      statusLabel: 'Refill verified · Safe to approve',
       phone: '+91 91234 56789',
-      aiSummary: 'Antihistamine tablet 30 days. Seen 3 weeks ago. Safe refill authorized.',
+      aiSummary: 'Antihistamine tablet 30 days. Seen 3 weeks ago. Safe refill verified against chart.',
       messages: [
-        { sender: 'patient', text: 'Hello doctor, I need a refill for my allergy tablets for another 30 days.', time: '7:15 AM' }
+        {
+          sender: 'patient',
+          text: 'Hello doctor, I need a refill for my allergy tablets for another 30 days.',
+          time: '7:15 AM'
+        }
       ],
-      draftReply: 'Hello Simran, your 30-day refill has been authorized. You can collect your prescription or order via our partnered pharmacy.'
+      draftReply:
+        'Hello Simran, your 30-day refill has been authorized. You can collect your prescription or order via our partnered pharmacy.'
     },
     {
       id: 't-4',
       name: 'Anita Verma',
-      subtitle: '42y • P-24622 • WhatsApp • Reschedule request',
+      subtitle: '42y · P-24622 · Reschedule request',
       category: 'patients',
       channel: 'WhatsApp',
+      priority: 'routine',
+      stage: 'draft_ready',
       preview: 'Can we move my visit to Friday?',
       timestamp: '3 h ago',
       unread: false,
-      tag: 'Reschedule - 3 slots',
-      tagColor: 'bg-teal-100 text-teal-800 border-teal-200',
+      statusLabel: 'Schedule change · 3 open slots',
       phone: '+91 99887 76655',
-      aiSummary: 'Wants to move visit. Three open slots fit clinic schedule (10:00 AM, 2:30 PM, 4:00 PM).',
+      aiSummary: 'Requests moving visit to Friday. Open clinic slots: 10:00 AM, 2:30 PM, 4:00 PM.',
       messages: [
-        { sender: 'patient', text: 'Can we move my visit from tomorrow to Friday? Something urgent came up.', time: '6:50 AM' }
+        {
+          sender: 'patient',
+          text: 'Can we move my visit from tomorrow to Friday? Something urgent came up.',
+          time: '6:50 AM'
+        }
       ],
-      draftReply: 'Hi Anita, we have open slots on Friday at 10:00 AM, 2:30 PM, or 4:00 PM. Would any of these work for you?'
+      draftReply:
+        'Hi Anita, we have open slots on Friday at 10:00 AM, 2:30 PM, or 4:00 PM. Would any of these work for you?'
     },
     {
       id: 't-5',
       name: 'Meera Patel',
-      subtitle: '29y • P-24623 • SMS • Follow-up check',
+      subtitle: '29y · P-24623 · Follow-up check',
       category: 'patients',
       channel: 'SMS',
+      priority: 'routine',
+      stage: 'resolved',
       preview: 'Thank you for the prescription',
       timestamp: 'Yesterday',
       unread: false,
-      tag: 'Follow-up nudge',
-      tagColor: 'bg-slate-100 text-slate-700 border-slate-200',
+      statusLabel: 'Follow-up logged',
       phone: '+91 98111 22334',
-      aiSummary: 'Topical cream 2 tubes. Review due next week.',
+      aiSummary: 'Topical cream 2 tubes. Patient confirmed adherence. Next review in 7 days.',
       messages: [
-        { sender: 'patient', text: 'Thank you for the prescription. I am using the cream as directed.', time: 'Yesterday' }
+        {
+          sender: 'patient',
+          text: 'Thank you for the prescription. I am using the cream as directed.',
+          time: 'Yesterday'
+        }
       ],
-      draftReply: 'Hi Meera, glad to hear that. Please let us know if you experience any mild stinging or if you need a follow-up consultation.'
+      draftReply: ''
     },
     {
       id: 't-6',
       name: 'Apollo Pharmacy Hub',
-      subtitle: 'Partner Pharmacy • Refill Verification',
+      subtitle: 'Partner Pharmacy · Batch verification',
       category: 'pharmacies',
       channel: 'SMS',
+      priority: 'routine',
+      stage: 'needs_review',
       preview: 'Verifying prescription batch #RX-8842',
       timestamp: '1 h ago',
       unread: true,
-      tag: 'Pharmacy',
-      tagColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      statusLabel: 'Pharmacy authorization',
       phone: '+91 1800 420 000',
-      aiSummary: 'Partner pharmacy requesting stock confirmation for topical corticosteroid cream.',
+      aiSummary: 'Partner pharmacy requesting dispensing confirmation for Harman Preet (P-24618).',
       messages: [
-        { sender: 'patient', text: 'Hello Doctor, confirming prescription for patient Harman (P-24618). Please authorize.', time: '11:15 AM' }
+        {
+          sender: 'patient',
+          text: 'Hello Doctor, confirming prescription for patient Harman (P-24618). Please authorize.',
+          time: '11:15 AM'
+        }
       ],
       draftReply: 'Prescription batch #RX-8842 verified and authorized for dispensing.'
     }
@@ -236,7 +281,8 @@ export const MessagesView: React.FC = () => {
   // Load registered patients from clinic database
   useEffect(() => {
     setIsLoadingPatients(true);
-    api.patients.list()
+    api.patients
+      .list()
       .then(res => {
         if (res.patients && res.patients.length > 0) {
           setRealPatients(res.patients);
@@ -248,49 +294,58 @@ export const MessagesView: React.FC = () => {
 
   const activeThread = threads.find(t => t.id === selectedThreadId) || threads[0];
 
-  // Dispatch a message
-  const handleSendMessage = async (textToSend: string, forceWhatsApp = false) => {
+  // Pipeline counts
+  const urgentCount = threads.filter(t => t.priority === 'urgent' && t.stage !== 'resolved').length;
+  const draftReadyCount = threads.filter(t => t.stage === 'draft_ready').length;
+  const needsReviewCount = threads.filter(t => t.stage === 'needs_review').length;
+  const resolvedCount = threads.filter(t => t.stage === 'resolved').length;
+
+  // Dispatch a message & advance pipeline stage to 'resolved'
+  const handleSendMessage = async (textToSend: string, openInWhatsAppTab = false) => {
     if (!textToSend.trim() || !activeThread) return;
     setIsDispatching(true);
 
     const messageText = textToSend.trim();
     const cleanPhone = cleanPhoneNumber(activeThread.phone);
 
-    // If channel is WhatsApp or forceWhatsApp is true, trigger WhatsApp dispatch
-    if (activeThread.channel === 'WhatsApp' || forceWhatsApp) {
+    if (activeThread.channel === 'WhatsApp' || openInWhatsAppTab) {
       try {
-        // 1. Audit log to server pipeline
-        await api.reports.logWhatsApp({
-          patientId: activeThread.patientId || activeThread.id,
-          reportType: 'chat_message',
-          recipientMobile: cleanPhone,
-          note: messageText.slice(0, 100)
-        }).catch(() => {});
+        await api.reports
+          .logWhatsApp({
+            patientId: activeThread.patientId || activeThread.id,
+            reportType: 'chat_message',
+            recipientMobile: cleanPhone,
+            note: messageText.slice(0, 100)
+          })
+          .catch(() => {});
 
-        // 2. Open WhatsApp Web or Native URI
-        const webUrl = getWhatsAppWebUrl(cleanPhone, messageText);
-        window.open(webUrl, '_blank');
-
-        showToast(`Opened WhatsApp chat for ${activeThread.name}! Message queued.`);
+        if (openInWhatsAppTab) {
+          const webUrl = getWhatsAppWebUrl(cleanPhone, messageText);
+          window.open(webUrl, '_blank');
+          showToast(`Opened WhatsApp Web for ${activeThread.name} and logged reply.`);
+        } else {
+          showToast(`Reply sent and logged to ${activeThread.name}'s WhatsApp thread.`);
+        }
       } catch {
         showToast(`Dispatched message to ${activeThread.name}`);
       }
     } else {
-      showToast(`Message dispatched via ${activeThread.channel} to ${activeThread.name}`);
+      showToast(`Message sent via ${activeThread.channel} to ${activeThread.name}`);
     }
 
-    // Update local thread messages
     setThreads(prev =>
       prev.map(t => {
         if (t.id === activeThread.id) {
           return {
             ...t,
+            stage: 'resolved',
+            statusLabel: 'Resolved · Sent just now',
             messages: [
               ...t.messages,
-              { sender: 'doctor', text: messageText, time: 'Just now', status: 'sent' }
+              { sender: 'doctor', text: messageText, time: 'Just now', status: 'dispatched' }
             ],
             draftReply: '',
-            preview: messageText,
+            preview: `You: ${messageText}`,
             timestamp: 'Just now',
             unread: false
           };
@@ -303,53 +358,113 @@ export const MessagesView: React.FC = () => {
     setIsDispatching(false);
   };
 
+  // Batch approve all safe drafts in pipeline
+  const handleBatchApproveDrafts = () => {
+    const readyThreads = threads.filter(t => t.stage === 'draft_ready' && t.draftReply);
+    if (readyThreads.length === 0) {
+      showToast('All queued drafts have already been approved and sent.');
+      return;
+    }
+
+    setThreads(prev =>
+      prev.map(t => {
+        if (t.stage === 'draft_ready' && t.draftReply) {
+          return {
+            ...t,
+            stage: 'resolved',
+            statusLabel: 'Resolved · Batch approved',
+            messages: [
+              ...t.messages,
+              { sender: 'doctor', text: t.draftReply, time: 'Just now', status: 'dispatched' }
+            ],
+            preview: `You: ${t.draftReply}`,
+            draftReply: '',
+            timestamp: 'Just now',
+            unread: false
+          };
+        }
+        return t;
+      })
+    );
+    showToast(`Approved and dispatched ${readyThreads.length} patient drafts.`);
+  };
+
+  // Mark thread resolved or reopen
+  const handleToggleThreadStage = (threadId: string) => {
+    setThreads(prev =>
+      prev.map(t => {
+        if (t.id === threadId) {
+          const nextStage: PipelineStage = t.stage === 'resolved' ? 'needs_review' : 'resolved';
+          return {
+            ...t,
+            stage: nextStage,
+            unread: false,
+            statusLabel: nextStage === 'resolved' ? 'Resolved' : 'Reopened for review'
+          };
+        }
+        return t;
+      })
+    );
+  };
+
   // Start or open thread with a patient from the clinic EHR
   const handleSelectPatientForMessaging = (patient: Patient) => {
     const existingThread = threads.find(
-      t => t.patientId === patient.id || t.phone.replace(/\D/g, '').endsWith((patient.mobile || '').slice(-10))
+      t =>
+        t.patientId === patient.id ||
+        t.phone.replace(/\D/g, '').endsWith((patient.mobile || '').slice(-10))
     );
 
     if (existingThread) {
       setSelectedThreadId(existingThread.id);
       setShowNewMessageModal(false);
-      showToast(`Selected existing thread with ${patient.fullName}`);
+      showToast(`Opened conversation with ${patient.fullName}`);
       return;
     }
 
-    const cleanNumber = patient.mobile ? `+91 ${patient.mobile.replace(/\D/g, '').slice(-10)}` : '+91 98000 00000';
+    const cleanNumber = patient.mobile
+      ? `+91 ${patient.mobile.replace(/\D/g, '').slice(-10)}`
+      : '+91 98000 00000';
     const newThread: Thread = {
       id: `p-thread-${patient.id}`,
       name: patient.fullName,
-      subtitle: `${patient.age}y • ${patient.patientCode} • WhatsApp • ${patient.gender}`,
+      subtitle: `${patient.age}y · ${patient.patientCode} · ${patient.gender}`,
       category: 'patients',
       channel: 'WhatsApp',
-      preview: patient.notes ? `Notes: ${patient.notes.slice(0, 45)}` : 'New conversation with patient',
+      priority: 'routine',
+      stage: 'draft_ready',
+      preview: patient.notes ? `Notes: ${patient.notes.slice(0, 45)}` : 'Direct patient follow-up',
       timestamp: 'Just now',
       unread: false,
-      tag: 'Registered Patient',
-      tagColor: 'bg-teal-100 text-teal-800 border-teal-200',
+      statusLabel: 'EHR Patient · Draft ready',
       phone: cleanNumber,
       patientId: patient.id,
-      aiSummary: `EHR Profile: ${patient.age}y ${patient.gender}. Allergies: ${patient.allergies || 'None documented'}. Medical History: ${patient.medicalHistory || 'Routine'}.`,
+      aiSummary: `EHR Profile: ${patient.age}y ${patient.gender}. Allergies: ${
+        patient.allergies || 'None documented'
+      }. Medical History: ${patient.medicalHistory || 'Routine'}.`,
       messages: [
         {
           sender: 'ai',
-          text: `EHR link established for ${patient.fullName} (${patient.patientCode}). You can send clinical updates, Rx reminders, or open WhatsApp Web directly.`,
+          text: `Connected to ${patient.fullName}'s EHR record (${patient.patientCode}).`,
           time: 'Just now'
         }
       ],
-      draftReply: `Hello ${patient.fullName}, this is Dr. ${doctor?.name || 'Sarah Chen'} following up regarding your dermatology visit. How is your skin condition improving?`
+      draftReply: `Hello ${patient.fullName}, this is Dr. ${
+        doctor?.name || 'Sarah Chen'
+      } following up regarding your dermatology visit. How is your skin responding to treatment?`
     };
 
     setThreads(prev => [newThread, ...prev]);
     setSelectedThreadId(newThread.id);
     setShowNewMessageModal(false);
-    showToast(`Started new WhatsApp thread with ${patient.fullName}`);
+    showToast(`Started conversation with ${patient.fullName}`);
   };
 
   // Open full WhatsApp report modal for the active patient
   const handleOpenWhatsAppShareModal = () => {
-    let targetPatient = realPatients.find(p => p.id === activeThread.patientId || p.fullName === activeThread.name);
+    let targetPatient = realPatients.find(
+      p => p.id === activeThread.patientId || p.fullName === activeThread.name
+    );
     if (!targetPatient) {
       targetPatient = {
         id: activeThread.id,
@@ -366,351 +481,442 @@ export const MessagesView: React.FC = () => {
     setShowWhatsAppReportModal(true);
   };
 
+  const filteredThreads = threads.filter(t => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (
+        !t.name.toLowerCase().includes(q) &&
+        !t.preview.toLowerCase().includes(q) &&
+        !t.phone.includes(q)
+      ) {
+        return false;
+      }
+    }
+    if (activeFilter === 'urgent') return t.priority === 'urgent' && t.stage !== 'resolved';
+    if (activeFilter === 'draft_ready') return t.stage === 'draft_ready';
+    if (activeFilter === 'resolved') return t.stage === 'resolved';
+    if (activeFilter === 'whatsapp') return t.channel === 'WhatsApp';
+    if (activeFilter === 'sms') return t.channel === 'SMS';
+    return true;
+  });
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-200 pb-16">
+    <div className="space-y-5 animate-in fade-in duration-150 pb-12">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-[#0d3f3b] text-white px-4 py-3 rounded-2xl shadow-xl border border-teal-500/40 flex items-center gap-2.5 animate-in slide-in-from-top-2 duration-150">
+        <div className="fixed top-5 right-5 z-50 bg-[#0d3f3b] text-white px-4 py-3 rounded-xl shadow-lg border border-teal-500/30 flex items-center gap-2.5 animate-in slide-in-from-top-2 duration-150">
           <CheckCircle2 className="w-4 h-4 text-teal-300 shrink-0" />
-          <span className="text-xs font-semibold">{toastMessage}</span>
+          <span className="text-xs font-medium">{toastMessage}</span>
         </div>
       )}
 
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Clean Header & Primary Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0f2926] tracking-tight">
-              Messages &amp; Patient Communications
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center gap-1">
-              <WhatsAppIcon className="w-3 h-3 fill-emerald-700" />
-              WhatsApp Live
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-[#5c7c77] mt-1">
-            Omnichannel triage &amp; automated WhatsApp messaging pipeline for prescriptions, follow-ups, and clinical alerts.
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            Patient Inbox &amp; Triage Pipeline
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Review incoming patient queries, approve AI-drafted clinical responses, and dispatch via WhatsApp or SMS.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => setShowNewMessageModal(true)}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            <Plus className="w-4 h-4 text-teal-700" />
-            <span>+ Message Patient</span>
+            <Plus className="w-3.5 h-3.5 text-teal-700" />
+            <span>Message Patient</span>
           </button>
           <button
             type="button"
             onClick={() => setBroadcastModalOpen(true)}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            <MessageSquare className="w-4 h-4 text-teal-700" />
-            <span>New broadcast</span>
+            <MessageSquare className="w-3.5 h-3.5 text-teal-700" />
+            <span>Broadcast</span>
           </button>
           <button
             type="button"
-            onClick={() => {
-              const safeCount = threads.filter(t => t.tag?.includes('safe') || t.tag?.includes('draft ready')).length;
-              showToast(`Approved ${safeCount} safe AI drafts! Dispatched to patient queue.`);
-            }}
-            className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            onClick={handleBatchApproveDrafts}
+            disabled={draftReadyCount === 0}
+            className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] disabled:opacity-40 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Approve safe drafts</span>
+            <CheckCircle2 className="w-3.5 h-3.5 text-teal-300" />
+            <span>Approve Ready Drafts ({draftReadyCount})</span>
           </button>
         </div>
       </div>
 
-      {/* AI Digest Banner */}
-      <div className="bg-[#0f3b37] text-white p-6 rounded-3xl shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-96 h-96 bg-teal-600/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="space-y-3 z-10 max-w-2xl">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-teal-500/30 text-teal-200 text-[10px] font-bold uppercase tracking-wider">
-              While you were in clinic • AI Triage Digest
+      {/* Interactive 4-Step Triage Pipeline Bar */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveFilter('urgent');
+            const firstUrgent = threads.find(t => t.priority === 'urgent' && t.stage !== 'resolved');
+            if (firstUrgent) setSelectedThreadId(firstUrgent.id);
+          }}
+          className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+            activeFilter === 'urgent'
+              ? 'bg-rose-50/90 border-rose-300 ring-2 ring-rose-500/20'
+              : 'bg-white border-slate-200 hover:border-rose-200'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-rose-700">
+              01. Urgent Triage
             </span>
+            <AlertCircle className="w-4 h-4 text-rose-600" />
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
-            3 need you now. 5 are ready to approve. 4 can wait.
-          </h2>
-          <ul className="text-xs sm:text-sm text-teal-100 space-y-1 font-medium list-disc list-inside">
-            <li>Rohit Sharma reports spreading rash &amp; chest tightness. Call him first.</li>
-            <li>Simran&apos;s allergy tablet refill is safe to approve.</li>
-            <li>Anita wants to move her visit to Friday. Three slots fit your day.</li>
-          </ul>
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('urgent');
-                const urgent = threads.find(t => t.tag?.includes('Red flag') || t.tag?.includes('urgent'));
-                if (urgent) setSelectedThreadId(urgent.id);
-              }}
-              className="px-4 py-2 bg-white text-[#0f3b37] rounded-xl text-xs font-bold hover:bg-teal-50 transition-colors shadow-xs cursor-pointer"
-            >
-              Handle urgent first →
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowDigestModal(true)}
-              className="px-4 py-2 bg-teal-800/80 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition-colors border border-teal-600/40 cursor-pointer"
-            >
-              Read full digest
-            </button>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 font-mono">{urgentCount}</span>
+            <span className="text-xs text-slate-500">red flag cases</span>
           </div>
-        </div>
+        </button>
 
-        {/* Digest Metrics Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-3 w-full lg:w-auto z-10 shrink-0">
-          <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10 text-center">
-            <span className="text-2xl font-extrabold text-white block">12</span>
-            <span className="text-[10px] text-teal-200 font-bold uppercase tracking-wider">unread</span>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveFilter('draft_ready');
+            const firstDraft = threads.find(t => t.stage === 'draft_ready');
+            if (firstDraft) setSelectedThreadId(firstDraft.id);
+          }}
+          className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+            activeFilter === 'draft_ready'
+              ? 'bg-amber-50/90 border-amber-300 ring-2 ring-amber-500/20'
+              : 'bg-white border-slate-200 hover:border-amber-200'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+              02. AI Drafts Ready
+            </span>
+            <Clock className="w-4 h-4 text-amber-600" />
           </div>
-          <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10 text-center">
-            <span className="text-2xl font-extrabold text-rose-300 block">3</span>
-            <span className="text-[10px] text-rose-200 font-bold uppercase tracking-wider">red flags</span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 font-mono">{draftReadyCount}</span>
+            <span className="text-xs text-slate-500">awaiting 1-click sign-off</span>
           </div>
-          <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10 text-center">
-            <span className="text-2xl font-extrabold text-white block">4 min</span>
-            <span className="text-[10px] text-teal-200 font-bold uppercase tracking-wider">average reply</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveFilter('all')}
+          className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+            activeFilter === 'all'
+              ? 'bg-teal-50/70 border-teal-300 ring-2 ring-teal-500/20'
+              : 'bg-white border-slate-200 hover:border-teal-200'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-teal-800">
+              03. Open Queue
+            </span>
+            <MessageSquare className="w-4 h-4 text-teal-700" />
           </div>
-          <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10 text-center">
-            <span className="text-2xl font-extrabold text-teal-300 block">38%</span>
-            <span className="text-[10px] text-teal-200 font-bold uppercase tracking-wider">AI resolved</span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 font-mono">
+              {needsReviewCount + draftReadyCount}
+            </span>
+            <span className="text-xs text-slate-500">active conversations</span>
           </div>
-        </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveFilter('resolved')}
+          className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+            activeFilter === 'resolved'
+              ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-500/20'
+              : 'bg-white border-slate-200 hover:border-emerald-200'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-800">
+              04. Dispatched &amp; Resolved
+            </span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 font-mono">{resolvedCount}</span>
+            <span className="text-xs text-slate-500">completed today</span>
+          </div>
+        </button>
       </div>
 
-      {/* Two-Column Inbox Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Thread List Column (5 Cols) */}
-        <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden flex flex-col h-[760px]">
-          {/* Search & Filters */}
-          <div className="p-4 border-b border-slate-200 space-y-3 bg-slate-50/70">
+      {/* Main Split-Pane Workspace */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* LEFT COLUMN: Clean Queue List (4 Cols) */}
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[680px]">
+          {/* Search & Segmented Filter Controls */}
+          <div className="p-3.5 border-b border-slate-200 space-y-2.5 bg-slate-50/50">
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search patient name, phone, or message text..."
+                placeholder="Filter by patient name or phone..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full text-xs pl-9 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                className="w-full text-xs pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-600 focus:outline-none"
               />
             </div>
 
-            {/* Category / Channel Pills */}
-            <div className="flex flex-wrap gap-1.5 pt-1">
+            {/* Clean Segmented Filter Bar */}
+            <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg overflow-x-auto">
               {[
                 { id: 'all', label: 'All' },
-                { id: 'whatsapp', label: 'WhatsApp', icon: WhatsAppIcon },
                 { id: 'urgent', label: 'Urgent' },
-                { id: 'refills', label: 'Refills' },
-                { id: 'doubts', label: 'Doubts' },
+                { id: 'draft_ready', label: 'Drafts' },
+                { id: 'whatsapp', label: 'WhatsApp' },
                 { id: 'sms', label: 'SMS' },
-                { id: 'patients', label: `Clinic Patients (${realPatients.length})` }
-              ].map(tab => {
-                const IconComponent = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 cursor-pointer ${
-                      activeTab === tab.id
-                        ? 'bg-teal-700 text-white border-teal-700 shadow-2xs'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {IconComponent && <IconComponent className={`w-3 h-3 ${activeTab === tab.id ? 'fill-white' : 'fill-emerald-600'}`} />}
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
+                { id: 'resolved', label: 'Resolved' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveFilter(tab.id as any)}
+                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors shrink-0 cursor-pointer ${
+                    activeFilter === tab.id
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Quick Patient Direct Message Shortcut Bar */}
-          <div className="px-4 py-2.5 bg-teal-50/60 border-b border-teal-100/80 flex items-center justify-between text-xs">
-            <span className="text-[11px] font-bold text-teal-900 flex items-center gap-1.5">
+          {/* Direct EHR Patient Selector Bar */}
+          <div className="px-4 py-2 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between text-xs">
+            <span className="text-[11px] font-medium text-slate-600 flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-teal-700" />
-              Direct Patient Messaging
+              <span>{realPatients.length} patients in EHR</span>
             </span>
             <button
               type="button"
               onClick={() => setShowNewMessageModal(true)}
-              className="text-[10.5px] font-bold text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
+              className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 flex items-center gap-0.5 cursor-pointer"
             >
-              <span>+ Pick from EHR</span>
-              <ChevronRight className="w-3 h-3" />
+              <span>Select patient</span>
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* Thread List Items */}
+          {/* Thread Queue Items */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-            {threads
-              .filter(t => {
-                if (searchQuery) {
-                  const q = searchQuery.toLowerCase();
-                  if (!t.name.toLowerCase().includes(q) && !t.preview.toLowerCase().includes(q) && !t.phone.includes(q)) {
-                    return false;
-                  }
-                }
-                if (activeTab === 'urgent' && !t.tag?.toLowerCase().includes('red flag') && !t.tag?.toLowerCase().includes('urgent')) return false;
-                if (activeTab === 'doubts' && !t.tag?.toLowerCase().includes('doubt')) return false;
-                if (activeTab === 'refills' && !t.tag?.toLowerCase().includes('refill')) return false;
-                if (activeTab === 'whatsapp' && t.channel !== 'WhatsApp') return false;
-                if (activeTab === 'sms' && t.channel !== 'SMS') return false;
-                if (activeTab === 'patients' && !t.patientId) return false;
-                return true;
-              })
-              .map(th => {
+            {filteredThreads.length === 0 ? (
+              <div className="p-8 text-center space-y-2">
+                <p className="text-xs font-semibold text-slate-700">No conversations in this filter</p>
+                <p className="text-[11px] text-slate-400">
+                  Switch filters above or start a new message with a patient.
+                </p>
+              </div>
+            ) : (
+              filteredThreads.map(th => {
                 const isSelected = th.id === selectedThreadId;
-                const isWhatsApp = th.channel === 'WhatsApp';
+                const isUrgent = th.priority === 'urgent' && th.stage !== 'resolved';
+
                 return (
-                  <div
+                  <button
                     key={th.id}
-                    onClick={() => setSelectedThreadId(th.id)}
-                    className={`p-4 cursor-pointer transition-colors flex items-start gap-3 relative ${
-                      isSelected ? 'bg-teal-50/70 border-l-4 border-teal-700' : 'hover:bg-slate-50'
+                    type="button"
+                    onClick={() => {
+                      setSelectedThreadId(th.id);
+                      setThreads(prev =>
+                        prev.map(item => (item.id === th.id ? { ...item, unread: false } : item))
+                      );
+                    }}
+                    className={`w-full text-left p-3.5 transition-colors flex items-start gap-3 cursor-pointer ${
+                      isSelected
+                        ? 'bg-teal-50/60 border-l-4 border-[#0d3f3b]'
+                        : 'hover:bg-slate-50 border-l-4 border-transparent'
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-full text-white font-bold text-xs flex items-center justify-center shrink-0 relative ${
-                      isWhatsApp ? 'bg-emerald-600' : 'bg-teal-800'
-                    }`}>
+                    <div
+                      className={`w-9 h-9 rounded-full text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 ${
+                        isUrgent
+                          ? 'bg-rose-600'
+                          : th.channel === 'WhatsApp'
+                          ? 'bg-[#0d3f3b]'
+                          : 'bg-slate-700'
+                      }`}
+                    >
                       {th.name.charAt(0)}
-                      {isWhatsApp && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center">
-                          <WhatsAppIcon className="w-2.5 h-2.5 fill-white" />
-                        </div>
-                      )}
                     </div>
+
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs text-slate-900 truncate">{th.name}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className={`text-xs truncate ${
+                              th.unread ? 'font-bold text-slate-950' : 'font-semibold text-slate-800'
+                            }`}
+                          >
+                            {th.name}
+                          </span>
+                          {th.unread && (
+                            <span className="w-2 h-2 rounded-full bg-teal-600 shrink-0" />
+                          )}
+                        </div>
                         <span className="text-[10px] text-slate-400 shrink-0">{th.timestamp}</span>
                       </div>
-                      <p className="text-[11px] text-slate-500 truncate mt-0.5">{th.subtitle}</p>
-                      <p className="text-xs font-medium text-slate-700 truncate mt-1">{th.preview}</p>
-                      <div className="flex items-center gap-1.5 flex-wrap mt-2">
-                        {th.tag && (
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${th.tagColor}`}>
-                            {th.tag}
-                          </span>
-                        )}
-                        <span className={`text-[9.5px] px-1.5 py-0.2 rounded font-semibold ${
-                          isWhatsApp ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'
-                        }`}>
-                          {th.channel}
+
+                      {/* Clean unboxed metadata line */}
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5 truncate">
+                        <span>{th.channel}</span>
+                        <span aria-hidden="true">·</span>
+                        <span
+                          className={
+                            isUrgent
+                              ? 'text-rose-600 font-semibold'
+                              : th.stage === 'draft_ready'
+                              ? 'text-amber-700 font-medium'
+                              : th.stage === 'resolved'
+                              ? 'text-emerald-700 font-medium'
+                              : 'text-slate-500'
+                          }
+                        >
+                          {th.statusLabel}
                         </span>
                       </div>
+
+                      <p className="text-xs text-slate-600 truncate mt-1">{th.preview}</p>
                     </div>
-                    {th.unread && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 absolute right-4 top-4" />
-                    )}
-                  </div>
+                  </button>
                 );
-              })}
+              })
+            )}
           </div>
         </div>
 
-        {/* Right Active Thread Chat & Action Panel (7 Cols) */}
-        <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden flex flex-col h-[760px]">
-          {/* Thread Top Bar */}
-          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70 gap-2 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={`w-10 h-10 rounded-full text-white font-bold text-sm flex items-center justify-center shrink-0 ${
-                activeThread.channel === 'WhatsApp' ? 'bg-emerald-600' : 'bg-teal-700'
-              }`}>
-                {activeThread.name.charAt(0)}
+        {/* RIGHT COLUMN: Focused Conversation & Action Workspace (8 Cols) */}
+        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[680px]">
+          {/* Active Patient Top Bar */}
+          <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap bg-white">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900 truncate">{activeThread.name}</h2>
+                <span className="text-xs text-slate-400" aria-hidden="true">
+                  ·
+                </span>
+                <span className="text-xs font-mono text-slate-600">{activeThread.phone}</span>
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-slate-900 truncate">{activeThread.name}</h3>
-                  {activeThread.channel === 'WhatsApp' && (
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center gap-1 shrink-0">
-                      <WhatsAppIcon className="w-2.5 h-2.5 fill-emerald-800" />
-                      WhatsApp
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                  <span className="font-mono">{activeThread.phone}</span>
-                  <span>•</span>
-                  <span className="truncate">{activeThread.subtitle}</span>
-                </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                <span>{activeThread.subtitle}</span>
+                <span aria-hidden="true">·</span>
+                <span>Via {activeThread.channel}</span>
               </div>
             </div>
 
-            {/* Header Direct Actions */}
-            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-              {/* WhatsApp Web Direct Launch Button */}
-              <a
-                href={getWhatsAppWebUrl(cleanPhoneNumber(activeThread.phone), customReply || activeThread.draftReply || `Hello ${activeThread.name}, this is Dr. ${doctor?.name || 'Sarah Chen'}.`)}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
-                title="Open directly in WhatsApp Web in a new browser tab"
+            {/* Clean Action Bar */}
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleToggleThreadStage(activeThread.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  activeThread.stage === 'resolved'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
               >
-                <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
-                <span>WhatsApp Web</span>
-              </a>
+                <Check className="w-3.5 h-3.5" />
+                <span>{activeThread.stage === 'resolved' ? 'Resolved' : 'Mark Resolved'}</span>
+              </button>
 
-              {/* Direct Phone Dial Link */}
               <a
                 href={`tel:${activeThread.phone.replace(/\s+/g, '')}`}
-                className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-1.5 transition-colors shadow-2xs"
-                title="Initiate direct phone call"
+                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 flex items-center gap-1.5 transition-colors"
+                title="Call patient directly"
               >
-                <Phone className="w-3.5 h-3.5 text-teal-700" />
+                <Phone className="w-3.5 h-3.5 text-slate-600" />
                 <span>Call</span>
               </a>
 
-              {/* Send Clinical Report via WhatsApp */}
               <button
                 type="button"
                 onClick={handleOpenWhatsAppShareModal}
-                className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-900 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
-                title="Send full formatted medical report or Rx to patient's WhatsApp"
+                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Format & send full Rx or clinical summary on WhatsApp"
               >
                 <FileText className="w-3.5 h-3.5 text-teal-700" />
                 <span>Send Rx / Report</span>
               </button>
+
+              <a
+                href={getWhatsAppWebUrl(
+                  cleanPhoneNumber(activeThread.phone),
+                  customReply ||
+                    activeThread.draftReply ||
+                    `Hello ${activeThread.name}, this is Dr. ${doctor?.name || 'Sarah Chen'}.`
+                )}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
+                title="Open conversation in WhatsApp Web"
+              >
+                <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                <span>WhatsApp Web</span>
+              </a>
             </div>
           </div>
 
-          {/* Scrollable Chat & AI Draft Workspace */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f8faf9]">
-            {/* AI Summary Banner */}
-            <div className="p-3.5 bg-teal-50/80 border border-teal-200 rounded-2xl text-xs space-y-1">
-              <div className="flex items-center gap-1.5 text-teal-900 font-bold">
-                <Sparkles className="w-4 h-4 text-teal-700" />
-                <span>Clinical Triage &amp; AI Thread Summary</span>
-              </div>
-              <p className="text-teal-800 leading-relaxed font-medium">{activeThread.aiSummary}</p>
+          {/* Clinical Context Strip */}
+          <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-semibold text-slate-700 shrink-0">Clinical Context:</span>
+              <span className="text-slate-600 truncate">{activeThread.aiSummary}</span>
             </div>
+            <span className="text-[11px] font-medium text-slate-400 shrink-0">
+              Stage:{' '}
+              <strong className="text-slate-700">
+                {activeThread.stage === 'needs_review'
+                  ? 'Needs Review'
+                  : activeThread.stage === 'draft_ready'
+                  ? 'Draft Ready'
+                  : 'Resolved'}
+              </strong>
+            </span>
+          </div>
 
-            {/* Chat Bubbles */}
+          {/* Conversation History Area */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#f9fbfa]">
             {activeThread.messages.map((m, idx) => (
-              <div key={idx} className={`flex ${m.sender === 'patient' ? 'justify-start' : m.sender === 'ai' ? 'justify-center' : 'justify-end'}`}>
+              <div
+                key={idx}
+                className={`flex ${
+                  m.sender === 'patient'
+                    ? 'justify-start'
+                    : m.sender === 'ai'
+                    ? 'justify-center'
+                    : 'justify-end'
+                }`}
+              >
                 {m.sender === 'ai' ? (
-                  <div className="bg-slate-100 border border-slate-200 text-slate-600 px-3.5 py-2 rounded-xl text-[11px] max-w-md text-center italic">
+                  <div className="text-[11px] text-slate-500 bg-slate-100/80 px-3 py-1 rounded-md">
                     {m.text}
                   </div>
                 ) : (
-                  <div className={`max-w-md p-3.5 rounded-2xl text-xs ${
-                    m.sender === 'patient'
-                      ? 'bg-white text-slate-800 border border-slate-200 shadow-2xs rounded-tl-xs'
-                      : 'bg-teal-800 text-white rounded-tr-xs shadow-xs'
-                  }`}>
+                  <div
+                    className={`max-w-lg px-4 py-3 rounded-2xl text-xs ${
+                      m.sender === 'patient'
+                        ? 'bg-white text-slate-800 border border-slate-200 rounded-tl-xs'
+                        : 'bg-[#0d3f3b] text-white rounded-tr-xs'
+                    }`}
+                  >
                     <p className="leading-relaxed">{m.text}</p>
-                    <div className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] ${m.sender === 'patient' ? 'text-slate-400' : 'text-teal-200'}`}>
+                    <div
+                      className={`flex items-center justify-end gap-1.5 mt-1.5 text-[10px] ${
+                        m.sender === 'patient' ? 'text-slate-400' : 'text-teal-200/90'
+                      }`}
+                    >
                       <span>{m.time}</span>
                       {m.status && (
                         <span className="flex items-center gap-0.5">
-                          • <CheckCheck className="w-3 h-3 inline text-teal-300" /> {m.status}
+                          · <CheckCheck className="w-3 h-3 inline" /> {m.status}
                         </span>
                       )}
                     </div>
@@ -719,96 +925,92 @@ export const MessagesView: React.FC = () => {
               </div>
             ))}
 
-            {/* AI Draft Response Box */}
+            {/* Clean AI Suggested Draft Card (Only visible when a draft is pending) */}
             {activeThread.draftReply && (
-              <div className="bg-white border-2 border-teal-600/30 rounded-2xl p-4 shadow-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center text-xs font-bold">
-                      AI
+              <div className="bg-white border border-teal-600/30 rounded-xl p-4 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="font-bold text-teal-900">Suggested Clinical Reply</span>
+                    <span className="text-slate-400" aria-hidden="true">
+                      ·
                     </span>
-                    <span className="text-xs font-bold text-slate-900">
-                      AI Suggested Response • Tailored to Patient EHR
-                    </span>
+                    <span className="text-slate-500">Prepared from patient chart</span>
                   </div>
-                  <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-semibold">
-                    Doctor approval required
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomReply(activeThread.draftReply);
+                        showToast('Loaded draft into composer for manual editing.');
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const alternate = `Hi ${activeThread.name}, please follow up with the clinic regarding your symptoms so we can review your progress today.`;
+                        setThreads(prev =>
+                          prev.map(t =>
+                            t.id === activeThread.id ? { ...t, draftReply: alternate } : t
+                          )
+                        );
+                        showToast('Generated alternative clinical response.');
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Rewrite</span>
+                    </button>
+                  </div>
                 </div>
 
-                <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200 leading-relaxed font-medium">
+                <p className="text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-200/80 leading-relaxed">
                   {activeThread.draftReply}
                 </p>
 
-                {/* Tone / Language Pills */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase mr-1">Tones:</span>
-                  {['Reassuring', 'Clinical', 'Concise', 'English', 'हिंदी', 'ਪੰਜਾਬੀ'].map(pill => (
+                <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+                  <span className="text-[11px] text-slate-500">
+                    Approving logs the message and marks this thread resolved.
+                  </span>
+                  <div className="flex items-center gap-2">
                     <button
-                      key={pill}
                       type="button"
-                      onClick={() => showToast(`Draft calibrated to ${pill} style.`)}
-                      className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold border border-slate-200 cursor-pointer transition-colors"
+                      disabled={isDispatching}
+                      onClick={() => handleSendMessage(activeThread.draftReply, false)}
+                      className="px-3.5 py-1.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
-                      {pill}
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Approve &amp; Log Reply</span>
                     </button>
-                  ))}
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    disabled={isDispatching}
-                    onClick={() => handleSendMessage(activeThread.draftReply)}
-                    className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Approve and Send</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCustomReply(activeThread.draftReply);
-                      showToast('Draft copied to input bar for editing.');
-                    }}
-                    className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    Edit in Bar
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Alternate draft
-                      const alternate = `Hi ${activeThread.name}, please follow up with the clinic regarding your current symptoms. Feel free to call us directly.`;
-                      setThreads(prev =>
-                        prev.map(t => (t.id === activeThread.id ? { ...t, draftReply: alternate } : t))
-                      );
-                      showToast('Generated fresh alternative draft.');
-                    }}
-                    className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
-                  >
-                    <RefreshCw className="w-3 h-3 text-slate-500" />
-                    <span>Regenerate</span>
-                  </button>
+                    {activeThread.channel === 'WhatsApp' && (
+                      <button
+                        type="button"
+                        disabled={isDispatching}
+                        onClick={() => handleSendMessage(activeThread.draftReply, true)}
+                        className="px-3.5 py-1.5 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                        <span>Approve &amp; Open WhatsApp</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Quick Clinical Templates Drawer (Toggled) */}
+            {/* Quick Clinical Templates Drawer */}
             {showTemplateDrawer && (
-              <div className="bg-white border border-teal-200 rounded-2xl p-3.5 shadow-sm space-y-2 animate-in slide-in-from-bottom-2 duration-150">
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm space-y-2.5">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="text-xs font-bold text-teal-900 flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-teal-700" />
-                    Insert Clinical Quick Template
+                  <span className="text-xs font-bold text-slate-800">
+                    Select Standard Clinical Template
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowTemplateDrawer(false)}
-                    className="text-slate-400 hover:text-slate-600 p-1"
+                    className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -821,202 +1023,197 @@ export const MessagesView: React.FC = () => {
                       onClick={() => {
                         setCustomReply(tpl.text);
                         setShowTemplateDrawer(false);
-                        showToast(`Inserted template: ${tpl.title}`);
                       }}
-                      className="text-left p-2 rounded-xl bg-slate-50 hover:bg-teal-50/80 border border-slate-200 hover:border-teal-300 transition-colors cursor-pointer"
+                      className="text-left p-2.5 rounded-lg bg-slate-50 hover:bg-teal-50/70 border border-slate-200/80 hover:border-teal-300 transition-colors cursor-pointer"
                     >
-                      <div className="text-[11px] font-bold text-slate-900">{tpl.title}</div>
-                      <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">{tpl.text}</p>
+                      <div className="text-xs font-semibold text-slate-900">{tpl.title}</div>
+                      <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{tpl.text}</p>
                     </button>
                   ))}
                 </div>
               </div>
             )}
-
-            {/* Quick Action Toolbar */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowTemplateDrawer(prev => !prev)}
-                className="px-3 py-1.5 bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-300 text-teal-900 rounded-xl text-xs font-semibold shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
-              >
-                <FileText className="w-3.5 h-3.5 text-teal-700" />
-                <span>{showTemplateDrawer ? 'Close Templates' : 'Templates'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleOpenWhatsAppShareModal}
-                className="px-3 py-1.5 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-emerald-900 rounded-xl text-xs font-semibold shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
-              >
-                <WhatsAppIcon className="w-3.5 h-3.5 fill-emerald-600" />
-                <span>WhatsApp Rx / PDF</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setCustomReply('Please find your consultation fee payment link: https://pay.dermacare.in/rx-portal');
-                  showToast('Payment link inserted into message bar.');
-                }}
-                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-              >
-                Payment Link
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setCustomReply('Please fill out the electronic consent form before your procedure: https://consent.dermacare.in/form');
-                  showToast('Consent form link inserted.');
-                }}
-                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-              >
-                Consent Form
-              </button>
-            </div>
           </div>
 
-          {/* Bottom Message Input Box */}
-          <div className="p-3 border-t border-slate-200 bg-white flex items-center gap-2">
-            <input
-              type="text"
-              placeholder={`Type a message to ${activeThread.name} (Press Enter to send)...`}
-              value={customReply}
-              onChange={e => setCustomReply(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleSendMessage(customReply);
-                }
-              }}
-              className="flex-1 text-xs px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-
-            {/* Voice Dictation for hands-free typing */}
-            <VoiceDictationButton
-              value={customReply}
-              onChange={setCustomReply}
-              variant="badge"
-              title="Speak reply with microphone (English / Hindi / Punjabi)"
-            />
-
-            {/* Send Button */}
-            <button
-              type="button"
-              disabled={isDispatching || !customReply.trim()}
-              onClick={() => handleSendMessage(customReply)}
-              className="px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>Send</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Feature Grid Sections */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
-        {/* 1. Refill Requests */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Refill Requests • AI Checked</h3>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">3 pending</span>
-          </div>
-          <div className="space-y-3">
-            {[
-              { name: 'Simran Kaur • tablet, 30 days', desc: 'Seen 3 weeks ago. No interactions. Dose unchanged.', status: 'Safe to Refill', color: 'bg-emerald-100 text-emerald-800' },
-              { name: 'Meera Patel • cream, 2 tubes', desc: 'Review overdue by 40 days.', status: 'Review Needed', color: 'bg-amber-100 text-amber-800' },
-              { name: 'Anil Kumar • steroid lotion', desc: 'Used more this month. Suggest in-clinic visit.', status: 'Red Flag', color: 'bg-rose-100 text-rose-800' },
-            ].map((ref, i) => (
-              <div key={i} className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-2">
-                <div className="space-y-0.5 min-w-0 pr-2">
-                  <p className="text-xs font-bold text-slate-900 truncate">{ref.name}</p>
-                  <p className="text-[11px] text-slate-500 truncate">{ref.desc}</p>
-                </div>
+          {/* Unified Composer Footer */}
+          <div className="p-3.5 border-t border-slate-200 bg-white space-y-2.5">
+            {/* Subtle Quick-Insert Actions */}
+            <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => showToast(`Handled refill: ${ref.name}`)}
-                  className={`px-3 py-1 rounded-xl text-[11px] font-bold shrink-0 transition cursor-pointer hover:opacity-80 ${ref.color}`}
+                  onClick={() => setShowTemplateDrawer(prev => !prev)}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-semibold transition-colors cursor-pointer"
                 >
-                  {ref.status}
+                  {showTemplateDrawer ? 'Hide Templates' : '+ Insert Template'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCustomReply(
+                      'Please complete your consultation fee payment securely here: https://pay.dermacare.in/rx-portal'
+                    )
+                  }
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-semibold transition-colors cursor-pointer"
+                >
+                  + Payment Link
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCustomReply(
+                      'Please review and sign your procedure consent form prior to your visit: https://consent.dermacare.in/form'
+                    )
+                  }
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-semibold transition-colors cursor-pointer"
+                >
+                  + Consent Link
                 </button>
               </div>
-            ))}
-          </div>
-        </div>
+              <span className="text-[11px] text-slate-400 hidden sm:inline">
+                Press Enter to log &amp; send
+              </span>
+            </div>
 
-        {/* 2. Symptom Check-Ins */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Symptom Check-Ins • Automated</h3>
-          <div className="space-y-3 pt-2">
-            <div>
-              <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                <span>Improving</span>
-                <span>64%</span>
-              </div>
-              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                <div className="w-[64%] h-full bg-teal-600 rounded-full" />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                <span>Same</span>
-                <span>24%</span>
-              </div>
-              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                <div className="w-[24%] h-full bg-amber-500 rounded-full" />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                <span>Worse</span>
-                <span>12%</span>
-              </div>
-              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                <div className="w-[12%] h-full bg-rose-500 rounded-full" />
-              </div>
-            </div>
-          </div>
-          <p className="text-[11px] text-slate-500">
-            Patients who reply &quot;worse&quot; automatically escalate to the top of your inbox with red flag banners.
-          </p>
-        </div>
+            {/* Input & Dispatch Controls */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder={`Write a message to ${activeThread.name}...`}
+                value={customReply}
+                onChange={e => setCustomReply(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && customReply.trim()) {
+                    e.preventDefault();
+                    handleSendMessage(customReply, false);
+                  }
+                }}
+                className="flex-1 text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
+              />
 
-        {/* 3. Team Inbox & Handover */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Team Inbox &amp; Handover</h3>
-          <div className="space-y-3">
-            {[
-              { role: 'Receptionist Desk', count: '3 assigned', bg: 'bg-teal-50 text-teal-800' },
-              { role: 'Clinical Nurse', count: '2 assigned', bg: 'bg-sky-50 text-sky-800' },
-              { role: 'Doctor On-Duty', count: '7 open', bg: 'bg-amber-50 text-amber-800' },
-            ].map((team, i) => (
-              <div key={i} className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900">{team.role}</span>
-                <span className={`px-2.5 py-1 rounded-xl text-xs font-extrabold ${team.bg}`}>{team.count}</span>
-              </div>
-            ))}
+              <VoiceDictationButton
+                value={customReply}
+                onChange={setCustomReply}
+                variant="badge"
+                title="Dictate reply with microphone"
+              />
+
+              <button
+                type="button"
+                disabled={isDispatching || !customReply.trim()}
+                onClick={() => handleSendMessage(customReply, false)}
+                className="px-4 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Send</span>
+              </button>
+            </div>
           </div>
-          <p className="text-[11px] text-slate-500 font-medium">
-            Shift handover notes are compiled automatically by AI at the close of every clinic session.
-          </p>
         </div>
       </div>
 
-      {/* New Patient Direct Message Selector Modal */}
+      {/* Streamlined Refill & Follow-Up Action Queue */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">
+              Pending Prescription Refill Authorizations
+            </h3>
+            <p className="text-xs text-slate-500">
+              One-click verification dispatches refill confirmation directly to the patient&apos;s thread.
+            </p>
+          </div>
+          <span className="text-xs font-semibold text-slate-500">
+            {refillQueue.filter(r => r.status === 'pending').length} pending review
+          </span>
+        </div>
+
+        <div className="divide-y divide-slate-100">
+          {refillQueue.map(item => (
+            <div
+              key={item.id}
+              className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            >
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="font-bold text-slate-900">{item.name}</span>
+                  <span className="text-slate-400" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="font-medium text-teal-800">{item.medication}</span>
+                </div>
+                <p className="text-xs text-slate-500">{item.note}</p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedThreadId(item.threadId)}
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  View Thread
+                </button>
+                {item.status === 'approved' ? (
+                  <span className="px-3 py-1.5 text-xs font-semibold text-emerald-700 flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5" />
+                    Approved
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRefillQueue(prev =>
+                        prev.map(r => (r.id === item.id ? { ...r, status: 'approved' } : r))
+                      );
+                      setThreads(prev =>
+                        prev.map(t =>
+                          t.id === item.threadId
+                            ? {
+                                ...t,
+                                stage: 'resolved',
+                                statusLabel: 'Refill approved',
+                                messages: [
+                                  ...t.messages,
+                                  {
+                                    sender: 'doctor',
+                                    text: `Refill authorized for ${item.medication}.`,
+                                    time: 'Just now',
+                                    status: 'dispatched'
+                                  }
+                                ],
+                                draftReply: ''
+                              }
+                            : t
+                        )
+                      );
+                      showToast(`Refill authorized and sent to ${item.name}.`);
+                    }}
+                    className="px-3.5 py-1.5 bg-[#0d3f3b] hover:bg-[#135650] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                  >
+                    Authorize Refill
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Modal: Select Registered Patient from EHR */}
       {showNewMessageModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900">Message a Registered Patient</h3>
-                <p className="text-xs text-slate-500">Select any patient from your EHR database to start communicating</p>
+                <p className="text-xs text-slate-500">
+                  Select any patient from your clinic EHR to open a direct WhatsApp thread
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowNewMessageModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1024,38 +1221,38 @@ export const MessagesView: React.FC = () => {
 
             <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
               {isLoadingPatients ? (
-                <div className="p-6 text-center text-xs text-slate-500">Loading patients from database...</div>
+                <div className="p-6 text-center text-xs text-slate-500">
+                  Loading patients from database...
+                </div>
               ) : realPatients.length === 0 ? (
-                <div className="p-6 text-center text-xs text-slate-500">No registered patients found.</div>
+                <div className="p-6 text-center text-xs text-slate-500">
+                  No registered patients found.
+                </div>
               ) : (
                 realPatients.map(p => (
                   <div
                     key={p.id}
                     onClick={() => handleSelectPatientForMessaging(p)}
-                    className="p-3 hover:bg-teal-50/70 transition-colors rounded-xl cursor-pointer flex items-center justify-between gap-3"
+                    className="p-3 hover:bg-slate-50 transition-colors rounded-xl cursor-pointer flex items-center justify-between gap-3"
                   >
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-900">{p.fullName}</span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded">
-                          {p.patientCode}
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="font-bold text-slate-900">{p.fullName}</span>
+                        <span className="text-slate-400" aria-hidden="true">
+                          ·
                         </span>
+                        <span className="font-mono text-slate-500">{p.patientCode}</span>
                       </div>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        {p.age}y • {p.gender} • {p.mobile || 'No mobile'}
+                        {p.age}y · {p.gender} · {p.mobile || 'No mobile'}
                       </p>
-                      {p.notes && (
-                        <p className="text-[10.5px] text-teal-800 font-medium truncate mt-0.5">
-                          {p.notes}
-                        </p>
-                      )}
                     </div>
                     <button
                       type="button"
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shrink-0"
+                      className="px-3 py-1.5 bg-[#0d3f3b] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0"
                     >
                       <WhatsAppIcon className="w-3 h-3 fill-white" />
-                      <span>Chat</span>
+                      <span>Open Thread</span>
                     </button>
                   </div>
                 ))
@@ -1066,33 +1263,30 @@ export const MessagesView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowNewMessageModal(false)}
-                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50"
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer"
               >
-                Cancel
+                Close
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Broadcast Modal */}
+      {/* Modal: Broadcast Campaign */}
       {broadcastModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
-                  <MessageSquare className="w-4 h-4 text-teal-800" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Patient Broadcast Campaign</h3>
-                  <p className="text-xs text-slate-500">Send WhatsApp announcements, follow-up reminders, or seasonal tips</p>
-                </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Patient Broadcast Campaign</h3>
+                <p className="text-xs text-slate-500">
+                  Send follow-up reminders or clinic announcements to a filtered patient group
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setBroadcastModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1119,15 +1313,8 @@ export const MessagesView: React.FC = () => {
                   rows={4}
                   value={broadcastText}
                   onChange={e => setBroadcastText(e.target.value)}
-                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600"
                 />
-              </div>
-
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 flex items-center gap-2">
-                <WhatsAppIcon className="w-4 h-4 fill-emerald-700 shrink-0" />
-                <span className="text-[11px] font-medium">
-                  Broadcasts are dispatched through the verified WhatsApp business gateway with compliance opt-out.
-                </span>
               </div>
 
               <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
@@ -1142,78 +1329,14 @@ export const MessagesView: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setBroadcastModalOpen(false);
-                    showToast(`Broadcast campaign dispatched to ${broadcastFilter}!`);
+                    showToast(`Broadcast queued for ${broadcastFilter}.`);
                   }}
-                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                  className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl font-semibold cursor-pointer flex items-center gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Send Broadcast</span>
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* AI Digest Modal */}
-      {showDigestModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-teal-700 text-white flex items-center justify-center font-bold">
-                  AI
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">AI Clinical Communication Digest</h3>
-                  <p className="text-xs text-slate-500">Summary compiled while you were with patients</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDigestModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="space-y-4 text-xs">
-              <div className="p-4 bg-teal-50 rounded-2xl border border-teal-200 space-y-2">
-                <h4 className="font-bold text-teal-900 text-sm">Priority Action Summary</h4>
-                <p className="text-teal-800 leading-relaxed font-medium">
-                  12 unread messages analyzed. 3 require immediate clinical evaluation (Red Flags), 5 refills ready for safe batch approval, and 4 general appointments/inquiries waiting.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="font-bold text-slate-800">Critical Patient Cases</h4>
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1">
-                  <div className="flex justify-between font-bold text-rose-900">
-                    <span>Rohit Sharma (P-24621) - WhatsApp</span>
-                    <span className="text-rose-700">2 min ago</span>
-                  </div>
-                  <p className="text-rose-800">Acute chest tightness and spreading rash reported. High priority clinical triage advised.</p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="font-bold text-slate-800">Routine Refills &amp; Follow-ups</h4>
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                  <span className="font-bold text-slate-900 block">Simran &amp; Meera Refill Requests</span>
-                  <p className="text-slate-600">AI verified dosage safety against patient history. Ready for 1-click batch approval.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 flex justify-end gap-2 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={() => setShowDigestModal(false)}
-                className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl font-bold shadow-xs cursor-pointer"
-              >
-                Got it, Return to Inbox
-              </button>
             </div>
           </div>
         </div>
@@ -1229,7 +1352,7 @@ export const MessagesView: React.FC = () => {
           reportType="patient_summary"
           data={{}}
           onSentSuccess={() => {
-            showToast(`WhatsApp report dispatched to ${selectedPatientForReport.fullName}!`);
+            showToast(`WhatsApp report dispatched to ${selectedPatientForReport.fullName}.`);
           }}
         />
       )}
