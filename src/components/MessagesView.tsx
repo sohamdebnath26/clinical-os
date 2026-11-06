@@ -29,6 +29,13 @@ import {
 
 type PipelineStage = 'needs_review' | 'draft_ready' | 'resolved';
 
+interface SuggestedResolution {
+  id: string;
+  label: string;
+  intent: string;
+  text: string;
+}
+
 interface Thread {
   id: string;
   name: string;
@@ -46,6 +53,7 @@ interface Thread {
   patientId?: string;
   messages: { sender: 'patient' | 'doctor' | 'ai'; text: string; time: string; status?: string }[];
   draftReply: string;
+  suggestedReplies: SuggestedResolution[];
 }
 
 const CLINICAL_TEMPLATES = [
@@ -78,6 +86,8 @@ export const MessagesView: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'draft_ready' | 'resolved' | 'whatsapp' | 'sms'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedThreadId, setSelectedThreadId] = useState<string>('t-1');
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(0);
+  const [isGeneratingAiReply, setIsGeneratingAiReply] = useState<boolean>(false);
   const [realPatients, setRealPatients] = useState<Patient[]>([]);
   const [isLoadingPatients, setIsLoadingPatients] = useState(false);
 
@@ -149,7 +159,27 @@ export const MessagesView: React.FC = () => {
         }
       ],
       draftReply:
-        'Rohit, please call the clinic hotline (+91 98765 43210) or visit the nearest emergency room immediately for an urgent evaluation.'
+        'Rohit, please stop any newly started medication immediately and visit the nearest emergency room or call our clinic hotline (+91 98765 43210) right away for an urgent evaluation of your chest tightness and rash.',
+      suggestedReplies: [
+        {
+          id: 's-1a',
+          label: 'Urgent ER & Stop Meds',
+          intent: 'Immediate safety escalation',
+          text: 'Rohit, please stop any newly started medication immediately and visit the nearest emergency room or call our clinic hotline (+91 98765 43210) right away for an urgent evaluation of your chest tightness and rash.'
+        },
+        {
+          id: 's-1b',
+          label: 'Immediate Clinic Walk-In',
+          intent: 'Priority in-clinic triage',
+          text: 'Rohit, chest tightness with a spreading rash needs immediate evaluation. Please come directly to the clinic priority desk now or head to the nearest emergency department.'
+        },
+        {
+          id: 's-1c',
+          label: 'Check Anaphylaxis Signs',
+          intent: 'Symptom screening & call',
+          text: 'Rohit, I am calling you now. If you have any difficulty breathing, lip/tongue swelling, or dizziness, please take your emergency antihistamine and go to the nearest ER immediately.'
+        }
+      ]
     },
     {
       id: 't-2',
@@ -180,7 +210,27 @@ export const MessagesView: React.FC = () => {
         }
       ],
       draftReply:
-        'Mild itching at night is common as the skin barrier repairs. Keep the area moisturised with your prescribed cream, avoid scratching, and message us if you notice fever or pain.'
+        'Mild itching at night is common as the skin barrier repairs. Keep the area well moisturised with your prescribed ceramide cream before sleep, avoid scratching, and continue your bedtime antihistamine.',
+      suggestedReplies: [
+        {
+          id: 's-2a',
+          label: 'Reassure & Moisturize',
+          intent: 'Barrier healing guidance',
+          text: 'Mild itching at night is common as the skin barrier repairs. Keep the area well moisturised with your prescribed ceramide cream before sleep, avoid scratching, and continue your bedtime antihistamine.'
+        },
+        {
+          id: 's-2b',
+          label: 'Cold Compress & Dosage Adjustment',
+          intent: 'Symptomatic relief',
+          text: 'Hi Harman, the reduced redness is a good sign of healing. For night itching, apply a cool damp compress for 5 minutes before applying your chilled moisturizer, and take your prescribed tablet 1 hour before bed.'
+        },
+        {
+          id: 's-2c',
+          label: 'Bilingual (English + Punjabi)',
+          intent: 'Patient native comfort',
+          text: 'Hi Harman, ਰਾਤ ਨੂੰ ਹਲਕੀ ਖਾਰਸ਼ ਚਮੜੀ ਦੇ ਠੀਕ ਹੋਣ ਦਾ ਹਿੱਸਾ ਹੈ। ਸੌਣ ਤੋਂ ਪਹਿਲਾਂ ਆਪਣੀ ਮਾਇਸਚਰਾਈਜ਼ਰ ਕਰੀਮ ਲਗਾਓ ਅਤੇ ਖੁਰਕਣ ਤੋਂ ਬਚੋ। (Mild night itching is normal during healing; apply moisturizer before bed.)'
+        }
+      ]
     },
     {
       id: 't-3',
@@ -204,7 +254,27 @@ export const MessagesView: React.FC = () => {
         }
       ],
       draftReply:
-        'Hello Simran, your 30-day refill has been authorized. You can collect your prescription or order via our partnered pharmacy.'
+        'Hello Simran, your 30-day allergy tablet refill has been approved. We have updated your digital prescription—you can collect it at the clinic pharmacy or order directly.',
+      suggestedReplies: [
+        {
+          id: 's-3a',
+          label: 'Approve 30-Day Refill',
+          intent: 'Full authorization',
+          text: 'Hello Simran, your 30-day allergy tablet refill has been approved. We have updated your digital prescription—you can collect it at the clinic pharmacy or order directly.'
+        },
+        {
+          id: 's-3b',
+          label: 'Approve + Book 4-Week Review',
+          intent: 'Refill with follow-up',
+          text: 'Hello Simran, I have authorized your 30-day refill. Since this completes your 2-month course, please book a brief follow-up check next month so we can taper the dose.'
+        },
+        {
+          id: 's-3c',
+          label: 'Short 14-Day Bridge Refill',
+          intent: 'Require in-person check',
+          text: 'Hello Simran, I have approved a 14-day supply to keep your symptoms controlled. Please schedule a quick clinic visit within two weeks so we can review your progress.'
+        }
+      ]
     },
     {
       id: 't-4',
@@ -228,7 +298,27 @@ export const MessagesView: React.FC = () => {
         }
       ],
       draftReply:
-        'Hi Anita, we have open slots on Friday at 10:00 AM, 2:30 PM, or 4:00 PM. Would any of these work for you?'
+        'Hi Anita, certainly. We have open slots this Friday at 10:00 AM, 2:30 PM, or 4:00 PM. Please reply with your preferred time and we will confirm your appointment.',
+      suggestedReplies: [
+        {
+          id: 's-4a',
+          label: 'Offer Friday Slots (10 AM / 2:30 PM / 4 PM)',
+          intent: 'Direct slot selection',
+          text: 'Hi Anita, certainly. We have open slots this Friday at 10:00 AM, 2:30 PM, or 4:00 PM. Please reply with your preferred time and we will confirm your appointment.'
+        },
+        {
+          id: 's-4b',
+          label: 'Confirm Friday 10:00 AM Slot',
+          intent: 'Proactive booking',
+          text: 'Hi Anita, I have tentatively reserved the Friday 10:00 AM morning slot for your visit. Let us know if you prefer an afternoon time instead.'
+        },
+        {
+          id: 's-4c',
+          label: 'Offer Tele-Consult Option',
+          intent: 'Remote alternative',
+          text: 'Hi Anita, we can move your in-clinic visit to Friday at 2:30 PM, or if it is more convenient, we can do a quick video follow-up tomorrow evening.'
+        }
+      ]
     },
     {
       id: 't-5',
@@ -251,7 +341,22 @@ export const MessagesView: React.FC = () => {
           time: 'Yesterday'
         }
       ],
-      draftReply: ''
+      draftReply:
+        'Hi Meera, glad to hear that. Remember to apply SPF 50+ sunscreen every morning while using the night cream, and message us if you notice any dryness.',
+      suggestedReplies: [
+        {
+          id: 's-5a',
+          label: 'Sunscreen & Hydration Reminder',
+          intent: 'Adherence support',
+          text: 'Hi Meera, glad to hear that. Remember to apply SPF 50+ sunscreen every morning while using the night cream, and message us if you notice any dryness.'
+        },
+        {
+          id: 's-5b',
+          label: '1-Week Photo Check-In Request',
+          intent: 'Visual progress tracking',
+          text: 'Hi Meera, great! Please share a clear daylight photo of the treated area after 7 days so we can assess your pigmentation improvement.'
+        }
+      ]
     },
     {
       id: 't-6',
@@ -274,7 +379,21 @@ export const MessagesView: React.FC = () => {
           time: '11:15 AM'
         }
       ],
-      draftReply: 'Prescription batch #RX-8842 verified and authorized for dispensing.'
+      draftReply: 'Prescription batch #RX-8842 for Harman Preet (P-24618) is verified and authorized for dispensing as written.',
+      suggestedReplies: [
+        {
+          id: 's-6a',
+          label: 'Authorize Dispensing (#RX-8842)',
+          intent: 'Approve as written',
+          text: 'Prescription batch #RX-8842 for Harman Preet (P-24618) is verified and authorized for dispensing as written.'
+        },
+        {
+          id: 's-6b',
+          label: 'Approve Brand Substitution',
+          intent: 'Allow generic equivalent',
+          text: 'Batch #RX-8842 is authorized. If the primary topical brand is out of stock, you may dispense the equivalent strength ceramide formulation.'
+        }
+      ]
     }
   ]);
 
@@ -294,11 +413,79 @@ export const MessagesView: React.FC = () => {
 
   const activeThread = threads.find(t => t.id === selectedThreadId) || threads[0];
 
+  // Reset selected suggestion index when switching threads
+  useEffect(() => {
+    setSelectedSuggestionIndex(0);
+  }, [selectedThreadId]);
+
   // Pipeline counts
   const urgentCount = threads.filter(t => t.priority === 'urgent' && t.stage !== 'resolved').length;
   const draftReadyCount = threads.filter(t => t.stage === 'draft_ready').length;
   const needsReviewCount = threads.filter(t => t.stage === 'needs_review').length;
   const resolvedCount = threads.filter(t => t.stage === 'resolved').length;
+
+  // Generate fresh AI suggested reply for the active patient's issue using backend Gemini AI
+  const handleGenerateCustomAiSuggestion = async (clinicalAngle?: string) => {
+    if (!activeThread || isGeneratingAiReply) return;
+    setIsGeneratingAiReply(true);
+
+    const lastPatientMsg =
+      [...activeThread.messages].reverse().find(m => m.sender === 'patient')?.text ||
+      activeThread.preview;
+
+    const prompt = `Act as Dr. ${doctor?.name || 'Sarah Chen'} (Dermatologist). Draft a direct, compassionate, and clinically sound WhatsApp/SMS reply (2-3 sentences max, plain text, no markdown headers) to resolve this patient's issue:
+Patient Name: ${activeThread.name} (${activeThread.subtitle})
+Clinical Context: ${activeThread.aiSummary}
+Patient's Latest Message: "${lastPatientMsg}"
+${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Provide clear medical guidance and next steps.'}`;
+
+    try {
+      const res = await api.ai.chat({
+        question: prompt,
+        patientId: activeThread.patientId,
+        contextType: 'followup'
+      });
+
+      const cleanedReply = res.answer
+        .replace(/^["']|["']$/g, '')
+        .replace(/\*\*/g, '')
+        .trim();
+
+      const newSuggestion: SuggestedResolution = {
+        id: `ai-gen-${Date.now()}`,
+        label: clinicalAngle || 'AI Tailored Resolution',
+        intent: 'Live AI clinical synthesis',
+        text: cleanedReply
+      };
+
+      setThreads(prev =>
+        prev.map(t => {
+          if (t.id === activeThread.id) {
+            const updatedSuggestions = [newSuggestion, ...(t.suggestedReplies || [])].slice(0, 4);
+            return {
+              ...t,
+              draftReply: cleanedReply,
+              suggestedReplies: updatedSuggestions
+            };
+          }
+          return t;
+        })
+      );
+      setSelectedSuggestionIndex(0);
+      showToast('Generated new AI clinical reply for ' + activeThread.name);
+    } catch {
+      const fallbackText = `Hi ${activeThread.name}, I have reviewed your message regarding "${lastPatientMsg.slice(
+        0,
+        40
+      )}...". Please continue your prescribed regimen and let us know if symptoms change so we can prioritize a clinic review.`;
+      setThreads(prev =>
+        prev.map(t => (t.id === activeThread.id ? { ...t, draftReply: fallbackText } : t))
+      );
+      showToast('Updated clinical reply suggestion.');
+    } finally {
+      setIsGeneratingAiReply(false);
+    }
+  };
 
   // Dispatch a message & advance pipeline stage to 'resolved'
   const handleSendMessage = async (textToSend: string, openInWhatsAppTab = false) => {
@@ -344,7 +531,6 @@ export const MessagesView: React.FC = () => {
               ...t.messages,
               { sender: 'doctor', text: messageText, time: 'Just now', status: 'dispatched' }
             ],
-            draftReply: '',
             preview: `You: ${messageText}`,
             timestamp: 'Just now',
             unread: false
@@ -378,7 +564,6 @@ export const MessagesView: React.FC = () => {
               { sender: 'doctor', text: t.draftReply, time: 'Just now', status: 'dispatched' }
             ],
             preview: `You: ${t.draftReply}`,
-            draftReply: '',
             timestamp: 'Just now',
             unread: false
           };
@@ -425,6 +610,10 @@ export const MessagesView: React.FC = () => {
     const cleanNumber = patient.mobile
       ? `+91 ${patient.mobile.replace(/\D/g, '').slice(-10)}`
       : '+91 98000 00000';
+    const defaultDraft = `Hello ${patient.fullName}, this is Dr. ${
+      doctor?.name || 'Sarah Chen'
+    } following up regarding your dermatology visit. How is your skin responding to treatment?`;
+
     const newThread: Thread = {
       id: `p-thread-${patient.id}`,
       name: patient.fullName,
@@ -449,9 +638,29 @@ export const MessagesView: React.FC = () => {
           time: 'Just now'
         }
       ],
-      draftReply: `Hello ${patient.fullName}, this is Dr. ${
-        doctor?.name || 'Sarah Chen'
-      } following up regarding your dermatology visit. How is your skin responding to treatment?`
+      draftReply: defaultDraft,
+      suggestedReplies: [
+        {
+          id: `s-${patient.id}-1`,
+          label: 'Treatment Progress Check-In',
+          intent: 'Routine follow-up',
+          text: defaultDraft
+        },
+        {
+          id: `s-${patient.id}-2`,
+          label: 'Request Daylight Lesion Photo',
+          intent: 'Visual assessment',
+          text: `Hello ${patient.fullName}, please reply with a clear daylight photo of the treated skin area so Dr. ${
+            doctor?.name || 'Sarah Chen'
+          } can review your healing progress.`
+        },
+        {
+          id: `s-${patient.id}-3`,
+          label: 'Schedule Review Visit',
+          intent: 'Appointment reminder',
+          text: `Hello ${patient.fullName}, your dermatology follow-up review is due this week. Please let us know your preferred day and time to book a slot.`
+        }
+      ]
     };
 
     setThreads(prev => [newThread, ...prev]);
@@ -500,6 +709,11 @@ export const MessagesView: React.FC = () => {
     return true;
   });
 
+  const activeSuggestions = activeThread.suggestedReplies || [];
+  const currentSuggestion =
+    activeSuggestions[selectedSuggestionIndex] || activeSuggestions[0] || null;
+  const activeReplyText = currentSuggestion ? currentSuggestion.text : activeThread.draftReply;
+
   return (
     <div className="space-y-5 animate-in fade-in duration-150 pb-12">
       {/* Toast Notification */}
@@ -517,7 +731,7 @@ export const MessagesView: React.FC = () => {
             Patient Inbox &amp; Triage Pipeline
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Review incoming patient queries, approve AI-drafted clinical responses, and dispatch via WhatsApp or SMS.
+            Review incoming patient queries, select AI-suggested clinical resolutions, and dispatch via WhatsApp or SMS.
           </p>
         </div>
 
@@ -650,7 +864,7 @@ export const MessagesView: React.FC = () => {
       {/* Main Split-Pane Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* LEFT COLUMN: Clean Queue List (4 Cols) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[680px]">
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[720px]">
           {/* Search & Segmented Filter Controls */}
           <div className="p-3.5 border-b border-slate-200 space-y-2.5 bg-slate-50/50">
             <div className="relative">
@@ -793,8 +1007,8 @@ export const MessagesView: React.FC = () => {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Focused Conversation & Action Workspace (8 Cols) */}
-        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[680px]">
+        {/* RIGHT COLUMN: Focused Conversation & AI Resolution Workspace (8 Cols) */}
+        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[720px]">
           {/* Active Patient Top Bar */}
           <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap bg-white">
             <div className="min-w-0">
@@ -850,7 +1064,7 @@ export const MessagesView: React.FC = () => {
                 href={getWhatsAppWebUrl(
                   cleanPhoneNumber(activeThread.phone),
                   customReply ||
-                    activeThread.draftReply ||
+                    activeReplyText ||
                     `Hello ${activeThread.name}, this is Dr. ${doctor?.name || 'Sarah Chen'}.`
                 )}
                 target="_blank"
@@ -882,7 +1096,7 @@ export const MessagesView: React.FC = () => {
             </span>
           </div>
 
-          {/* Conversation History Area */}
+          {/* Conversation History + AI Suggested Replies Panel */}
           <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#f9fbfa]">
             {activeThread.messages.map((m, idx) => (
               <div
@@ -925,80 +1139,141 @@ export const MessagesView: React.FC = () => {
               </div>
             ))}
 
-            {/* Clean AI Suggested Draft Card (Only visible when a draft is pending) */}
-            {activeThread.draftReply && (
-              <div className="bg-white border border-teal-600/30 rounded-xl p-4 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between gap-2">
+            {/* AI Suggested Replies Panel to Resolve Patient's Issue */}
+            <div className="bg-white border border-teal-700/25 rounded-xl p-4 shadow-2xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                <div>
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="font-bold text-teal-900">Suggested Clinical Reply</span>
-                    <span className="text-slate-400" aria-hidden="true">
+                    <span className="font-bold text-slate-900">
+                      AI Suggested Replies to Resolve Issue
+                    </span>
+                    <span className="text-slate-300" aria-hidden="true">
                       ·
                     </span>
-                    <span className="text-slate-500">Prepared from patient chart</span>
+                    <span className="text-[11px] text-teal-800 font-medium">
+                      {currentSuggestion?.intent || 'Tailored to patient chart'}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCustomReply(activeThread.draftReply);
-                        showToast('Loaded draft into composer for manual editing.');
-                      }}
-                      className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const alternate = `Hi ${activeThread.name}, please follow up with the clinic regarding your symptoms so we can review your progress today.`;
-                        setThreads(prev =>
-                          prev.map(t =>
-                            t.id === activeThread.id ? { ...t, draftReply: alternate } : t
-                          )
-                        );
-                        showToast('Generated alternative clinical response.');
-                      }}
-                      className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      <span>Rewrite</span>
-                    </button>
-                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Select a clinical resolution strategy below, edit in the composer, or approve to send immediately.
+                  </p>
                 </div>
 
-                <p className="text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-200/80 leading-relaxed">
-                  {activeThread.draftReply}
+                {/* Live AI Generation Trigger */}
+                <button
+                  type="button"
+                  disabled={isGeneratingAiReply}
+                  onClick={() => handleGenerateCustomAiSuggestion()}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer disabled:opacity-50"
+                  title="Generate a fresh AI clinical reply using the patient's chart and message history"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isGeneratingAiReply ? 'animate-spin text-teal-700' : ''}`} />
+                  <span>{isGeneratingAiReply ? 'Synthesizing...' : 'Generate New AI Option'}</span>
+                </button>
+              </div>
+
+              {/* Selectable Resolution Strategy Tabs */}
+              {activeSuggestions.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {activeSuggestions.map((sug, idx) => {
+                    const isSelected = idx === selectedSuggestionIndex;
+                    return (
+                      <button
+                        key={sug.id}
+                        type="button"
+                        onClick={() => setSelectedSuggestionIndex(idx)}
+                        className={`text-left p-2.5 rounded-lg border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-teal-50/80 border-teal-700 text-slate-900 shadow-2xs'
+                            : 'bg-slate-50/70 border-slate-200/90 text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[11px] font-bold truncate">
+                            {idx + 1}. {sug.label}
+                          </span>
+                          {isSelected && (
+                            <Check className="w-3 h-3 text-teal-700 shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-500 truncate mt-0.5">{sug.intent}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Selected Suggested Reply Preview Box */}
+              <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200/90 space-y-2">
+                <p className="text-xs text-slate-800 leading-relaxed">
+                  {activeReplyText}
                 </p>
 
-                <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
-                  <span className="text-[11px] text-slate-500">
-                    Approving logs the message and marks this thread resolved.
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={isDispatching}
-                      onClick={() => handleSendMessage(activeThread.draftReply, false)}
-                      className="px-3.5 py-1.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Approve &amp; Log Reply</span>
-                    </button>
-                    {activeThread.channel === 'WhatsApp' && (
+                {/* Quick AI Refinement Actions */}
+                <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-slate-200/60">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mr-1">
+                      AI Tailor:
+                    </span>
+                    {[
+                      { label: 'More Reassuring', angle: 'Warm, reassuring bedside manner with clear comfort measures' },
+                      { label: 'Request Photo', angle: 'Ask patient to send a clear daylight close-up photo of the skin area' },
+                      { label: 'Advise Clinic Visit', angle: 'Recommend an in-person dermatology examination at the clinic today or tomorrow' }
+                    ].map(action => (
                       <button
+                        key={action.label}
                         type="button"
-                        disabled={isDispatching}
-                        onClick={() => handleSendMessage(activeThread.draftReply, true)}
-                        className="px-3.5 py-1.5 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                        disabled={isGeneratingAiReply}
+                        onClick={() => handleGenerateCustomAiSuggestion(action.angle)}
+                        className="px-2 py-0.5 bg-white hover:bg-teal-50 text-slate-600 hover:text-teal-900 border border-slate-200 rounded text-[10.5px] font-medium transition-colors cursor-pointer disabled:opacity-50"
                       >
-                        <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
-                        <span>Approve &amp; Open WhatsApp</span>
+                        {action.label}
                       </button>
-                    )}
+                    ))}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomReply(activeReplyText);
+                      showToast('Loaded suggested reply into the message composer below.');
+                    }}
+                    className="text-[11px] font-semibold text-teal-700 hover:text-teal-950 cursor-pointer"
+                  >
+                    Load into composer to edit →
+                  </button>
                 </div>
               </div>
-            )}
+
+              {/* Primary 1-Click Resolution Actions */}
+              <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+                <span className="text-[11px] text-slate-500">
+                  Sending automatically logs the response and marks this issue resolved.
+                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={isDispatching || !activeReplyText}
+                    onClick={() => handleSendMessage(activeReplyText, false)}
+                    className="px-3.5 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Use Reply &amp; Resolve Issue</span>
+                  </button>
+                  {activeThread.channel === 'WhatsApp' && (
+                    <button
+                      type="button"
+                      disabled={isDispatching || !activeReplyText}
+                      onClick={() => handleSendMessage(activeReplyText, true)}
+                      className="px-3.5 py-2 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                    >
+                      <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                      <span>Send via WhatsApp Web</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
 
             {/* Quick Clinical Templates Drawer */}
             {showTemplateDrawer && (
@@ -1079,7 +1354,7 @@ export const MessagesView: React.FC = () => {
             <div className="flex items-center gap-2">
               <input
                 type="text"
-                placeholder={`Write a message to ${activeThread.name}...`}
+                placeholder={`Write or edit a custom reply to ${activeThread.name}...`}
                 value={customReply}
                 onChange={e => setCustomReply(e.target.value)}
                 onKeyDown={e => {
@@ -1180,8 +1455,7 @@ export const MessagesView: React.FC = () => {
                                     time: 'Just now',
                                     status: 'dispatched'
                                   }
-                                ],
-                                draftReply: ''
+                                ]
                               }
                             : t
                         )
