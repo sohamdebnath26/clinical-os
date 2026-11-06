@@ -56,7 +56,15 @@ interface Thread {
   phone: string;
   aiSummary: string;
   patientId?: string;
-  messages: { sender: 'patient' | 'doctor' | 'ai'; text: string; time: string; status?: string }[];
+  messages: {
+    sender: 'patient' | 'doctor' | 'ai';
+    text: string;
+    time: string;
+    status?: string;
+    receiptId?: string;
+    whatsappUrl?: string;
+    recipientPhone?: string;
+  }[];
   draftReply: string;
   suggestedReplies: SuggestedResolution[];
 }
@@ -99,6 +107,10 @@ export const MessagesView: React.FC = () => {
   const [isEditingClinicPhone, setIsEditingClinicPhone] = useState(false);
   const [clinicPhoneDraft, setClinicPhoneDraft] = useState(clinicPhone);
 
+  // Patient Recipient Phone Inline Edit State (allows diverting to any real phone number)
+  const [isEditingPatientPhone, setIsEditingPatientPhone] = useState(false);
+  const [patientPhoneDraft, setPatientPhoneDraft] = useState('');
+
   // Filter, Search & Active Thread State
   const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'draft_ready' | 'resolved' | 'whatsapp' | 'sms'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -119,10 +131,19 @@ export const MessagesView: React.FC = () => {
   const [showWhatsAppReportModal, setShowWhatsAppReportModal] = useState(false);
   const [selectedPatientForReport, setSelectedPatientForReport] = useState<Patient | null>(null);
 
-  // Reply state
+  // Reply & Live Diversion Receipt State
   const [customReply, setCustomReply] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDispatching, setIsDispatching] = useState(false);
+  const [lastDivertedReceipt, setLastDivertedReceipt] = useState<{
+    receiptId: string;
+    patientName: string;
+    clinicPhone: string;
+    recipientPhone: string;
+    messageText: string;
+    whatsappUrl: string;
+    sentAt: string;
+  } | null>(null);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
@@ -450,7 +471,7 @@ export const MessagesView: React.FC = () => {
     }
   ]);
 
-  // Load registered patients from clinic database
+  // Load registered patients & previously dispatched WhatsApp messages from clinic backend
   useEffect(() => {
     setIsLoadingPatients(true);
     api.patients
@@ -462,17 +483,62 @@ export const MessagesView: React.FC = () => {
       })
       .catch(() => {})
       .finally(() => setIsLoadingPatients(false));
+
+    api.whatsapp
+      .list()
+      .then(res => {
+        if (res.messages && res.messages.length > 0) {
+          const latest = res.messages[0];
+          setLastDivertedReceipt({
+            receiptId: latest.id,
+            patientName: latest.patientName,
+            clinicPhone: latest.clinicPhone,
+            recipientPhone: `+${latest.recipientMobile}`,
+            messageText: latest.messageText,
+            whatsappUrl: latest.whatsappUrl,
+            sentAt: latest.sentAt
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const activeThread = threads.find(t => t.id === selectedThreadId) || threads[0];
 
-  // Reset selected suggestion index & scroll when switching threads
+  // Reset selected suggestion index & inline phone edit when switching threads
   useEffect(() => {
     setSelectedSuggestionIndex(0);
+    setIsEditingPatientPhone(false);
+    setPatientPhoneDraft(activeThread?.phone || '');
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = 0;
     }
   }, [selectedThreadId]);
+
+  const handleSavePatientPhone = () => {
+    const rawDigits = patientPhoneDraft.replace(/\D/g, '');
+    if (rawDigits.length < 10) {
+      showToast('Please enter a valid 10-digit patient mobile number.');
+      return;
+    }
+    const formattedPhone =
+      rawDigits.length === 10
+        ? `+91 ${rawDigits.slice(0, 5)} ${rawDigits.slice(5)}`
+        : `+${rawDigits}`;
+
+    setThreads(prev =>
+      prev.map(t => (t.id === activeThread.id ? { ...t, phone: formattedPhone } : t))
+    );
+
+    if (activeThread.patientId) {
+      api.patients
+        .update(activeThread.patientId, { mobile: rawDigits.slice(-10) })
+        .catch(() => {});
+    }
+
+    setIsEditingPatientPhone(false);
+    showToast(`Patient number for ${activeThread.name} updated to ${formattedPhone}`);
+  };
 
   // Keyboard shortcuts (1 / 2 / 3 to quickly select AI resolution strategy when not typing in an input)
   useEffect(() => {
@@ -629,34 +695,47 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     }
   };
 
-  // Dispatch a message & ALWAYS open external WhatsApp Web tab on send, log reply, and mark resolved
+  // Dispatch a message & ALWAYS open external WhatsApp Web tab on send, log reply via backend gateway, and mark resolved
   const handleSendMessage = async (textToSend: string, alwaysOpenWhatsAppWeb = true) => {
     if (!textToSend.trim() || !activeThread) return;
     setIsDispatching(true);
 
     const messageText = textToSend.trim();
-    const cleanPhone = cleanPhoneNumber(activeThread.phone);
+    const cleanPhone = cleanPhoneNumber(activeThread.phone) || '919876543210';
+    const whatsappUrl = getWhatsAppWebUrl(cleanPhone, messageText);
 
     // Open external WhatsApp tab synchronously on click BEFORE any network await so popup blockers never interfere
     if (alwaysOpenWhatsAppWeb) {
       launchWhatsAppSynchronously(cleanPhone, messageText, 'web');
     }
 
+    let receiptId = `wa-${Date.now().toString(36)}`;
     try {
-      await api.whatsapp
-        .send({
-          patientId: activeThread.patientId || activeThread.id,
-          patientName: activeThread.name,
-          recipientMobile: cleanPhone,
-          clinicPhone,
-          reportType: 'chat_message',
-          messageText,
-          note: `[From Clinic ${clinicPhone}] ${messageText.slice(0, 100)}`
-        })
-        .catch(() => {});
+      const res = await api.whatsapp.send({
+        patientId: activeThread.patientId || activeThread.id,
+        patientName: activeThread.name,
+        recipientMobile: cleanPhone,
+        clinicPhone,
+        reportType: 'chat_message',
+        messageText,
+        note: `[From Clinic ${clinicPhone}] ${messageText.slice(0, 100)}`
+      });
+      if (res?.dispatch?.id) {
+        receiptId = res.dispatch.id;
+      }
     } catch {
-      // ignore logging error
+      // fallback receipt id if offline
     }
+
+    setLastDivertedReceipt({
+      receiptId,
+      patientName: activeThread.name,
+      clinicPhone,
+      recipientPhone: activeThread.phone,
+      messageText,
+      whatsappUrl,
+      sentAt: new Date().toISOString()
+    });
 
     setThreads(prev =>
       prev.map(t => {
@@ -664,14 +743,17 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
           return {
             ...t,
             stage: 'resolved',
-            statusLabel: 'Resolved · Sent via WhatsApp',
+            statusLabel: 'Resolved · Diverted to WhatsApp',
             messages: [
               ...t.messages,
               {
                 sender: 'doctor',
                 text: messageText,
                 time: 'Just now',
-                status: `Sent via WhatsApp (${clinicPhone})`
+                status: `Diverted: ${clinicPhone} → ${activeThread.phone}`,
+                receiptId,
+                whatsappUrl,
+                recipientPhone: activeThread.phone
               }
             ],
             preview: `You: ${messageText}`,
@@ -685,7 +767,15 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
     setCustomReply('');
     setIsDispatching(false);
-    showToast(`Sent WhatsApp message to ${activeThread.name} (${activeThread.phone}) & marked resolved.`);
+    setTimeout(() => {
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTo({
+          top: messagesContainerRef.current.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    }, 80);
+    showToast(`Message diverted from ${clinicPhone} to ${activeThread.name} (${activeThread.phone}) · Receipt #${receiptId}`);
   };
 
   // Batch approve all safe drafts in pipeline
@@ -700,12 +790,21 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     const targetThread =
       readyThreads.find(t => t.id === activeThread.id) || readyThreads[0];
     if (targetThread) {
-      const cleanPhone = cleanPhoneNumber(targetThread.phone);
-      launchWhatsAppSynchronously(cleanPhone, targetThread.draftReply, 'web');
+      const cleanPhone = cleanPhoneNumber(targetThread.phone) || '919876543210';
+      const url = launchWhatsAppSynchronously(cleanPhone, targetThread.draftReply, 'web');
+      setLastDivertedReceipt({
+        receiptId: `wa-batch-${Date.now().toString(36)}`,
+        patientName: targetThread.name,
+        clinicPhone,
+        recipientPhone: targetThread.phone,
+        messageText: targetThread.draftReply,
+        whatsappUrl: url,
+        sentAt: new Date().toISOString()
+      });
     }
 
     for (const rt of readyThreads) {
-      const cleanPhone = cleanPhoneNumber(rt.phone);
+      const cleanPhone = cleanPhoneNumber(rt.phone) || '919876543210';
       api.whatsapp
         .send({
           patientId: rt.patientId || rt.id,
@@ -721,6 +820,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     setThreads(prev =>
       prev.map(t => {
         if (t.stage === 'draft_ready' && t.draftReply) {
+          const cleanPhone = cleanPhoneNumber(t.phone) || '919876543210';
           return {
             ...t,
             stage: 'resolved',
@@ -731,7 +831,9 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                 sender: 'doctor',
                 text: t.draftReply,
                 time: 'Just now',
-                status: `Sent via WhatsApp (${clinicPhone})`
+                status: `Diverted: ${clinicPhone} → ${t.phone}`,
+                whatsappUrl: getWhatsAppWebUrl(cleanPhone, t.draftReply),
+                recipientPhone: t.phone
               }
             ],
             preview: `You: ${t.draftReply}`,
@@ -742,7 +844,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         return t;
       })
     );
-    showToast(`Approved & dispatched ${readyThreads.length} WhatsApp drafts.`);
+    showToast(`Approved & diverted ${readyThreads.length} WhatsApp drafts to patients.`);
   };
 
   // Mark thread resolved or reopen
@@ -765,10 +867,11 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
   // Start or open thread with a patient from the clinic EHR
   const handleSelectPatientForMessaging = (patient: Patient) => {
+    const patientDigits = (patient.mobile || '').replace(/\D/g, '').slice(-10);
     const existingThread = threads.find(
       t =>
         t.patientId === patient.id ||
-        t.phone.replace(/\D/g, '').endsWith((patient.mobile || '').slice(-10))
+        (patientDigits.length === 10 && t.phone.replace(/\D/g, '').endsWith(patientDigits))
     );
 
     if (existingThread) {
@@ -778,9 +881,10 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
       return;
     }
 
-    const cleanNumber = patient.mobile
-      ? `+91 ${patient.mobile.replace(/\D/g, '').slice(-10)}`
-      : '+91 98000 00000';
+    const cleanNumber =
+      patientDigits.length === 10
+        ? `+91 ${patientDigits.slice(0, 5)} ${patientDigits.slice(5)}`
+        : '+91 98765 43210';
     const defaultDraft = `Hello ${patient.fullName}, this is Dr. ${
       doctor?.name || 'Sarah Chen'
     } following up regarding your dermatology visit. How is your skin responding to treatment?`;
@@ -842,6 +946,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
   // Open full WhatsApp report modal for the active patient
   const handleOpenWhatsAppShareModal = () => {
+    const activePhoneDigits = activeThread.phone.replace(/\D/g, '').slice(-10) || '9876543210';
     let targetPatient = realPatients.find(
       p => p.id === activeThread.patientId || p.fullName === activeThread.name
     );
@@ -852,9 +957,14 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         fullName: activeThread.name,
         age: 30,
         gender: 'Other',
-        mobile: activeThread.phone.replace(/\D/g, '').slice(-10),
+        mobile: activePhoneDigits,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
+      };
+    } else {
+      targetPatient = {
+        ...targetPatient,
+        mobile: activePhoneDigits
       };
     }
     setSelectedPatientForReport(targetPatient || null);
@@ -1268,7 +1378,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
         {/* RIGHT COLUMN: Focused Conversation & AI Resolution Workspace (8 Cols) */}
         <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[760px]">
-          {/* Active Patient Top Bar + Clinic ↔ Patient Phone Routing */}
+          {/* Active Patient Top Bar + Editable Clinic ↔ Patient Phone Diversion Bar */}
           <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap bg-white">
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -1276,11 +1386,61 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                 <span className="text-xs text-slate-300" aria-hidden="true">
                   |
                 </span>
-                {/* Explicit Clinic Number ↔ Patient Number Routing Relationship */}
-                <div className="inline-flex items-center gap-1.5 text-[11px] font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                {/* Explicit Clinic Number ↔ Patient Number Routing Relationship with Inline Edit */}
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-mono bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200/80">
                   <span className="text-teal-800 font-semibold">Clinic {clinicPhone}</span>
                   <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
-                  <span className="font-bold text-slate-900">Patient {activeThread.phone}</span>
+                  {isEditingPatientPhone ? (
+                    <span className="inline-flex items-center gap-1">
+                      <input
+                        type="tel"
+                        value={patientPhoneDraft}
+                        onChange={e => setPatientPhoneDraft(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') handleSavePatientPhone();
+                          if (e.key === 'Escape') {
+                            setPatientPhoneDraft(activeThread.phone);
+                            setIsEditingPatientPhone(false);
+                          }
+                        }}
+                        autoFocus
+                        placeholder="+91 98765 43210"
+                        className="text-[11px] font-mono font-bold text-slate-900 bg-white border border-teal-500 rounded px-1.5 py-0.5 w-36 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSavePatientPhone}
+                        className="px-1.5 py-0.5 bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-sans font-bold rounded cursor-pointer"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPatientPhoneDraft(activeThread.phone);
+                          setIsEditingPatientPhone(false);
+                        }}
+                        className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-bold text-slate-900">Patient {activeThread.phone}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPatientPhoneDraft(activeThread.phone);
+                          setIsEditingPatientPhone(true);
+                        }}
+                        className="text-[10px] font-sans font-semibold text-teal-700 hover:text-teal-950 underline cursor-pointer"
+                        title="Edit patient recipient mobile number"
+                      >
+                        Edit
+                      </button>
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
@@ -1344,6 +1504,40 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
             </span>
           </div>
 
+          {/* Live Diverted Message Receipt Strip (when a message has been diverted) */}
+          {lastDivertedReceipt && (
+            <div className="px-5 py-2 bg-emerald-50/90 border-b border-emerald-200 flex items-center justify-between gap-3 flex-wrap text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="text-[11px] text-emerald-950 truncate">
+                  <strong>Diverted to {lastDivertedReceipt.patientName}</strong> ({lastDivertedReceipt.clinicPhone} →{' '}
+                  <span className="font-mono font-bold">{lastDivertedReceipt.recipientPhone}</span>) · Receipt{' '}
+                  <span className="font-mono">#{lastDivertedReceipt.receiptId}</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={lastDivertedReceipt.whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-[#25D366] hover:bg-[#20ba59] text-white font-bold text-[10.5px] rounded-md shadow-2xs"
+                >
+                  <WhatsAppIcon className="w-3 h-3 fill-white" />
+                  <span>Open in WhatsApp Tab</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setLastDivertedReceipt(null)}
+                  className="text-emerald-700 hover:text-emerald-950 p-0.5 cursor-pointer"
+                  title="Dismiss receipt banner"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Scrollable Conversation History + AI Suggested Replies Panel */}
           <div
             ref={messagesContainerRef}
@@ -1376,7 +1570,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                     >
                       <p className="leading-relaxed">{m.text}</p>
                       <div
-                        className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] ${
+                        className={`flex items-center justify-end gap-2 mt-1.5 text-[10px] flex-wrap ${
                           m.sender === 'patient' ? 'text-slate-400' : 'text-teal-200/90'
                         }`}
                       >
@@ -1385,6 +1579,17 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                           <span className="flex items-center gap-0.5">
                             · <CheckCheck className="w-3 h-3 inline" /> {m.status}
                           </span>
+                        )}
+                        {m.whatsappUrl && (
+                          <a
+                            href={m.whatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 underline text-emerald-300 hover:text-white font-semibold ml-1"
+                          >
+                            <span>Launch WhatsApp</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
                         )}
                       </div>
                     </div>
@@ -1736,7 +1941,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                 {item.status === 'approved' ? (
                   <span className="px-3 py-1.5 text-xs font-semibold text-emerald-700 flex items-center gap-1">
                     <Check className="w-3.5 h-3.5" />
-                    Approved
+                    Approved &amp; Diverted
                   </span>
                 ) : (
                   <button
@@ -1746,14 +1951,30 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                       const refillMsg = `Hello ${item.name}, your prescription refill for ${item.medication} has been authorized by Dr. ${
                         doctor?.name || 'Sarah Chen'
                       }.`;
-                      if (targetThread) {
-                        const cleanPhone = cleanPhoneNumber(targetThread.phone);
-                        window.open(
-                          getWhatsAppWebUrl(cleanPhone, refillMsg),
-                          '_blank',
-                          'noopener,noreferrer'
-                        );
-                      }
+                      const cleanPhone = cleanPhoneNumber(targetThread?.phone || '') || '919123456789';
+                      const whatsappUrl = launchWhatsAppSynchronously(cleanPhone, refillMsg, 'web');
+
+                      api.whatsapp
+                        .send({
+                          patientId: targetThread?.patientId || item.threadId,
+                          patientName: item.name,
+                          recipientMobile: cleanPhone,
+                          clinicPhone,
+                          reportType: 'refill_authorization',
+                          messageText: refillMsg
+                        })
+                        .catch(() => {});
+
+                      setLastDivertedReceipt({
+                        receiptId: `wa-rx-${Date.now().toString(36)}`,
+                        patientName: item.name,
+                        clinicPhone,
+                        recipientPhone: targetThread?.phone || `+${cleanPhone}`,
+                        messageText: refillMsg,
+                        whatsappUrl,
+                        sentAt: new Date().toISOString()
+                      });
+
                       setRefillQueue(prev =>
                         prev.map(r => (r.id === item.id ? { ...r, status: 'approved' } : r))
                       );
@@ -1763,21 +1984,23 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                             ? {
                                 ...t,
                                 stage: 'resolved',
-                                statusLabel: 'Refill approved',
+                                statusLabel: 'Refill approved & diverted',
                                 messages: [
                                   ...t.messages,
                                   {
                                     sender: 'doctor',
                                     text: refillMsg,
                                     time: 'Just now',
-                                    status: `WhatsApp Web (${clinicPhone})`
+                                    status: `Diverted: ${clinicPhone} → ${t.phone}`,
+                                    whatsappUrl,
+                                    recipientPhone: t.phone
                                   }
                                 ]
                               }
                             : t
                         )
                       );
-                      showToast(`Refill authorized & opened WhatsApp Web for ${item.name}.`);
+                      showToast(`Refill authorized & diverted to ${item.name} via WhatsApp.`);
                     }}
                     className="px-3.5 py-1.5 bg-[#0d3f3b] hover:bg-[#135650] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                   >
@@ -1919,8 +2142,34 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                 <button
                   type="button"
                   onClick={() => {
+                    const personalizedMsg = broadcastText.replace(/\[name\]/gi, activeThread.name);
+                    const cleanPhone = cleanPhoneNumber(activeThread.phone) || '919876543210';
+                    const whatsappUrl = launchWhatsAppSynchronously(cleanPhone, personalizedMsg, 'web');
+
+                    api.whatsapp
+                      .send({
+                        patientId: activeThread.patientId || activeThread.id,
+                        patientName: activeThread.name,
+                        recipientMobile: cleanPhone,
+                        clinicPhone,
+                        reportType: 'broadcast_campaign',
+                        messageText: personalizedMsg,
+                        note: `[Broadcast: ${broadcastFilter}] ${personalizedMsg.slice(0, 80)}`
+                      })
+                      .catch(() => {});
+
+                    setLastDivertedReceipt({
+                      receiptId: `wa-bcast-${Date.now().toString(36)}`,
+                      patientName: activeThread.name,
+                      clinicPhone,
+                      recipientPhone: activeThread.phone,
+                      messageText: personalizedMsg,
+                      whatsappUrl,
+                      sentAt: new Date().toISOString()
+                    });
+
                     setBroadcastModalOpen(false);
-                    showToast(`Broadcast queued from ${clinicPhone} for ${broadcastFilter}.`);
+                    showToast(`Broadcast dispatched from ${clinicPhone} for ${broadcastFilter}.`);
                   }}
                   className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl font-semibold cursor-pointer flex items-center gap-1.5"
                 >
