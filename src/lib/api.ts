@@ -1031,6 +1031,14 @@ export const api = {
       messageText: string;
       note?: string;
       autoSimulateReply?: boolean;
+      pdfAttachment?: {
+        filename: string;
+        reportId: string;
+        sizeLabel: string;
+        generatedAt: string;
+        summaryPoints?: string[];
+        pdfDataUrl?: string;
+      };
     }) =>
       fetchWithAuth<{
         success: boolean;
@@ -1047,6 +1055,14 @@ export const api = {
           clinicPhone: string;
           reportType: string;
           messageText: string;
+          pdfAttachment?: {
+            filename: string;
+            reportId: string;
+            sizeLabel: string;
+            generatedAt: string;
+            summaryPoints?: string[];
+            pdfDataUrl?: string;
+          };
           deliveryMode: 'cloud_api' | 'whatsapp_gateway';
           status: 'sent' | 'delivered';
           whatsappUrl: string;

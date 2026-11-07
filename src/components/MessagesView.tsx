@@ -10,6 +10,7 @@ import {
   getWhatsAppWebUrl,
   launchWhatsAppSynchronously
 } from '../lib/whatsappUtils';
+import { generatePatientAiReportPdf } from '../utils/generatePatientAiReportPdf';
 import {
   Search,
   Phone,
@@ -29,7 +30,8 @@ import {
   Edit2,
   ArrowRight,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Download
 } from 'lucide-react';
 
 type PipelineStage = 'needs_review' | 'draft_ready' | 'resolved';
@@ -64,6 +66,14 @@ interface Thread {
     receiptId?: string;
     whatsappUrl?: string;
     recipientPhone?: string;
+    pdfAttachment?: {
+      filename: string;
+      reportId: string;
+      sizeLabel: string;
+      generatedAt: string;
+      summaryPoints?: string[];
+      pdfDataUrl?: string;
+    };
   }[];
   draftReply: string;
   suggestedReplies: SuggestedResolution[];
@@ -130,6 +140,14 @@ export const MessagesView: React.FC = () => {
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
   const [showWhatsAppReportModal, setShowWhatsAppReportModal] = useState(false);
   const [selectedPatientForReport, setSelectedPatientForReport] = useState<Patient | null>(null);
+
+  // AI Clinical Analysis PDF Modal State
+  const [showAiPdfModal, setShowAiPdfModal] = useState(false);
+  const [aiPdfAssessmentDraft, setAiPdfAssessmentDraft] = useState('');
+  const [aiPdfPlanDraft, setAiPdfPlanDraft] = useState('');
+  const [aiPdfFollowUpDraft, setAiPdfFollowUpDraft] = useState('');
+  const [alsoDownloadLocalPdf, setAlsoDownloadLocalPdf] = useState(true);
+  const [isSendingAiPdf, setIsSendingAiPdf] = useState(false);
 
   // Reply & Live Diversion Receipt State
   const [customReply, setCustomReply] = useState('');
@@ -1093,6 +1111,198 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     setShowWhatsAppReportModal(true);
   };
 
+  // Open AI Clinical Analysis PDF Modal pre-populated with the active patient's AI summary & recommended clinical plan
+  const handleOpenAiPdfModal = () => {
+    if (!activeThread) return;
+    const currentSug =
+      (activeThread.suggestedReplies || [])[selectedSuggestionIndex] ||
+      (activeThread.suggestedReplies || [])[0] ||
+      null;
+    const planText = currentSug ? currentSug.text : activeThread.draftReply;
+
+    setAiPdfAssessmentDraft(
+      activeThread.aiSummary ||
+        `Clinical triage assessment for ${activeThread.name}. Patient reported symptoms reviewed against dermatology chart.`
+    );
+    setAiPdfPlanDraft(
+      planText ||
+        `Continue prescribed topical therapy and share a daylight progress photo with our clinic desk.`
+    );
+    setAiPdfFollowUpDraft(
+      activeThread.priority === 'urgent'
+        ? `Immediate priority dermatology evaluation advised. Contact clinic helpline (${clinicPhone}) or visit the nearest emergency center if red-flag symptoms progress.`
+        : `Follow prescribed skin care regimen for 7–14 days. Reply directly in this WhatsApp thread (${clinicPhone}) with any questions or updated photos.`
+    );
+    setShowAiPdfModal(true);
+  };
+
+  // Build the PDF payload for the active thread
+  const buildCurrentPatientAiPdf = () => {
+    const lastPatientMsg =
+      [...activeThread.messages].reverse().find(m => m.sender === 'patient')?.text ||
+      activeThread.preview;
+
+    return generatePatientAiReportPdf({
+      patientName: activeThread.name,
+      patientSubtitle: activeThread.subtitle,
+      patientPhone: activeThread.phone,
+      clinicPhone,
+      doctorName: doctor?.name || 'Sarah Chen',
+      doctorQualification: 'MD, Dermatology',
+      priority: activeThread.priority,
+      aiSummary: aiPdfAssessmentDraft.trim() || activeThread.aiSummary,
+      latestPatientMessage: lastPatientMsg,
+      recommendedPlan: aiPdfPlanDraft.trim() || activeReplyText,
+      followUpAdvice: aiPdfFollowUpDraft.trim() || undefined
+    });
+  };
+
+  // Preview / Download the AI Analysis Report PDF locally
+  const handleDownloadOrPreviewAiReportPdf = () => {
+    if (!activeThread) return;
+    const generated = buildCurrentPatientAiPdf();
+    generated.triggerDownload();
+    showToast(`Downloaded ${generated.filename} (${generated.sizeLabel})`);
+  };
+
+  // Generate & Dispatch the AI Analysis Report PDF over WhatsApp in-app (and optionally download locally)
+  const handleSendAiReportPdf = async () => {
+    if (!activeThread || isSendingAiPdf) return;
+    setIsSendingAiPdf(true);
+
+    try {
+      const generated = buildCurrentPatientAiPdf();
+      if (alsoDownloadLocalPdf) {
+        generated.triggerDownload();
+      }
+
+      const cleanPhone = cleanPhoneNumber(activeThread.phone) || '919876543210';
+      const whatsappUrl = getWhatsAppWebUrl(cleanPhone, generated.whatsappCompanionText);
+      const pdfAttachmentPayload = {
+        filename: generated.filename,
+        reportId: generated.reportId,
+        sizeLabel: generated.sizeLabel,
+        generatedAt: generated.generatedAt,
+        summaryPoints: generated.summaryPoints,
+        pdfDataUrl: generated.pdfDataUrl
+      };
+
+      let receiptId = `wa-pdf-${Date.now().toString(36)}`;
+      try {
+        const res = await api.whatsapp.send({
+          threadId: activeThread.id,
+          patientId: activeThread.patientId || activeThread.id,
+          patientName: activeThread.name,
+          recipientMobile: cleanPhone,
+          clinicPhone,
+          reportType: 'ai_analysis_pdf',
+          messageText: generated.whatsappCompanionText,
+          note: `[AI Analysis PDF: ${generated.filename}] Ref #${generated.reportId}`,
+          autoSimulateReply: autoSimulatePatientReply,
+          pdfAttachment: pdfAttachmentPayload
+        });
+
+        if (res?.dispatch?.id) {
+          receiptId = res.dispatch.id;
+        }
+        if (res?.threads && Array.isArray(res.threads)) {
+          const counts: Record<string, number> = {};
+          res.threads.forEach((th: Thread) => {
+            counts[th.id] = th.messages?.length || 0;
+          });
+          knownMessageCountRef.current = counts;
+          setThreads(res.threads);
+        }
+      } catch {
+        setThreads(prev =>
+          prev.map(t => {
+            if (t.id === activeThread.id) {
+              return {
+                ...t,
+                stage: 'resolved',
+                statusLabel: 'Resolved · AI Report PDF Sent',
+                messages: [
+                  ...t.messages,
+                  {
+                    sender: 'doctor',
+                    text: generated.whatsappCompanionText,
+                    time: 'Just now',
+                    status: `PDF Report Dispatched (${clinicPhone} → ${activeThread.phone})`,
+                    receiptId,
+                    whatsappUrl,
+                    recipientPhone: activeThread.phone,
+                    pdfAttachment: pdfAttachmentPayload
+                  }
+                ],
+                preview: `📄 PDF Sent: ${generated.filename}`,
+                timestamp: 'Just now',
+                unread: false
+              };
+            }
+            return t;
+          })
+        );
+      }
+
+      setLastDivertedReceipt({
+        receiptId,
+        patientName: activeThread.name,
+        clinicPhone,
+        recipientPhone: activeThread.phone,
+        messageText: `[PDF: ${generated.filename}] ${generated.whatsappCompanionText}`,
+        whatsappUrl,
+        sentAt: new Date().toISOString()
+      });
+
+      setShowAiPdfModal(false);
+      setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTo({
+            top: messagesContainerRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }, 90);
+      showToast(
+        `AI Analysis Report PDF (${generated.filename}) sent on WhatsApp to ${activeThread.name}!`
+      );
+    } finally {
+      setIsSendingAiPdf(false);
+    }
+  };
+
+  // Download a PDF attachment directly from a chat message bubble
+  const handleDownloadMessagePdfAttachment = (
+    att: NonNullable<Thread['messages'][number]['pdfAttachment']>,
+    messageText: string
+  ) => {
+    if (att.pdfDataUrl && att.pdfDataUrl.startsWith('data:application/pdf')) {
+      const link = document.createElement('a');
+      link.href = att.pdfDataUrl;
+      link.download = att.filename || 'AI_Clinical_Analysis_Report.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast(`Downloaded ${att.filename}`);
+      return;
+    }
+
+    // Regenerate on the fly if dataUrl was omitted
+    const regenerated = generatePatientAiReportPdf({
+      patientName: activeThread.name,
+      patientSubtitle: activeThread.subtitle,
+      patientPhone: activeThread.phone,
+      clinicPhone,
+      doctorName: doctor?.name || 'Sarah Chen',
+      doctorQualification: 'MD, Dermatology',
+      priority: activeThread.priority,
+      aiSummary: activeThread.aiSummary,
+      recommendedPlan: messageText
+    });
+    regenerated.triggerDownload();
+    showToast(`Downloaded ${att.filename}`);
+  };
+
   const filteredThreads = threads.filter(t => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -1606,6 +1816,16 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
               <button
                 type="button"
+                onClick={handleOpenAiPdfModal}
+                className="px-3 py-1.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                title="Generate AI Clinical Analysis Report as PDF and send to patient on WhatsApp"
+              >
+                <FileText className="w-3.5 h-3.5 text-teal-200" />
+                <span>Send AI Report PDF</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleOpenWhatsAppShareModal}
                 className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                 title="Format & send full Rx or clinical summary on WhatsApp"
@@ -1691,7 +1911,57 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                           : 'bg-[#0d3f3b] text-white rounded-tr-xs'
                       }`}
                     >
-                      <p className="leading-relaxed">{m.text}</p>
+                      {/* WhatsApp PDF Document Attachment Card */}
+                      {m.pdfAttachment && (
+                        <div className="mb-2.5 p-3 rounded-xl bg-white/12 border border-teal-300/30 text-white space-y-2">
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-9 h-9 rounded-lg bg-rose-600 text-white flex flex-col items-center justify-center shrink-0 shadow-2xs border border-rose-400/40">
+                                <FileText className="w-4 h-4" />
+                                <span className="text-[8px] font-extrabold tracking-tighter uppercase leading-none mt-0.5">
+                                  PDF
+                                </span>
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs text-white truncate">
+                                  {m.pdfAttachment.filename}
+                                </div>
+                                <div className="text-[10.5px] text-teal-200 flex items-center gap-1.5 flex-wrap">
+                                  <span>{m.pdfAttachment.sizeLabel}</span>
+                                  <span>·</span>
+                                  <span className="font-mono">Ref #{m.pdfAttachment.reportId}</span>
+                                  <span>·</span>
+                                  <span>AI Clinical Report</span>
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDownloadMessagePdfAttachment(m.pdfAttachment!, m.text)
+                              }
+                              className="px-2.5 py-1.5 bg-white text-[#0d3f3b] hover:bg-teal-50 rounded-lg text-[10.5px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer shadow-2xs"
+                              title="Download AI Clinical Analysis PDF Report"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>Download PDF</span>
+                            </button>
+                          </div>
+
+                          {m.pdfAttachment.summaryPoints &&
+                            m.pdfAttachment.summaryPoints.length > 0 && (
+                              <div className="pt-1.5 border-t border-white/15 space-y-0.5 text-[10.5px] text-teal-100">
+                                {m.pdfAttachment.summaryPoints.map((pt, pIdx) => (
+                                  <div key={pIdx} className="truncate">
+                                    • {pt}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                        </div>
+                      )}
+
+                      <p className="leading-relaxed whitespace-pre-line">{m.text}</p>
                       <div
                         className={`flex items-center justify-end gap-2 mt-1.5 text-[10px] flex-wrap ${
                           m.sender === 'patient' ? 'text-slate-400' : 'text-teal-200/90'
@@ -1835,6 +2105,16 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                   </label>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={isDispatching || isSendingAiPdf}
+                    onClick={handleOpenAiPdfModal}
+                    className="px-3.5 py-2 bg-teal-50 hover:bg-teal-100 text-teal-950 border border-teal-300 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                    title="Generate a formal AI Clinical Analysis PDF Report and dispatch it on WhatsApp"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-teal-800" />
+                    <span>Send as AI Report PDF</span>
+                  </button>
                   <button
                     type="button"
                     disabled={isDispatching || !activeReplyText}
@@ -2397,6 +2677,165 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                   <span>{isSimulatingIncoming ? 'Routing...' : 'Route Reply into Inbox'}</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: AI Clinical Analysis Report PDF Generator & WhatsApp Dispatcher */}
+      {showAiPdfModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3.5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#0d3f3b] text-white flex items-center justify-center shrink-0">
+                  <FileText className="w-5 h-5 text-teal-300" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-slate-900">
+                      Send AI Clinical Analysis Report (PDF) via WhatsApp
+                    </h3>
+                    <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold uppercase">
+                      PDF Document
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Generates an official A4 clinical analysis PDF for{' '}
+                    <strong className="text-slate-800">{activeThread.name}</strong> and dispatches it on WhatsApp ({clinicPhone} →{' '}
+                    <span className="font-mono font-semibold text-slate-700">{activeThread.phone}</span>).
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAiPdfModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Live PDF Document Header Card Preview */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-lg bg-rose-600 text-white flex flex-col items-center justify-center shrink-0 font-bold">
+                  <FileText className="w-4 h-4" />
+                  <span className="text-[8px] tracking-tighter uppercase mt-0.5">PDF</span>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-900 truncate">
+                    AI_Clinical_Analysis_{activeThread.name.replace(/\s+/g, '_')}.pdf
+                  </div>
+                  <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
+                    <span>Patient: {activeThread.subtitle}</span>
+                    <span>·</span>
+                    <span
+                      className={
+                        activeThread.priority === 'urgent'
+                          ? 'text-rose-700 font-semibold'
+                          : 'text-teal-800 font-semibold'
+                      }
+                    >
+                      {activeThread.priority === 'urgent'
+                        ? 'Priority: Urgent Triage'
+                        : 'Priority: Routine Follow-Up'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDownloadOrPreviewAiReportPdf}
+                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                title="Download a copy of the generated PDF to inspect locally"
+              >
+                <Download className="w-3.5 h-3.5 text-teal-700" />
+                <span>Download PDF Preview</span>
+              </button>
+            </div>
+
+            {/* Editable PDF Report Sections */}
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  1. AI Clinical Assessment &amp; Triage Findings (Included in PDF Section 2 &amp; 3)
+                </label>
+                <textarea
+                  rows={3}
+                  value={aiPdfAssessmentDraft}
+                  onChange={e => setAiPdfAssessmentDraft(e.target.value)}
+                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                  placeholder="Enter AI clinical assessment and dermatological findings..."
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  2. Doctor&apos;s Recommended Action Plan &amp; Regimen (Included in PDF Section 4)
+                </label>
+                <textarea
+                  rows={3}
+                  value={aiPdfPlanDraft}
+                  onChange={e => setAiPdfPlanDraft(e.target.value)}
+                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                  placeholder="Enter treatment plan and medical guidance..."
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  3. Follow-Up &amp; Safety Instructions (Included in PDF Section 5)
+                </label>
+                <textarea
+                  rows={2}
+                  value={aiPdfFollowUpDraft}
+                  onChange={e => setAiPdfFollowUpDraft(e.target.value)}
+                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                  placeholder="Enter follow-up schedule and red-flag instructions..."
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+                <label className="inline-flex items-center gap-2 text-xs text-slate-700 font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={alsoDownloadLocalPdf}
+                    onChange={e => setAlsoDownloadLocalPdf(e.target.checked)}
+                    className="rounded text-teal-700 focus:ring-teal-600"
+                  />
+                  <span>Also download PDF file to my computer when sending</span>
+                </label>
+
+                <span className="text-[11px] text-slate-500">
+                  Signed by <strong>Dr. {doctor?.name || 'Sarah Chen'}</strong>
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setShowAiPdfModal(false)}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSendingAiPdf}
+                onClick={handleSendAiReportPdf}
+                className="px-4 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-sm"
+              >
+                <WhatsAppIcon className="w-4 h-4 fill-white" />
+                <span>
+                  {isSendingAiPdf
+                    ? 'Generating & Sending PDF...'
+                    : `Send AI Report PDF to ${activeThread.name} (In-App)`}
+                </span>
+                <Send className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </div>

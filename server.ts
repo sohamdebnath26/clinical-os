@@ -2686,6 +2686,15 @@ app.post('/api/ai/compare-visits', authMiddleware, async (req: AuthenticatedRequ
 // ==========================================
 // WHATSAPP DIRECT MESSAGE & REPORT DISPATCH
 // ==========================================
+interface InboxPdfAttachment {
+  filename: string;
+  reportId: string;
+  sizeLabel: string;
+  generatedAt: string;
+  summaryPoints?: string[];
+  pdfDataUrl?: string;
+}
+
 interface DispatchedWhatsAppMessage {
   id: string;
   patientId?: string;
@@ -2695,6 +2704,7 @@ interface DispatchedWhatsAppMessage {
   reportType: string;
   messageText: string;
   note?: string;
+  pdfAttachment?: InboxPdfAttachment;
   deliveryMode: 'cloud_api' | 'whatsapp_gateway';
   status: 'sent' | 'delivered';
   whatsappUrl: string;
@@ -2719,6 +2729,7 @@ interface InboxMessageRecord {
   receiptId?: string;
   whatsappUrl?: string;
   recipientPhone?: string;
+  pdfAttachment?: InboxPdfAttachment;
   createdAt?: string;
 }
 
@@ -3338,6 +3349,7 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
     reportType,
     messageText,
     note,
+    pdfAttachment,
     autoSimulateReply
   } = req.body || {};
 
@@ -3391,15 +3403,33 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
     }
   }
 
+  const sanitizedPdfAttachment: InboxPdfAttachment | undefined =
+    pdfAttachment && typeof pdfAttachment === 'object' && pdfAttachment.filename
+      ? {
+          filename: String(pdfAttachment.filename),
+          reportId: String(pdfAttachment.reportId || 'AIR-PDF'),
+          sizeLabel: String(pdfAttachment.sizeLabel || '24 KB · PDF'),
+          generatedAt: String(pdfAttachment.generatedAt || new Date().toLocaleTimeString()),
+          summaryPoints: Array.isArray(pdfAttachment.summaryPoints)
+            ? pdfAttachment.summaryPoints.slice(0, 4).map(String)
+            : undefined,
+          pdfDataUrl:
+            typeof pdfAttachment.pdfDataUrl === 'string' && pdfAttachment.pdfDataUrl.startsWith('data:application/pdf')
+              ? pdfAttachment.pdfDataUrl
+              : undefined
+        }
+      : undefined;
+
   const dispatchRecord: DispatchedWhatsAppMessage = {
     id: `wa-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
     patientId: patient?.id || patientId,
     patientName: patient?.fullName || patientName || 'Patient',
     recipientMobile: normalizedRecipient,
     clinicPhone: resolvedClinicPhone,
-    reportType: reportType || 'clinical_message',
+    reportType: reportType || (sanitizedPdfAttachment ? 'ai_analysis_pdf' : 'clinical_message'),
     messageText: bodyText,
     note,
+    pdfAttachment: sanitizedPdfAttachment,
     deliveryMode,
     status: 'delivered',
     whatsappUrl,
@@ -3425,8 +3455,12 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
   thread.phone = formatDisplayPhone(normalizedRecipient);
   thread.stage = 'resolved';
   thread.unread = false;
-  thread.statusLabel = 'Resolved · Dispatched in background';
-  thread.preview = `You: ${bodyText.slice(0, 90)}`;
+  thread.statusLabel = sanitizedPdfAttachment
+    ? 'Resolved · AI Analysis PDF sent'
+    : 'Resolved · Dispatched in background';
+  thread.preview = sanitizedPdfAttachment
+    ? `📄 PDF Sent: ${sanitizedPdfAttachment.filename}`
+    : `You: ${bodyText.slice(0, 90)}`;
   thread.timestamp = 'Just now';
   thread.updatedAt = new Date().toISOString();
   thread.messages.push({
@@ -3434,26 +3468,30 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
     sender: 'doctor',
     text: bodyText,
     time: nowTime,
-    status: `Delivered in background (${resolvedClinicPhone} → ${thread.phone})`,
+    status: sanitizedPdfAttachment
+      ? `PDF Delivered on WhatsApp (${resolvedClinicPhone} → ${thread.phone})`
+      : `Delivered in background (${resolvedClinicPhone} → ${thread.phone})`,
     receiptId: dispatchRecord.id,
     whatsappUrl,
     recipientPhone: thread.phone,
+    pdfAttachment: sanitizedPdfAttachment,
     createdAt: dispatchRecord.sentAt
   });
 
   // Optionally schedule an automatic simulated patient reply routed back into Clinical OS Inbox after 3 seconds
   if (autoSimulateReply) {
     setTimeout(() => {
-      const contextualReply =
-        thread.id === 't-1'
-          ? 'Thank you Doctor, I have stopped the new tablet and my family is taking me to the clinic emergency desk right now.'
-          : thread.id === 't-2'
-          ? 'Thank you Doctor! I applied the chilled ceramide moisturizer and took the antihistamine—feeling much more comfortable now.'
-          : thread.id === 't-3'
-          ? 'Thank you for approving the 30-day refill Doctor! I will pick it up from the pharmacy today.'
-          : thread.id === 't-4'
-          ? 'Friday at 10:00 AM works great for me, Doctor. Please confirm that slot!'
-          : `Thank you Dr. ${doctor.name}, I received your message and will follow the instructions carefully.`;
+      const contextualReply = sanitizedPdfAttachment
+        ? `Thank you Dr. ${doctor.name}! I received the AI Clinical Analysis PDF report (${sanitizedPdfAttachment.filename}) on my WhatsApp and reviewed the treatment instructions.`
+        : thread.id === 't-1'
+        ? 'Thank you Doctor, I have stopped the new tablet and my family is taking me to the clinic emergency desk right now.'
+        : thread.id === 't-2'
+        ? 'Thank you Doctor! I applied the chilled ceramide moisturizer and took the antihistamine—feeling much more comfortable now.'
+        : thread.id === 't-3'
+        ? 'Thank you for approving the 30-day refill Doctor! I will pick it up from the pharmacy today.'
+        : thread.id === 't-4'
+        ? 'Friday at 10:00 AM works great for me, Doctor. Please confirm that slot!'
+        : `Thank you Dr. ${doctor.name}, I received your message and will follow the instructions carefully.`;
 
       routeIncomingPatientMessageToInbox({
         threadId: thread.id,
