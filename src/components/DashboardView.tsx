@@ -520,20 +520,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {/* Dark / Light Mode Toggle */}
           <ThemeToggleButton variant="dashboard" />
 
-          {/* 1-Click POV Switcher */}
-          <button
-            type="button"
-            onClick={() => switchRoleSession({ role: isReceptionist ? 'doctor' : 'receptionist' })}
-            className="px-4 py-3.5 bg-white hover:bg-[#f7faf9] border border-[#dce5e3] rounded-2xl text-xs font-bold text-[#0f2926] transition-colors shrink-0 cursor-pointer"
-            title={
-              isReceptionist
-                ? 'Switch back to Doctor Point of View'
-                : 'Preview Receptionist Point of View'
-            }
-          >
-            {isReceptionist ? 'Doctor View' : 'Receptionist View'}
-          </button>
-
           {/* Walk-in Button */}
           <button
             type="button"
@@ -622,202 +608,243 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Row 2: NEXT IN QUEUE · AI PRE-VISIT BRIEF (8 cols) + QUICK ACTIONS (4 cols) */}
+      {/* Row 2: Receptionist Front-Desk Card vs. Doctor Clinical Pre-Visit Brief + Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* NEXT IN QUEUE · AI PRE-VISIT BRIEF Hero Card */}
-        <div className="lg:col-span-8 bg-[#faf7f0] border border-[#e5dfd3] rounded-2xl p-6 sm:p-7 text-[#102a26] shadow-2xs">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
-            {/* Left Column: Patient Info + AI Pre-Visit Brief Bullets + Actions */}
-            <div className="md:col-span-7 flex flex-col justify-between">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#45615a] block">
-                  {isReceptionist
-                    ? 'NEXT IN QUEUE · FRONT-DESK CHECK-IN'
-                    : 'NEXT IN QUEUE · AI PRE-VISIT BRIEF'}
-                </span>
-
-                <h2
-                  onClick={() => nextQueueDisplay.patientId && onSelectPatient(nextQueueDisplay.patientId)}
-                  className="font-serif text-3xl sm:text-[38px] font-normal text-[#102a26] tracking-tight leading-tight mt-1.5 cursor-pointer hover:underline"
-                >
-                  {nextQueueDisplay.name}
-                </h2>
-
-                <p className="text-[14px] text-[#4e6660] mt-1 font-normal">
-                  {nextQueueDisplay.age}y · {nextQueueDisplay.gender} · {nextQueueDisplay.code} ·{' '}
-                  {nextQueueDisplay.diagnosis && nextQueueDisplay.diagnosis !== 'Pigmentation / Dark spots'
-                    ? nextQueueDisplay.diagnosis
-                    : 'Post-treatment follow-up'}
-                </p>
-
-                {/* AI Pre-Visit Brief Bullet Points */}
-                <ul className="space-y-2 mt-4 text-[13.5px] text-[#142e2a]">
-                  <li className="flex items-start gap-2.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#102a26] mt-2 shrink-0" />
-                    <span>
-                      {(() => {
-                        const patVisits = recentVisits.filter(
-                          v => v.patientId === nextQueueDisplay.patientId
-                        );
-                        if (patVisits.length > 0 && patVisits[0].prescriptions?.length > 0) {
-                          const rx = patVisits[0].prescriptions[0];
-                          return `${rx.duration || 'Two-week'} course (${rx.medicineName}) started recently.`;
-                        }
-                        return 'Two-week course started 14 days ago.';
-                      })()}
-                    </span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#102a26] mt-2 shrink-0" />
-                    <span>
-                      {(() => {
-                        const patVisits = recentVisits.filter(
-                          v => v.patientId === nextQueueDisplay.patientId
-                        );
-                        if (patVisits.length > 0 && patVisits[0].symptoms?.length > 0) {
-                          return `Photo at day 7 shows less redness (${patVisits[0].symptoms[0]}).`;
-                        }
-                        return 'Photo at day 7 shows less redness.';
-                      })()}
-                    </span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#102a26] mt-2 shrink-0" />
-                    <span>
-                      {(() => {
-                        const rawAllergies = nextQueueDisplay.patientRecord?.allergies as unknown;
-                        const allergyText = Array.isArray(rawAllergies)
-                          ? rawAllergies.filter(Boolean).join(', ')
-                          : typeof rawAllergies === 'string'
-                          ? rawAllergies.trim()
-                          : '';
-                        if (
-                          allergyText &&
-                          allergyText.toLowerCase() !== 'no known allergies' &&
-                          allergyText.toLowerCase() !== 'none'
-                        ) {
-                          return `Allergy flag on file (${allergyText}). Check before prescribing.`;
-                        }
-                        return 'Allergy flag on file. Check before prescribing.';
-                      })()}
-                    </span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-2.5 mt-6 pt-1">
-                <button
-                  type="button"
-                  onClick={handleStartNextConsultation}
-                  className="px-5 py-2.5 bg-[#0d2622] hover:bg-[#163d37] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                >
-                  {isReceptionist ? 'Check in & open patient chart →' : 'Start consultation →'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (nextQueueDisplay.patientId) {
-                      onSelectPatient(nextQueueDisplay.patientId);
-                    } else if (onNavigateToPatients) {
-                      onNavigateToPatients();
-                    }
-                  }}
-                  className="px-5 py-2.5 bg-transparent hover:bg-[#102a26]/5 border border-[#102a26]/45 text-[#102a26] rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  Open history
-                </button>
-              </div>
+        {isReceptionist ? (
+          <div className="lg:col-span-8 bg-[#faf7f0] border border-[#e5dfd3] rounded-2xl p-6 sm:p-7 text-[#102a26] shadow-2xs flex flex-col justify-between">
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#45615a] block">
+                FRONT-DESK RECEPTION · PATIENT REGISTRATION &amp; APPOINTMENTS
+              </span>
+              <h2 className="font-serif text-2xl sm:text-3xl font-normal text-[#102a26] tracking-tight leading-tight mt-1.5">
+                Next Patient in Queue: {nextQueueDisplay.name}
+              </h2>
+              <p className="text-sm text-[#4e6660] mt-1">
+                {nextQueueDisplay.age}y · {nextQueueDisplay.gender} · {nextQueueDisplay.code}
+              </p>
+              <p className="text-xs text-[#45615a] mt-3 leading-relaxed">
+                As a Receptionist, you can register new patients, check in walk-in patients, and book or manage clinic appointments. Clinical notes, AI diagnostics, prescriptions, and role settings are restricted to Doctors.
+              </p>
             </div>
 
-            {/* Right Column: PATIENT PULSE · LAST 5 VISITS */}
-            <div className="md:col-span-5 flex flex-col justify-between">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#45615a] block mb-2">
-                  PATIENT PULSE · LAST 5 VISITS
-                </span>
+            <div className="flex flex-wrap items-center gap-3 mt-6 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddPatientModal(true)}
+                className="px-5 py-2.5 bg-[#0d2622] hover:bg-[#163d37] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                + Add New Patient
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowScheduleModal(true)}
+                className="px-5 py-2.5 bg-[#157a6e] hover:bg-[#116359] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                + Book Appointment
+              </button>
+              <button
+                type="button"
+                onClick={onOpenWalkIn}
+                className="px-5 py-2.5 bg-transparent hover:bg-[#102a26]/5 border border-[#102a26]/45 text-[#102a26] rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+              >
+                + Walk-In Check-In
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* NEXT IN QUEUE · AI PRE-VISIT BRIEF Hero Card (Doctor Only) */
+          <div className="lg:col-span-8 bg-[#faf7f0] border border-[#e5dfd3] rounded-2xl p-6 sm:p-7 text-[#102a26] shadow-2xs">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+              {/* Left Column: Patient Info + AI Pre-Visit Brief Bullets + Actions */}
+              <div className="md:col-span-7 flex flex-col justify-between">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#45615a] block">
+                    NEXT IN QUEUE · AI PRE-VISIT BRIEF
+                  </span>
 
-                {/* Trend Chart Container */}
-                <div className="bg-[#efeadd] rounded-xl p-3.5 border border-[#e4decb]">
-                  <svg
-                    viewBox="0 0 240 76"
-                    className="w-full h-20 overflow-visible"
-                    role="img"
-                    aria-label="Symptom score trend down from 8 to 3"
+                  <h2
+                    onClick={() => nextQueueDisplay.patientId && onSelectPatient(nextQueueDisplay.patientId)}
+                    className="font-serif text-3xl sm:text-[38px] font-normal text-[#102a26] tracking-tight leading-tight mt-1.5 cursor-pointer hover:underline"
                   >
-                    <line
-                      x1="12"
-                      y1="14"
-                      x2="224"
-                      y2="58"
-                      stroke="#0e5a4f"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                    />
-                    <circle cx="224" cy="58" r="6" fill="#df6d46" />
-                  </svg>
+                    {nextQueueDisplay.name}
+                  </h2>
+
+                  <p className="text-[14px] text-[#4e6660] mt-1 font-normal">
+                    {nextQueueDisplay.age}y · {nextQueueDisplay.gender} · {nextQueueDisplay.code} ·{' '}
+                    {nextQueueDisplay.diagnosis && nextQueueDisplay.diagnosis !== 'Pigmentation / Dark spots'
+                      ? nextQueueDisplay.diagnosis
+                      : 'Post-treatment follow-up'}
+                  </p>
+
+                  {/* AI Pre-Visit Brief Bullet Points */}
+                  <ul className="space-y-2 mt-4 text-[13.5px] text-[#142e2a]">
+                    <li className="flex items-start gap-2.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#102a26] mt-2 shrink-0" />
+                      <span>
+                        {(() => {
+                          const patVisits = recentVisits.filter(
+                            v => v.patientId === nextQueueDisplay.patientId
+                          );
+                          if (patVisits.length > 0 && patVisits[0].prescriptions?.length > 0) {
+                            const rx = patVisits[0].prescriptions[0];
+                            return `${rx.duration || 'Two-week'} course (${rx.medicineName}) started recently.`;
+                          }
+                          return 'Two-week course started 14 days ago.';
+                        })()}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#102a26] mt-2 shrink-0" />
+                      <span>
+                        {(() => {
+                          const patVisits = recentVisits.filter(
+                            v => v.patientId === nextQueueDisplay.patientId
+                          );
+                          if (patVisits.length > 0 && patVisits[0].symptoms?.length > 0) {
+                            return `Photo at day 7 shows less redness (${patVisits[0].symptoms[0]}).`;
+                          }
+                          return 'Photo at day 7 shows less redness.';
+                        })()}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#102a26] mt-2 shrink-0" />
+                      <span>
+                        {(() => {
+                          const rawAllergies = nextQueueDisplay.patientRecord?.allergies as unknown;
+                          const allergyText = Array.isArray(rawAllergies)
+                            ? rawAllergies.filter(Boolean).join(', ')
+                            : typeof rawAllergies === 'string'
+                            ? rawAllergies.trim()
+                            : '';
+                          if (
+                            allergyText &&
+                            allergyText.toLowerCase() !== 'no known allergies' &&
+                            allergyText.toLowerCase() !== 'none'
+                          ) {
+                            return `Allergy flag on file (${allergyText}). Check before prescribing.`;
+                          }
+                          return 'Allergy flag on file. Check before prescribing.';
+                        })()}
+                      </span>
+                    </li>
+                  </ul>
                 </div>
 
-                <p className="text-[11.5px] text-[#4e6660] mt-2 mb-2.5">
-                  Symptom score down from 8 to 3.
-                </p>
+                {/* Action Buttons */}
+                <div className="flex flex-wrap items-center gap-2.5 mt-6 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleStartNextConsultation}
+                    className="px-5 py-2.5 bg-[#0d2622] hover:bg-[#163d37] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Start consultation →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (nextQueueDisplay.patientId) {
+                        onSelectPatient(nextQueueDisplay.patientId);
+                      } else if (onNavigateToPatients) {
+                        onNavigateToPatients();
+                      }
+                    }}
+                    className="px-5 py-2.5 bg-transparent hover:bg-[#102a26]/5 border border-[#102a26]/45 text-[#102a26] rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Open history
+                  </button>
+                </div>
               </div>
 
-              {/* Day 1 & Recent Visit Clinical Image Thumbnails with Click-to-Zoom */}
-              <div className="grid grid-cols-2 gap-2.5 mt-auto">
-                <button
-                  type="button"
-                  onClick={() => setQueueZoomModal({ activeSide: 'day1', zoom: 1.5 })}
-                  className="group relative bg-[#d9d1bf] hover:ring-2 hover:ring-[#0e5a4f] transition-all rounded-xl h-20 overflow-hidden text-left cursor-pointer border border-[#c9bfa8]"
-                  title="Click to zoom in on Day 1 clinical image"
-                >
-                  <img
-                    src={nextQueueImages.day1Url}
-                    alt="Day 1 Baseline Clinical"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
-                  <span className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-black/55 text-white flex items-center justify-center opacity-90 group-hover:bg-[#0e5a4f] transition-colors">
-                    <ZoomIn className="w-3.5 h-3.5" />
+              {/* Right Column: PATIENT PULSE · LAST 5 VISITS */}
+              <div className="md:col-span-5 flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#45615a] block mb-2">
+                    PATIENT PULSE · LAST 5 VISITS
                   </span>
-                  <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-white drop-shadow-xs">
-                      Day 1
-                    </span>
-                    <span className="text-[9px] font-semibold text-white/85 bg-black/45 px-1.5 py-0.5 rounded">
-                      Zoom
-                    </span>
-                  </div>
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => setQueueZoomModal({ activeSide: 'recent', zoom: 1.5 })}
-                  className="group relative bg-[#c2ded6] hover:ring-2 hover:ring-[#0e5a4f] transition-all rounded-xl h-20 overflow-hidden text-left cursor-pointer border border-[#aecbc2]"
-                  title="Click to zoom in on Recent Visit clinical image"
-                >
-                  <img
-                    src={nextQueueImages.recentUrl}
-                    alt="Recent Visit Clinical"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
-                  <span className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-black/55 text-white flex items-center justify-center opacity-90 group-hover:bg-[#0e5a4f] transition-colors">
-                    <ZoomIn className="w-3.5 h-3.5" />
-                  </span>
-                  <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-white drop-shadow-xs">
-                      Recent Visit
-                    </span>
-                    <span className="text-[9px] font-semibold text-emerald-200 bg-black/45 px-1.5 py-0.5 rounded">
-                      Zoom
-                    </span>
+                  {/* Trend Chart Container */}
+                  <div className="bg-[#efeadd] rounded-xl p-3.5 border border-[#e4decb]">
+                    <svg
+                      viewBox="0 0 240 76"
+                      className="w-full h-20 overflow-visible"
+                      role="img"
+                      aria-label="Symptom score trend down from 8 to 3"
+                    >
+                      <line
+                        x1="12"
+                        y1="14"
+                        x2="224"
+                        y2="58"
+                        stroke="#0e5a4f"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                      />
+                      <circle cx="224" cy="58" r="6" fill="#df6d46" />
+                    </svg>
                   </div>
-                </button>
+
+                  <p className="text-[11.5px] text-[#4e6660] mt-2 mb-2.5">
+                    Symptom score down from 8 to 3.
+                  </p>
+                </div>
+
+                {/* Day 1 & Recent Visit Clinical Image Thumbnails with Click-to-Zoom */}
+                <div className="grid grid-cols-2 gap-2.5 mt-auto">
+                  <button
+                    type="button"
+                    onClick={() => setQueueZoomModal({ activeSide: 'day1', zoom: 1.5 })}
+                    className="group relative bg-[#d9d1bf] hover:ring-2 hover:ring-[#0e5a4f] transition-all rounded-xl h-20 overflow-hidden text-left cursor-pointer border border-[#c9bfa8]"
+                    title="Click to zoom in on Day 1 clinical image"
+                  >
+                    <img
+                      src={nextQueueImages.day1Url}
+                      alt="Day 1 Baseline Clinical"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
+                    <span className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-black/55 text-white flex items-center justify-center opacity-90 group-hover:bg-[#0e5a4f] transition-colors">
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </span>
+                    <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-white drop-shadow-xs">
+                        Day 1
+                      </span>
+                      <span className="text-[9px] font-semibold text-white/85 bg-black/45 px-1.5 py-0.5 rounded">
+                        Zoom
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setQueueZoomModal({ activeSide: 'recent', zoom: 1.5 })}
+                    className="group relative bg-[#c2ded6] hover:ring-2 hover:ring-[#0e5a4f] transition-all rounded-xl h-20 overflow-hidden text-left cursor-pointer border border-[#aecbc2]"
+                    title="Click to zoom in on Recent Visit clinical image"
+                  >
+                    <img
+                      src={nextQueueImages.recentUrl}
+                      alt="Recent Visit Clinical"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
+                    <span className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-black/55 text-white flex items-center justify-center opacity-90 group-hover:bg-[#0e5a4f] transition-colors">
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </span>
+                    <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-white drop-shadow-xs">
+                        Recent Visit
+                      </span>
+                      <span className="text-[9px] font-semibold text-emerald-200 bg-black/45 px-1.5 py-0.5 rounded">
+                        Zoom
+                      </span>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* QUICK ACTIONS Card */}
         <div className="lg:col-span-4 bg-white rounded-2xl border border-[#e4ecea] p-6 flex flex-col justify-between">

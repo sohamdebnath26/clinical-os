@@ -70,14 +70,16 @@ function MainApp() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Redirect receptionists away from doctor-only routes
+  // Redirect receptionists away from doctor-only routes (receptionists can only access dashboard, patients, and appointments)
   useEffect(() => {
     if (
       isReceptionist &&
       (currentRoute === 'prescriptions' ||
+        currentRoute === 'messages' ||
         currentRoute === 'revenue' ||
         currentRoute === 'image-analyzer' ||
-        currentRoute === 'ai-assistant')
+        currentRoute === 'ai-assistant' ||
+        currentRoute === 'settings')
     ) {
       setCurrentRoute('dashboard');
     }
@@ -117,9 +119,11 @@ function MainApp() {
     if (
       isReceptionist &&
       (route === 'prescriptions' ||
+        route === 'messages' ||
         route === 'revenue' ||
         route === 'image-analyzer' ||
-        route === 'ai-assistant')
+        route === 'ai-assistant' ||
+        route === 'settings')
     ) {
       setCurrentRoute('dashboard');
       setActivePatientId(null);
@@ -142,7 +146,7 @@ function MainApp() {
   // Start new consultation for a patient directly (Receptionists are routed to the patient's chart)
   const handleStartConsultationForPatient = async (patient: Patient) => {
     if (isReceptionist) {
-      handleSelectPatient(patient.id);
+      handleSelectPatient(patient.id, 'appointments');
       return;
     }
     try {
@@ -239,36 +243,16 @@ function MainApp() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        {/* Front-Desk Receptionist Mode Banner */}
+        {/* Front-Desk Receptionist Mode Banner (No role-settings or doctor-switch buttons shown to receptionist) */}
         {isReceptionist && (
           <div className="shrink-0 bg-emerald-900 text-emerald-50 border-b border-emerald-700/60 px-4 sm:px-8 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-20">
             <div className="flex items-center gap-2 min-w-0">
               <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/25 border border-emerald-400/30 text-emerald-200 font-bold uppercase tracking-wider text-[10px] shrink-0">
-                Receptionist Point of View
+                Receptionist Workspace
               </span>
               <span className="truncate text-emerald-100">
-                Signed in as <strong>{doctor.name}</strong> ({doctor.email}) · Front-desk check-in, appointments, patient directory &amp; WhatsApp inbox active. Clinical prescribing &amp; revenue restricted to Doctors.
+                Signed in as <strong>{doctor.name}</strong> ({doctor.email}) · Front-desk patient registration &amp; appointment booking only.
               </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => handleNavigate('settings')}
-                className="px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-emerald-100 font-semibold transition-colors cursor-pointer"
-              >
-                Role Settings
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  switchRoleSession({ role: 'doctor' }).then(() =>
-                    showToast('Switched to Doctor Point of View')
-                  )
-                }
-                className="px-3 py-1 rounded-lg bg-white text-emerald-950 hover:bg-emerald-50 font-bold transition-colors cursor-pointer"
-              >
-                Switch to Doctor View →
-              </button>
             </div>
           </div>
         )}

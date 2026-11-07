@@ -77,15 +77,9 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
   const isReceptionist = doctor?.role === 'receptionist';
 
-  const PROFILE_TAB_ORDER: TabType[] = [
-    'overview',
-    'images',
-    'vitals',
-    'appointments',
-    'timeline',
-    'reports',
-    ...(!isReceptionist ? (['prescriptions'] as TabType[]) : [])
-  ];
+  const PROFILE_TAB_ORDER: TabType[] = isReceptionist
+    ? ['overview', 'appointments']
+    : ['overview', 'images', 'vitals', 'appointments', 'timeline', 'reports', 'prescriptions'];
 
   const PROFILE_TAB_LABELS: Record<TabType, string> = {
     overview: 'Overview',
@@ -583,33 +577,35 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             <span>Edit Profile</span>
           </button>
           {!isReceptionist && (
-            <button
-              type="button"
-              onClick={() => setShowPrintRx(true)}
-              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5 text-slate-500" />
-              <span>Print Rx</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() =>
-              setWhatsAppData({
-                isOpen: true,
-                reportType: 'patient_summary',
-                data: {
-                  activePrescriptions: prescriptions,
-                  consultation: consultations[0] || null
+            <>
+              <button
+                type="button"
+                onClick={() => setShowPrintRx(true)}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-500" />
+                <span>Print Rx</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setWhatsAppData({
+                    isOpen: true,
+                    reportType: 'patient_summary',
+                    data: {
+                      activePrescriptions: prescriptions,
+                      consultation: consultations[0] || null
+                    }
+                  })
                 }
-              })
-            }
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            title="Send Medical Summary to patient"
-          >
-            <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
-            <span>WhatsApp Summary</span>
-          </button>
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                title="Send Medical Summary to patient"
+              >
+                <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                <span>WhatsApp Summary</span>
+              </button>
+            </>
+          )}
           {isReceptionist ? (
             <button
               type="button"
@@ -617,7 +613,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>+ Schedule Visit</span>
+              <span>+ Book Appointment</span>
             </button>
           ) : (
             <button
@@ -694,200 +690,204 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-150">
           {/* Left Main Column */}
           <div className="lg:col-span-2 space-y-6">
-            {/* 1. Clinical Background, Allergies & Active Medications */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-900">
-                  Clinical Background &amp; Allergies
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(true)}
-                  className="text-xs font-medium text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
-                >
-                  <Pencil className="w-3 h-3" />
-                  <span>Edit</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                <div className="p-3.5 rounded-xl bg-rose-50/40 border border-rose-100 space-y-1">
-                  <span className="font-semibold text-rose-800 block">Known Drug Allergies</span>
-                  <p className="text-slate-700 leading-relaxed">
-                    {patient.allergies || 'No known drug or environmental allergies documented.'}
-                  </p>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-teal-50/30 border border-teal-100 space-y-1">
-                  <span className="font-semibold text-teal-900 block">Current Medications</span>
-                  <p className="text-slate-700 leading-relaxed">
-                    {patient.currentMedications || 'No ongoing long-term medications documented.'}
-                  </p>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                  <span className="font-semibold text-slate-800 block">Medical &amp; Surgical History</span>
-                  <p className="text-slate-700 leading-relaxed">
-                    {patient.medicalHistory || 'No past surgical or chronic medical history reported.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Single Unified Previous vs. Current Image Comparison Card */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                <div>
-                  <div className="flex items-center gap-2">
+            {!isReceptionist && (
+              <>
+                {/* 1. Clinical Background, Allergies & Active Medications (Doctor Only) */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
+                  <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-900">
-                      Previous vs. Current Image Comparison
+                      Clinical Background &amp; Allergies
                     </h3>
-                    <span className="text-xs text-slate-400 tabular-nums">
-                      · {images.length} {images.length === 1 ? 'photo' : 'photos'} stored
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowEditModal(true)}
+                      className="text-xs font-medium text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      <span>Edit</span>
+                    </button>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Compare baseline and current follow-up photos side-by-side with 1x–4x zoom, lesion marking, and AI progression analysis.
-                  </p>
-                </div>
 
-                <div className="flex items-center gap-2 flex-wrap shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setShowProfileQrModal(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-medium transition cursor-pointer whitespace-nowrap shrink-0"
-                    title="Scan QR code with phone camera to upload lesion photo"
-                  >
-                    <QrCode className="w-3.5 h-3.5 text-teal-700" />
-                    <span>Scan QR</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => quickCompareInputRef.current?.click()}
-                    disabled={isUploadingProfileImage}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-medium transition cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-teal-700" />
-                    <span>{isUploadingProfileImage ? 'Uploading...' : 'Upload Image'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedPrevImageId(undefined);
-                      setSelectedCurrImageOverride(null);
-                      setShowProgressionModal(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <Maximize2 className="w-3.5 h-3.5" />
-                    <span>Compare Images</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Side-by-Side Previous vs. Current Preview */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Slot 1: Previous Image */}
-                <div
-                  onClick={() => {
-                    if (previousProfileImage) {
-                      setSelectedPrevImageId(previousProfileImage.id);
-                      setSelectedCurrImageOverride(null);
-                      setShowProgressionModal(true);
-                    } else {
-                      pastImageInputRef.current?.click();
-                    }
-                  }}
-                  className="group rounded-xl border border-slate-200 bg-slate-50/60 p-3 flex items-center gap-3.5 hover:border-teal-300 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  <div className="w-16 h-16 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-slate-200">
-                    {previousProfileImage ? (
-                      <img
-                        src={previousProfileImage.url}
-                        alt={previousProfileImage.caption || 'Previous visit image'}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      />
-                    ) : (
-                      <ImageIcon className="w-5 h-5 text-slate-400" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <span className="text-[11px] font-medium text-slate-500 block">
-                      01. Previous Baseline
-                    </span>
-                    {previousProfileImage ? (
-                      <>
-                        <p className="text-xs font-semibold text-slate-900 truncate">
-                          {previousProfileImage.caption || 'Clinical Baseline Photo'}
-                        </p>
-                        <p className="text-[11px] text-slate-500 tabular-nums">
-                          {new Date(previousProfileImage.createdAt).toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric'
-                          })}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-xs font-medium text-teal-700">
-                        + Upload baseline photo
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                    <div className="p-3.5 rounded-xl bg-rose-50/40 border border-rose-100 space-y-1">
+                      <span className="font-semibold text-rose-800 block">Known Drug Allergies</span>
+                      <p className="text-slate-700 leading-relaxed">
+                        {patient.allergies || 'No known drug or environmental allergies documented.'}
                       </p>
-                    )}
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-teal-50/30 border border-teal-100 space-y-1">
+                      <span className="font-semibold text-teal-900 block">Current Medications</span>
+                      <p className="text-slate-700 leading-relaxed">
+                        {patient.currentMedications || 'No ongoing long-term medications documented.'}
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                      <span className="font-semibold text-slate-800 block">Medical &amp; Surgical History</span>
+                      <p className="text-slate-700 leading-relaxed">
+                        {patient.medicalHistory || 'No past surgical or chronic medical history reported.'}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                {/* Slot 2: Current Image */}
-                <div
-                  onClick={() => {
-                    if (currentProfileImage) {
-                      setSelectedPrevImageId(previousProfileImage?.id);
-                      setSelectedCurrImageOverride(currentProfileImage);
-                      setShowProgressionModal(true);
-                    } else {
-                      quickCompareInputRef.current?.click();
-                    }
-                  }}
-                  className="group rounded-xl border border-slate-200 bg-slate-50/60 p-3 flex items-center gap-3.5 hover:border-teal-300 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  <div className="w-16 h-16 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-slate-200">
-                    {currentProfileImage ? (
-                      <img
-                        src={currentProfileImage.url}
-                        alt={currentProfileImage.caption || 'Current visit image'}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      />
-                    ) : (
-                      <Upload className="w-5 h-5 text-teal-400" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <span className="text-[11px] font-medium text-teal-700 block">
-                      02. Current Follow-up
-                    </span>
-                    {currentProfileImage ? (
-                      <>
-                        <p className="text-xs font-semibold text-slate-900 truncate">
-                          {currentProfileImage.caption || 'Latest Follow-up Photo'}
-                        </p>
-                        <p className="text-[11px] text-slate-500 tabular-nums">
-                          {new Date(currentProfileImage.createdAt).toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric'
-                          })}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-xs font-medium text-teal-700">
-                        + Upload current photo to compare
+                {/* 2. Single Unified Previous vs. Current Image Comparison Card (Doctor Only) */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-slate-900">
+                          Previous vs. Current Image Comparison
+                        </h3>
+                        <span className="text-xs text-slate-400 tabular-nums">
+                          · {images.length} {images.length === 1 ? 'photo' : 'photos'} stored
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Compare baseline and current follow-up photos side-by-side with 1x–4x zoom, lesion marking, and AI progression analysis.
                       </p>
-                    )}
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setShowProfileQrModal(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-medium transition cursor-pointer whitespace-nowrap shrink-0"
+                        title="Scan QR code with phone camera to upload lesion photo"
+                      >
+                        <QrCode className="w-3.5 h-3.5 text-teal-700" />
+                        <span>Scan QR</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => quickCompareInputRef.current?.click()}
+                        disabled={isUploadingProfileImage}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-medium transition cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-teal-700" />
+                        <span>{isUploadingProfileImage ? 'Uploading...' : 'Upload Image'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPrevImageId(undefined);
+                          setSelectedCurrImageOverride(null);
+                          setShowProgressionModal(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                        <span>Compare Images</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Side-by-Side Previous vs. Current Preview */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Slot 1: Previous Image */}
+                    <div
+                      onClick={() => {
+                        if (previousProfileImage) {
+                          setSelectedPrevImageId(previousProfileImage.id);
+                          setSelectedCurrImageOverride(null);
+                          setShowProgressionModal(true);
+                        } else {
+                          pastImageInputRef.current?.click();
+                        }
+                      }}
+                      className="group rounded-xl border border-slate-200 bg-slate-50/60 p-3 flex items-center gap-3.5 hover:border-teal-300 hover:bg-slate-50 transition cursor-pointer"
+                    >
+                      <div className="w-16 h-16 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-slate-200">
+                        {previousProfileImage ? (
+                          <img
+                            src={previousProfileImage.url}
+                            alt={previousProfileImage.caption || 'Previous visit image'}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                        ) : (
+                          <ImageIcon className="w-5 h-5 text-slate-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <span className="text-[11px] font-medium text-slate-500 block">
+                          01. Previous Baseline
+                        </span>
+                        {previousProfileImage ? (
+                          <>
+                            <p className="text-xs font-semibold text-slate-900 truncate">
+                              {previousProfileImage.caption || 'Clinical Baseline Photo'}
+                            </p>
+                            <p className="text-[11px] text-slate-500 tabular-nums">
+                              {new Date(previousProfileImage.createdAt).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric'
+                              })}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-xs font-medium text-teal-700">
+                            + Upload baseline photo
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Slot 2: Current Image */}
+                    <div
+                      onClick={() => {
+                        if (currentProfileImage) {
+                          setSelectedPrevImageId(previousProfileImage?.id);
+                          setSelectedCurrImageOverride(currentProfileImage);
+                          setShowProgressionModal(true);
+                        } else {
+                          quickCompareInputRef.current?.click();
+                        }
+                      }}
+                      className="group rounded-xl border border-slate-200 bg-slate-50/60 p-3 flex items-center gap-3.5 hover:border-teal-300 hover:bg-slate-50 transition cursor-pointer"
+                    >
+                      <div className="w-16 h-16 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-slate-200">
+                        {currentProfileImage ? (
+                          <img
+                            src={currentProfileImage.url}
+                            alt={currentProfileImage.caption || 'Current visit image'}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                        ) : (
+                          <Upload className="w-5 h-5 text-teal-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <span className="text-[11px] font-medium text-teal-700 block">
+                          02. Current Follow-up
+                        </span>
+                        {currentProfileImage ? (
+                          <>
+                            <p className="text-xs font-semibold text-slate-900 truncate">
+                              {currentProfileImage.caption || 'Latest Follow-up Photo'}
+                            </p>
+                            <p className="text-[11px] text-slate-500 tabular-nums">
+                              {new Date(currentProfileImage.createdAt).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric'
+                              })}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-xs font-medium text-teal-700">
+                            + Upload current photo to compare
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
 
             {/* 3. Personal & Contact Information */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
@@ -895,14 +895,16 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                 <h3 className="text-sm font-semibold text-slate-900">
                   Patient Demographics &amp; Contact
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('timeline')}
-                  className="text-xs font-medium text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
-                >
-                  <span>View {totalUnifiedCount} Visits</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                {!isReceptionist && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('timeline')}
+                    className="text-xs font-medium text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>View {totalUnifiedCount} Visits</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs tabular-nums">
                 <div>
@@ -947,46 +949,48 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
           {/* Right Column: Clinical Metrics, Follow-up, Vitals & AI Co-Pilot */}
           <div className="space-y-6">
-            {/* Quick Stats Card */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
-              <h3 className="text-xs font-semibold text-slate-500">
-                Chart Summary
-              </h3>
-              <div className="grid grid-cols-2 gap-2.5 text-left tabular-nums">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('timeline')}
-                  className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
-                >
-                  <span className="text-lg font-bold text-slate-900 block">{totalUnifiedCount}</span>
-                  <span className="text-[11px] text-slate-500">Visits &amp; Timeline</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('images')}
-                  className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
-                >
-                  <span className="text-lg font-bold text-slate-900 block">{images.length}</span>
-                  <span className="text-[11px] text-slate-500">Clinical Images</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('prescriptions')}
-                  className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
-                >
-                  <span className="text-lg font-bold text-slate-900 block">{prescriptions.length}</span>
-                  <span className="text-[11px] text-slate-500">Prescriptions</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('reports')}
-                  className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
-                >
-                  <span className="text-lg font-bold text-slate-900 block">{testReports.length}</span>
-                  <span className="text-[11px] text-slate-500">Report Results</span>
-                </button>
+            {!isReceptionist && (
+              /* Quick Stats Card (Doctor Only) */
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
+                <h3 className="text-xs font-semibold text-slate-500">
+                  Chart Summary
+                </h3>
+                <div className="grid grid-cols-2 gap-2.5 text-left tabular-nums">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('timeline')}
+                    className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
+                  >
+                    <span className="text-lg font-bold text-slate-900 block">{totalUnifiedCount}</span>
+                    <span className="text-[11px] text-slate-500">Visits &amp; Timeline</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('images')}
+                    className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
+                  >
+                    <span className="text-lg font-bold text-slate-900 block">{images.length}</span>
+                    <span className="text-[11px] text-slate-500">Clinical Images</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('prescriptions')}
+                    className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
+                  >
+                    <span className="text-lg font-bold text-slate-900 block">{prescriptions.length}</span>
+                    <span className="text-[11px] text-slate-500">Prescriptions</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('reports')}
+                    className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
+                  >
+                    <span className="text-lg font-bold text-slate-900 block">{testReports.length}</span>
+                    <span className="text-[11px] text-slate-500">Report Results</span>
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Upcoming Follow-Up & Appointment Card */}
             {(() => {
@@ -1040,14 +1044,16 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                     </p>
                   )}
                   <div className="pt-1 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onStartConsultation(patient)}
-                      className="flex-1 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <Stethoscope className="w-3.5 h-3.5" />
-                      <span>Start Visit</span>
-                    </button>
+                    {!isReceptionist && (
+                      <button
+                        type="button"
+                        onClick={() => onStartConsultation(patient)}
+                        className="flex-1 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Stethoscope className="w-3.5 h-3.5" />
+                        <span>Start Visit</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -1063,45 +1069,47 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               );
             })()}
 
-            {/* Compact AI Clinical Assistant Prompts */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Clinical AI Assistant</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onOpenAIWithPrompt?.('')}
-                  className="text-[11px] font-medium text-teal-700 hover:text-teal-900 cursor-pointer"
-                >
-                  Open Chat
-                </button>
+            {/* Compact AI Clinical Assistant Prompts (Doctor Only) */}
+            {!isReceptionist && (
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Clinical AI Assistant</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAIWithPrompt?.('')}
+                    className="text-[11px] font-medium text-teal-700 hover:text-teal-900 cursor-pointer"
+                  >
+                    Open Chat
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onOpenAIWithPrompt?.(`Summarize ${patient.fullName}'s clinical history`)}
+                    className="text-left px-3 py-2 bg-slate-50 hover:bg-teal-50/60 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-700 transition-colors cursor-pointer"
+                  >
+                    Summarize patient clinical history
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAIWithPrompt?.(`Generate a structured SOAP note for ${patient.fullName}`)}
+                    className="text-left px-3 py-2 bg-slate-50 hover:bg-teal-50/60 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-700 transition-colors cursor-pointer"
+                  >
+                    Generate structured SOAP note
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAIWithPrompt?.(`Draft a follow-up plan for ${patient.fullName}`)}
+                    className="text-left px-3 py-2 bg-slate-50 hover:bg-teal-50/60 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-700 transition-colors cursor-pointer"
+                  >
+                    Draft follow-up &amp; medication plan
+                  </button>
+                </div>
               </div>
-              <div className="grid grid-cols-1 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => onOpenAIWithPrompt?.(`Summarize ${patient.fullName}'s clinical history`)}
-                  className="text-left px-3 py-2 bg-slate-50 hover:bg-teal-50/60 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-700 transition-colors cursor-pointer"
-                >
-                  Summarize patient clinical history
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onOpenAIWithPrompt?.(`Generate a structured SOAP note for ${patient.fullName}`)}
-                  className="text-left px-3 py-2 bg-slate-50 hover:bg-teal-50/60 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-700 transition-colors cursor-pointer"
-                >
-                  Generate structured SOAP note
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onOpenAIWithPrompt?.(`Draft a follow-up plan for ${patient.fullName}`)}
-                  className="text-left px-3 py-2 bg-slate-50 hover:bg-teal-50/60 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-700 transition-colors cursor-pointer"
-                >
-                  Draft follow-up &amp; medication plan
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       )}

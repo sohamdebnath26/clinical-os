@@ -132,8 +132,7 @@
       "createdAt": "2026-09-29T12:24:30.102Z",
       "updatedAt": "2026-10-09T03:22:27.503Z",
       "lastVisitAt": "2026-10-09T03:22:27.503Z",
-      "primaryDiagnosis": "Post-treatment follow-up",
-      "createdByEmail": "demo@clinicalos.med"
+      "primaryDiagnosis": "Post-treatment follow-up"
     },
     {
       "fullName": "Kabir Kashyap",
@@ -151,8 +150,7 @@
       "id": "pat-mv0er2l2-uln3",
       "patientCode": "P-24619",
       "createdAt": "2026-10-09T03:30:40.215Z",
-      "updatedAt": "2026-10-09T03:30:40.215Z",
-      "createdByEmail": "demo@clinicalos.med"
+      "updatedAt": "2026-10-09T03:30:40.215Z"
     }
   ],
   "consultations": [
@@ -1244,7 +1242,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-11-07T20:24:58.652Z"
+    "updatedAt": "2026-11-07T20:38:53.586Z"
   },
   "appointments": [
     {

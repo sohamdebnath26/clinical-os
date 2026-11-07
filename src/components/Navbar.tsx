@@ -220,30 +220,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Right Controls */}
       <div className="flex items-center gap-2.5">
-        {/* 1-Click Receptionist / Doctor POV Switcher */}
-        <button
-          type="button"
-          onClick={() => switchRoleSession({ role: isReceptionist ? 'doctor' : 'receptionist' })}
-          title={isReceptionist ? 'Switch back to Doctor Point of View' : 'Preview Receptionist Point of View'}
-          className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
-            isReceptionist
-              ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800'
-              : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
-          }`}
-        >
-          {isReceptionist ? (
-            <>
-              <Stethoscope className="w-3.5 h-3.5 text-teal-700" />
-              <span>Doctor View</span>
-            </>
-          ) : (
-            <>
-              <UserCog className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Receptionist View</span>
-            </>
-          )}
-        </button>
-
         {/* Dark / Light Mode Toggle */}
         <ThemeToggleButton variant="navbar" />
 

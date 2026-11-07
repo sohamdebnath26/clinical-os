@@ -188,32 +188,23 @@ export const SettingsView: React.FC = () => {
     }
   };
 
+  if (isReceptionist) {
+    return (
+      <div className="p-6 bg-white rounded-2xl border border-slate-200 text-xs text-slate-600">
+        Role assignment and clinic settings are restricted to Doctors.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 max-w-4xl animate-in fade-in duration-150">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{t('practiceSettings')}</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Configure clinic team roles (Doctor vs. Receptionist), display theme, language preferences, and doctor credentials.
+            Assign email addresses as Doctor or Receptionist, and configure clinic preferences.
           </p>
         </div>
-
-        {/* 1-Click POV Switcher between Doctor View and Receptionist View */}
-        <button
-          type="button"
-          disabled={isSwitchingView}
-          onClick={() =>
-            handleSwitchToAccount({
-              targetRole: isReceptionist ? 'doctor' : 'receptionist'
-            })
-          }
-          className="px-4 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer shrink-0 shadow-xs disabled:opacity-50"
-        >
-          <ArrowRightLeft className="w-3.5 h-3.5 text-teal-300" />
-          <span>
-            {isReceptionist ? 'Switch Back to Doctor View' : 'Test Receptionist Point of View'}
-          </span>
-        </button>
       </div>
 
       {successMsg && (
@@ -229,22 +220,20 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
-      {/* Clinic Team & Email Role Assignment (Doctor / Receptionist) */}
+      {/* Doctor-Only Clinic Team & Email Role Assignment (Doctor / Receptionist) */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
               <Shield className="w-4 h-4 text-teal-700" />
-              Clinic Team &amp; Email Role Assignment (Doctor / Receptionist)
+              Assign Role by Email Address (Doctor / Receptionist)
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              {isReceptionist
-                ? `You are currently signed in with Front-Desk Receptionist permissions (${doctor?.email}). Only Doctors can assign or modify email roles.`
-                : 'Assign any email address as a Doctor (full clinical, Rx, AI & revenue access) or as a Receptionist (front-desk walk-in, queue, appointments & patient registration only).'}
+              Assign any email address as a Doctor (full clinical, Rx, AI &amp; revenue access) or as a Receptionist (can only add patients and book appointments).
             </p>
           </div>
           <span className="text-[11px] font-semibold text-teal-800 shrink-0">
-            Active Role: {isReceptionist ? 'Receptionist' : 'Doctor (Admin)'}
+            Active Role: Doctor (Admin)
           </span>
         </div>
 
@@ -386,30 +375,18 @@ export const SettingsView: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap shrink-0">
-                    {!isReceptionist && !isCurrentUser && (
+                    {!isCurrentUser && (
                       <button
                         type="button"
                         onClick={() => handleToggleAccountRole(member)}
-                        className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
+                        className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
                         title="Change assigned role for this email address"
                       >
                         Set as {memberIsRec ? 'Doctor' : 'Receptionist'}
                       </button>
                     )}
 
-                    {!isCurrentUser && (
-                      <button
-                        type="button"
-                        disabled={isSwitchingView}
-                        onClick={() => handleSwitchToAccount({ targetId: member.id })}
-                        className="px-3 py-1.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        Switch to {memberIsRec ? 'Receptionist' : 'Doctor'} View
-                      </button>
-                    )}
-
-                    {!isReceptionist &&
-                      !isCurrentUser &&
+                    {!isCurrentUser &&
                       member.email !== 'demo@clinicalos.med' &&
                       member.email !== 'receptionist@clinicalos.med' && (
                         <button

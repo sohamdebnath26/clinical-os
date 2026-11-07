@@ -75,11 +75,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'appointments', label: t('appointments'), shortLabel: 'Calendar', icon: Calendar },
     { id: 'patients', label: t('patients'), shortLabel: 'Patients', icon: Users },
     ...(!isReceptionist
-      ? [{ id: 'prescriptions' as NavRoute, label: t('prescriptions'), shortLabel: 'Rx Notes', icon: FileText }]
-      : []),
-    { id: 'messages', label: 'Messages', shortLabel: 'Inbox', icon: MessageSquare },
-    ...(!isReceptionist
-      ? [{ id: 'revenue' as NavRoute, label: 'Revenue', shortLabel: 'Billing', icon: IndianRupee }]
+      ? [
+          { id: 'prescriptions' as NavRoute, label: t('prescriptions'), shortLabel: 'Rx Notes', icon: FileText },
+          { id: 'messages' as NavRoute, label: 'Messages', shortLabel: 'Inbox', icon: MessageSquare },
+          { id: 'revenue' as NavRoute, label: 'Revenue', shortLabel: 'Billing', icon: IndianRupee }
+        ]
       : [])
   ];
 
@@ -281,26 +281,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Dark / Light Mode Toggle */}
         <ThemeToggleButton variant={isRail ? 'sidebar-rail' : 'sidebar-expanded'} />
 
-        {/* Settings */}
-        <button
-          type="button"
-          onClick={() => onNavigate('settings')}
-          title={t('settings')}
-          className={`w-full rounded-xl transition-all cursor-pointer ${
-            isRail
-              ? 'flex flex-col items-center justify-center py-2 px-1 gap-1'
-              : 'flex items-center gap-2.5 px-3 py-2 text-xs'
-          } ${
-            currentRoute === 'settings'
-              ? 'bg-[#157a6e] text-white font-semibold shadow-2xs'
-              : 'text-[#c9e3df] hover:bg-white/8 hover:text-white font-medium'
-          }`}
-        >
-          <Settings className="w-[18px] h-[18px] shrink-0" />
-          <span className={isRail ? 'text-[10px] leading-tight text-center' : 'truncate'}>
-            {t('settings')}
-          </span>
-        </button>
+        {/* Settings (Doctor Only — contains Email Role Assignment & Clinic Config) */}
+        {!isReceptionist && (
+          <button
+            type="button"
+            onClick={() => onNavigate('settings')}
+            title={t('settings')}
+            className={`w-full rounded-xl transition-all cursor-pointer ${
+              isRail
+                ? 'flex flex-col items-center justify-center py-2 px-1 gap-1'
+                : 'flex items-center gap-2.5 px-3 py-2 text-xs'
+            } ${
+              currentRoute === 'settings'
+                ? 'bg-[#157a6e] text-white font-semibold shadow-2xs'
+                : 'text-[#c9e3df] hover:bg-white/8 hover:text-white font-medium'
+            }`}
+          >
+            <Settings className="w-[18px] h-[18px] shrink-0" />
+            <span className={isRail ? 'text-[10px] leading-tight text-center' : 'truncate'}>
+              {t('settings')}
+            </span>
+          </button>
+        )}
 
         {/* Compact Doctor & Sign Out Row */}
         <div
