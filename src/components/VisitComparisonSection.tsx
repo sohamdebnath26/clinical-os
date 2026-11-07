@@ -566,25 +566,14 @@ ${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClin
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
-          {onOpenImageComparison && (
-            <button
-              type="button"
-              onClick={onOpenImageComparison}
-              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-900 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
-              title="Compare any previous image with current image or upload a new photo"
-            >
-              <ImageIcon className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Compare Prev vs. Current Photo</span>
-            </button>
-          )}
           <button
             type="button"
             onClick={() => setShowSideBySideFullScreenModal(true)}
-            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition"
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition whitespace-nowrap shrink-0"
             title="Open Full Screen Side-by-Side Image Viewer with Zoom & Area Marking"
           >
             <Maximize2 className="w-3.5 h-3.5 text-teal-300" />
-            <span>Full Screen Side-by-Side (Zoom &amp; Mark)</span>
+            <span>Compare Images Side-by-Side</span>
           </button>
 
           <button
@@ -771,14 +760,6 @@ ${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClin
               Showing the <strong>first clinical image from each visit</strong> across a <strong>{getIntervalDays()} day</strong> interval.
             </span>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowSideBySideFullScreenModal(true)}
-                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold flex items-center gap-1.5 shadow-2xs transition"
-              >
-                <Maximize2 className="w-3.5 h-3.5 text-teal-300" />
-                <span>View Full Screen Side-by-Side (Zoom &amp; Mark Areas)</span>
-              </button>
 
               {selectedImgA && selectedImgB && (
                 <>

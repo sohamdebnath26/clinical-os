@@ -9,7 +9,6 @@ import { MarkdownView } from './MarkdownView';
 import { LesionProgressionModal } from './LesionProgressionModal';
 import { WhatsAppShareModal, WhatsAppIcon, WhatsAppReportType } from './WhatsAppShareModal';
 import { PatientVitalsChart } from './PatientVitalsChart';
-import { VisitComparisonSection } from './VisitComparisonSection';
 import { PatientReportsSection } from './PatientReportsSection';
 import { MobileQrUploadModal } from './MobileQrUploadModal';
 import { useAuth } from '../context/AuthContext';
@@ -30,7 +29,6 @@ import {
   ChevronUp,
   Image as ImageIcon,
   Pencil,
-  ScanEye,
   Activity,
   Search,
   ArrowUpDown,
@@ -529,35 +527,42 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
       </div>
 
       {/* Patient Header Card */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-teal-600 text-white font-bold text-xl flex items-center justify-center shadow-md">
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-4 min-w-0">
+          <div className="w-12 h-12 rounded-xl bg-teal-700 text-white font-bold text-lg flex items-center justify-center shrink-0">
             {patient.fullName.charAt(0).toUpperCase()}
           </div>
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight truncate">
                 {patient.fullName}
               </h1>
-              <span className="font-mono text-xs font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+              <span className="font-mono tabular-nums text-xs font-semibold text-teal-800">
                 {patient.patientCode}
               </span>
             </div>
-            <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 font-medium">
-              <span>{patient.age} years old</span>
-              <span>•</span>
+            <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 flex-wrap tabular-nums">
+              <span>{patient.age} yrs</span>
+              <span aria-hidden="true">·</span>
               <span>{patient.gender}</span>
               {patient.bloodGroup && (
                 <>
-                  <span>•</span>
-                  <span className="font-semibold text-slate-700">Blood: {patient.bloodGroup}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="text-slate-700 font-medium">Blood {patient.bloodGroup}</span>
+                </>
+              )}
+              {patient.mobile && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="font-mono text-slate-600">{patient.mobile}</span>
                 </>
               )}
               {patient.allergies && (
                 <>
-                  <span>•</span>
-                  <span className="text-rose-600 font-semibold flex items-center gap-1">
-                    <ShieldAlert className="w-3.5 h-3.5" /> Allergies: {patient.allergies}
+                  <span aria-hidden="true">·</span>
+                  <span className="text-rose-600 font-semibold inline-flex items-center gap-1">
+                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                    <span>Allergies: {patient.allergies}</span>
                   </span>
                 </>
               )}
@@ -565,67 +570,38 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap">
-          {onNavigateToImageAnalyzer && (
-            <button
-              type="button"
-              onClick={() => onNavigateToImageAnalyzer(patient.id)}
-              className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl text-xs font-semibold text-teal-900 shadow-2xs transition-colors"
-            >
-              <ScanEye className="w-3.5 h-3.5 text-teal-600" />
-              <span>Analyze Image</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedPrevImageId(undefined);
-              setSelectedCurrImageOverride(null);
-              setShowProgressionModal(true);
-            }}
-            className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-semibold text-indigo-900 shadow-2xs transition-colors"
-            title="Compare previous visit image with current image side-by-side"
-          >
-            <Activity className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Compare Prev vs. Current Image</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onOpenAIWithPrompt?.('')}
-            className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 shadow-2xs transition-colors"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-            <span>AI Assistant</span>
-          </button>
+        {/* Clean Primary Clinical Actions */}
+        <div className="flex items-center gap-2 w-full lg:w-auto flex-wrap shrink-0">
           <button
             type="button"
             onClick={() => setShowEditModal(true)}
-            className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 shadow-2xs transition-colors"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <Pencil className="w-3.5 h-3.5 text-teal-700" />
-            <span>Edit details</span>
+            <Pencil className="w-3.5 h-3.5 text-slate-500" />
+            <span>Edit Profile</span>
           </button>
           <button
             type="button"
             onClick={() => setShowPrintRx(true)}
-            className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 shadow-2xs transition-colors"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <FileText className="w-3.5 h-3.5 text-slate-500" />
-            <span>Prescription</span>
+            <Printer className="w-3.5 h-3.5 text-slate-500" />
+            <span>Print Rx</span>
           </button>
           <button
             type="button"
-            onClick={() => setWhatsAppData({
-              isOpen: true,
-              reportType: 'patient_summary',
-              data: {
-                activePrescriptions: prescriptions,
-                consultation: consultations[0] || null
-              }
-            })}
-            className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors"
-            title="Send Medical Summary directly to patient's WhatsApp"
+            onClick={() =>
+              setWhatsAppData({
+                isOpen: true,
+                reportType: 'patient_summary',
+                data: {
+                  activePrescriptions: prescriptions,
+                  consultation: consultations[0] || null
+                }
+              })
+            }
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            title="Send Medical Summary to patient"
           >
             <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
             <span>WhatsApp Summary</span>
@@ -633,79 +609,17 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           <button
             type="button"
             onClick={() => onStartConsultation(patient)}
-            className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold shadow-md transition-all"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
             <Stethoscope className="w-3.5 h-3.5" />
-            <span>New consultation</span>
+            <span>New Consultation</span>
           </button>
         </div>
       </div>
 
-      {/* AI Assistant Quick Chips */}
-      <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-teal-900 flex items-center gap-1 mr-1">
-          <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-          ASK THE AI ASSISTANT:
-        </span>
-        <button
-          type="button"
-          onClick={() => onOpenAIWithPrompt?.(`Summarize ${patient.fullName}'s clinical history`)}
-          className="px-3 py-1 bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-400 rounded-lg text-xs font-medium text-slate-700 transition-colors"
-        >
-          Summarize this patient&apos;s history
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenAIWithPrompt?.(`Generate a structured SOAP note for ${patient.fullName}`)}
-          className="px-3 py-1 bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-400 rounded-lg text-xs font-medium text-slate-700 transition-colors"
-        >
-          Generate a SOAP note
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenAIWithPrompt?.(`List current medications and dosing for ${patient.fullName}`)}
-          className="px-3 py-1 bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-400 rounded-lg text-xs font-medium text-slate-700 transition-colors"
-        >
-          List current medications
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenAIWithPrompt?.(`Draft a follow-up plan for ${patient.fullName}`)}
-          className="px-3 py-1 bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-400 rounded-lg text-xs font-medium text-slate-700 transition-colors"
-        >
-          Draft a follow-up plan
-        </button>
-      </div>
-
-      {/* Profile Navigation Tabs */}
-      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
-        <div className="flex items-center justify-between px-2 pt-0.5">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Patient Chart Sections ({currentTabIndex + 1}/{PROFILE_TAB_ORDER.length})
-            </span>
-            {tabAdvanceToast && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-700 text-white text-[10px] font-bold animate-in fade-in duration-150">
-                <CheckCircle2 className="w-3 h-3 text-emerald-300" />
-                {tabAdvanceToast}
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={handleAdvanceProfileTab}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-[11px] font-semibold text-teal-900 transition-colors cursor-pointer"
-            title="Press Enter when fields are filled to jump to the next tab"
-          >
-            <span>Press</span>
-            <kbd className="px-1.5 py-0.5 bg-white border border-teal-300 rounded text-[10px] font-mono font-bold text-teal-900 shadow-2xs">
-              Enter ↵
-            </kbd>
-            <span>→ {PROFILE_TAB_LABELS[nextProfileTab]}</span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+      {/* Streamlined Single-Row Profile Navigation Tabs */}
+      <div className="bg-white p-1.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2 overflow-x-auto">
+        <div className="flex items-center gap-1 overflow-x-auto">
           {PROFILE_TAB_ORDER.map(tab => {
             const isActive = activeTab === tab;
             return (
@@ -713,10 +627,10 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                 key={tab}
                 type="button"
                 onClick={() => setActiveTab(tab)}
-                className={`py-2.5 px-3.5 text-xs font-bold rounded-xl transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                className={`py-2 px-3.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer tabular-nums ${
                   isActive
-                    ? 'bg-teal-700 text-white shadow-xs'
-                    : 'bg-slate-50/70 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-teal-700 text-white'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
                 {tab === 'overview' && <User className="w-3.5 h-3.5" />}
@@ -739,108 +653,107 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             );
           })}
         </div>
+
+        <div className="hidden xl:flex items-center gap-2 pr-1.5 shrink-0">
+          {tabAdvanceToast && (
+            <span className="text-[11px] font-medium text-teal-700 whitespace-nowrap">
+              {tabAdvanceToast}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleAdvanceProfileTab}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-600 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            title="Press Enter to jump to the next chart section"
+          >
+            <span>Next: {PROFILE_TAB_LABELS[nextProfileTab]}</span>
+            <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-mono text-slate-700">
+              Enter ↵
+            </kbd>
+          </button>
+        </div>
       </div>
 
       {/* TAB 1: OVERVIEW */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-150">
-          {/* Left Column: Personal info */}
+          {/* Left Main Column */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Personal Information
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
-                <div>
-                  <span className="text-[11px] text-slate-400 block font-medium">Full Name</span>
-                  <span className="font-bold text-slate-800">{patient.fullName}</span>
+            {/* 1. Clinical Background, Allergies & Active Medications */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Clinical Background &amp; Allergies
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(true)}
+                  className="text-xs font-medium text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
+                >
+                  <Pencil className="w-3 h-3" />
+                  <span>Edit</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div className="p-3.5 rounded-xl bg-rose-50/40 border border-rose-100 space-y-1">
+                  <span className="font-semibold text-rose-800 block">Known Drug Allergies</span>
+                  <p className="text-slate-700 leading-relaxed">
+                    {patient.allergies || 'No known drug or environmental allergies documented.'}
+                  </p>
                 </div>
-                <div>
-                  <span className="text-[11px] text-slate-400 block font-medium">Patient Code</span>
-                  <span className="font-mono font-bold text-teal-800">{patient.patientCode}</span>
+
+                <div className="p-3.5 rounded-xl bg-teal-50/30 border border-teal-100 space-y-1">
+                  <span className="font-semibold text-teal-900 block">Current Medications</span>
+                  <p className="text-slate-700 leading-relaxed">
+                    {patient.currentMedications || 'No ongoing long-term medications documented.'}
+                  </p>
                 </div>
-                <div>
-                  <span className="text-[11px] text-slate-400 block font-medium">Age & Gender</span>
-                  <span className="font-semibold text-slate-800">{patient.age}y / {patient.gender}</span>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                  <span className="font-semibold text-slate-800 block">Medical &amp; Surgical History</span>
+                  <p className="text-slate-700 leading-relaxed">
+                    {patient.medicalHistory || 'No past surgical or chronic medical history reported.'}
+                  </p>
                 </div>
-                <div>
-                  <span className="text-[11px] text-slate-400 block font-medium">Mobile Number</span>
-                  <span className="font-mono font-medium text-slate-800">{patient.mobile}</span>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-400 block font-medium">Blood Group</span>
-                  <span className="font-semibold text-slate-800">{patient.bloodGroup || 'Not recorded'}</span>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-400 block font-medium">Date of Birth</span>
-                  <span className="font-medium text-slate-700">{patient.dateOfBirth || 'Not provided'}</span>
-                </div>
-                {patient.emergencyContact && (
-                  <div className="col-span-2">
-                    <span className="text-[11px] text-slate-400 block font-medium">Emergency Contact</span>
-                    <span className="font-medium text-slate-700">{patient.emergencyContact}</span>
-                  </div>
-                )}
-                {patient.address && (
-                  <div className="col-span-2 sm:col-span-3">
-                    <span className="text-[11px] text-slate-400 block font-medium">Residential Address</span>
-                    <span className="font-medium text-slate-700">{patient.address}</span>
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Direct Patient Profile Card: Compare Previous Image vs. Current Image */}
-            <div className="bg-white p-6 rounded-2xl border border-indigo-200/90 shadow-2xs space-y-4">
-              <div className="flex flex-col gap-3.5">
-                {/* Header Row: Icon, Title & Badge, Description */}
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center shrink-0 mt-0.5">
-                    <Activity className="w-5 h-5" />
+            {/* 2. Single Unified Previous vs. Current Image Comparison Card */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      Previous vs. Current Image Comparison
+                    </h3>
+                    <span className="text-xs text-slate-400 tabular-nums">
+                      · {images.length} {images.length === 1 ? 'photo' : 'photos'} stored
+                    </span>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h3 className="text-sm sm:text-base font-bold text-slate-900">
-                        Compare Previous Image vs. Current Image
-                      </h3>
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 whitespace-nowrap">
-                        {images.length} {images.length === 1 ? 'Photo' : 'Photos'} in Profile
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-2xl">
-                      Inspect previous visit photos alongside today&apos;s image with full-screen 1x–4x zoom, lesion marking, voice notes, and AI progression summary.
-                    </p>
-                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Compare baseline and current follow-up photos side-by-side with 1x–4x zoom, lesion marking, and AI progression analysis.
+                  </p>
                 </div>
 
-                {/* Actions Toolbar Row: Clean responsive flow with no text squishing */}
-                <div className="flex items-center gap-2 flex-wrap pt-2.5 border-t border-slate-100">
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
                   <button
                     type="button"
                     onClick={() => setShowProfileQrModal(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-900 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer"
-                    title="Scan QR code with phone camera to snap lesion photo for comparison"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-medium transition cursor-pointer whitespace-nowrap shrink-0"
+                    title="Scan QR code with phone camera to upload lesion photo"
                   >
                     <QrCode className="w-3.5 h-3.5 text-teal-700" />
-                    <span>Scan QR from Mobile</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => pastImageInputRef.current?.click()}
-                    disabled={isUploadingProfileImage}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-900 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{isUploadingProfileImage ? 'Storing...' : '+ Store Past Medical Image'}</span>
+                    <span>Scan QR</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => quickCompareInputRef.current?.click()}
                     disabled={isUploadingProfileImage}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-medium transition cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
                   >
-                    <Upload className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>{isUploadingProfileImage ? 'Uploading...' : '+ Upload Current Image'}</span>
+                    <Upload className="w-3.5 h-3.5 text-teal-700" />
+                    <span>{isUploadingProfileImage ? 'Uploading...' : 'Upload Image'}</span>
                   </button>
                   <button
                     type="button"
@@ -849,52 +762,61 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                       setSelectedCurrImageOverride(null);
                       setShowProgressionModal(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-900 hover:bg-indigo-950 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer sm:ml-auto"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
                   >
-                    <Maximize2 className="w-3.5 h-3.5 text-indigo-200" />
-                    <span>Compare Past vs. Current</span>
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>Compare Images</span>
                   </button>
                 </div>
               </div>
 
-              {/* Side-by-Side Past vs. Current Preview right inside Patient Profile */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              {/* Side-by-Side Previous vs. Current Preview */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Slot 1: Previous Image */}
                 <div
                   onClick={() => {
-                    setSelectedPrevImageId(previousProfileImage?.id);
-                    setSelectedCurrImageOverride(null);
-                    setShowProgressionModal(true);
+                    if (previousProfileImage) {
+                      setSelectedPrevImageId(previousProfileImage.id);
+                      setSelectedCurrImageOverride(null);
+                      setShowProgressionModal(true);
+                    } else {
+                      pastImageInputRef.current?.click();
+                    }
                   }}
-                  className="group relative rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex items-center gap-3.5 hover:border-indigo-300 hover:bg-indigo-50/20 transition cursor-pointer"
+                  className="group rounded-xl border border-slate-200 bg-slate-50/60 p-3 flex items-center gap-3.5 hover:border-teal-300 hover:bg-slate-50 transition cursor-pointer"
                 >
-                  <div className="w-20 h-20 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-slate-200">
+                  <div className="w-16 h-16 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-slate-200">
                     {previousProfileImage ? (
                       <img
                         src={previousProfileImage.url}
                         alt={previousProfileImage.caption || 'Previous visit image'}
+                        referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />
                     ) : (
-                      <ImageIcon className="w-6 h-6 text-slate-500" />
+                      <ImageIcon className="w-5 h-5 text-slate-400" />
                     )}
                   </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-200/80 text-slate-700 whitespace-nowrap">
-                      1. Previous Image (Baseline)
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <span className="text-[11px] font-medium text-slate-500 block">
+                      01. Previous Baseline
                     </span>
                     {previousProfileImage ? (
                       <>
-                        <p className="text-xs font-bold text-slate-800 truncate">
+                        <p className="text-xs font-semibold text-slate-900 truncate">
                           {previousProfileImage.caption || 'Clinical Baseline Photo'}
                         </p>
-                        <p className="text-[11px] text-slate-500">
-                          Captured {new Date(previousProfileImage.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        <p className="text-[11px] text-slate-500 tabular-nums">
+                          {new Date(previousProfileImage.createdAt).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
                         </p>
                       </>
                     ) : (
-                      <p className="text-xs text-slate-500">
-                        No previous image yet — click to upload baseline photo
+                      <p className="text-xs font-medium text-teal-700">
+                        + Upload baseline photo
                       </p>
                     )}
                   </div>
@@ -911,157 +833,142 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                       quickCompareInputRef.current?.click();
                     }
                   }}
-                  className="group relative rounded-xl border border-teal-200 bg-teal-50/30 p-3 flex items-center gap-3.5 hover:border-teal-400 hover:bg-teal-50/60 transition cursor-pointer"
+                  className="group rounded-xl border border-slate-200 bg-slate-50/60 p-3 flex items-center gap-3.5 hover:border-teal-300 hover:bg-slate-50 transition cursor-pointer"
                 >
-                  <div className="w-20 h-20 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-teal-200">
+                  <div className="w-16 h-16 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-slate-200">
                     {currentProfileImage ? (
                       <img
                         src={currentProfileImage.url}
                         alt={currentProfileImage.caption || 'Current visit image'}
+                        referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />
                     ) : (
-                      <div className="flex flex-col items-center justify-center text-teal-300">
-                        <Upload className="w-5 h-5" />
-                      </div>
+                      <Upload className="w-5 h-5 text-teal-400" />
                     )}
                   </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-teal-100 text-teal-900 whitespace-nowrap">
-                      2. Current Image (Follow-up)
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <span className="text-[11px] font-medium text-teal-700 block">
+                      02. Current Follow-up
                     </span>
                     {currentProfileImage ? (
                       <>
-                        <p className="text-xs font-bold text-slate-800 truncate">
+                        <p className="text-xs font-semibold text-slate-900 truncate">
                           {currentProfileImage.caption || 'Latest Follow-up Photo'}
                         </p>
-                        <p className="text-[11px] text-teal-800 font-medium">
-                          Captured {new Date(currentProfileImage.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        <p className="text-[11px] text-slate-500 tabular-nums">
+                          {new Date(currentProfileImage.createdAt).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
                         </p>
                       </>
                     ) : (
-                      <p className="text-xs font-semibold text-teal-800">
-                        + Click to upload today&apos;s current image &amp; compare
+                      <p className="text-xs font-medium text-teal-700">
+                        + Upload current photo to compare
                       </p>
                     )}
                   </div>
                 </div>
               </div>
-
-              <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
-                <span className="text-[11px] text-slate-500">
-                  Supports side-by-side full-screen zoom (1x–4x), area marking, voice notes &amp; editable AI summary.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('images')}
-                  className="font-bold text-indigo-700 hover:text-indigo-950 flex items-center gap-1 shrink-0"
-                >
-                  <span>Open Full Image Gallery ({images.length})</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
             </div>
 
-            {/* Visit & Clinical Report Comparison (Longitudinal Tracking) */}
-            <VisitComparisonSection
-              patient={patient}
-              consultations={consultations}
-              images={images}
-              onStartConsultation={onStartConsultation}
-              onRefreshData={loadPatientData}
-              onOpenImageComparison={() => {
-                setSelectedPrevImageId(undefined);
-                setSelectedCurrImageOverride(null);
-                setShowProgressionModal(true);
-              }}
-              onOpenWhatsApp={(data) => setWhatsAppData({
-                isOpen: true,
-                reportType: 'consultation_summary',
-                data: { consultation: data.consultation }
-              })}
-            />
-
-            {/* Medical History, Medications & Allergies */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+            {/* 3. Personal & Contact Information */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Clinical Background & Allergies
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Patient Demographics &amp; Contact
                 </h3>
                 <button
                   type="button"
-                  onClick={() => setShowEditModal(true)}
-                  className="text-xs font-semibold text-teal-700 hover:text-teal-900 flex items-center gap-1"
+                  onClick={() => setActiveTab('timeline')}
+                  className="text-xs font-medium text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
                 >
-                  <Pencil className="w-3 h-3" />
-                  <span>Edit</span>
+                  <span>View {totalUnifiedCount} Visits</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
-
-              <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs tabular-nums">
                 <div>
-                  <span className="font-semibold text-rose-700 block mb-0.5">Known Drug Allergies:</span>
-                  <p className="text-slate-700 bg-rose-50/50 p-2.5 rounded-lg border border-rose-100">
-                    {patient.allergies || 'No known drug or environmental allergies documented.'}
-                  </p>
+                  <span className="text-[11px] text-slate-400 block">Full Name</span>
+                  <span className="font-semibold text-slate-800">{patient.fullName}</span>
                 </div>
-
                 <div>
-                  <span className="font-semibold text-teal-800 block mb-0.5">Current / Regular Medications:</span>
-                  <p className="text-slate-700 bg-teal-50/30 p-2.5 rounded-lg border border-teal-100">
-                    {patient.currentMedications || 'No ongoing long-term medications documented.'}
-                  </p>
+                  <span className="text-[11px] text-slate-400 block">Patient ID</span>
+                  <span className="font-mono font-semibold text-teal-800">{patient.patientCode}</span>
                 </div>
-
                 <div>
-                  <span className="font-semibold text-slate-700 block mb-0.5">Medical & Surgical History:</span>
-                  <p className="text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    {patient.medicalHistory || 'No past surgical or chronic medical history reported.'}
-                  </p>
+                  <span className="text-[11px] text-slate-400 block">Age &amp; Gender</span>
+                  <span className="font-semibold text-slate-800">{patient.age}y · {patient.gender}</span>
                 </div>
+                <div>
+                  <span className="text-[11px] text-slate-400 block">Mobile Number</span>
+                  <span className="font-mono font-medium text-slate-800">{patient.mobile}</span>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-400 block">Blood Group</span>
+                  <span className="font-semibold text-slate-800">{patient.bloodGroup || 'Not recorded'}</span>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-400 block">Date of Birth</span>
+                  <span className="font-medium text-slate-700">{patient.dateOfBirth || 'Not provided'}</span>
+                </div>
+                {patient.emergencyContact && (
+                  <div className="col-span-2">
+                    <span className="text-[11px] text-slate-400 block">Emergency Contact</span>
+                    <span className="font-medium text-slate-700">{patient.emergencyContact}</span>
+                  </div>
+                )}
+                {patient.address && (
+                  <div className="col-span-2 sm:col-span-3">
+                    <span className="text-[11px] text-slate-400 block">Residential Address</span>
+                    <span className="font-medium text-slate-700">{patient.address}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Right Column: Encounters summary */}
+          {/* Right Column: Clinical Metrics, Follow-up, Vitals & AI Co-Pilot */}
           <div className="space-y-6">
-            {/* Quick stats card */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Patient Metrics
+            {/* Quick Stats Card */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
+              <h3 className="text-xs font-semibold text-slate-500">
+                Chart Summary
               </h3>
-              <div className="grid grid-cols-2 gap-3 text-center">
+              <div className="grid grid-cols-2 gap-2.5 text-left tabular-nums">
                 <button
                   type="button"
                   onClick={() => setActiveTab('timeline')}
-                  className="bg-slate-50 hover:bg-teal-50/70 p-3 rounded-xl border border-slate-100 hover:border-teal-200 transition-colors cursor-pointer"
+                  className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
                 >
-                  <span className="text-xl font-extrabold text-slate-800 block">{totalUnifiedCount}</span>
-                  <span className="text-[11px] text-slate-500 font-medium">Visits &amp; Timeline</span>
+                  <span className="text-lg font-bold text-slate-900 block">{totalUnifiedCount}</span>
+                  <span className="text-[11px] text-slate-500">Visits &amp; Timeline</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('images')}
-                  className="bg-indigo-50/60 hover:bg-indigo-100/70 p-3 rounded-xl border border-indigo-100 hover:border-indigo-300 transition-colors cursor-pointer"
+                  className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
                 >
-                  <span className="text-xl font-extrabold text-indigo-900 block">{images.length}</span>
-                  <span className="text-[11px] text-indigo-800 font-semibold">Images &amp; Compare</span>
+                  <span className="text-lg font-bold text-slate-900 block">{images.length}</span>
+                  <span className="text-[11px] text-slate-500">Clinical Images</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('prescriptions')}
-                  className="bg-slate-50 hover:bg-teal-50/70 p-3 rounded-xl border border-slate-100 hover:border-teal-200 transition-colors cursor-pointer"
+                  className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
                 >
-                  <span className="text-xl font-extrabold text-teal-800 block">{prescriptions.length}</span>
-                  <span className="text-[11px] text-slate-500 font-medium">Prescriptions</span>
+                  <span className="text-lg font-bold text-slate-900 block">{prescriptions.length}</span>
+                  <span className="text-[11px] text-slate-500">Prescriptions</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('reports')}
-                  className="bg-slate-50 hover:bg-teal-50/70 p-3 rounded-xl border border-slate-100 hover:border-teal-200 transition-colors cursor-pointer"
+                  className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
                 >
-                  <span className="text-xl font-extrabold text-teal-800 block">{testReports.length}</span>
-                  <span className="text-[11px] text-slate-500 font-medium">Report Results</span>
+                  <span className="text-lg font-bold text-slate-900 block">{testReports.length}</span>
+                  <span className="text-[11px] text-slate-500">Report Results</span>
                 </button>
               </div>
             </div>
@@ -1074,11 +981,11 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
               if (!followUpDate) {
                 return (
-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs space-y-2">
+                  <div className="bg-white border border-slate-200 p-5 rounded-2xl text-xs space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <span className="font-semibold text-slate-800 flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-teal-700" />
-                        Follow-up Status
+                        <span>Follow-up Status</span>
                       </span>
                       <button
                         type="button"
@@ -1086,42 +993,42 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                           setEditingAppointment(null);
                           setShowScheduleModal(true);
                         }}
-                        className="text-xs font-bold text-teal-800 hover:underline"
+                        className="text-xs font-semibold text-teal-700 hover:text-teal-900 cursor-pointer"
                       >
                         + Schedule
                       </button>
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                      No future follow-up appointment currently scheduled for this patient.
+                    <p className="text-xs text-slate-500">
+                      No upcoming follow-up appointment scheduled.
                     </p>
                   </div>
                 );
               }
 
               return (
-                <div className="bg-amber-50/80 border border-amber-200 p-4 rounded-2xl text-xs space-y-2">
-                  <div className="flex items-center justify-between text-amber-900 font-bold">
+                <div className="bg-amber-50/60 border border-amber-200 p-5 rounded-2xl text-xs space-y-2.5">
+                  <div className="flex items-center justify-between text-amber-900 font-semibold">
                     <span className="flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-amber-700" />
-                      Follow-up Scheduled
+                      <span>Follow-up Scheduled</span>
                     </span>
-                    <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">
+                    <span className="text-[11px] font-mono tabular-nums text-amber-800">
                       {upcomingAppt?.time || '10:00 AM'}
                     </span>
                   </div>
-                  <p className="text-slate-900 font-bold text-sm pt-0.5">
+                  <p className="text-slate-900 font-bold text-sm tabular-nums">
                     {followUpDate}
                   </p>
                   {followUpInstructions && (
-                    <p className="text-slate-700 text-[11px] leading-relaxed bg-white/60 p-2 rounded-lg border border-amber-100">
-                      <strong>Plan:</strong> {followUpInstructions}
+                    <p className="text-slate-700 text-xs leading-relaxed bg-white/80 p-2.5 rounded-lg border border-amber-100">
+                      {followUpInstructions}
                     </p>
                   )}
                   <div className="pt-1 flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => onStartConsultation(patient)}
-                      className="flex-1 py-1.5 bg-teal-800 hover:bg-teal-900 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors flex items-center justify-center gap-1"
+                      className="flex-1 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     >
                       <Stethoscope className="w-3.5 h-3.5" />
                       <span>Start Visit</span>
@@ -1132,7 +1039,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                         setEditingAppointment(upcomingAppt || null);
                         setShowScheduleModal(true);
                       }}
-                      className="py-1.5 px-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition-colors"
+                      className="py-1.5 px-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition-colors cursor-pointer"
                     >
                       Reschedule
                     </button>
@@ -1141,37 +1048,44 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               );
             })()}
 
-            {/* Quick Vitals & Growth Summary Card */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+            {/* Compact AI Clinical Assistant Prompts */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-teal-50 text-teal-800 flex items-center justify-center">
-                    <Activity className="w-3.5 h-3.5" />
-                  </div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                    Vitals & Biometrics
-                  </h4>
-                </div>
+                <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                  <span>Clinical AI Assistant</span>
+                </span>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('vitals')}
-                  className="text-xs font-bold text-teal-800 hover:text-teal-950 flex items-center gap-1 transition-colors"
+                  onClick={() => onOpenAIWithPrompt?.('')}
+                  className="text-[11px] font-medium text-teal-700 hover:text-teal-900 cursor-pointer"
                 >
-                  <span>View Trends</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
+                  Open Chat
                 </button>
               </div>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Historical weight, height, and body mass index (BMI) curves tracked over consultations.
-              </p>
-              <button
-                type="button"
-                onClick={() => setActiveTab('vitals')}
-                className="w-full py-2 bg-slate-50 hover:bg-teal-50/80 border border-slate-200 hover:border-teal-300 rounded-xl text-xs font-semibold text-slate-700 hover:text-teal-950 transition-colors flex items-center justify-center gap-1.5"
-              >
-                <Activity className="w-3.5 h-3.5 text-teal-700" />
-                <span>Open Biometric Charts & Trends</span>
-              </button>
+              <div className="grid grid-cols-1 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onOpenAIWithPrompt?.(`Summarize ${patient.fullName}'s clinical history`)}
+                  className="text-left px-3 py-2 bg-slate-50 hover:bg-teal-50/60 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-700 transition-colors cursor-pointer"
+                >
+                  Summarize patient clinical history
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenAIWithPrompt?.(`Generate a structured SOAP note for ${patient.fullName}`)}
+                  className="text-left px-3 py-2 bg-slate-50 hover:bg-teal-50/60 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-700 transition-colors cursor-pointer"
+                >
+                  Generate structured SOAP note
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenAIWithPrompt?.(`Draft a follow-up plan for ${patient.fullName}`)}
+                  className="text-left px-3 py-2 bg-slate-50 hover:bg-teal-50/60 border border-slate-200/80 rounded-lg text-xs font-medium text-slate-700 transition-colors cursor-pointer"
+                >
+                  Draft follow-up &amp; medication plan
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1180,21 +1094,26 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
       {/* TAB: CLINICAL IMAGES & PREVIOUS vs. CURRENT COMPARISON */}
       {activeTab === 'images' && (
         <div className="space-y-6 animate-in fade-in duration-150">
-          {/* Top Comparison & Upload Banner */}
-          <div className="bg-white p-6 rounded-2xl border border-indigo-200 shadow-2xs space-y-5">
+          {/* Top Comparison & Upload Card */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-5">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-indigo-700" />
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Patient Clinical Images &amp; Previous vs. Current Comparison
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Compare any previous visit photo with the current image side-by-side (1x–4x zoom, lesion marking, voice dictation &amp; AI progression summary).
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Clinical Image Archive &amp; Progression Comparison
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Store baseline or follow-up clinical images and compare previous vs. current photos side-by-side.
                 </p>
               </div>
-              <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowProfileQrModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  <QrCode className="w-3.5 h-3.5 text-teal-700" />
+                  <span>Scan QR from Mobile</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -1202,20 +1121,20 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                     setSelectedCurrImageOverride(null);
                     setShowProgressionModal(true);
                   }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-indigo-900 hover:bg-indigo-950 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
                 >
-                  <Maximize2 className="w-3.5 h-3.5 text-indigo-200" />
-                  <span>Compare Previous vs. Current Image</span>
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Compare Previous vs. Current</span>
                 </button>
               </div>
             </div>
 
-            {/* Store Past or Current Medical Image Form inside Patient Profile */}
+            {/* Clean Upload Form */}
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <label className="text-xs font-bold text-slate-800">
-                  Store Past Medical Image or Upload Current Image to {patient.fullName}&apos;s Permanent Archive
-                </label>
+                <span className="text-xs font-semibold text-slate-800">
+                  Add Medical Image to Permanent Archive
+                </span>
                 <div className="inline-flex rounded-lg bg-white border border-slate-200 p-0.5 text-xs">
                   <button
                     type="button"
@@ -1225,13 +1144,13 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                       d.setDate(d.getDate() - 14);
                       setUploadExamDate(d.toISOString().split('T')[0]);
                     }}
-                    className={`px-3 py-1 rounded-md font-bold transition ${
+                    className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
                       uploadImageRole === 'past'
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-slate-900 text-white'
                         : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    1. Past Medical Image (Historical)
+                    1. Past Baseline Image
                   </button>
                   <button
                     type="button"
@@ -1239,37 +1158,37 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                       setUploadImageRole('current');
                       setUploadExamDate(new Date().toISOString().split('T')[0]);
                     }}
-                    className={`px-3 py-1 rounded-md font-bold transition ${
+                    className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
                       uploadImageRole === 'current'
                         ? 'bg-teal-700 text-white'
                         : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    2. Current Visit Image (Today)
+                    2. Current Visit Image
                   </button>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                    {uploadImageRole === 'past' ? 'Past Exam / Capture Date' : 'Current Exam Date'}
+                  <label className="text-[11px] font-medium text-slate-500 block mb-1">
+                    Exam / Capture Date
                   </label>
                   <input
                     type="date"
                     value={uploadExamDate}
                     onChange={e => setUploadExamDate(e.target.value)}
-                    className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                    className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-600"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                    Medical Image Modality
+                  <label className="text-[11px] font-medium text-slate-500 block mb-1">
+                    Image Modality
                   </label>
                   <select
                     value={uploadModality}
                     onChange={e => setUploadModality(e.target.value as MedicalImageModality)}
-                    className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                    className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-600"
                   >
                     {[
                       'Clinical Photo',
@@ -1288,52 +1207,28 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                  <label className="text-[11px] font-medium text-slate-500 block mb-1">
                     Anatomical Site / Clinical Caption
                   </label>
-                  <input
-                    type="text"
-                    value={uploadCaption}
-                    onChange={e => setUploadCaption(e.target.value)}
-                    placeholder={
-                      uploadImageRole === 'past'
-                        ? 'e.g., Left forearm plaque — Past baseline before treatment'
-                        : 'e.g., Left forearm plaque — Current follow-up visit'
-                    }
-                    className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-600"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={uploadCaption}
+                      onChange={e => setUploadCaption(e.target.value)}
+                      placeholder="e.g., Left forearm plaque"
+                      className="flex-1 text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => profileImageInputRef.current?.click()}
+                      disabled={isUploadingProfileImage}
+                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{isUploadingProfileImage ? 'Uploading...' : 'Upload Image'}</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-1 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => profileImageInputRef.current?.click()}
-                  disabled={isUploadingProfileImage}
-                  className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 ${
-                    uploadImageRole === 'past'
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
-                      : 'bg-white hover:bg-slate-100 border border-slate-300 text-slate-800'
-                  }`}
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>
-                    {isUploadingProfileImage
-                      ? 'Storing & Extracting...'
-                      : uploadImageRole === 'past'
-                      ? 'Store Past Medical Image in Archive'
-                      : 'Store Current Image in Archive'}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => quickCompareInputRef.current?.click()}
-                  disabled={isUploadingProfileImage}
-                  className="px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition cursor-pointer disabled:opacity-50"
-                >
-                  <Upload className="w-3.5 h-3.5 text-teal-200" />
-                  <span>Upload Current Image &amp; Compare Immediately</span>
-                </button>
               </div>
             </div>
           </div>
@@ -1341,31 +1236,13 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           {/* Patient Medical Image Archive Grid */}
           {sortedPatientImages.length === 0 ? (
             <div className="bg-white p-12 rounded-2xl border border-dashed border-slate-300 text-center space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center mx-auto">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center mx-auto">
                 <ImageIcon className="w-6 h-6" />
               </div>
-              <p className="text-sm font-bold text-slate-700">No Medical Images Stored Yet</p>
-              <p className="text-xs text-slate-400 max-w-md mx-auto">
-                Store a past/baseline medical image or upload today&apos;s current clinical image above to extract findings and compare progression for {patient.fullName}.
+              <p className="text-sm font-semibold text-slate-800">No Medical Images Stored Yet</p>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Upload a baseline or current clinical image above to track visual progression for {patient.fullName}.
               </p>
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => pastImageInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Store Past Medical Image</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => quickCompareInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-900 hover:bg-indigo-950 text-white rounded-xl text-xs font-bold shadow-xs transition"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Upload Current Image</span>
-                </button>
-              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1375,84 +1252,67 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                 return (
                   <div
                     key={img.id}
-                    className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs flex flex-col justify-between hover:border-indigo-300 transition"
+                    className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:border-slate-300 transition"
                   >
                     <div>
                       <div className="relative h-48 bg-slate-900 overflow-hidden">
                         <img
                           src={img.dataUrl || img.url}
                           alt={img.caption || 'Patient medical image'}
+                          referrerPolicy="no-referrer"
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
-                          <span
-                            className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md shadow-xs ${
-                              img.imageRole === 'past'
-                                ? 'bg-blue-700 text-white'
-                                : isLatest
-                                ? 'bg-teal-600 text-white'
-                                : 'bg-slate-900/80 text-slate-100 backdrop-blur-xs'
-                            }`}
-                          >
-                            {img.imageRole === 'past' ? 'Stored Past Image' : isLatest ? 'Current / Latest' : 'Stored Follow-up'}
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 flex items-end justify-between text-xs text-white">
+                          <span className="font-medium">
+                            {img.imageRole === 'past' ? 'Past Baseline' : isLatest ? 'Current Image' : 'Follow-up'}
+                            {img.modality ? ` · ${img.modality}` : ''}
                           </span>
-                          {img.modality && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-black/70 text-teal-200 border border-white/15">
-                              {img.modality}
-                            </span>
-                          )}
-                        </div>
-                        <div className="absolute bottom-2.5 right-2.5 bg-slate-900/80 text-white text-[10px] font-mono px-2 py-0.5 rounded backdrop-blur-xs">
-                          Exam Date:{' '}
-                          {new Date(displayDate).toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric'
-                          })}
+                          <span className="font-mono text-[11px] tabular-nums text-slate-200">
+                            {new Date(displayDate).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </span>
                         </div>
                       </div>
                       <div className="p-4 space-y-1.5">
-                        <p className="text-xs font-bold text-slate-900">
+                        <p className="text-xs font-semibold text-slate-900">
                           {img.caption || img.bodyArea || 'Clinical Examination Image'}
                         </p>
                         {img.extractedFindings ? (
-                          <p className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 leading-snug">
-                            <strong className="text-slate-800">Extracted:</strong> {img.extractedFindings}
+                          <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
+                            {img.extractedFindings}
                           </p>
                         ) : (
                           <p className="text-[11px] text-slate-500">
-                            Stored in patient archive • {img.modality || 'Clinical Photo'}
+                            {img.modality || 'Clinical Photo'}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+                    <div className="px-4 pb-4 pt-2 border-t border-slate-100 flex items-center justify-end">
                       <button
                         type="button"
                         onClick={() => {
-                          setSelectedPrevImageId(img.id);
-                          setSelectedCurrImageOverride(null);
+                          if (img.imageRole === 'past') {
+                            setSelectedPrevImageId(img.id);
+                            setSelectedCurrImageOverride(null);
+                          } else {
+                            setSelectedPrevImageId(
+                              previousProfileImage && previousProfileImage.id !== img.id
+                                ? previousProfileImage.id
+                                : undefined
+                            );
+                            setSelectedCurrImageOverride(img);
+                          }
                           setShowProgressionModal(true);
                         }}
-                        className="flex-1 py-1.5 px-2.5 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-blue-900 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                        className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
                       >
-                        Use as Past Image
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedPrevImageId(
-                            previousProfileImage && previousProfileImage.id !== img.id
-                              ? previousProfileImage.id
-                              : undefined
-                          );
-                          setSelectedCurrImageOverride(img);
-                          setShowProgressionModal(true);
-                        }}
-                        className="flex-1 py-1.5 px-2.5 bg-indigo-900 hover:bg-indigo-950 text-white rounded-lg text-[11px] font-bold transition cursor-pointer"
-                      >
-                        Compare as Current
+                        <Maximize2 className="w-3.5 h-3.5 text-teal-300" />
+                        <span>Compare Image</span>
                       </button>
                     </div>
                   </div>
