@@ -1,0 +1,102 @@
+﻿1. Enter to next tab in each tab ✅
+2. Remove body map option from walk in and from patient profile ✅
+3. Remove comparison from walk in , in clinical image section…..the blue bar ✅
+4. In walk in , in summary option in 6., remove comparison from there aswell ✅
+5. Add QR image upload feature in patient profile in comparison mode and in image AI analysis aswell ✅
+6. Side bar goes up while scrolling fix it ,side bar should not move ✅
+7. In comparison model using feature on full screen gets me back to previous page that is not working properly fix it ✅
+8. Remove broche from setting ✅
+9. Remove diagnosis from AI analysis tab for once only diagnosis keep rest as same ✅
+10. Check chat for rest ✅
+11. Add team feature (check whataspp) ✅
+12. In dashboard next in queue add images of day 1 and recent visit image also add feature to click and zoom in (check whataspp) ✅
+13. Add team feature all logins should be kept there.(check whataspp) ✅
+
+================================================================================
+CLINICAL OS — FULL WEBSITE AUDIT & PRODUCTION READINESS CHECKLIST
+================================================================================
+
+SECTION A: COMPLETED APPLICATION CHANGES & AUDIT VERIFICATION (ALL 13 ITEMS ✅)
+--------------------------------------------------------------------------------
+1. [✅] Keyboard Enter-to-Next-Field Navigation (`WalkInModal.tsx`, `AddPatientModal.tsx`)
+   - Pressing `Enter` inside any input field smoothly advances focus to the next clinical field or tab step without prematurely submitting forms.
+
+2. [✅] Body Map Removed from Walk-In & Patient Profile (`WalkInModal.tsx`, `PatientProfileView.tsx`)
+   - Removed the Body Map tab and 3D/SVG anatomical pin selector from Walk-In Consultation and Patient Profile to keep the clinical workflow fast and uncluttered.
+
+3. [✅] Walk-In Clinical Image Section Cleanup (`WalkInModal.tsx`)
+   - Removed the blue comparison banner from Step 2 (Clinical Images) inside the Walk-In modal.
+
+4. [✅] Walk-In Step 6 Summary Cleanup (`WalkInModal.tsx`)
+   - Removed the duplicate lesion comparison block from Step 6 (Summary & Prescription) in the Walk-In modal.
+
+5. [✅] Mobile QR Code Image Upload (`MobileQrUploadModal.tsx`, `LesionProgressionModal.tsx`, `ImageAnalyzerView.tsx`, `PatientProfileView.tsx`)
+   - Added real-time QR code session pairing (`POST /api/mobile-upload/session`) so doctors can scan a QR code with their phone camera and beam clinical photos directly into Patient Profile Comparison Mode and the AI Image Analyzer.
+
+6. [✅] Fixed / Non-Scrolling Sidebar (`App.tsx`, `Sidebar.tsx`)
+   - Locked the application shell to `h-screen overflow-hidden` with `shrink-0 h-screen sticky top-0` on the Sidebar and independent `overflow-y-auto` scrolling on the main content viewport so the sidebar never scrolls out of view.
+
+7. [✅] Full-Screen Side-by-Side Comparison Modal Navigation Fix (`FullScreenSideBySideModal.tsx`, `LesionProgressionModal.tsx`)
+   - Fixed event bubbling and backdrop click guards when using Full-Screen Side-by-Side Zoom & Area Marking (`createPortal`), and ensured both `dataUrl` and `url` images render properly. Clicking "Exit Full Screen", "Done", or pressing `Escape` returns cleanly to the Comparison modal without navigating back to the previous page.
+
+8. [✅] Removed Brochure / Marketing Card from Settings (`SettingsView.tsx`)
+   - Removed the clinic brochure section from Settings for a clean clinical configuration view.
+
+9. [✅] Single Diagnosis Display in AI Image Analyzer (`ImageAnalyzerView.tsx`)
+   - Kept the primary diagnosis once in the top **Primary Clinical Impression** banner and removed the duplicate `Differential Diagnosis` list section below it while keeping `01. Key Visual Findings & Patient History`, `02. Recommended Workup & Treatment Plan`, and `03. Red Flags to Watch / Rule Out`.
+
+10. [✅] Native Clinical OS Inbox & Background WhatsApp Dispatch (`InboxView.tsx`, `WhatsAppShareModal.tsx`, `PatientProfileView.tsx`)
+    - Eliminated foreground `wa.me` tab popups on send; messages and AI Analysis PDF reports dispatch via background API (`POST /api/inbox/send-message`) and route all patient replies directly into the native Clinical OS Inbox.
+
+11. & 13. [✅] Clinic Team Management, All Logins & Doctor Role Assignment (`SettingsView.tsx`, `server.ts`, `AuthContext.tsx`)
+    - Added **Clinic Team & Email Role Assignment (Doctor / Receptionist)** inside Settings.
+    - All clinic logins are centrally listed there with role badges (`Doctor` vs `Receptionist`), 1-click session switching, and email-based role assignment (`POST /api/team/assign-role`) restricted exclusively to doctors (`HTTP 403` for receptionists).
+    - Enforced full **Receptionist Point of View (RBAC)** across Sidebar, Dashboard, Patient Profile, Walk-In Check-In, and Appointments.
+
+12. [✅] Dashboard "Next in Queue" Day 1 & Recent Visit Images with Click-to-Zoom (`DashboardView.tsx`)
+    - Added actual **Day 1 (Baseline)** and **Recent Visit** clinical image thumbnails to the Dashboard's `NEXT IN QUEUE` card with an interactive **Click-to-Zoom Lightbox Modal** (100%–400% zoom slider, Day 1 / Recent Visit / Side-by-Side view switcher).
+
+
+SECTION B: CHANGES NEEDED TO MAKE THE WEBSITE 100% PRODUCTION-READY (DEPLOYMENT ROADMAP)
+--------------------------------------------------------------------------------
+While all UI workflows, role-based access controls, PDF generation, and API routes are built and verified, the following infrastructure and compliance steps are required before onboarding real clinic patients in production on Render:
+
+1. Persistent Production Database (Replace Local JSON File Storage)
+   - Current State: Data is stored in `data/clinical-os-db.json` (which resets on ephemeral container restarts on Render Free/Starter tiers unless a persistent disk is attached).
+   - Production Action Required:
+     a) Attach a **Render Persistent Disk** mounted at `/app/data` (or set `DATA_DIR=/var/data`), OR
+     b) Migrate `server/db.ts` to managed **PostgreSQL** (Render Postgres / Supabase / Cloud SQL) with automated daily snapshots and connection pooling.
+
+2. Cloud Object Storage for High-Resolution Clinical Images & PDFs
+   - Current State: Uploaded clinical images, voice notes, and generated AI PDF reports are stored as Base64 `dataUrl` strings inside the database payload.
+   - Production Action Required:
+     - Store clinical images and PDF reports in **AWS S3 / Google Cloud Storage / Cloudflare R2** using pre-signed URLs and save only the object URL + metadata in the database. This prevents database bloat once thousands of high-resolution dermoscopy photos are uploaded.
+
+3. Environment Variables & Cryptographic Session Security on Render
+   - Current State: Sessions use an in-memory `Map` (`sessions` in `server.ts`) and fallback password hashing.
+   - Production Action Required:
+     - Configure the following environment variables in the Render Dashboard:
+       * `NODE_ENV=production`
+       * `GEMINI_API_KEY=<your-production-gemini-api-key>`
+       * `SESSION_SECRET=<64-char-random-hex>`
+       * `GOOGLE_CLIENT_ID=<your-google-oauth-client-id>`
+       * `GOOGLE_CLIENT_SECRET=<your-google-oauth-client-secret>`
+       * `APP_URL=https://<your-custom-domain-or-render-url>`
+     - Hash all staff passwords with `bcrypt` / `argon2` and persist session tokens in Redis or the database so active doctor/receptionist logins survive server restarts.
+
+4. Live WhatsApp Business Cloud API / Twilio Webhook Verification
+   - Current State: Outbound messages and PDF attachments log to the native Inbox and call the configured webhook/bridge; incoming patient replies can be tested via `/api/inbox/webhook/whatsapp` or the built-in Simulator.
+   - Production Action Required:
+     - Connect a verified **Meta WhatsApp Business Cloud API** (`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`) or **Twilio WhatsApp API** number.
+     - Point Meta's Webhook callback URL to `https://<your-domain>/api/inbox/webhook/whatsapp` with `X-Hub-Signature-256` payload verification enabled so real patient WhatsApp messages and media arrive automatically in the Clinical OS Inbox.
+
+5. Healthcare Security, Rate Limiting & Audit Logging (HIPAA / DPDP Act Compliance)
+   - Production Action Required:
+     - Add `helmet` HTTP security headers, strict CORS origin allowlisting (`APP_URL`), and `express-rate-limit` on `/api/auth/*`, `/api/ai/*`, and `/api/mobile-upload/*`.
+     - Enable an immutable **Clinical Audit Trail** table logging every view, edit, role assignment, and prescription export with `actorId`, `actorRole`, `patientId`, `ipAddress`, and `timestamp`.
+     - Enforce HTTPS-only TLS 1.3 and encrypt patient PII/PHI at rest.
+
+6. Production Build & Health Check Configuration on Render
+   - Build Command: `npm install && npm run build`
+   - Start Command: `npm run start` (`node server.ts` or `tsx server.ts` serving compiled `dist/` static assets alongside `/api/*` routes)
+   - Health Check Path: `/api/health`

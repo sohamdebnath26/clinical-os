@@ -1451,61 +1451,12 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                 )}
               </div>
 
-              {/* STRUCTURED REPORT BODY (SECTIONS 01 - 04) */}
+              {/* STRUCTURED REPORT BODY (SECTIONS 01 - 03) */}
               <div className="divide-y divide-slate-200">
-                {/* SECTION 01: Differential Diagnoses */}
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-slate-900">
-                      01. Differential Diagnosis
-                    </h3>
-                    <span className="text-xs text-slate-500">
-                      Ranked by clinical likelihood
-                    </span>
-                  </div>
-
-                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-                    {analysisResult.differentials.map((diff, idx) => (
-                      <div key={idx} className="p-3.5 bg-white hover:bg-slate-50/70 transition flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-mono font-bold text-slate-400">
-                              #{idx + 1}
-                            </span>
-                            <span className="text-sm font-bold text-slate-900">
-                              {diff.condition}
-                            </span>
-                            {diff.icdCode && (
-                              <span className="text-xs font-mono text-slate-500">
-                                · ICD-10: {diff.icdCode}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-600 leading-relaxed">
-                            {renderInlineMarkdown(diff.rationale, `diff-rat-${idx}`)}
-                          </p>
-                        </div>
-
-                        <span
-                          className={`text-xs font-semibold shrink-0 ${
-                            diff.confidence === 'High'
-                              ? 'text-emerald-700'
-                              : diff.confidence === 'Moderate'
-                              ? 'text-amber-700'
-                              : 'text-slate-500'
-                          }`}
-                        >
-                          {diff.confidence} Likelihood
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* SECTION 02: Key Visual Findings & Patient Context */}
+                {/* SECTION 01: Key Visual Findings & Patient Context */}
                 <div className="p-6 space-y-4">
                   <h3 className="text-sm font-bold text-slate-900">
-                    02. Key Visual Findings & Patient History
+                    01. Key Visual Findings &amp; Patient History
                   </h3>
 
                   {/* Compact Metrics Bar */}
@@ -1561,7 +1512,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
 
                     <div>
                       <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                        Patient History & Lab Correlation
+                        Patient History &amp; Lab Correlation
                       </h4>
                       <div className="text-xs text-slate-700 leading-relaxed bg-teal-50/50 border border-teal-100 rounded-xl p-3.5">
                         <MarkdownView content={analysisResult.timelineCorrelation} />
@@ -1570,10 +1521,10 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   </div>
                 </div>
 
-                {/* SECTION 03: Action Plan (Tests & Treatment) */}
+                {/* SECTION 02: Action Plan (Tests & Treatment) */}
                 <div className="p-6">
                   <h3 className="text-sm font-bold text-slate-900 mb-3">
-                    03. Recommended Workup & Treatment Plan
+                    02. Recommended Workup &amp; Treatment Plan
                   </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1604,12 +1555,12 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   </div>
                 </div>
 
-                {/* SECTION 04: Red Flags & Disclaimer */}
+                {/* SECTION 03: Red Flags & Disclaimer */}
                 {analysisResult.redFlags.length > 0 && (
                   <div className="p-6 bg-rose-50/40">
                     <h3 className="text-sm font-bold text-rose-900 mb-2 flex items-center gap-1.5">
                       <ShieldAlert className="w-4 h-4 text-rose-600" />
-                      <span>04. Red Flags to Watch / Rule Out</span>
+                      <span>03. Red Flags to Watch / Rule Out</span>
                     </h3>
                     <ul className="space-y-1 text-xs text-rose-800">
                       {analysisResult.redFlags.map((flag, idx) => (

@@ -44,6 +44,7 @@ export interface Patient {
   updatedAt: string;
   lastVisitAt?: string;
   primaryDiagnosis?: string;
+  clinicalImages?: ClinicalImage[];
 }
 
 export interface BodyMarker {

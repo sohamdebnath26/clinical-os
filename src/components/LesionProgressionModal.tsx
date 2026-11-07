@@ -482,7 +482,10 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={() => {
+          if (showFullScreenSideBySide || mobileQrSlot) return;
+          onClose();
+        }}
         className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-xs"
       >
       <div

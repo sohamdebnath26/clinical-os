@@ -415,6 +415,8 @@ export const FullScreenSideBySideModal: React.FC<FullScreenSideBySideModalProps>
   const modalContent = (
     <div
       onClick={e => e.stopPropagation()}
+      onMouseDown={e => e.stopPropagation()}
+      onMouseUp={e => e.stopPropagation()}
       className="fixed inset-0 z-[100] bg-slate-950 text-white flex flex-col overflow-hidden animate-in fade-in duration-150 select-none"
     >
       {/* Top Clinical Toolbar */}
@@ -482,7 +484,7 @@ export const FullScreenSideBySideModal: React.FC<FullScreenSideBySideModalProps>
           <button
             type="button"
             onClick={() => setSyncZoomPan(!syncZoomPan)}
-            className={`px-2 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 border transition ${
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 border transition ${
               syncZoomPan
                 ? 'bg-teal-500/20 border-teal-500/40 text-teal-300'
                 : 'bg-slate-900 border-slate-700 text-slate-400'
@@ -698,7 +700,7 @@ export const FullScreenSideBySideModal: React.FC<FullScreenSideBySideModalProps>
                 }}
               >
                 <img
-                  src={imageA.url}
+                  src={imageA.dataUrl || imageA.url}
                   alt="Visit A Clinical"
                   draggable={false}
                   className="max-w-full max-h-full object-contain pointer-events-none select-none"
@@ -751,7 +753,7 @@ export const FullScreenSideBySideModal: React.FC<FullScreenSideBySideModalProps>
                 }}
               >
                 <img
-                  src={imageB.url}
+                  src={imageB.dataUrl || imageB.url}
                   alt="Visit B Clinical"
                   draggable={false}
                   className="max-w-full max-h-full object-contain pointer-events-none select-none"

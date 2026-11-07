@@ -11,7 +11,8 @@
       "defaultConsultationFee": 500,
       "avatarUrl": "",
       "createdAt": "2026-09-29T12:21:25.847Z",
-      "accountType": "individual"
+      "accountType": "individual",
+      "role": "doctor"
     },
     {
       "id": "doc-org-001",
@@ -26,7 +27,8 @@
       "accountType": "organisational",
       "organizationName": "Metro Health University Medical Center",
       "organizationDepartment": "Department of Dermatology",
-      "createdAt": "2026-10-14T07:36:52.679Z"
+      "createdAt": "2026-10-14T07:36:52.679Z",
+      "role": "doctor"
     },
     {
       "id": "doc-mv7sr3d5-2nsr",
@@ -38,7 +40,8 @@
       "phone": "+1 (555) 014-9922",
       "defaultConsultationFee": 500,
       "createdAt": "2026-10-14T07:36:59.081Z",
-      "accountType": "individual"
+      "accountType": "individual",
+      "role": "doctor"
     },
     {
       "id": "doc-mv7sssl7-ww9t",
@@ -52,7 +55,8 @@
       "createdAt": "2026-10-14T07:38:18.427Z",
       "accountType": "organisational",
       "organizationName": "St. Jude Academic Medical Network",
-      "organizationDepartment": "Pediatric & General Dermatology Division"
+      "organizationDepartment": "Pediatric & General Dermatology Division",
+      "role": "doctor"
     },
     {
       "id": "doc-rec-001",
@@ -81,7 +85,8 @@
       "accountType": "organisational",
       "organizationName": "NHS Foundation Trust Hospitals",
       "organizationDepartment": "Regional Cutaneous Oncology & Phototherapy Unit",
-      "createdAt": "2026-10-27T04:04:14.121Z"
+      "createdAt": "2026-10-27T04:04:14.121Z",
+      "role": "doctor"
     },
     {
       "id": "doc-org-004",
@@ -96,7 +101,8 @@
       "accountType": "organisational",
       "organizationName": "Apex Health Enterprise System",
       "organizationDepartment": "Outpatient Dermatology & Aesthetics Center",
-      "createdAt": "2026-10-27T04:04:14.121Z"
+      "createdAt": "2026-10-27T04:04:14.121Z",
+      "role": "doctor"
     }
   ],
   "doctorPasswords": {
@@ -126,7 +132,8 @@
       "createdAt": "2026-09-29T12:24:30.102Z",
       "updatedAt": "2026-10-09T03:22:27.503Z",
       "lastVisitAt": "2026-10-09T03:22:27.503Z",
-      "primaryDiagnosis": "Post-treatment follow-up"
+      "primaryDiagnosis": "Post-treatment follow-up",
+      "createdByEmail": "demo@clinicalos.med"
     },
     {
       "fullName": "Kabir Kashyap",
@@ -144,7 +151,8 @@
       "id": "pat-mv0er2l2-uln3",
       "patientCode": "P-24619",
       "createdAt": "2026-10-09T03:30:40.215Z",
-      "updatedAt": "2026-10-09T03:30:40.215Z"
+      "updatedAt": "2026-10-09T03:30:40.215Z",
+      "createdByEmail": "demo@clinicalos.med"
     }
   ],
   "consultations": [
@@ -428,7 +436,92 @@
   ],
   "prescriptions": [],
   "bodyMarkers": [],
-  "clinicalImages": [],
+  "clinicalImages": [
+    {
+      "id": "img-past-6-8awj",
+      "patientId": "pat-mumnf2c6-8awj",
+      "consultationId": "con-mumnfac9-ol53",
+      "url": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+CiAgICAgIDxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjZWZkMmI5Ii8+CiAgICAgIDxwYXRoIGQ9Ik0xMjUgMTUwIEMxMTUgODgsIDI1NSA3OCwgMjc1IDEzMiBDMjk1IDE5NSwgMjM4IDIzMiwgMTcyIDIyMiBDMTE1IDIxMiwgOTIgMTc4LCAxMjUgMTUwIFoiIGZpbGw9IiM3YTQ0MjEiIG9wYWNpdHk9IjAuODIiLz4KICAgICAgPHBhdGggZD0iTTE0MiAxNDYgQzEzMiAxMDIsIDI0MCA5MiwgMjU4IDEzNiBDMjcyIDE4NCwgMjI2IDIxNCwgMTc2IDIwNiBDMTMyIDE5OCwgMTE0IDE3MiwgMTQyIDE0NiBaIiBmaWxsPSIjM2IxZTBkIiBvcGFjaXR5PSIwLjkyIi8+CiAgICAgIDxjaXJjbGUgY3g9IjE5NSIgY3k9IjE0MiIgcj0iMTgiIGZpbGw9IiMxYTBjMDUiIG9wYWNpdHk9IjAuOTUiLz4KICAgICAgPGNpcmNsZSBjeD0iMTY1IiBjeT0iMTY2IiByPSIxMyIgZmlsbD0iIzI0MTEwNyIgb3BhY2l0eT0iMC45MiIvPgogICAgPC9zdmc+",
+      "dataUrl": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+CiAgICAgIDxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjZWZkMmI5Ii8+CiAgICAgIDxwYXRoIGQ9Ik0xMjUgMTUwIEMxMTUgODgsIDI1NSA3OCwgMjc1IDEzMiBDMjk1IDE5NSwgMjM4IDIzMiwgMTcyIDIyMiBDMTE1IDIxMiwgOTIgMTc4LCAxMjUgMTUwIFoiIGZpbGw9IiM3YTQ0MjEiIG9wYWNpdHk9IjAuODIiLz4KICAgICAgPHBhdGggZD0iTTE0MiAxNDYgQzEzMiAxMDIsIDI0MCA5MiwgMjU4IDEzNiBDMjcyIDE4NCwgMjI2IDIxNCwgMTc2IDIwNiBDMTMyIDE5OCwgMTE0IDE3MiwgMTQyIDE0NiBaIiBmaWxsPSIjM2IxZTBkIiBvcGFjaXR5PSIwLjkyIi8+CiAgICAgIDxjaXJjbGUgY3g9IjE5NSIgY3k9IjE0MiIgcj0iMTgiIGZpbGw9IiMxYTBjMDUiIG9wYWNpdHk9IjAuOTUiLz4KICAgICAgPGNpcmNsZSBjeD0iMTY1IiBjeT0iMTY2IiByPSIxMyIgZmlsbD0iIzI0MTEwNyIgb3BhY2l0eT0iMC45MiIvPgogICAgPC9zdmc+",
+      "filename": "past_baseline_p-24618.svg",
+      "mimeType": "image/svg+xml",
+      "sizeBytes": 786,
+      "caption": "Past Baseline — Pre-RF Ablation Cutaneous Lesion / Skin Tags",
+      "bodyArea": "Lateral Neck & Upper Trunk",
+      "modality": "Dermoscopy",
+      "imageRole": "past",
+      "examDate": "2026-09-29",
+      "extractedFindings": "Hyperkeratotic hyperpigmented papillomatous lesions prior to radiofrequency ablation; dark melanin core with peripheral tan network (pigmentation index 68/100).",
+      "tags": [
+        "Past Medical Image",
+        "Baseline"
+      ],
+      "createdAt": "2026-09-29T12:24:40.473Z"
+    },
+    {
+      "id": "img-curr-6-8awj",
+      "patientId": "pat-mumnf2c6-8awj",
+      "consultationId": "con-mvcpl8tf-k4wu",
+      "url": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+CiAgICAgIDxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjZjFkNmJlIi8+CiAgICAgIDxlbGxpcHNlIGN4PSIxOTgiIGN5PSIxNTIiIHJ4PSI1MiIgcnk9IjM4IiBmaWxsPSIjZDk5Yjc4IiBvcGFjaXR5PSIwLjU1Ii8+CiAgICAgIDxlbGxpcHNlIGN4PSIxOTgiIGN5PSIxNTIiIHJ4PSIzMiIgcnk9IjIyIiBmaWxsPSIjZTZiNDk3IiBvcGFjaXR5PSIwLjcyIi8+CiAgICAgIDxjaXJjbGUgY3g9IjE5NSIgY3k9IjE1MCIgcj0iOCIgZmlsbD0iI2I4N2E1NiIgb3BhY2l0eT0iMC40NSIvPgogICAgPC9zdmc+",
+      "dataUrl": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+CiAgICAgIDxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjZjFkNmJlIi8+CiAgICAgIDxlbGxpcHNlIGN4PSIxOTgiIGN5PSIxNTIiIHJ4PSI1MiIgcnk9IjM4IiBmaWxsPSIjZDk5Yjc4IiBvcGFjaXR5PSIwLjU1Ii8+CiAgICAgIDxlbGxpcHNlIGN4PSIxOTgiIGN5PSIxNTIiIHJ4PSIzMiIgcnk9IjIyIiBmaWxsPSIjZTZiNDk3IiBvcGFjaXR5PSIwLjcyIi8+CiAgICAgIDxjaXJjbGUgY3g9IjE5NSIgY3k9IjE1MCIgcj0iOCIgZmlsbD0iI2I4N2E1NiIgb3BhY2l0eT0iMC40NSIvPgogICAgPC9zdmc+",
+      "filename": "followup_p-24618.svg",
+      "mimeType": "image/svg+xml",
+      "sizeBytes": 538,
+      "caption": "Follow-Up Visit — Post-RF Ablation Re-epithelialized Site",
+      "bodyArea": "Lateral Neck & Upper Trunk",
+      "modality": "Dermoscopy",
+      "imageRole": "current",
+      "examDate": "2026-10-17",
+      "extractedFindings": "Clean re-epithelialization following radiofrequency ablation; dark papillomatous tissue resolved with mild pink-tan remodeling macule and intact epidermal barrier.",
+      "tags": [
+        "Follow-up Image",
+        "Current"
+      ],
+      "createdAt": "2026-10-17T18:07:18.243Z"
+    },
+    {
+      "id": "img-past-2-uln3",
+      "patientId": "pat-mv0er2l2-uln3",
+      "consultationId": "con-kabir-01",
+      "url": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+CiAgICAgICAgPHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmNWQyYjgiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIxMzUiIGN5PSIxMTAiIHI9IjM2IiBmaWxsPSIjZDkzODI5IiBvcGFjaXR5PSIwLjcyIi8+CiAgICAgICAgPGNpcmNsZSBjeD0iMTM1IiBjeT0iMTEwIiByPSIyMCIgZmlsbD0iI2I4MjUxOCIgb3BhY2l0eT0iMC45MCIvPgogICAgICAgIDxjaXJjbGUgY3g9IjEzNSIgY3k9IjExMCIgcj0iOSIgZmlsbD0iI2ZmZjhjNCIvPgogICAgICAgIDxjaXJjbGUgY3g9IjIxNSIgY3k9IjE1NSIgcj0iNDYiIGZpbGw9IiNkOTM4MjkiIG9wYWNpdHk9IjAuNzYiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIyMTUiIGN5PSIxNTUiIHI9IjI2IiBmaWxsPSIjYjgyNTE4IiBvcGFjaXR5PSIwLjkyIi8+CiAgICAgICAgPGNpcmNsZSBjeD0iMjE1IiBjeT0iMTU1IiByPSIxMiIgZmlsbD0iI2ZmZjljNCIvPgogICAgICAgIDxjaXJjbGUgY3g9IjI4NSIgY3k9IjEyMCIgcj0iMzQiIGZpbGw9IiNkOTM4MjkiIG9wYWNpdHk9IjAuNjgiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIyODUiIGN5PSIxMjAiIHI9IjE4IiBmaWxsPSIjYjgyNTE4IiBvcGFjaXR5PSIwLjg2Ii8+CiAgICAgICAgPGNpcmNsZSBjeD0iMjg1IiBjeT0iMTIwIiByPSI4IiBmaWxsPSIjZmZmOGM0Ii8+CiAgICAgICAgPGNpcmNsZSBjeD0iMTcwIiBjeT0iMjEwIiByPSIyOCIgZmlsbD0iI2Q5MzgyOSIgb3BhY2l0eT0iMC43OCIvPgogICAgICAgIDxjaXJjbGUgY3g9IjI1NSIgY3k9IjIxNSIgcj0iMjYiIGZpbGw9IiNkOTM4MjkiIG9wYWNpdHk9IjAuNzQiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIxNzgiIGN5PSIxMjYiIHI9IjMuNSIgZmlsbD0iIzJjM2U1MCIvPgogICAgICAgIDxjaXJjbGUgY3g9IjI0MiIgY3k9IjEzOCIgcj0iMy4yIiBmaWxsPSIjMmMzZTUwIi8+CiAgICAgIDwvc3ZnPg==",
+      "dataUrl": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+CiAgICAgICAgPHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmNWQyYjgiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIxMzUiIGN5PSIxMTAiIHI9IjM2IiBmaWxsPSIjZDkzODI5IiBvcGFjaXR5PSIwLjcyIi8+CiAgICAgICAgPGNpcmNsZSBjeD0iMTM1IiBjeT0iMTEwIiByPSIyMCIgZmlsbD0iI2I4MjUxOCIgb3BhY2l0eT0iMC45MCIvPgogICAgICAgIDxjaXJjbGUgY3g9IjEzNSIgY3k9IjExMCIgcj0iOSIgZmlsbD0iI2ZmZjhjNCIvPgogICAgICAgIDxjaXJjbGUgY3g9IjIxNSIgY3k9IjE1NSIgcj0iNDYiIGZpbGw9IiNkOTM4MjkiIG9wYWNpdHk9IjAuNzYiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIyMTUiIGN5PSIxNTUiIHI9IjI2IiBmaWxsPSIjYjgyNTE4IiBvcGFjaXR5PSIwLjkyIi8+CiAgICAgICAgPGNpcmNsZSBjeD0iMjE1IiBjeT0iMTU1IiByPSIxMiIgZmlsbD0iI2ZmZjljNCIvPgogICAgICAgIDxjaXJjbGUgY3g9IjI4NSIgY3k9IjEyMCIgcj0iMzQiIGZpbGw9IiNkOTM4MjkiIG9wYWNpdHk9IjAuNjgiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIyODUiIGN5PSIxMjAiIHI9IjE4IiBmaWxsPSIjYjgyNTE4IiBvcGFjaXR5PSIwLjg2Ii8+CiAgICAgICAgPGNpcmNsZSBjeD0iMjg1IiBjeT0iMTIwIiByPSI4IiBmaWxsPSIjZmZmOGM0Ii8+CiAgICAgICAgPGNpcmNsZSBjeD0iMTcwIiBjeT0iMjEwIiByPSIyOCIgZmlsbD0iI2Q5MzgyOSIgb3BhY2l0eT0iMC43OCIvPgogICAgICAgIDxjaXJjbGUgY3g9IjI1NSIgY3k9IjIxNSIgcj0iMjYiIGZpbGw9IiNkOTM4MjkiIG9wYWNpdHk9IjAuNzQiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIxNzgiIGN5PSIxMjYiIHI9IjMuNSIgZmlsbD0iIzJjM2U1MCIvPgogICAgICAgIDxjaXJjbGUgY3g9IjI0MiIgY3k9IjEzOCIgcj0iMy4yIiBmaWxsPSIjMmMzZTUwIi8+CiAgICAgIDwvc3ZnPg==",
+      "filename": "past_baseline_p-24619.svg",
+      "mimeType": "image/svg+xml",
+      "sizeBytes": 1402,
+      "caption": "Past Baseline — Bilateral Malar Cheeks (Grade III Papulopustular Acne)",
+      "bodyArea": "Bilateral Malar Cheeks & Jawline",
+      "modality": "Clinical Photo",
+      "imageRole": "past",
+      "examDate": "2026-09-24",
+      "extractedFindings": "Multiple tense inflammatory papulopustules (8–12 mm erythema halos), central pustular cores, and open comedones across bilateral cheeks; high baseline erythema index (76/100).",
+      "tags": [
+        "Past Medical Image",
+        "Baseline"
+      ],
+      "createdAt": "2026-09-24T10:30:00.000Z"
+    },
+    {
+      "id": "img-curr-2-uln3",
+      "patientId": "pat-mv0er2l2-uln3",
+      "consultationId": "con-kabir-01",
+      "url": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+CiAgICAgICAgPHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmNmQ4YzAiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIxMzUiIGN5PSIxMTAiIHI9IjE4IiBmaWxsPSIjZTU3MzY4IiBvcGFjaXR5PSIwLjM4Ii8+CiAgICAgICAgPGNpcmNsZSBjeD0iMjE1IiBjeT0iMTU1IiByPSIyNCIgZmlsbD0iI2U1NzM2OCIgb3BhY2l0eT0iMC40MiIvPgogICAgICAgIDxjaXJjbGUgY3g9IjIxNSIgY3k9IjE1NSIgcj0iMTAiIGZpbGw9IiNjOTViNTAiIG9wYWNpdHk9IjAuNDUiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIyODUiIGN5PSIxMjAiIHI9IjE1IiBmaWxsPSIjZTU3MzY4IiBvcGFjaXR5PSIwLjMyIi8+CiAgICAgICAgPGNpcmNsZSBjeD0iMTcwIiBjeT0iMjEwIiByPSIxNCIgZmlsbD0iI2Q5ODI3NiIgb3BhY2l0eT0iMC4zNSIvPgogICAgICAgIDxjaXJjbGUgY3g9IjI1NSIgY3k9IjIxNSIgcj0iMTIiIGZpbGw9IiNkOTgyNzYiIG9wYWNpdHk9IjAuMzAiLz4KICAgICAgPC9zdmc+",
+      "dataUrl": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+CiAgICAgICAgPHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmNmQ4YzAiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIxMzUiIGN5PSIxMTAiIHI9IjE4IiBmaWxsPSIjZTU3MzY4IiBvcGFjaXR5PSIwLjM4Ii8+CiAgICAgICAgPGNpcmNsZSBjeD0iMjE1IiBjeT0iMTU1IiByPSIyNCIgZmlsbD0iI2U1NzM2OCIgb3BhY2l0eT0iMC40MiIvPgogICAgICAgIDxjaXJjbGUgY3g9IjIxNSIgY3k9IjE1NSIgcj0iMTAiIGZpbGw9IiNjOTViNTAiIG9wYWNpdHk9IjAuNDUiLz4KICAgICAgICA8Y2lyY2xlIGN4PSIyODUiIGN5PSIxMjAiIHI9IjE1IiBmaWxsPSIjZTU3MzY4IiBvcGFjaXR5PSIwLjMyIi8+CiAgICAgICAgPGNpcmNsZSBjeD0iMTcwIiBjeT0iMjEwIiByPSIxNCIgZmlsbD0iI2Q5ODI3NiIgb3BhY2l0eT0iMC4zNSIvPgogICAgICAgIDxjaXJjbGUgY3g9IjI1NSIgY3k9IjIxNSIgcj0iMTIiIGZpbGw9IiNkOTgyNzYiIG9wYWNpdHk9IjAuMzAiLz4KICAgICAgPC9zdmc+",
+      "filename": "followup_p-24619.svg",
+      "mimeType": "image/svg+xml",
+      "sizeBytes": 818,
+      "caption": "Follow-Up Visit — Bilateral Cheeks Post-Peel & Minocycline Regimen",
+      "bodyArea": "Bilateral Malar Cheeks & Jawline",
+      "modality": "Clinical Photo",
+      "imageRole": "current",
+      "examDate": "2026-10-15",
+      "extractedFindings": "Marked flattening of papulopustular lesions with absence of active pustular heads; residual faint post-inflammatory erythema macules (erythema index reduced to 38/100).",
+      "tags": [
+        "Follow-up Image",
+        "Current"
+      ],
+      "createdAt": "2026-10-15T10:30:00.000Z"
+    }
+  ],
   "auditLogs": [
     {
       "actorId": "doc-org-001",
@@ -1151,7 +1244,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-11-02T05:21:57.996Z"
+    "updatedAt": "2026-11-07T20:24:58.652Z"
   },
   "appointments": [
     {
