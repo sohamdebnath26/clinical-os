@@ -1137,7 +1137,6 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
             {/* Simple Clinic Phone Badge with Manual Number Edit */}
             <div className="inline-flex items-center gap-2 bg-emerald-50/90 border border-emerald-200 px-3 py-1 rounded-lg">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
               <span className="text-[11px] font-semibold text-emerald-900">
                 Clinic WhatsApp/SMS Line:
               </span>
@@ -1445,8 +1444,8 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                     }}
                     className={`w-full text-left p-3.5 transition-colors flex items-start gap-3 cursor-pointer ${
                       isSelected
-                        ? 'bg-teal-50/60 border-l-4 border-[#0d3f3b]'
-                        : 'hover:bg-slate-50 border-l-4 border-transparent'
+                        ? 'bg-teal-50/70'
+                        : 'hover:bg-slate-50'
                     }`}
                   >
                     <div
@@ -1727,7 +1726,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Pick an option below (or press keys 1, 2, 3) and click send to open WhatsApp Web with the reply ready.
+                    Pick an option below (or press keys 1, 2, 3) and click send to dispatch the reply in-app without leaving Clinical OS.
                   </p>
                 </div>
 
