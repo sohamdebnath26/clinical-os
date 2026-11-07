@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { LanguageSelector } from './LanguageSelector';
 import { AuditLog } from '../types';
 import { api } from '../lib/api';
-import { Settings, Shield, User, Building, Save, CheckCircle2, History, Globe } from 'lucide-react';
+import { Settings, Shield, User, Building, Save, CheckCircle2, History, Globe, Moon, Sun } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
   const { doctor, updateDoctor } = useAuth();
   const { t } = useLanguage();
+  const { theme, setTheme } = useTheme();
   const [name, setName] = useState(doctor?.name || '');
   const [speciality, setSpeciality] = useState(doctor?.speciality || '');
   const [clinicName, setClinicName] = useState(doctor?.clinicName || '');
@@ -77,6 +79,67 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
+
+      {/* Appearance & Display Theme (Light / Dark Mode) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            {theme === 'dark' ? (
+              <Moon className="w-4 h-4 text-teal-400" />
+            ) : (
+              <Sun className="w-4 h-4 text-teal-700" />
+            )}
+            Appearance &amp; Display Theme
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">
+            Switch between Clinical Daylight (Light Mode) and Low-Glare Clinical Slate (Dark Mode) for comfortable extended consultations.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <button
+            type="button"
+            onClick={() => setTheme('light')}
+            className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+              theme === 'light'
+                ? 'border-teal-700 bg-teal-50/70 text-slate-900 shadow-2xs'
+                : 'border-slate-200 bg-slate-50/60 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <Sun className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900">Light Mode (Clinical Daylight)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">High-clarity white &amp; soft sage canvas</div>
+              </div>
+            </div>
+            {theme === 'light' && <CheckCircle2 className="w-4 h-4 text-teal-700 shrink-0" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTheme('dark')}
+            className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+              theme === 'dark'
+                ? 'border-teal-500 bg-teal-50/70 text-slate-900 shadow-2xs'
+                : 'border-slate-200 bg-slate-50/60 text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-slate-800 text-teal-300 flex items-center justify-center shrink-0">
+                <Moon className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900">Dark Mode (Clinical Slate)</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">Low-glare dark emerald &amp; slate surfaces</div>
+              </div>
+            </div>
+            {theme === 'dark' && <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />}
+          </button>
+        </div>
+      </div>
 
       {/* Language Preferences */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">

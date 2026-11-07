@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { PREDEFINED_DIAGNOSES } from '../data/clinicalCatalogues';
 import { AddPatientModal } from './AddPatientModal';
 import { ScheduleAppointmentModal } from './ScheduleAppointmentModal';
+import { ThemeToggleButton } from '../context/ThemeContext';
 import { Menu, X, ArrowRight } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -412,6 +413,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             )}
           </div>
+
+          {/* Dark / Light Mode Toggle */}
+          <ThemeToggleButton variant="dashboard" />
 
           {/* Walk-in Button */}
           <button

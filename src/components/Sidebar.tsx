@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { ThemeToggleButton } from '../context/ThemeContext';
 import {
   LayoutDashboard,
   Users,
@@ -273,8 +274,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Bottom Settings, Doctor Profile & Collapse Toggle */}
+      {/* Bottom Theme Toggle, Settings, Doctor Profile & Collapse Toggle */}
       <div className="border-t border-white/10 p-2 space-y-1.5 shrink-0">
+        {/* Dark / Light Mode Toggle */}
+        <ThemeToggleButton variant={isRail ? 'sidebar-rail' : 'sidebar-expanded'} />
+
         {/* Settings */}
         <button
           type="button"

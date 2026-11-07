@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { AuthView } from './components/AuthView';
 import { Sidebar, NavRoute } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
@@ -164,7 +165,7 @@ function MainApp() {
   };
 
   return (
-    <div className="h-screen w-full overflow-hidden flex bg-[#f2f6f5] text-[#0f2926] antialiased selection:bg-teal-600 selection:text-white">
+    <div className="h-screen w-full overflow-hidden flex bg-[#f2f6f5] dark:bg-[#0b1514] text-[#0f2926] dark:text-[#ecfdf5] antialiased selection:bg-teal-600 selection:text-white transition-colors duration-150">
       {/* Desktop Persistent Left Sidebar (rigidly locked in place; does not scroll with page content) */}
       <div className="hidden md:block shrink-0 h-screen sticky top-0 z-30">
         <Sidebar
@@ -383,11 +384,13 @@ export default function App() {
 
   return (
     <ErrorBoundary fallbackTitle="Clinical OS Application Error">
-      <LanguageProvider>
-        <AuthProvider>
-          <MainApp />
-        </AuthProvider>
-      </LanguageProvider>
+      <ThemeProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <MainApp />
+          </AuthProvider>
+        </LanguageProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

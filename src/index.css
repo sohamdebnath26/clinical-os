@@ -1,4 +1,24 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --clinical-bg: #f2f6f5;
+  --clinical-surface: #ffffff;
+  --clinical-surface-muted: #f8fafc;
+  --clinical-border: #e2e8f0;
+  --clinical-text: #0f2926;
+  --clinical-text-muted: #475569;
+}
+
+html.dark {
+  --clinical-bg: #0b1514;
+  --clinical-surface: #11201e;
+  --clinical-surface-muted: #162926;
+  --clinical-border: #1f3834;
+  --clinical-text: #ecfdf5;
+  --clinical-text-muted: #94a3b8;
+  color-scheme: dark;
+}
 
 html,
 body,
@@ -7,4 +27,123 @@ body,
   width: 100%;
   margin: 0;
   padding: 0;
+  background-color: var(--clinical-bg);
+  color: var(--clinical-text);
+  transition: background-color 150ms ease, color 150ms ease;
 }
+
+/* Comprehensive Clinical Dark Mode Surface & Input Adaptation */
+html.dark .bg-white {
+  background-color: #11201e;
+}
+
+html.dark .bg-white\/80,
+html.dark .bg-white\/90 {
+  background-color: rgba(17, 32, 30, 0.9);
+}
+
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/70,
+html.dark .bg-slate-50\/80,
+html.dark .bg-\[\#f9fbfa\],
+html.dark .bg-\[\#f7faf9\],
+html.dark .bg-\[\#f2f6f5\] {
+  background-color: #0d1917;
+}
+
+html.dark .bg-slate-100,
+html.dark .bg-slate-100\/80 {
+  background-color: #182d2a;
+}
+
+html.dark .text-slate-900,
+html.dark .text-slate-800,
+html.dark .text-\[\#0f2926\] {
+  color: #ecfdf5;
+}
+
+html.dark .text-slate-700,
+html.dark .text-slate-600 {
+  color: #cbd5e1;
+}
+
+html.dark .text-slate-500,
+html.dark .text-slate-400,
+html.dark .text-\[\#5c7c77\],
+html.dark .text-\[\#688580\] {
+  color: #94a3b8;
+}
+
+html.dark .text-\[\#115e56\],
+html.dark .text-teal-800,
+html.dark .text-teal-900,
+html.dark .text-teal-950 {
+  color: #5eead4;
+}
+
+html.dark .border-slate-200,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-200\/90,
+html.dark .border-slate-300,
+html.dark .border-\[\#e4ecea\],
+html.dark .border-\[\#dce5e3\],
+html.dark .border-\[\#b8ccc8\] {
+  border-color: #1f3834;
+}
+
+html.dark .border-slate-100,
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #182d2a;
+}
+
+html.dark .bg-teal-50,
+html.dark .bg-teal-50\/50,
+html.dark .bg-teal-50\/70,
+html.dark .bg-teal-50\/80 {
+  background-color: rgba(20, 184, 166, 0.14);
+}
+
+html.dark .bg-emerald-50,
+html.dark .bg-emerald-50\/90 {
+  background-color: rgba(16, 185, 129, 0.14);
+}
+
+html.dark .text-emerald-950,
+html.dark .text-emerald-900,
+html.dark .text-emerald-800 {
+  color: #6ee7b7;
+}
+
+html.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.14);
+}
+
+html.dark .text-amber-900,
+html.dark .text-amber-800 {
+  color: #fcd34d;
+}
+
+html.dark .bg-rose-50,
+html.dark .bg-red-50 {
+  background-color: rgba(244, 63, 94, 0.15);
+}
+
+html.dark .text-rose-700,
+html.dark .text-red-700 {
+  color: #fda4af;
+}
+
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark textarea,
+html.dark select {
+  background-color: #0e1c1a;
+  color: #f1f5f9;
+  border-color: #24423d;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b;
+}
+

@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { PREDEFINED_DIAGNOSES } from '../data/clinicalCatalogues';
 import { useLanguage } from '../context/LanguageContext';
 import { LanguageSelector } from './LanguageSelector';
+import { ThemeToggleButton } from '../context/ThemeContext';
 
 interface NavbarProps {
   onOpenWalkIn: () => void;
@@ -215,7 +216,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
+        {/* Dark / Light Mode Toggle */}
+        <ThemeToggleButton variant="navbar" />
+
         {/* Language selector dropdown */}
         <LanguageSelector variant="compact" />
 
