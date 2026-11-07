@@ -2703,17 +2703,642 @@ interface DispatchedWhatsAppMessage {
   doctorName: string;
 }
 
+interface InboxSuggestedResolution {
+  id: string;
+  label: string;
+  intent: string;
+  text: string;
+}
+
+interface InboxMessageRecord {
+  id?: string;
+  sender: 'patient' | 'doctor' | 'ai';
+  text: string;
+  time: string;
+  status?: string;
+  receiptId?: string;
+  whatsappUrl?: string;
+  recipientPhone?: string;
+  createdAt?: string;
+}
+
+interface InboxThreadRecord {
+  id: string;
+  name: string;
+  subtitle: string;
+  category: 'patients' | 'pharmacies' | 'collaborations';
+  channel: 'WhatsApp' | 'SMS' | 'Email' | 'App';
+  priority: 'urgent' | 'routine';
+  stage: 'needs_review' | 'draft_ready' | 'resolved';
+  preview: string;
+  timestamp: string;
+  unread: boolean;
+  statusLabel: string;
+  phone: string;
+  aiSummary: string;
+  patientId?: string;
+  messages: InboxMessageRecord[];
+  draftReply: string;
+  suggestedReplies: InboxSuggestedResolution[];
+  updatedAt: string;
+}
+
 const dispatchedWhatsAppMessages: DispatchedWhatsAppMessage[] = [];
+
+const inboxThreads: InboxThreadRecord[] = [
+  {
+    id: 't-1',
+    name: 'Rohit Sharma',
+    subtitle: '28y · P-24621 · English',
+    category: 'patients',
+    channel: 'WhatsApp',
+    priority: 'urgent',
+    stage: 'needs_review',
+    preview: 'Chest feels tight since morning with red rash',
+    timestamp: '2 min ago',
+    unread: true,
+    statusLabel: 'Red flag · Immediate review',
+    phone: '+91 98765 43210',
+    aiSummary: 'Patient reports acute rash extension with chest tightness. Immediate clinical triage advised.',
+    messages: [
+      {
+        id: 'm-101',
+        sender: 'patient',
+        text: 'Doctor, my chest feels tight and the rash is spreading since morning. Is this normal?',
+        time: '9:30 AM'
+      }
+    ],
+    draftReply:
+      'Rohit, please stop any newly started medication immediately and visit the nearest emergency room or call our clinic hotline right away for an urgent evaluation of your chest tightness and rash.',
+    suggestedReplies: [
+      {
+        id: 's-1a',
+        label: 'Urgent ER & Stop Meds',
+        intent: 'Immediate safety escalation',
+        text: 'Rohit, please stop any newly started medication immediately and visit the nearest emergency room or call our clinic hotline right away for an urgent evaluation of your chest tightness and rash.'
+      },
+      {
+        id: 's-1b',
+        label: 'Immediate Clinic Walk-In',
+        intent: 'Priority in-clinic triage',
+        text: 'Rohit, chest tightness with a spreading rash needs immediate evaluation. Please come directly to the clinic priority desk now or head to the nearest emergency department.'
+      },
+      {
+        id: 's-1c',
+        label: 'Check Anaphylaxis Signs',
+        intent: 'Symptom screening & call',
+        text: 'Rohit, I am calling you now. If you have any difficulty breathing, lip/tongue swelling, or dizziness, please take your emergency antihistamine and go to the nearest ER immediately.'
+      }
+    ],
+    updatedAt: new Date(Date.now() - 2 * 60_000).toISOString()
+  },
+  {
+    id: 't-2',
+    name: 'Harman Preet',
+    subtitle: '25y · P-24618 · English & Punjabi',
+    category: 'patients',
+    channel: 'WhatsApp',
+    priority: 'routine',
+    stage: 'draft_ready',
+    preview: 'Itching more at night, is it normal?',
+    timestamp: '40 min ago',
+    unread: true,
+    statusLabel: 'Patient question · AI draft ready',
+    phone: '+91 98765 11223',
+    aiSummary: 'Less redness, mild night itching. Clinical photo shows barrier healing. No fever or swelling.',
+    messages: [
+      {
+        id: 'm-201',
+        sender: 'patient',
+        text: 'Doctor, the redness is better but the itching is more at night. Is this normal?',
+        time: '9:41 AM',
+        status: 'photo attached'
+      },
+      {
+        id: 'm-202',
+        sender: 'doctor',
+        text: 'Hi Harman. I received your message and photo. I will reply with advice shortly.',
+        time: '9:45 AM',
+        status: 'read'
+      }
+    ],
+    draftReply:
+      'Mild itching at night is common as the skin barrier repairs. Keep the area well moisturised with your prescribed ceramide cream before sleep, avoid scratching, and continue your bedtime antihistamine.',
+    suggestedReplies: [
+      {
+        id: 's-2a',
+        label: 'Reassure & Moisturize',
+        intent: 'Barrier healing guidance',
+        text: 'Mild itching at night is common as the skin barrier repairs. Keep the area well moisturised with your prescribed ceramide cream before sleep, avoid scratching, and continue your bedtime antihistamine.'
+      },
+      {
+        id: 's-2b',
+        label: 'Cold Compress & Dosage Adjustment',
+        intent: 'Symptomatic relief',
+        text: 'Hi Harman, the reduced redness is a good sign of healing. For night itching, apply a cool damp compress for 5 minutes before applying your chilled moisturizer, and take your prescribed tablet 1 hour before bed.'
+      },
+      {
+        id: 's-2c',
+        label: 'Bilingual (English + Punjabi)',
+        intent: 'Patient native comfort',
+        text: 'Hi Harman, ਰਾਤ ਨੂੰ ਹਲਕੀ ਖਾਰਸ਼ ਚਮੜੀ ਦੇ ਠੀਕ ਹੋਣ ਦਾ ਹਿੱਸਾ ਹੈ। ਸੌਣ ਤੋਂ ਪਹਿਲਾਂ ਆਪਣੀ ਮਾਇਸਚਰਾਈਜ਼ਰ ਕਰੀਮ ਲਗਾਓ ਅਤੇ ਖੁਰਕਣ ਤੋਂ ਬਚੋ। (Mild night itching is normal during healing; apply moisturizer before bed.)'
+      }
+    ],
+    updatedAt: new Date(Date.now() - 40 * 60_000).toISOString()
+  },
+  {
+    id: 't-3',
+    name: 'Simran Kaur',
+    subtitle: '31y · P-24619 · Refill request',
+    category: 'patients',
+    channel: 'WhatsApp',
+    priority: 'routine',
+    stage: 'draft_ready',
+    preview: 'Need refill for my prescribed tablets',
+    timestamp: '3 h ago',
+    unread: false,
+    statusLabel: 'Refill verified · Safe to approve',
+    phone: '+91 91234 56789',
+    aiSummary: 'Antihistamine tablet 30 days. Seen 3 weeks ago. Safe refill verified against chart.',
+    messages: [
+      {
+        id: 'm-301',
+        sender: 'patient',
+        text: 'Hello doctor, I need a refill for my allergy tablets for another 30 days.',
+        time: '7:15 AM'
+      }
+    ],
+    draftReply:
+      'Hello Simran, your 30-day allergy tablet refill has been approved. We have updated your digital prescription—you can collect it at the clinic pharmacy or order directly.',
+    suggestedReplies: [
+      {
+        id: 's-3a',
+        label: 'Approve 30-Day Refill',
+        intent: 'Full authorization',
+        text: 'Hello Simran, your 30-day allergy tablet refill has been approved. We have updated your digital prescription—you can collect it at the clinic pharmacy or order directly.'
+      },
+      {
+        id: 's-3b',
+        label: 'Approve + Book 4-Week Review',
+        intent: 'Refill with follow-up',
+        text: 'Hello Simran, I have authorized your 30-day refill. Since this completes your 2-month course, please book a brief follow-up check next month so we can taper the dose.'
+      },
+      {
+        id: 's-3c',
+        label: 'Short 14-Day Bridge Refill',
+        intent: 'Require in-person check',
+        text: 'Hello Simran, I have approved a 14-day supply to keep your symptoms controlled. Please schedule a quick clinic visit within two weeks so we can review your progress.'
+      }
+    ],
+    updatedAt: new Date(Date.now() - 180 * 60_000).toISOString()
+  },
+  {
+    id: 't-4',
+    name: 'Anita Verma',
+    subtitle: '42y · P-24622 · Reschedule request',
+    category: 'patients',
+    channel: 'WhatsApp',
+    priority: 'routine',
+    stage: 'draft_ready',
+    preview: 'Can we move my visit to Friday?',
+    timestamp: '3 h ago',
+    unread: false,
+    statusLabel: 'Schedule change · 3 open slots',
+    phone: '+91 99887 76655',
+    aiSummary: 'Requests moving visit to Friday. Open clinic slots: 10:00 AM, 2:30 PM, 4:00 PM.',
+    messages: [
+      {
+        id: 'm-401',
+        sender: 'patient',
+        text: 'Can we move my visit from tomorrow to Friday? Something urgent came up.',
+        time: '6:50 AM'
+      }
+    ],
+    draftReply:
+      'Hi Anita, certainly. We have open slots this Friday at 10:00 AM, 2:30 PM, or 4:00 PM. Please reply with your preferred time and we will confirm your appointment.',
+    suggestedReplies: [
+      {
+        id: 's-4a',
+        label: 'Offer Friday Slots (10 AM / 2:30 PM / 4 PM)',
+        intent: 'Direct slot selection',
+        text: 'Hi Anita, certainly. We have open slots this Friday at 10:00 AM, 2:30 PM, or 4:00 PM. Please reply with your preferred time and we will confirm your appointment.'
+      },
+      {
+        id: 's-4b',
+        label: 'Confirm Friday 10:00 AM Slot',
+        intent: 'Proactive booking',
+        text: 'Hi Anita, I have tentatively reserved the Friday 10:00 AM morning slot for your visit. Let us know if you prefer an afternoon time instead.'
+      },
+      {
+        id: 's-4c',
+        label: 'Offer Tele-Consult Option',
+        intent: 'Remote alternative',
+        text: 'Hi Anita, we can move your in-clinic visit to Friday at 2:30 PM, or if it is more convenient, we can do a quick video follow-up tomorrow evening.'
+      }
+    ],
+    updatedAt: new Date(Date.now() - 190 * 60_000).toISOString()
+  },
+  {
+    id: 't-5',
+    name: 'Meera Patel',
+    subtitle: '29y · P-24623 · Follow-up check',
+    category: 'patients',
+    channel: 'SMS',
+    priority: 'routine',
+    stage: 'resolved',
+    preview: 'Thank you for the prescription',
+    timestamp: 'Yesterday',
+    unread: false,
+    statusLabel: 'Follow-up logged',
+    phone: '+91 98111 22334',
+    aiSummary: 'Topical cream 2 tubes. Patient confirmed adherence. Next review in 7 days.',
+    messages: [
+      {
+        id: 'm-501',
+        sender: 'patient',
+        text: 'Thank you for the prescription. I am using the cream as directed.',
+        time: 'Yesterday'
+      }
+    ],
+    draftReply:
+      'Hi Meera, glad to hear that. Remember to apply SPF 50+ sunscreen every morning while using the night cream, and message us if you notice any dryness.',
+    suggestedReplies: [
+      {
+        id: 's-5a',
+        label: 'Sunscreen & Hydration Reminder',
+        intent: 'Adherence support',
+        text: 'Hi Meera, glad to hear that. Remember to apply SPF 50+ sunscreen every morning while using the night cream, and message us if you notice any dryness.'
+      },
+      {
+        id: 's-5b',
+        label: '1-Week Photo Check-In Request',
+        intent: 'Visual progress tracking',
+        text: 'Hi Meera, great! Please share a clear daylight photo of the treated area after 7 days so we can assess your pigmentation improvement.'
+      },
+      {
+        id: 's-5c',
+        label: 'Confirm 7-Day Review Slot',
+        intent: 'Routine follow-up',
+        text: 'Hi Meera, glad your skin is tolerating the cream well. We will check in with you next week for your 7-day progress review.'
+      }
+    ],
+    updatedAt: new Date(Date.now() - 1440 * 60_000).toISOString()
+  },
+  {
+    id: 't-6',
+    name: 'Apollo Pharmacy Hub',
+    subtitle: 'Partner Pharmacy · Batch verification',
+    category: 'pharmacies',
+    channel: 'SMS',
+    priority: 'routine',
+    stage: 'needs_review',
+    preview: 'Verifying prescription batch #RX-8842',
+    timestamp: '1 h ago',
+    unread: true,
+    statusLabel: 'Pharmacy authorization',
+    phone: '+91 98765 00420',
+    aiSummary: 'Partner pharmacy requesting dispensing confirmation for Harman Preet (P-24618).',
+    messages: [
+      {
+        id: 'm-601',
+        sender: 'patient',
+        text: 'Hello Doctor, confirming prescription for patient Harman (P-24618). Please authorize.',
+        time: '11:15 AM'
+      }
+    ],
+    draftReply: 'Prescription batch #RX-8842 for Harman Preet (P-24618) is verified and authorized for dispensing as written.',
+    suggestedReplies: [
+      {
+        id: 's-6a',
+        label: 'Authorize Dispensing (#RX-8842)',
+        intent: 'Approve as written',
+        text: 'Prescription batch #RX-8842 for Harman Preet (P-24618) is verified and authorized for dispensing as written.'
+      },
+      {
+        id: 's-6b',
+        label: 'Approve Brand Substitution',
+        intent: 'Allow generic equivalent',
+        text: 'Batch #RX-8842 is authorized. If the primary topical brand is out of stock, you may dispense the equivalent strength ceramide formulation.'
+      },
+      {
+        id: 's-6c',
+        label: 'Request Patient Call Before Dispense',
+        intent: 'Dosage verification',
+        text: 'Please hold batch #RX-8842 briefly and have the pharmacist call our clinic desk to confirm the strength.'
+      }
+    ],
+    updatedAt: new Date(Date.now() - 60 * 60_000).toISOString()
+  }
+];
+
+function formatDisplayPhone(rawDigits: string): string {
+  const digits = rawDigits.replace(/\D/g, '');
+  if (digits.length >= 10) {
+    const last10 = digits.slice(-10);
+    return `+91 ${last10.slice(0, 5)} ${last10.slice(5)}`;
+  }
+  return `+91 ${digits || '98765 43210'}`;
+}
+
+function buildSmartSuggestedRepliesForIncoming(
+  patientName: string,
+  incomingText: string
+): {
+  isUrgent: boolean;
+  aiSummary: string;
+  draftReply: string;
+  suggestedReplies: InboxSuggestedResolution[];
+} {
+  const lower = incomingText.toLowerCase();
+  const isUrgent =
+    /chest|tight|breath|swelling|fever|bleed|pus|severe|worse|spread|pain|dizzy|emergency/.test(lower);
+
+  if (isUrgent) {
+    const draftReply = `Hi ${patientName}, because you mentioned "${incomingText.slice(
+      0,
+      45
+    )}", please pause any newly started topical or oral medication and visit our clinic priority desk or the nearest emergency room immediately for an evaluation.`;
+    return {
+      isUrgent: true,
+      aiSummary: `Red Flag Alert: Patient reported "${incomingText.slice(0, 80)}". Immediate clinical review recommended.`,
+      draftReply,
+      suggestedReplies: [
+        {
+          id: `sug-urg-1-${Date.now()}`,
+          label: 'Immediate Clinic / ER Triage',
+          intent: 'Urgent safety escalation',
+          text: draftReply
+        },
+        {
+          id: `sug-urg-2-${Date.now()}`,
+          label: 'Stop Active Meds & Call Now',
+          intent: 'Direct physician call',
+          text: `Hi ${patientName}, please stop applying the cream/tablets immediately. I am reviewing your chart now—please answer our clinic call or come directly to the clinic.`
+        },
+        {
+          id: `sug-urg-3-${Date.now()}`,
+          label: 'Bilingual Urgent Guidance (EN + PA)',
+          intent: 'Native patient safety',
+          text: `Hi ${patientName}, ਕਿਰਪਾ ਕਰਕੇ ਨਵੀਂ ਦਵਾਈ ਤੁਰੰਤ ਬੰਦ ਕਰੋ ਅਤੇ ਤੁਰੰਤ ਕਲੀਨਿਕ ਜਾਂ ਨੇੜਲੇ ਹਸਪਤਾਲ ਵਿਖੇ ਸੰਪਰਕ ਕਰੋ। (Please stop the new medication immediately and visit the clinic or nearest ER right away.)`
+        }
+      ]
+    };
+  }
+
+  const draftReply = `Hi ${patientName}, thank you for the update ("${incomingText.slice(
+    0,
+    40
+  )}"). Please continue your prescribed skincare regimen as directed and share a daylight photo if you need us to review any changes.`;
+
+  return {
+    isUrgent: false,
+    aiSummary: `Latest patient reply: "${incomingText.slice(0, 85)}". Routine clinical follow-up draft ready.`,
+    draftReply,
+    suggestedReplies: [
+      {
+        id: `sug-rt-1-${Date.now()}`,
+        label: 'Acknowledge & Continue Regimen',
+        intent: 'Reassurance & adherence',
+        text: draftReply
+      },
+      {
+        id: `sug-rt-2-${Date.now()}`,
+        label: 'Confirm Slot / Follow-Up Plan',
+        intent: 'Scheduling & next steps',
+        text: `Hi ${patientName}, we have noted your message in your Clinical OS chart. We have reserved your requested follow-up slot—see you at the clinic.`
+      },
+      {
+        id: `sug-rt-3-${Date.now()}`,
+        label: 'Bilingual Reply (EN + Punjabi)',
+        intent: 'Patient native comfort',
+        text: `Hi ${patientName}, ਤੁਹਾਡਾ ਸੁਨੇਹਾ ਮਿਲ ਗਿਆ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਆਪਣੀ ਦੱਸੀ ਹੋਈ ਦਵਾਈ ਅਤੇ ਕਰੀਮ ਸਮੇਂ ਸਿਰ ਲਗਾਉਂਦੇ ਰਹੋ। (We received your message; please continue your prescribed treatment as scheduled.)`
+      }
+    ]
+  };
+}
+
+function findOrCreateInboxThread(params: {
+  threadId?: string;
+  patientId?: string;
+  patientName?: string;
+  phoneDigits: string;
+}): InboxThreadRecord {
+  const last10 = params.phoneDigits.replace(/\D/g, '').slice(-10);
+
+  let thread = inboxThreads.find(
+    t =>
+      (params.threadId && t.id === params.threadId) ||
+      (params.patientId && (t.patientId === params.patientId || t.id === params.patientId)) ||
+      (last10.length === 10 && t.phone.replace(/\D/g, '').endsWith(last10))
+  );
+
+  if (!thread) {
+    const matchedPatient =
+      (params.patientId ? db.findPatientById(params.patientId) : undefined) ||
+      (last10.length === 10 ? db.findPatientByMobile(last10) : undefined);
+
+    const resolvedName =
+      matchedPatient?.fullName || params.patientName || `Patient (${last10 || 'New'})`;
+    const displayPhone = formatDisplayPhone(last10 || params.phoneDigits);
+    const defaultDraft = `Hello ${resolvedName}, thank you for reaching out to our clinic. How can we assist you with your treatment today?`;
+
+    thread = {
+      id: params.threadId || (matchedPatient ? `p-thread-${matchedPatient.id}` : `t-in-${Date.now().toString(36)}`),
+      name: resolvedName,
+      subtitle: matchedPatient
+        ? `${matchedPatient.age}y · ${matchedPatient.patientCode} · ${matchedPatient.gender}`
+        : 'Patient · Direct WhatsApp/SMS Line',
+      category: 'patients',
+      channel: 'WhatsApp',
+      priority: 'routine',
+      stage: 'draft_ready',
+      preview: 'New conversation linked to Clinical OS Inbox',
+      timestamp: 'Just now',
+      unread: true,
+      statusLabel: 'Linked to Clinical OS Inbox',
+      phone: displayPhone,
+      patientId: matchedPatient?.id || params.patientId,
+      aiSummary: matchedPatient
+        ? `EHR Profile: ${matchedPatient.age}y ${matchedPatient.gender}. Allergies: ${matchedPatient.allergies || 'None'}.`
+        : 'Direct patient conversation routed into Clinical OS.',
+      messages: [],
+      draftReply: defaultDraft,
+      suggestedReplies: [
+        {
+          id: `s-init-1-${Date.now()}`,
+          label: 'Standard Clinical Check-In',
+          intent: 'Routine follow-up',
+          text: defaultDraft
+        }
+      ],
+      updatedAt: new Date().toISOString()
+    };
+
+    inboxThreads.unshift(thread);
+  }
+
+  return thread;
+}
+
+function routeIncomingPatientMessageToInbox(params: {
+  threadId?: string;
+  patientId?: string;
+  patientName?: string;
+  senderPhone: string;
+  messageText: string;
+  channel?: 'WhatsApp' | 'SMS';
+}): { thread: InboxThreadRecord; message: InboxMessageRecord } {
+  const cleanDigits = String(params.senderPhone || '').replace(/\D/g, '') || '919876543210';
+  const thread = findOrCreateInboxThread({
+    threadId: params.threadId,
+    patientId: params.patientId,
+    patientName: params.patientName,
+    phoneDigits: cleanDigits
+  });
+
+  const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const incomingMsg: InboxMessageRecord = {
+    id: `msg-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
+    sender: 'patient',
+    text: params.messageText.trim(),
+    time: nowTime,
+    status: `Routed to Clinical OS (${params.channel || thread.channel})`,
+    createdAt: new Date().toISOString()
+  };
+
+  const triage = buildSmartSuggestedRepliesForIncoming(thread.name, params.messageText.trim());
+
+  thread.messages.push(incomingMsg);
+  thread.preview = params.messageText.trim();
+  thread.timestamp = 'Just now';
+  thread.unread = true;
+  thread.channel = params.channel || thread.channel;
+  thread.priority = triage.isUrgent ? 'urgent' : thread.priority;
+  thread.stage = triage.isUrgent ? 'needs_review' : 'draft_ready';
+  thread.statusLabel = triage.isUrgent
+    ? 'Red flag · New patient reply'
+    : 'New patient reply · AI draft ready';
+  thread.aiSummary = triage.aiSummary;
+  thread.draftReply = triage.draftReply;
+  thread.suggestedReplies = triage.suggestedReplies;
+  thread.updatedAt = new Date().toISOString();
+
+  // Move updated thread to top of inbox
+  const idx = inboxThreads.findIndex(t => t.id === thread.id);
+  if (idx > 0) {
+    inboxThreads.splice(idx, 1);
+    inboxThreads.unshift(thread);
+  }
+
+  return { thread, message: incomingMsg };
+}
+
+// Get all native Clinical OS Inbox threads
+app.get('/api/whatsapp/threads', authMiddleware, (_req: AuthenticatedRequest, res) => {
+  res.json({
+    threads: inboxThreads,
+    lastUpdatedAt: new Date().toISOString()
+  });
+});
+
+// Receive an incoming patient reply directly into the native Clinical OS Inbox UI
+app.post('/api/whatsapp/incoming', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const { threadId, patientId, patientName, senderPhone, messageText, channel } = req.body || {};
+  if (!messageText || !String(messageText).trim()) {
+    return res.status(400).json({ error: 'messageText is required' });
+  }
+
+  const targetThread = threadId ? inboxThreads.find(t => t.id === threadId) : undefined;
+  const resolvedPhone = senderPhone || targetThread?.phone || '+91 98765 43210';
+
+  const result = routeIncomingPatientMessageToInbox({
+    threadId,
+    patientId: patientId || targetThread?.patientId,
+    patientName: patientName || targetThread?.name,
+    senderPhone: resolvedPhone,
+    messageText: String(messageText),
+    channel: channel === 'SMS' ? 'SMS' : 'WhatsApp'
+  });
+
+  res.json({
+    success: true,
+    thread: result.thread,
+    incomingMessage: result.message,
+    threads: inboxThreads
+  });
+});
+
+// Meta WhatsApp Cloud API / Twilio Webhook Verification (GET) & Inbound Routing (POST)
+app.get('/api/whatsapp/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  if (mode === 'subscribe' && challenge) {
+    return res.status(200).send(challenge);
+  }
+  res.status(200).json({ status: 'Clinical OS Native WhatsApp/SMS Webhook Active', token: Boolean(token) });
+});
+
+app.post('/api/whatsapp/webhook', (req, res) => {
+  try {
+    const body = req.body || {};
+
+    // 1. Standard Meta WhatsApp Cloud API webhook payload
+    const entry = body.entry?.[0];
+    const changeVal = entry?.changes?.[0]?.value;
+    const waMessage = changeVal?.messages?.[0];
+    const waContact = changeVal?.contacts?.[0];
+
+    if (waMessage) {
+      const fromPhone = waMessage.from || '';
+      const senderName = waContact?.profile?.name || undefined;
+      const textBody =
+        waMessage.text?.body ||
+        waMessage.button?.text ||
+        waMessage.interactive?.button_reply?.title ||
+        '[Media / Attachment received]';
+
+      const result = routeIncomingPatientMessageToInbox({
+        patientName: senderName,
+        senderPhone: fromPhone,
+        messageText: textBody,
+        channel: 'WhatsApp'
+      });
+
+      return res.status(200).json({ success: true, threadId: result.thread.id });
+    }
+
+    // 2. Generic / Twilio / Custom Gateway JSON webhook payload ({ From, Body } or { from, text })
+    const rawFrom = body.from || body.From || body.senderPhone || '';
+    const rawText = body.text || body.Body || body.messageText || '';
+    if (rawFrom && rawText) {
+      const result = routeIncomingPatientMessageToInbox({
+        patientName: body.patientName || body.ProfileName,
+        senderPhone: String(rawFrom),
+        messageText: String(rawText),
+        channel: body.channel === 'SMS' ? 'SMS' : 'WhatsApp'
+      });
+      return res.status(200).json({ success: true, threadId: result.thread.id });
+    }
+
+    res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('Webhook routing error:', err);
+    res.status(200).json({ received: true });
+  }
+});
 
 app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
   const {
+    threadId,
     patientId,
     patientName,
     recipientMobile,
     clinicPhone,
     reportType,
     messageText,
-    note
+    note,
+    autoSimulateReply
   } = req.body || {};
 
   const rawDigits = String(recipientMobile || '').replace(/\D/g, '');
@@ -2736,7 +3361,7 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
 
   let deliveryMode: 'cloud_api' | 'whatsapp_gateway' = 'whatsapp_gateway';
 
-  // If Meta WhatsApp Cloud API credentials are configured in environment, dispatch directly via Graph API
+  // If Meta WhatsApp Cloud API credentials are configured in environment, dispatch directly via Graph API in background
   const waToken = process.env.WHATSAPP_API_TOKEN;
   const waPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   if (waToken && waPhoneId) {
@@ -2788,6 +3413,59 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
     dispatchedWhatsAppMessages.pop();
   }
 
+  // Update or create the conversation thread natively inside Clinical OS
+  const thread = findOrCreateInboxThread({
+    threadId,
+    patientId: patient?.id || patientId,
+    patientName: patient?.fullName || patientName,
+    phoneDigits: normalizedRecipient
+  });
+
+  const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  thread.phone = formatDisplayPhone(normalizedRecipient);
+  thread.stage = 'resolved';
+  thread.unread = false;
+  thread.statusLabel = 'Resolved · Dispatched in background';
+  thread.preview = `You: ${bodyText.slice(0, 90)}`;
+  thread.timestamp = 'Just now';
+  thread.updatedAt = new Date().toISOString();
+  thread.messages.push({
+    id: dispatchRecord.id,
+    sender: 'doctor',
+    text: bodyText,
+    time: nowTime,
+    status: `Delivered in background (${resolvedClinicPhone} → ${thread.phone})`,
+    receiptId: dispatchRecord.id,
+    whatsappUrl,
+    recipientPhone: thread.phone,
+    createdAt: dispatchRecord.sentAt
+  });
+
+  // Optionally schedule an automatic simulated patient reply routed back into Clinical OS Inbox after 3 seconds
+  if (autoSimulateReply) {
+    setTimeout(() => {
+      const contextualReply =
+        thread.id === 't-1'
+          ? 'Thank you Doctor, I have stopped the new tablet and my family is taking me to the clinic emergency desk right now.'
+          : thread.id === 't-2'
+          ? 'Thank you Doctor! I applied the chilled ceramide moisturizer and took the antihistamine—feeling much more comfortable now.'
+          : thread.id === 't-3'
+          ? 'Thank you for approving the 30-day refill Doctor! I will pick it up from the pharmacy today.'
+          : thread.id === 't-4'
+          ? 'Friday at 10:00 AM works great for me, Doctor. Please confirm that slot!'
+          : `Thank you Dr. ${doctor.name}, I received your message and will follow the instructions carefully.`;
+
+      routeIncomingPatientMessageToInbox({
+        threadId: thread.id,
+        patientId: thread.patientId,
+        patientName: thread.name,
+        senderPhone: normalizedRecipient,
+        messageText: contextualReply,
+        channel: thread.channel === 'SMS' ? 'SMS' : 'WhatsApp'
+      });
+    }, 2800);
+  }
+
   db.logAudit({
     actorId: doctor.id,
     actorName: doctor.name,
@@ -2810,8 +3488,10 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
   res.json({
     success: true,
     dispatch: dispatchRecord,
+    thread,
+    threads: inboxThreads,
     whatsappUrl,
-    message: `WhatsApp message dispatched to +${normalizedRecipient}`,
+    message: `Message dispatched in background to +${normalizedRecipient}`,
     timestamp: dispatchRecord.sentAt
   });
 });

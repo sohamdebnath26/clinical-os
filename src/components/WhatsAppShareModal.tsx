@@ -250,11 +250,10 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   };
 
   /**
-   * Dispatches WhatsApp report:
-   * 1. Synchronously launches WhatsApp (wa.me or native) BEFORE any async await so browser popup blockers never block it.
-   * 2. Calls POST /api/whatsapp/send to dispatch & persist the message in the clinic backend outbox and audit log.
+   * Dispatches WhatsApp report in the background via Clinic Gateway & logs it directly into the
+   * native Clinical OS Inbox thread so the doctor never leaves the Clinical OS application.
    */
-  const handleSendWhatsApp = async (openAsWeb = true) => {
+  const handleSendWhatsApp = async (openUnfocusedTab = false) => {
     setErrorMessage(null);
 
     const cleanTenDigits = phoneNumber.replace(/\D/g, '').slice(0, 10);
@@ -268,15 +267,12 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
       return;
     }
 
-    const useWebMode = openAsWeb || preferWeb;
     const targetWhatsAppUrl = getWhatsAppWebUrl(cleanedRecipient, messageText);
 
-    // CRITICAL: Launch external WhatsApp synchronously on click BEFORE any network await!
-    launchWhatsAppSynchronously(
-      cleanedRecipient,
-      messageText,
-      useWebMode ? 'web' : 'native'
-    );
+    // Only open an unfocused background tab if explicitly requested; default is 100% background API dispatch
+    if (openUnfocusedTab) {
+      launchWhatsAppSynchronously(cleanedRecipient, messageText, 'unfocused');
+    }
 
     setIsLogging(true);
 
@@ -290,7 +286,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
         }
       }
 
-      // 2. Dispatch & persist via backend WhatsApp gateway + audit log
+      // 2. Dispatch & persist via backend WhatsApp gateway + native Clinical OS Inbox thread
       let receiptId = `WA-${Date.now().toString(36).toUpperCase()}`;
       try {
         const sendRes = await api.whatsapp.send({
@@ -316,19 +312,16 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
         sentAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       });
 
-      if (useWebMode) {
-        setShowAppLaunchPrompt(false);
-        setStatusMessage(`WhatsApp message dispatched to +${cleanedRecipient} & logged (${receiptId}).`);
-      } else {
-        setShowAppLaunchPrompt(true);
-        setStatusMessage(`Dispatched to +${cleanedRecipient} (${receiptId}). Click "Open WhatsApp Web" if the desktop app isn't installed.`);
-      }
+      setShowAppLaunchPrompt(false);
+      setStatusMessage(
+        `Dispatched in background to +${cleanedRecipient} & routed to Clinical OS Inbox (${receiptId}).`
+      );
 
       if (onSentSuccess) {
         onSentSuccess();
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to launch WhatsApp';
+      const msg = err instanceof Error ? err.message : 'Failed to dispatch message';
       setErrorMessage(msg);
     } finally {
       setIsLogging(false);
@@ -649,16 +642,16 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               <span>WhatsApp Web</span>
             </button>
 
-            {/* Primary Action Button: Synchronously launches WhatsApp & dispatches via Clinic Gateway */}
+            {/* Primary Action Button: Dispatches in background via Clinic Gateway & logs in Clinical OS Inbox */}
             <button
               type="button"
-              onClick={() => handleSendWhatsApp(preferWeb)}
+              onClick={() => handleSendWhatsApp(false)}
               disabled={isLogging || !cleanedRecipient}
-              className="flex-1 sm:flex-none px-5 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.99]"
-              title="Send report directly to patient's WhatsApp"
+              className="flex-1 sm:flex-none px-5 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white text-xs font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.99] cursor-pointer"
+              title="Dispatch report in background without leaving Clinical OS"
             >
               <WhatsAppIcon className="w-4 h-4 fill-white" />
-              <span>{isLogging ? 'Sending...' : 'Send on WhatsApp'}</span>
+              <span>{isLogging ? 'Dispatching...' : 'Send to Patient (In-App)'}</span>
               <Send className="w-3.5 h-3.5" />
             </button>
           </div>

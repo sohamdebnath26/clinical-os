@@ -999,7 +999,30 @@ export const api = {
   },
 
   whatsapp: {
+    threads: () =>
+      fetchWithAuth<{
+        threads: Array<any>;
+        lastUpdatedAt: string;
+      }>('/api/whatsapp/threads'),
+    receiveIncoming: (data: {
+      threadId?: string;
+      patientId?: string;
+      patientName?: string;
+      senderPhone?: string;
+      messageText: string;
+      channel?: 'WhatsApp' | 'SMS';
+    }) =>
+      fetchWithAuth<{
+        success: boolean;
+        thread: any;
+        incomingMessage: any;
+        threads: Array<any>;
+      }>('/api/whatsapp/incoming', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
     send: (data: {
+      threadId?: string;
       patientId?: string;
       patientName?: string;
       recipientMobile: string;
@@ -1007,12 +1030,15 @@ export const api = {
       reportType?: string;
       messageText: string;
       note?: string;
+      autoSimulateReply?: boolean;
     }) =>
       fetchWithAuth<{
         success: boolean;
         whatsappUrl: string;
         message: string;
         timestamp: string;
+        thread?: any;
+        threads?: Array<any>;
         dispatch: {
           id: string;
           patientId?: string;

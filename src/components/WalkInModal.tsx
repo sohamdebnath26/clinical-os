@@ -338,29 +338,25 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
       return;
     }
 
-    const pendingPopup = window.open('about:blank', '_blank');
     const url = await ensureMobileSessionLink();
     if (!url) {
-      if (pendingPopup && !pendingPopup.closed) pendingPopup.close();
       return;
     }
 
     const message = `Hello${fullName.trim() ? ` ${fullName.trim()}` : ''}, please complete your walk-in patient check-in details (Name, Age, Gender, Weight & Symptoms) on your mobile using this secure link:\n\n${url}`;
-    const whatsappUrl = `https://wa.me/${recipient}?text=${encodeURIComponent(message)}`;
-    if (pendingPopup && !pendingPopup.closed) {
-      pendingPopup.location.href = whatsappUrl;
-    } else {
-      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-    }
 
-    api.whatsapp
-      .send({
+    try {
+      await api.whatsapp.send({
         patientName: fullName.trim() || 'Walk-in Patient',
         recipientMobile: recipient,
         reportType: 'walkin_registration_link',
         messageText: message
-      })
-      .catch(() => {});
+      });
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 3000);
+    } catch {
+      // ignore
+    }
   };
 
   const handleSendSmsToPatient = async () => {

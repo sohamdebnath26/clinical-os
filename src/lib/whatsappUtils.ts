@@ -72,41 +72,33 @@ export function getWhatsAppUniversalUrl(cleanPhone: string, messageText: string)
 }
 
 /**
- * Synchronously launches WhatsApp in a new browser tab directly from a user click handler
- * (MUST be called BEFORE any async/await calls so browser popup blockers never block it).
+ * Dispatches or prepares a WhatsApp URL without stealing foreground focus from Clinical OS.
+ * - 'background' (default): Returns the target URL for background API dispatch without opening any browser tab.
+ * - 'unfocused': Opens an unfocused background tab and immediately restores focus to Clinical OS.
  */
 export function launchWhatsAppSynchronously(
   cleanPhone: string,
   messageText: string,
-  mode: 'web' | 'native' = 'web'
+  mode: 'background' | 'unfocused' | 'web' | 'native' = 'background'
 ): string {
   const targetUrl =
     mode === 'native'
       ? getWhatsAppNativeUri(cleanPhone, messageText)
       : getWhatsAppWebUrl(cleanPhone, messageText);
 
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  if (mode === 'background') {
+    return targetUrl;
+  }
+
+  if (typeof window !== 'undefined') {
     try {
-      const a = document.createElement('a');
-      a.href = targetUrl;
-      if (mode !== 'native') {
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
+      const bgWin = window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      if (bgWin) {
+        bgWin.blur();
       }
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        if (document.body.contains(a)) {
-          document.body.removeChild(a);
-        }
-      }, 300);
+      window.focus();
     } catch {
-      try {
-        window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      } catch {
-        // Ignore if sandboxed
-      }
+      // Ignore if sandboxed
     }
   }
 
