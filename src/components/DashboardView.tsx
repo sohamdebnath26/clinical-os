@@ -32,7 +32,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToImageAnalyzer,
   onToggleMobileMenu
 }) => {
-  const { doctor } = useAuth();
+  const { doctor, switchRoleSession } = useAuth();
+  const isReceptionist = doctor?.role === 'receptionist';
   const { language } = useLanguage();
   const [stats, setStats] = useState<ClinicStats | null>(null);
   const [revenue, setRevenue] = useState<PracticeRevenueAnalytics | null>(null);
@@ -222,6 +223,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   })();
 
   const handleStartNextConsultation = async () => {
+    if (isReceptionist) {
+      if (nextQueueDisplay.patientId) {
+        onSelectPatient(nextQueueDisplay.patientId);
+        return;
+      }
+      onOpenWalkIn();
+      return;
+    }
     if (nextQueueDisplay.patientRecord) {
       onStartConsultationForPatient(nextQueueDisplay.patientRecord);
       return;
@@ -307,12 +316,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {greeting}, {formatDoctorShortName(doctor?.name)}
             </h1>
             <p className="text-sm text-[#5c7c77] mt-1 font-normal">
-              {dateString} · Here is what is happening at your clinic today
+              {dateString} ·{' '}
+              {isReceptionist
+                ? 'Front-Desk Receptionist Workspace · Patient Queue & Check-In'
+                : 'Here is what is happening at your clinic today'}
             </p>
           </div>
         </div>
 
-        {/* Right Controls: Dashed Search Box + Walk-in + AI Assistant */}
+        {/* Right Controls: Dashed Search Box + Walk-in + AI Assistant / Role Switcher */}
         <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
           {/* Search Box with Dashed Border */}
           <div ref={searchRef} className="relative w-full sm:w-72">
@@ -417,6 +429,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {/* Dark / Light Mode Toggle */}
           <ThemeToggleButton variant="dashboard" />
 
+          {/* 1-Click POV Switcher */}
+          <button
+            type="button"
+            onClick={() => switchRoleSession({ role: isReceptionist ? 'doctor' : 'receptionist' })}
+            className="px-4 py-3.5 bg-white hover:bg-[#f7faf9] border border-[#dce5e3] rounded-2xl text-xs font-bold text-[#0f2926] transition-colors shrink-0 cursor-pointer"
+            title={
+              isReceptionist
+                ? 'Switch back to Doctor Point of View'
+                : 'Preview Receptionist Point of View'
+            }
+          >
+            {isReceptionist ? 'Doctor View' : 'Receptionist View'}
+          </button>
+
           {/* Walk-in Button */}
           <button
             type="button"
@@ -426,14 +452,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             Walk-in
           </button>
 
-          {/* + AI Assistant Button */}
-          <button
-            type="button"
-            onClick={onOpenAIAssistant}
-            className="px-5 py-3.5 bg-[#0d4a44] hover:bg-[#093834] text-white rounded-2xl text-sm font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1.5"
-          >
-            <span>✦ AI Assistant</span>
-          </button>
+          {/* + AI Assistant Button (Doctor only) */}
+          {!isReceptionist && (
+            <button
+              type="button"
+              onClick={onOpenAIAssistant}
+              className="px-5 py-3.5 bg-[#0d4a44] hover:bg-[#093834] text-white rounded-2xl text-sm font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1.5"
+            >
+              <span>✦ AI Assistant</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -480,18 +508,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <span className="text-sm text-[#5c7c77] block">needs attention</span>
         </div>
 
-        {/* ACTIVE RX */}
+        {/* ACTIVE RX (or FRONT DESK APPOINTMENTS for Receptionist) */}
         <div
-          onClick={() => onNavigateToPrescriptions && onNavigateToPrescriptions()}
+          onClick={() => {
+            if (isReceptionist) {
+              if (onNavigateToAppointments) onNavigateToAppointments();
+            } else if (onNavigateToPrescriptions) {
+              onNavigateToPrescriptions();
+            }
+          }}
           className="bg-white rounded-2xl border border-[#e4ecea] p-6 hover:border-[#bfd3cf] transition-colors cursor-pointer"
         >
           <span className="text-xs font-bold uppercase tracking-wider text-[#5c7c77] block">
-            ACTIVE RX
+            {isReceptionist ? 'SCHEDULED APPOINTMENTS' : 'ACTIVE RX'}
           </span>
           <div className="text-4xl font-extrabold text-[#115e56] tracking-tight tabular-nums mt-2.5 mb-1">
-            {stats ? stats.activePrescriptions : 0}
+            {isReceptionist ? appointments.length : stats ? stats.activePrescriptions : 0}
           </div>
-          <span className="text-sm text-[#5c7c77] block">prescribed regimens</span>
+          <span className="text-sm text-[#5c7c77] block">
+            {isReceptionist ? 'front-desk check-in queue' : 'prescribed regimens'}
+          </span>
         </div>
       </div>
 
@@ -504,7 +540,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="md:col-span-7 flex flex-col justify-between">
               <div>
                 <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#45615a] block">
-                  NEXT IN QUEUE · AI PRE-VISIT BRIEF
+                  {isReceptionist
+                    ? 'NEXT IN QUEUE · FRONT-DESK CHECK-IN'
+                    : 'NEXT IN QUEUE · AI PRE-VISIT BRIEF'}
                 </span>
 
                 <h2
@@ -583,7 +621,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   onClick={handleStartNextConsultation}
                   className="px-5 py-2.5 bg-[#0d2622] hover:bg-[#163d37] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
-                  Start consultation →
+                  {isReceptionist ? 'Check in & open patient chart →' : 'Start consultation →'}
                 </button>
                 <button
                   type="button"
@@ -656,29 +694,50 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* QUICK ACTIONS Card */}
         <div className="lg:col-span-4 bg-white rounded-2xl border border-[#e4ecea] p-6 flex flex-col justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-[#5c7c77] block mb-3.5">
-            QUICK ACTIONS
+            {isReceptionist ? 'FRONT-DESK QUICK ACTIONS' : 'QUICK ACTIONS'}
           </span>
           <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (onNavigateToPrescriptions) {
-                  onNavigateToPrescriptions();
-                } else {
-                  handleStartNextConsultation();
-                }
-              }}
-              className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
-            >
-              + New Rx
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigateToImageAnalyzer && onNavigateToImageAnalyzer()}
-              className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
-            >
-              Scan skin image
-            </button>
+            {isReceptionist ? (
+              <>
+                <button
+                  type="button"
+                  onClick={onOpenWalkIn}
+                  className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
+                >
+                  + Walk-in check-in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToAppointments && onNavigateToAppointments()}
+                  className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
+                >
+                  Open schedule
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onNavigateToPrescriptions) {
+                      onNavigateToPrescriptions();
+                    } else {
+                      handleStartNextConsultation();
+                    }
+                  }}
+                  className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
+                >
+                  + New Rx
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToImageAnalyzer && onNavigateToImageAnalyzer()}
+                  className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
+                >
+                  Scan skin image
+                </button>
+              </>
+            )}
             <button
               type="button"
               onClick={() => setShowAddPatientModal(true)}

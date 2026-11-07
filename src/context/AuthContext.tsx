@@ -19,6 +19,11 @@ interface AuthContextType {
   }) => Promise<void>;
   logout: () => Promise<void>;
   updateDoctor: (data: Partial<Doctor>) => Promise<void>;
+  switchRoleSession: (params: {
+    targetId?: string;
+    targetRole?: 'doctor' | 'receptionist';
+    role?: 'doctor' | 'receptionist';
+  }) => Promise<Doctor>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -93,6 +98,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setDoctor(res.doctor);
   };
 
+  const switchRoleSession = async (params: {
+    targetId?: string;
+    targetRole?: 'doctor' | 'receptionist';
+    role?: 'doctor' | 'receptionist';
+  }) => {
+    const res = await api.staff.switchSession({
+      targetId: params.targetId,
+      targetRole: params.targetRole || params.role
+    });
+    authStorage.setToken(res.token);
+    authStorage.setDoctor(res.doctor);
+    setDoctor(res.doctor);
+    window.dispatchEvent(new Event('clinical_os_patients_updated'));
+    return res.doctor;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -104,6 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         updateDoctor,
+        switchRoleSession,
       }}
     >
       {children}

@@ -349,6 +349,13 @@ class DatabaseService {
         if (!Array.isArray(parsed.testReports)) {
           parsed.testReports = [];
         }
+        if (Array.isArray(parsed.doctors)) {
+          parsed.doctors.forEach((d: any) => {
+            if (!d.role) {
+              d.role = d.email === 'receptionist@clinicalos.med' ? 'receptionist' : 'doctor';
+            }
+          });
+        }
         return parsed;
       } catch (err) {
         console.error('Failed to parse existing DB file, creating backup and fresh DB', err);
@@ -611,16 +618,27 @@ class DatabaseService {
     return DatabaseService.DEMO_EMAILS.has(doc.email.toLowerCase());
   }
 
+  public resolveEffectiveClinicDoctorId(doctorId?: string): string | undefined {
+    if (!doctorId) return undefined;
+    const callerDoc = this.findDoctorById(doctorId);
+    if (!callerDoc) return doctorId;
+    if (callerDoc.role === 'receptionist' && callerDoc.assignedByDoctorId) {
+      return callerDoc.assignedByDoctorId;
+    }
+    return doctorId;
+  }
+
   public canDoctorAccessPatient(patient: Patient, doctorId?: string): boolean {
     if (!doctorId) return true;
-    const callerDoc = this.findDoctorById(doctorId);
+    const effectiveDoctorId = this.resolveEffectiveClinicDoctorId(doctorId) || doctorId;
+    const callerDoc = this.findDoctorById(effectiveDoctorId) || this.findDoctorById(doctorId);
     const callerEmail = callerDoc?.email?.trim().toLowerCase();
     const patientOwnerEmail =
       patient.createdByEmail?.trim().toLowerCase() ||
       (patient.createdById ? this.findDoctorById(patient.createdById)?.email?.trim().toLowerCase() : undefined);
 
     // Direct ownership match by ID, email, or deterministic account ID
-    if (patient.createdById && patient.createdById === doctorId) {
+    if (patient.createdById && (patient.createdById === effectiveDoctorId || patient.createdById === doctorId)) {
       return true;
     }
     if (callerEmail && patientOwnerEmail && callerEmail === patientOwnerEmail) {
@@ -630,7 +648,7 @@ class DatabaseService {
       return true;
     }
 
-    const isCallerDemo = this.isDemoAccount(doctorId);
+    const isCallerDemo = this.isDemoAccount(effectiveDoctorId) || this.isDemoAccount(doctorId);
     if (isCallerDemo) {
       // Demo accounts see seeded/demo patients, never private real-doctor patients
       return !patient.createdById || this.isDemoAccount(patient.createdById);
@@ -726,6 +744,9 @@ class DatabaseService {
     registrationNumber?: string;
     clinicName?: string;
     phone?: string;
+    role?: 'doctor' | 'receptionist';
+    assignedByDoctorId?: string;
+    assignedByEmail?: string;
   }): Doctor {
     const cleanEmail = params.email.trim().toLowerCase();
     const existing = this.findDoctorByEmail(cleanEmail);
@@ -737,6 +758,9 @@ class DatabaseService {
       if (params.clinicName) existing.clinicName = params.clinicName;
       if (params.registrationNumber) existing.registrationNumber = params.registrationNumber;
       if (params.phone) existing.phone = params.phone;
+      if (params.role) existing.role = params.role;
+      if (params.assignedByDoctorId) existing.assignedByDoctorId = params.assignedByDoctorId;
+      if (params.assignedByEmail) existing.assignedByEmail = params.assignedByEmail;
       this.persist();
       return existing;
     }
@@ -746,11 +770,14 @@ class DatabaseService {
       id,
       name: params.name,
       email: cleanEmail,
-      speciality: params.speciality || 'General Practitioner',
-      registrationNumber: params.registrationNumber || `REG-${Math.floor(100000 + Math.random() * 900000)}`,
+      speciality: params.speciality || (params.role === 'receptionist' ? 'Front Desk & Patient Access' : 'General Practitioner'),
+      registrationNumber: params.registrationNumber || (params.role === 'receptionist' ? `REC-${Math.floor(1000 + Math.random() * 9000)}` : `REG-${Math.floor(100000 + Math.random() * 900000)}`),
       clinicName: params.clinicName || 'Clinical OS Medical Practice',
       phone: params.phone || '',
-      defaultConsultationFee: 500,
+      defaultConsultationFee: params.role === 'receptionist' ? 0 : 500,
+      role: params.role || 'doctor',
+      assignedByDoctorId: params.assignedByDoctorId,
+      assignedByEmail: params.assignedByEmail,
       createdAt: new Date().toISOString()
     };
 
@@ -779,6 +806,114 @@ class DatabaseService {
     Object.assign(doc, updates);
     this.persist();
     return doc;
+  }
+
+  // --- Staff & Email Role Assignment Methods (Doctor assigns Email as Doctor or Receptionist) ---
+  public getClinicStaffAccounts(doctorId: string): Doctor[] {
+    const currentDoc = this.findDoctorById(doctorId);
+    const effectiveOwnerId = this.resolveEffectiveClinicDoctorId(doctorId) || doctorId;
+    const ownerDoc = this.findDoctorById(effectiveOwnerId) || currentDoc;
+
+    return this.data.doctors.filter(d => {
+      if (d.id === doctorId || d.id === effectiveOwnerId) return true;
+      if (d.assignedByDoctorId === effectiveOwnerId || d.assignedByDoctorId === doctorId) return true;
+      if (ownerDoc && d.assignedByEmail && d.assignedByEmail.toLowerCase() === ownerDoc.email.toLowerCase()) return true;
+      if (this.isDemoAccount(effectiveOwnerId) && d.email.toLowerCase() === 'receptionist@clinicalos.med') return true;
+      return false;
+    });
+  }
+
+  public assignEmailRole(params: {
+    email: string;
+    name?: string;
+    role: 'doctor' | 'receptionist';
+    assignedByDoctor: Doctor;
+  }): Doctor {
+    const cleanEmail = params.email.trim().toLowerCase();
+    const existing = this.findDoctorByEmail(cleanEmail);
+    const emailPrefix = cleanEmail.split('@')[0].replace(/[._-]+/g, ' ');
+    const defaultFormattedName = emailPrefix
+      .split(' ')
+      .filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+
+    const resolvedName =
+      params.name?.trim() ||
+      (existing?.name
+        ? params.role === 'receptionist'
+          ? existing.name.replace(/^Dr\.\s*/i, '')
+          : existing.name.startsWith('Dr.')
+          ? existing.name
+          : `Dr. ${existing.name}`
+        : params.role === 'receptionist'
+        ? `${defaultFormattedName} (Receptionist)`
+        : `Dr. ${defaultFormattedName}`);
+
+    if (existing) {
+      existing.role = params.role;
+      existing.name = resolvedName;
+      existing.clinicName = params.assignedByDoctor.clinicName || existing.clinicName;
+      existing.speciality =
+        params.role === 'receptionist'
+          ? 'Front Desk & Patient Access'
+          : existing.speciality === 'Front Desk & Patient Access'
+          ? 'Dermatologist & Cosmetologist'
+          : existing.speciality;
+      if (existing.id !== params.assignedByDoctor.id) {
+        existing.assignedByDoctorId = params.assignedByDoctor.id;
+        existing.assignedByEmail = params.assignedByDoctor.email.toLowerCase();
+      }
+      this.persist();
+
+      this.logAudit({
+        actorId: params.assignedByDoctor.id,
+        actorName: params.assignedByDoctor.name,
+        action: `assigned_role_${params.role}`,
+        resourceType: 'staff_role',
+        resourceId: existing.id,
+        metadata: { email: cleanEmail, role: params.role }
+      });
+
+      return existing;
+    }
+
+    const created = this.createDoctor({
+      name: resolvedName,
+      email: cleanEmail,
+      password: 'Demo@1234',
+      role: params.role,
+      clinicName: params.assignedByDoctor.clinicName || 'Cliniq Dermatology Center',
+      speciality:
+        params.role === 'receptionist'
+          ? 'Front Desk & Patient Access'
+          : 'Dermatologist & Cosmetologist',
+      assignedByDoctorId: params.assignedByDoctor.id,
+      assignedByEmail: params.assignedByDoctor.email.toLowerCase()
+    });
+
+    this.logAudit({
+      actorId: params.assignedByDoctor.id,
+      actorName: params.assignedByDoctor.name,
+      action: `assigned_role_${params.role}`,
+      resourceType: 'staff_role',
+      resourceId: created.id,
+      metadata: { email: cleanEmail, role: params.role }
+    });
+
+    return created;
+  }
+
+  public removeStaffAccount(targetId: string, actorId: string): boolean {
+    if (targetId === actorId || DatabaseService.DEMO_DOCTOR_IDS.has(targetId)) {
+      return false;
+    }
+    const idx = this.data.doctors.findIndex(d => d.id === targetId);
+    if (idx < 0) return false;
+    this.data.doctors.splice(idx, 1);
+    delete this.data.doctorPasswords[targetId];
+    this.persist();
+    return true;
   }
 
   // --- Patients methods ---
@@ -832,7 +967,10 @@ class DatabaseService {
       `pat-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
     const patientCode = patientData.patientCode || this.generatePatientCode();
     const now = new Date().toISOString();
+    const effectiveOwnerId = this.resolveEffectiveClinicDoctorId(actor.id) || actor.id;
+    const effectiveOwnerDoc = this.findDoctorById(effectiveOwnerId);
     const actorEmail =
+      effectiveOwnerDoc?.email ||
       actor.email ||
       patientData.createdByEmail ||
       this.findDoctorById(actor.id)?.email ||
@@ -842,7 +980,7 @@ class DatabaseService {
     const newPatient: Patient = {
       ...patientData,
       mobile: String(patientData.mobile || '').replace(/\D/g, '').slice(-10),
-      createdById: patientData.createdById || actor.id,
+      createdById: patientData.createdById || effectiveOwnerId,
       createdByEmail: actorEmail ? actorEmail.toLowerCase().trim() : undefined,
       id,
       patientCode,

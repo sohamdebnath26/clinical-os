@@ -25,7 +25,8 @@ import { MobileImageUploadView } from './components/MobileImageUploadView';
 import { MobileWalkInView } from './components/MobileWalkInView';
 
 function MainApp() {
-  const { doctor, isLoading } = useAuth();
+  const { doctor, switchRoleSession } = useAuth();
+  const isReceptionist = doctor?.role === 'receptionist';
 
   // Navigation & Active views
   const [currentRoute, setCurrentRoute] = useState<NavRoute>('dashboard');
@@ -69,6 +70,19 @@ function MainApp() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Redirect receptionists away from doctor-only routes
+  useEffect(() => {
+    if (
+      isReceptionist &&
+      (currentRoute === 'prescriptions' ||
+        currentRoute === 'revenue' ||
+        currentRoute === 'image-analyzer' ||
+        currentRoute === 'ai-assistant')
+    ) {
+      setCurrentRoute('dashboard');
+    }
+  }, [isReceptionist, currentRoute]);
+
   // Modals state
   const [showWalkInModal, setShowWalkInModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
@@ -100,6 +114,19 @@ function MainApp() {
 
   // Navigation helper
   const handleNavigate = (route: NavRoute) => {
+    if (
+      isReceptionist &&
+      (route === 'prescriptions' ||
+        route === 'revenue' ||
+        route === 'image-analyzer' ||
+        route === 'ai-assistant')
+    ) {
+      setCurrentRoute('dashboard');
+      setActivePatientId(null);
+      setPatientProfileInitialTab(undefined);
+      setMobileMenuOpen(false);
+      return;
+    }
     setCurrentRoute(route);
     setActivePatientId(null);
     setPatientProfileInitialTab(undefined);
@@ -112,8 +139,12 @@ function MainApp() {
     setMobileMenuOpen(false);
   };
 
-  // Start new consultation for a patient directly
+  // Start new consultation for a patient directly (Receptionists are routed to the patient's chart)
   const handleStartConsultationForPatient = async (patient: Patient) => {
+    if (isReceptionist) {
+      handleSelectPatient(patient.id);
+      return;
+    }
     try {
       const res = await api.consultations.create({
         patientId: patient.id
@@ -138,6 +169,7 @@ function MainApp() {
 
   // Helper to open AI Assistant, seamlessly preserving active patient context
   const handleOpenAIAssistant = (patientOverride?: Patient | null, prompt?: string) => {
+    if (isReceptionist) return;
     if (patientOverride) {
       setActivePatientForAI(patientOverride);
       setAiPrompt(prompt);
@@ -207,6 +239,40 @@ function MainApp() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        {/* Front-Desk Receptionist Mode Banner */}
+        {isReceptionist && (
+          <div className="shrink-0 bg-emerald-900 text-emerald-50 border-b border-emerald-700/60 px-4 sm:px-8 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-20">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/25 border border-emerald-400/30 text-emerald-200 font-bold uppercase tracking-wider text-[10px] shrink-0">
+                Receptionist Point of View
+              </span>
+              <span className="truncate text-emerald-100">
+                Signed in as <strong>{doctor.name}</strong> ({doctor.email}) · Front-desk check-in, appointments, patient directory &amp; WhatsApp inbox active. Clinical prescribing &amp; revenue restricted to Doctors.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleNavigate('settings')}
+                className="px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-emerald-100 font-semibold transition-colors cursor-pointer"
+              >
+                Role Settings
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  switchRoleSession({ role: 'doctor' }).then(() =>
+                    showToast('Switched to Doctor Point of View')
+                  )
+                }
+                className="px-3 py-1 rounded-lg bg-white text-emerald-950 hover:bg-emerald-50 font-bold transition-colors cursor-pointer"
+              >
+                Switch to Doctor View →
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Top Navbar (shown on inner views; Dashboard has its own integrated header) */}
         {(activePatientId || currentRoute !== 'dashboard') && (
           <div className="shrink-0 z-20">
@@ -242,16 +308,27 @@ function MainApp() {
                     setPatientProfileInitialTab(undefined);
                   }}
                   onStartConsultation={handleStartConsultationForPatient}
-                  onOpenAIWithPrompt={(prompt) => {
-                    api.patients.get(activePatientId).then(res => {
-                      handleOpenAIAssistant(res.patient, prompt);
-                    }).catch(() => {
-                      handleOpenAIAssistant(null, prompt);
-                    });
-                  }}
-                  onNavigateToImageAnalyzer={() => {
-                    setCurrentRoute('image-analyzer');
-                  }}
+                  onOpenAIWithPrompt={
+                    isReceptionist
+                      ? undefined
+                      : (prompt) => {
+                          api.patients
+                            .get(activePatientId)
+                            .then(res => {
+                              handleOpenAIAssistant(res.patient, prompt);
+                            })
+                            .catch(() => {
+                              handleOpenAIAssistant(null, prompt);
+                            });
+                        }
+                  }
+                  onNavigateToImageAnalyzer={
+                    isReceptionist
+                      ? undefined
+                      : () => {
+                          setCurrentRoute('image-analyzer');
+                        }
+                  }
                 />
               ) : currentRoute === 'dashboard' ? (
                 <DashboardView
@@ -268,7 +345,9 @@ function MainApp() {
               ) : currentRoute === 'appointments' ? (
                 <AppointmentsView
                   onSelectPatient={handleSelectPatient}
-                  onStartConsultationForPatient={handleStartConsultationForPatient}
+                  onStartConsultationForPatient={
+                    isReceptionist ? undefined : handleStartConsultationForPatient
+                  }
                 />
               ) : currentRoute === 'patients' ? (
                 <PatientsListView
@@ -276,13 +355,13 @@ function MainApp() {
                   onOpenWalkIn={() => setShowWalkInModal(true)}
                   onStartConsultationForPatient={handleStartConsultationForPatient}
                 />
-              ) : currentRoute === 'prescriptions' ? (
+              ) : currentRoute === 'prescriptions' && !isReceptionist ? (
                 <PrescriptionsView onSelectPatient={handleSelectPatient} />
               ) : currentRoute === 'messages' ? (
                 <MessagesView />
-              ) : currentRoute === 'revenue' ? (
+              ) : currentRoute === 'revenue' && !isReceptionist ? (
                 <RevenueView onSelectPatient={handleSelectPatient} />
-              ) : currentRoute === 'image-analyzer' ? (
+              ) : currentRoute === 'image-analyzer' && !isReceptionist ? (
                 <ImageAnalyzerView
                   initialPatientId={activePatientId}
                   onSelectPatient={handleSelectPatient}
@@ -303,19 +382,23 @@ function MainApp() {
           onClose={() => setShowWalkInModal(false)}
           onPatientCreated={(patient) => {
             setShowWalkInModal(false);
-            showToast(`Patient ${patient.fullName} saved to your account`);
+            showToast(`Patient ${patient.fullName} checked in and saved to clinic queue`);
             handleSelectPatient(patient.id);
           }}
-          onStartConsultation={(consultation, patient) => {
-            setShowWalkInModal(false);
-            showToast('Patient added to walk-in queue');
-            setActiveConsultation({ consultation, patient });
-          }}
+          onStartConsultation={
+            isReceptionist
+              ? undefined
+              : (consultation, patient) => {
+                  setShowWalkInModal(false);
+                  showToast('Patient added to walk-in queue');
+                  setActiveConsultation({ consultation, patient });
+                }
+          }
         />
       )}
 
       {/* 2. Consultation Workspace Modal */}
-      {activeConsultation && (
+      {activeConsultation && !isReceptionist && (
         <ConsultationModal
           consultation={activeConsultation.consultation}
           patient={activeConsultation.patient}
@@ -326,7 +409,7 @@ function MainApp() {
       )}
 
       {/* 4. AI Clinical Assistant Modal */}
-      {showAIModal && (
+      {showAIModal && !isReceptionist && (
         <AIModal
           onClose={() => {
             setShowAIModal(false);

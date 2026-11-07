@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Patient, Gender } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientModal } from './AddPatientModal';
 import { api } from '../lib/api';
@@ -28,6 +29,8 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
   onStartConsultationForPatient
 }) => {
   const { t } = useLanguage();
+  const { doctor } = useAuth();
+  const isReceptionist = doctor?.role === 'receptionist';
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [genderFilter, setGenderFilter] = useState<string>('all');
@@ -217,17 +220,31 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onStartConsultationForPatient(p);
-                          }}
-                          className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
-                        >
-                          <Stethoscope className="w-3.5 h-3.5" />
-                          Consult
-                        </button>
+                        {isReceptionist ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectPatient(p.id);
+                            }}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                          >
+                            <UserCheck className="w-3.5 h-3.5 text-teal-700" />
+                            View Chart
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onStartConsultationForPatient(p);
+                            }}
+                            className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                          >
+                            <Stethoscope className="w-3.5 h-3.5" />
+                            Consult
+                          </button>
+                        )}
                         <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-600" />
                       </div>
                     </td>

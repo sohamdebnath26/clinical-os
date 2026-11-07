@@ -78,7 +78,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ? [{ id: 'prescriptions' as NavRoute, label: t('prescriptions'), shortLabel: 'Rx Notes', icon: FileText }]
       : []),
     { id: 'messages', label: 'Messages', shortLabel: 'Inbox', icon: MessageSquare },
-    { id: 'revenue', label: 'Revenue', shortLabel: 'Billing', icon: IndianRupee }
+    ...(!isReceptionist
+      ? [{ id: 'revenue' as NavRoute, label: 'Revenue', shortLabel: 'Billing', icon: IndianRupee }]
+      : [])
   ];
 
   const intelligenceNavItems = isReceptionist
@@ -135,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {t('appName')}
                 </span>
                 <span className="text-[10px] text-[#8abcb5] block truncate">
-                  Clinic EMR
+                  {isReceptionist ? 'Front-Desk Mode' : 'Clinic EMR'}
                 </span>
               </div>
             )}

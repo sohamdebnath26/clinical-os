@@ -3,14 +3,32 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { LanguageSelector } from './LanguageSelector';
-import { AuditLog } from '../types';
+import { AuditLog, Doctor } from '../types';
 import { api } from '../lib/api';
-import { Settings, Shield, User, Building, Save, CheckCircle2, History, Globe, Moon, Sun } from 'lucide-react';
+import {
+  Settings,
+  Shield,
+  User,
+  Building,
+  Save,
+  CheckCircle2,
+  History,
+  Globe,
+  Moon,
+  Sun,
+  UserCheck,
+  UserCog,
+  Mail,
+  Trash2,
+  ArrowRightLeft
+} from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
-  const { doctor, updateDoctor } = useAuth();
+  const { doctor, updateDoctor, switchRoleSession } = useAuth();
   const { t } = useLanguage();
   const { theme, setTheme } = useTheme();
+  const isReceptionist = doctor?.role === 'receptionist';
+
   const [name, setName] = useState(doctor?.name || '');
   const [speciality, setSpeciality] = useState(doctor?.speciality || '');
   const [clinicName, setClinicName] = useState(doctor?.clinicName || '');
@@ -18,16 +36,129 @@ export const SettingsView: React.FC = () => {
   const [phone, setPhone] = useState((doctor?.phone || '').replace(/\D/g, '').slice(-10));
   const [defaultFee, setDefaultFee] = useState(doctor?.defaultConsultationFee || 500);
 
+  // Staff & Email Role Assignment State
+  const [staffList, setStaffList] = useState<Doctor[]>([]);
+  const [assignEmail, setAssignEmail] = useState('');
+  const [assignName, setAssignName] = useState('');
+  const [assignRole, setAssignRole] = useState<'doctor' | 'receptionist'>('receptionist');
+  const [isAssigningRole, setIsAssigningRole] = useState(false);
+  const [isSwitchingView, setIsSwitchingView] = useState(false);
+
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    api.audit.list()
+  const loadStaffAndLogs = () => {
+    api.staff
+      .list()
+      .then(res => {
+        if (Array.isArray(res.staff)) setStaffList(res.staff);
+      })
+      .catch(() => {});
+
+    api.audit
+      .list()
       .then(res => setAuditLogs(res.logs))
       .catch(() => {});
-  }, []);
+  };
+
+  useEffect(() => {
+    loadStaffAndLogs();
+  }, [doctor?.id]);
+
+  useEffect(() => {
+    setName(doctor?.name || '');
+    setSpeciality(doctor?.speciality || '');
+    setClinicName(doctor?.clinicName || '');
+    setRegistrationNumber(doctor?.registrationNumber || '');
+    setPhone((doctor?.phone || '').replace(/\D/g, '').slice(-10));
+    setDefaultFee(doctor?.defaultConsultationFee || 500);
+  }, [doctor]);
+
+  const handleAssignEmailRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = assignEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMsg('Please enter a valid email address to assign a role.');
+      return;
+    }
+    setIsAssigningRole(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await api.staff.assign({
+        email: cleanEmail,
+        name: assignName.trim() || undefined,
+        role: assignRole
+      });
+      if (Array.isArray(res.staff)) {
+        setStaffList(res.staff);
+      }
+      setAssignEmail('');
+      setAssignName('');
+      setSuccessMsg(
+        `Assigned ${cleanEmail} as ${assignRole === 'receptionist' ? 'Front-Desk Receptionist' : 'Doctor'} for ${doctor?.clinicName || 'your clinic'}.`
+      );
+      setTimeout(() => setSuccessMsg(null), 4000);
+      loadStaffAndLogs();
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to assign role to email.');
+    } finally {
+      setIsAssigningRole(false);
+    }
+  };
+
+  const handleToggleAccountRole = async (staffMember: Doctor) => {
+    const nextRole: 'doctor' | 'receptionist' =
+      staffMember.role === 'receptionist' ? 'doctor' : 'receptionist';
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await api.staff.updateRole(staffMember.id, nextRole);
+      if (Array.isArray(res.staff)) {
+        setStaffList(res.staff);
+      }
+      setSuccessMsg(
+        `Updated ${staffMember.email} role to ${nextRole === 'receptionist' ? 'Receptionist' : 'Doctor'}.`
+      );
+      setTimeout(() => setSuccessMsg(null), 3500);
+      loadStaffAndLogs();
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to update account role.');
+    }
+  };
+
+  const handleRemoveStaffAccount = async (staffMember: Doctor) => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await api.staff.remove(staffMember.id);
+      if (Array.isArray(res.staff)) {
+        setStaffList(res.staff);
+      }
+      setSuccessMsg(`Removed ${staffMember.email} from clinic team.`);
+      setTimeout(() => setSuccessMsg(null), 3500);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Cannot remove primary or system demo account.');
+    }
+  };
+
+  const handleSwitchToAccount = async (params: { targetId?: string; targetRole?: 'doctor' | 'receptionist' }) => {
+    setIsSwitchingView(true);
+    setErrorMsg(null);
+    try {
+      const switched = await switchRoleSession(params);
+      setSuccessMsg(
+        `Switched active view to ${switched.name} (${switched.role === 'receptionist' ? 'Receptionist View' : 'Doctor View'}).`
+      );
+      setTimeout(() => setSuccessMsg(null), 3500);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to switch view.');
+    } finally {
+      setIsSwitchingView(false);
+    }
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,16 +190,35 @@ export const SettingsView: React.FC = () => {
 
   return (
     <div className="space-y-8 max-w-4xl animate-in fade-in duration-150">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{t('practiceSettings')}</h1>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Configure clinic branding, doctor credentials, interface language, consultation billing defaults, and compliance audit trail.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{t('practiceSettings')}</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Configure clinic team roles (Doctor vs. Receptionist), display theme, language preferences, and doctor credentials.
+          </p>
+        </div>
+
+        {/* 1-Click POV Switcher between Doctor View and Receptionist View */}
+        <button
+          type="button"
+          disabled={isSwitchingView}
+          onClick={() =>
+            handleSwitchToAccount({
+              targetRole: isReceptionist ? 'doctor' : 'receptionist'
+            })
+          }
+          className="px-4 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer shrink-0 shadow-xs disabled:opacity-50"
+        >
+          <ArrowRightLeft className="w-3.5 h-3.5 text-teal-300" />
+          <span>
+            {isReceptionist ? 'Switch Back to Doctor View' : 'Test Receptionist Point of View'}
+          </span>
+        </button>
       </div>
 
       {successMsg && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{successMsg}</span>
         </div>
       )}
@@ -78,6 +228,206 @@ export const SettingsView: React.FC = () => {
           <span>{errorMsg}</span>
         </div>
       )}
+
+      {/* Clinic Team & Email Role Assignment (Doctor / Receptionist) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-teal-700" />
+              Clinic Team &amp; Email Role Assignment (Doctor / Receptionist)
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              {isReceptionist
+                ? `You are currently signed in with Front-Desk Receptionist permissions (${doctor?.email}). Only Doctors can assign or modify email roles.`
+                : 'Assign any email address as a Doctor (full clinical, Rx, AI & revenue access) or as a Receptionist (front-desk walk-in, queue, appointments & patient registration only).'}
+            </p>
+          </div>
+          <span className="text-[11px] font-semibold text-teal-800 shrink-0">
+            Active Role: {isReceptionist ? 'Receptionist' : 'Doctor (Admin)'}
+          </span>
+        </div>
+
+        {/* Doctor-Only Form to Assign an Email Address as Doctor or Receptionist */}
+        {!isReceptionist ? (
+          <form onSubmit={handleAssignEmailRole} className="bg-slate-50 p-4 rounded-xl border border-slate-200/90 space-y-3 text-xs">
+            <div className="font-bold text-slate-800">
+              Assign Role to an Email Address
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+              <div className="sm:col-span-5">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Email Address *
+                </label>
+                <div className="relative">
+                  <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. frontdesk@clinic.com or doctor@gmail.com"
+                    value={assignEmail}
+                    onChange={e => setAssignEmail(e.target.value)}
+                    className="w-full text-xs pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="sm:col-span-3">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Full Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder={assignRole === 'receptionist' ? 'e.g. Priya Sharma' : 'e.g. Dr. Rohan'}
+                  value={assignName}
+                  onChange={e => setAssignName(e.target.value)}
+                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-4">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Assigned Role *
+                </label>
+                <select
+                  value={assignRole}
+                  onChange={e => setAssignRole(e.target.value as 'doctor' | 'receptionist')}
+                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none font-semibold"
+                >
+                  <option value="receptionist">Receptionist (Front-Desk &amp; Queue)</option>
+                  <option value="doctor">Doctor (Full Clinical &amp; Admin)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+              <span className="text-[11px] text-slate-500">
+                When this user signs in with their email on the login screen, Clinical OS automatically loads their assigned role and links them to <strong>{doctor?.clinicName || 'your clinic'}</strong>.
+              </span>
+              <button
+                type="submit"
+                disabled={isAssigningRole}
+                className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {isAssigningRole
+                  ? 'Assigning...'
+                  : `Assign as ${assignRole === 'receptionist' ? 'Receptionist' : 'Doctor'}`}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="font-bold">Receptionist Access Mode Active</div>
+              <p className="text-[11px] mt-0.5">
+                You have access to Walk-In Check-In, Patient Registration, Appointments, and Front-Desk Inbox. Role assignment and clinical prescriptions are reserved for Doctors.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleSwitchToAccount({ targetRole: 'doctor' })}
+              className="px-3.5 py-2 bg-[#0d3f3b] text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer"
+            >
+              Switch to Doctor Account
+            </button>
+          </div>
+        )}
+
+        {/* Assigned Clinic Team Accounts Table */}
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            <span>Assigned Clinic Emails &amp; Roles ({staffList.length})</span>
+            <span>Role Controls &amp; Live POV Test</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {staffList.map(member => {
+              const memberIsRec = member.role === 'receptionist';
+              const isCurrentUser = member.id === doctor?.id;
+              return (
+                <div
+                  key={member.id}
+                  className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:bg-slate-50/70 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold ${
+                        memberIsRec
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-teal-100 text-teal-900'
+                      }`}
+                    >
+                      {memberIsRec ? (
+                        <UserCog className="w-4 h-4" />
+                      ) : (
+                        <UserCheck className="w-4 h-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-900 truncate">{member.name}</span>
+                        <span className="text-slate-400">·</span>
+                        <span
+                          className={`font-semibold ${
+                            memberIsRec ? 'text-emerald-700' : 'text-teal-800'
+                          }`}
+                        >
+                          {memberIsRec ? 'Receptionist' : 'Doctor'}
+                        </span>
+                        {isCurrentUser && (
+                          <span className="text-[10.5px] font-semibold text-slate-500">
+                            (Active Session)
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-mono truncate mt-0.5">
+                        {member.email}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    {!isReceptionist && !isCurrentUser && (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleAccountRole(member)}
+                        className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
+                        title="Change assigned role for this email address"
+                      >
+                        Set as {memberIsRec ? 'Doctor' : 'Receptionist'}
+                      </button>
+                    )}
+
+                    {!isCurrentUser && (
+                      <button
+                        type="button"
+                        disabled={isSwitchingView}
+                        onClick={() => handleSwitchToAccount({ targetId: member.id })}
+                        className="px-3 py-1.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        Switch to {memberIsRec ? 'Receptionist' : 'Doctor'} View
+                      </button>
+                    )}
+
+                    {!isReceptionist &&
+                      !isCurrentUser &&
+                      member.email !== 'demo@clinicalos.med' &&
+                      member.email !== 'receptionist@clinicalos.med' && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStaffAccount(member)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                          title="Remove assigned email"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
 
       {/* Appearance & Display Theme (Light / Dark Mode) */}

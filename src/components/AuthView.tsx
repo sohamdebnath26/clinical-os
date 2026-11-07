@@ -138,15 +138,15 @@ export const AuthView: React.FC = () => {
             </div>
           )}
 
-          {/* SECTION 1: Doctor Sign In with Gmail */}
+          {/* SECTION 1: Clinic Sign In with Email / Gmail (Doctor or Assigned Receptionist) */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-cyan-400" />
-                Doctor Sign In (Gmail)
+                Clinic Sign In (Doctor or Receptionist Email)
               </label>
               <span className="text-[11px] font-medium text-cyan-400/90 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-cyan-400" /> Verified Storage
+                <ShieldCheck className="w-3 h-3 text-cyan-400" /> Role-Verified
               </span>
             </div>
 
@@ -177,13 +177,13 @@ export const AuthView: React.FC = () => {
                     type="email"
                     value={gmailEmail}
                     onChange={(e) => setGmailEmail(e.target.value)}
-                    placeholder="doctor@gmail.com"
+                    placeholder="doctor@gmail.com or frontdesk@clinic.com"
                     disabled={isLoading}
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                   />
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1.5 ml-1">
-                  Signs you in to your private doctor account. All patients and prescriptions remain persistent.
+                  Doctors can assign any email as <strong className="text-slate-200">Doctor</strong> or <strong className="text-emerald-300">Receptionist</strong> in Settings. Signing in automatically opens your assigned role &amp; shared clinic workspace.
                 </p>
               </div>
 
@@ -195,7 +195,7 @@ export const AuthView: React.FC = () => {
                 {isLoading && activeAction === 'gmail' ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Signing in to Doctor Account...</span>
+                    <span>Signing in to Clinic Account...</span>
                   </>
                 ) : (
                   <>
@@ -217,7 +217,7 @@ export const AuthView: React.FC = () => {
                         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                       />
                     </svg>
-                    <span>Sign in with Gmail</span>
+                    <span>Sign in with Email / Gmail</span>
                     <ArrowRight className="w-4 h-4 ml-0.5 opacity-80" />
                   </>
                 )}

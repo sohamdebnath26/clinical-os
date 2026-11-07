@@ -13,6 +13,8 @@ export interface Doctor {
   organizationName?: string;
   organizationDepartment?: string;
   role?: 'doctor' | 'receptionist';
+  assignedByDoctorId?: string;
+  assignedByEmail?: string;
   createdAt: string;
 }
 

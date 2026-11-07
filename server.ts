@@ -467,6 +467,126 @@ app.put('/api/doctor/profile', authMiddleware, (req: AuthenticatedRequest, res) 
 });
 
 // ==========================================
+// CLINIC STAFF & EMAIL ROLE ASSIGNMENT ROUTES
+// ==========================================
+app.get('/api/staff', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (!req.doctor) return res.status(401).json({ error: 'Unauthorized' });
+  const staff = db.getClinicStaffAccounts(req.doctor.id);
+  res.json({ staff });
+});
+
+app.post('/api/staff/assign', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (!req.doctor) return res.status(401).json({ error: 'Unauthorized' });
+  if (req.doctor.role === 'receptionist') {
+    return res.status(403).json({ error: 'Only doctors can assign or modify clinic email roles.' });
+  }
+
+  const { email, name, role } = req.body || {};
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    return res.status(400).json({ error: 'Please provide a valid email address.' });
+  }
+  if (role !== 'doctor' && role !== 'receptionist') {
+    return res.status(400).json({ error: 'Role must be either "doctor" or "receptionist".' });
+  }
+
+  const account = db.assignEmailRole({
+    email: cleanEmail,
+    name: name ? String(name).trim() : undefined,
+    role,
+    assignedByDoctor: req.doctor
+  });
+
+  const staff = db.getClinicStaffAccounts(req.doctor.id);
+  res.json({ account, staff });
+});
+
+app.put('/api/staff/:id/role', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (!req.doctor) return res.status(401).json({ error: 'Unauthorized' });
+  if (req.doctor.role === 'receptionist') {
+    return res.status(403).json({ error: 'Only doctors can change account roles.' });
+  }
+
+  const { role } = req.body || {};
+  if (role !== 'doctor' && role !== 'receptionist') {
+    return res.status(400).json({ error: 'Role must be either "doctor" or "receptionist".' });
+  }
+
+  const target = db.findDoctorById(req.params.id);
+  if (!target) {
+    return res.status(404).json({ error: 'Account not found.' });
+  }
+
+  const updated = db.assignEmailRole({
+    email: target.email,
+    name: target.name,
+    role,
+    assignedByDoctor: req.doctor
+  });
+
+  const staff = db.getClinicStaffAccounts(req.doctor.id);
+  res.json({ account: updated, staff });
+});
+
+app.delete('/api/staff/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (!req.doctor) return res.status(401).json({ error: 'Unauthorized' });
+  if (req.doctor.role === 'receptionist') {
+    return res.status(403).json({ error: 'Only doctors can remove staff accounts.' });
+  }
+
+  const removed = db.removeStaffAccount(req.params.id, req.doctor.id);
+  if (!removed) {
+    return res.status(400).json({ error: 'Cannot remove primary or system demo account.' });
+  }
+  const staff = db.getClinicStaffAccounts(req.doctor.id);
+  res.json({ success: true, staff });
+});
+
+// Switch session between Doctor and Receptionist account for instant POV testing
+app.post('/api/staff/switch-session', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (!req.doctor) return res.status(401).json({ error: 'Unauthorized' });
+  const { targetId, targetRole, role } = req.body || {};
+  const effectiveTargetRole = targetRole || role;
+
+  let targetAccount: ReturnType<typeof db.findDoctorById>;
+  if (targetId) {
+    targetAccount = db.findDoctorById(String(targetId));
+  } else if (effectiveTargetRole === 'receptionist') {
+    const clinicStaff = db.getClinicStaffAccounts(req.doctor.id);
+    targetAccount =
+      clinicStaff.find(s => s.role === 'receptionist') ||
+      db.assignEmailRole({
+        email: `reception.${req.doctor.email.split('@')[0]}@clinicalos.med`,
+        name: `Emily (Front Desk · ${req.doctor.clinicName || 'Clinic'})`,
+        role: 'receptionist',
+        assignedByDoctor: req.doctor
+      });
+  } else if (effectiveTargetRole === 'doctor') {
+    if (req.doctor.assignedByDoctorId) {
+      targetAccount = db.findDoctorById(req.doctor.assignedByDoctorId);
+    }
+    if (!targetAccount) {
+      const clinicStaff = db.getClinicStaffAccounts(req.doctor.id);
+      targetAccount =
+        clinicStaff.find(s => s.role !== 'receptionist') ||
+        db.findDoctorByEmail('demo@clinicalos.med');
+    }
+  }
+
+  if (!targetAccount) {
+    return res.status(404).json({ error: 'Target account not found.' });
+  }
+
+  const token = generateToken(targetAccount);
+  activeSessions.set(token, {
+    doctorId: targetAccount.id,
+    expiresAt: Date.now() + SESSION_TTL_MS
+  });
+
+  res.json({ token, doctor: targetAccount });
+});
+
+// ==========================================
 // PATIENT ROUTES
 // ==========================================
 app.get('/api/patients', authMiddleware, (req: AuthenticatedRequest, res) => {
@@ -928,6 +1048,9 @@ app.delete('/api/reports/:id', authMiddleware, (req: AuthenticatedRequest, res) 
 // CONSULTATION WORKSPACE ROUTES
 // ==========================================
 app.post('/api/consultations', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (req.doctor?.role === 'receptionist') {
+    return res.status(403).json({ error: 'Receptionists cannot start clinical consultations. Please check in the patient for the doctor.' });
+  }
   const { patientId, symptoms, fee } = req.body;
   if (!patientId) {
     return res.status(400).json({ error: 'patientId is required' });
@@ -957,6 +1080,9 @@ app.get('/api/consultations/:id', authMiddleware, (req, res) => {
 
 // Sign & Finish Consultation
 app.put('/api/consultations/:id/sign', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (req.doctor?.role === 'receptionist') {
+    return res.status(403).json({ error: 'Only doctors can sign clinical consultations.' });
+  }
   const doctor = req.doctor!;
   const signed = db.saveAndSignConsultation(req.params.id, req.body, {
     id: doctor.id,
@@ -977,6 +1103,9 @@ app.get('/api/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) =
 });
 
 app.post('/api/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (req.doctor?.role === 'receptionist') {
+    return res.status(403).json({ error: 'Only doctors can issue medical prescriptions.' });
+  }
   const { patientId, medicineName, dosage, frequency, duration, instructions, consultationId } = req.body;
   if (!patientId || !medicineName) {
     return res.status(400).json({ error: 'Patient ID and Medicine Name are required' });

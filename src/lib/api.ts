@@ -287,6 +287,29 @@ export const api = {
       }),
   },
 
+  staff: {
+    list: () => fetchWithAuth<{ staff: Doctor[] }>('/api/staff'),
+    assign: (data: { email: string; name?: string; role: 'doctor' | 'receptionist' }) =>
+      fetchWithAuth<{ account: Doctor; staff: Doctor[] }>('/api/staff/assign', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateRole: (id: string, role: 'doctor' | 'receptionist') =>
+      fetchWithAuth<{ account: Doctor; staff: Doctor[] }>(`/api/staff/${id}/role`, {
+        method: 'PUT',
+        body: JSON.stringify({ role }),
+      }),
+    remove: (id: string) =>
+      fetchWithAuth<{ success: boolean; staff: Doctor[] }>(`/api/staff/${id}`, {
+        method: 'DELETE',
+      }),
+    switchSession: (params: { targetId?: string; targetRole?: 'doctor' | 'receptionist' }) =>
+      fetchWithAuth<{ token: string; doctor: Doctor }>('/api/staff/switch-session', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      }),
+  },
+
   patients: {
     list: async (query?: string) => {
       const res = await fetchWithAuth<{ patients: Patient[] }>(

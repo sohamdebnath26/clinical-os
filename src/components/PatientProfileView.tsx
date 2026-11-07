@@ -75,6 +75,8 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const isReceptionist = doctor?.role === 'receptionist';
+
   const PROFILE_TAB_ORDER: TabType[] = [
     'overview',
     'images',
@@ -82,7 +84,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
     'appointments',
     'timeline',
     'reports',
-    'prescriptions'
+    ...(!isReceptionist ? (['prescriptions'] as TabType[]) : [])
   ];
 
   const PROFILE_TAB_LABELS: Record<TabType, string> = {
@@ -580,14 +582,16 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             <Pencil className="w-3.5 h-3.5 text-slate-500" />
             <span>Edit Profile</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setShowPrintRx(true)}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-500" />
-            <span>Print Rx</span>
-          </button>
+          {!isReceptionist && (
+            <button
+              type="button"
+              onClick={() => setShowPrintRx(true)}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <span>Print Rx</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() =>
@@ -606,14 +610,25 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
             <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
             <span>WhatsApp Summary</span>
           </button>
-          <button
-            type="button"
-            onClick={() => onStartConsultation(patient)}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <Stethoscope className="w-3.5 h-3.5" />
-            <span>New Consultation</span>
-          </button>
+          {isReceptionist ? (
+            <button
+              type="button"
+              onClick={() => setShowScheduleModal(true)}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>+ Schedule Visit</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onStartConsultation(patient)}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Stethoscope className="w-3.5 h-3.5" />
+              <span>New Consultation</span>
+            </button>
+          )}
         </div>
       </div>
 

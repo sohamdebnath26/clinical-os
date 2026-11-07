@@ -493,10 +493,14 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
                       type="button"
                       onClick={() => handleStartVisit(appt)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                      title="Advance to active consultation"
+                      title={
+                        onStartConsultationForPatient
+                          ? 'Advance to active consultation'
+                          : 'Open patient chart'
+                      }
                     >
                       <Stethoscope className="w-3.5 h-3.5 text-teal-200" />
-                      <span>Start Visit</span>
+                      <span>{onStartConsultationForPatient ? 'Start Visit' : 'Open Chart'}</span>
                     </button>
                   )}
                   {appt.status === 'in_progress' && (

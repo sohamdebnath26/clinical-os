@@ -568,7 +568,9 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                 Walk-in patient
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                Find or add them, then go straight into the consultation.
+                {onStartConsultation
+                  ? 'Find or add them, then go straight into the consultation.'
+                  : 'Find or register the walk-in patient and check them into the front-desk queue.'}
               </p>
             </div>
             <button
@@ -686,7 +688,7 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                   className="w-full py-2.5 px-4 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-2"
                 >
                   <UserPlus className="w-4 h-4" />
-                  Register &amp; start consultation
+                  {onStartConsultation ? 'Register & start consultation' : 'Register & check-in patient'}
                 </button>
               </div>
             </div>
