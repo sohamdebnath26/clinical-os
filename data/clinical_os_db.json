@@ -522,6 +522,15 @@
   ],
   "auditLogs": [
     {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mw7xi2q8-qcr0",
+      "timestamp": "2026-11-08T14:29:38.768Z"
+    },
+    {
       "actorId": "doc-org-001",
       "actorName": "Dr. Sarah Chen, MD",
       "action": "doctor_sso_login",
@@ -1242,7 +1251,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-11-08T01:02:36.910Z"
+    "updatedAt": "2026-11-08T14:37:15.765Z"
   },
   "appointments": [
     {
@@ -1457,8 +1466,8 @@
     "aiScansRemaining": 10,
     "aiScansTotalQuota": 10,
     "aiScansUsed": 0,
-    "activeProvider": "openrouter",
-    "activeModel": "google/gemini-2.5-pro",
+    "activeProvider": "gemini",
+    "activeModel": "gemini-2.5-flash",
     "transactions": [
       {
         "id": "tx-init-mvjdu9mv",

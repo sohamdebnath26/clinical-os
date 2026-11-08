@@ -31,10 +31,11 @@ export const PatientsListView: React.FC<PatientsListViewProps> = ({
   const { t } = useLanguage();
   const { doctor } = useAuth();
   const isReceptionist = doctor?.role === 'receptionist';
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const cachedPatients = api.patients.getCachedList();
+  const [patients, setPatients] = useState<Patient[]>(() => cachedPatients);
   const [searchQuery, setSearchQuery] = useState('');
   const [genderFilter, setGenderFilter] = useState<string>('all');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => cachedPatients.length === 0);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
 

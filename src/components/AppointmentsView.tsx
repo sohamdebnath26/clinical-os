@@ -34,8 +34,9 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
   onStartConsultationForPatient
 }) => {
   const { t } = useLanguage();
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedAppts = api.appointments.getCachedList();
+  const [appointments, setAppointments] = useState<Appointment[]>(() => cachedAppts);
+  const [isLoading, setIsLoading] = useState(() => cachedAppts.length === 0);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [selectedDate, setSelectedDate] = useState<string>('');

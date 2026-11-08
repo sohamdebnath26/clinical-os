@@ -76,11 +76,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const { doctor, switchRoleSession } = useAuth();
   const isReceptionist = doctor?.role === 'receptionist';
   const { language } = useLanguage();
-  const [stats, setStats] = useState<ClinicStats | null>(null);
-  const [revenue, setRevenue] = useState<PracticeRevenueAnalytics | null>(null);
-  const [recentVisits, setRecentVisits] = useState<Consultation[]>([]);
-  const [recentPatients, setRecentPatients] = useState<Patient[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const cachedInitial = api.dashboard.getCachedStats();
+  const [stats, setStats] = useState<ClinicStats | null>(() => cachedInitial?.stats || null);
+  const [revenue, setRevenue] = useState<PracticeRevenueAnalytics | null>(() => cachedInitial?.revenue || null);
+  const [recentVisits, setRecentVisits] = useState<Consultation[]>(() => cachedInitial?.recentVisits || []);
+  const [recentPatients, setRecentPatients] = useState<Patient[]>(() => cachedInitial?.recentPatients || []);
+  const [appointments, setAppointments] = useState<Appointment[]>(() => api.appointments.getCachedList());
 
   // Quick action modals
   const [showAddPatientModal, setShowAddPatientModal] = useState(false);

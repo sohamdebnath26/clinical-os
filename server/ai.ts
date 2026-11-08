@@ -63,22 +63,29 @@ function getAIClient(): GoogleGenAI | null {
   return genAI;
 }
 
-async function generateWithPollinationsGPT(
+async function generateWithGroq(
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
-  temperature = 0.4,
-  timeoutMs = 2400
+  temperature = 0.35,
+  jsonMode = false,
+  timeoutMs = 4000
 ): Promise<string | null> {
+  const groqKey = (process.env.GROQ_API_KEY || '').trim();
+  if (!groqKey || groqKey === 'MY_GROQ_API_KEY') {
+    return null;
+  }
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const response = await fetch('https://text.pollinations.ai/openai', {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${groqKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'openai',
+        model: 'llama-3.3-70b-versatile',
         temperature,
+        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
         messages
       }),
       signal: controller.signal
@@ -90,9 +97,12 @@ async function generateWithPollinationsGPT(
       };
       const text = data.choices?.[0]?.message?.content?.trim();
       if (text) return text;
+    } else {
+      const errText = await response.text();
+      console.warn(`[Groq] API returned ${response.status}: ${errText.substring(0, 120)}`);
     }
   } catch (err) {
-    console.warn('Pollinations GPT fast timeout/fallback:', err instanceof Error ? err.message : err);
+    console.warn('[Groq] Fast completion error/fallback:', err instanceof Error ? err.message : err);
   }
   return null;
 }
@@ -101,10 +111,22 @@ async function generateWithGemini(
   ai: GoogleGenAI | null,
   prompt: string,
   systemInstruction?: string,
-  timeoutMs = 3200
+  timeoutMs = 3500
 ): Promise<string | null> {
+  // If Groq is available, try it first for ultra-low latency text inference (<250ms)
+  const groqMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
+  if (systemInstruction) {
+    groqMessages.push({ role: 'system', content: systemInstruction });
+  }
+  groqMessages.push({ role: 'user', content: prompt });
+  const groqText = await generateWithGroq(groqMessages, 0.35, false, timeoutMs);
+  if (groqText) {
+    return groqText;
+  }
+
+  // Fallback to Gemini with production model chain
   if (ai && Date.now() > geminiCooldownUntil) {
-    const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
     for (const model of models) {
       try {
         const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs));

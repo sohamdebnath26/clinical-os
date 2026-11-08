@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
@@ -11,6 +12,15 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const isProduction = process.env.NODE_ENV === 'production';
+
+// HTTP response compression for JSON payloads & static assets (reduces transfer latency by ~75%)
+app.use(compression({
+  threshold: 1024,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  }
+}));
 
 // Increase body parser limits for clinical images
 app.use(express.json({ limit: '15mb' }));
@@ -3796,8 +3806,8 @@ async function startServer() {
     // Render automatically sets RENDER_EXTERNAL_URL (e.g., https://clinical-os.onrender.com)
     const externalUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || '').replace(/\/+$/, '');
     if (isProduction && externalUrl && externalUrl.startsWith('http')) {
-      const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000; // Every 10 minutes (before Render's 15-min idle timeout)
-      setInterval(() => {
+      const KEEP_ALIVE_INTERVAL_MS = 8 * 60 * 1000; // Every 8 minutes (safely under Render's 15-min idle timeout)
+      const pingHealth = () => {
         fetch(`${externalUrl}/api/health`)
           .then(res => {
             if (!res.ok) {
@@ -3807,8 +3817,11 @@ async function startServer() {
           .catch(err => {
             console.warn('[Keep-Alive] Ping error:', err instanceof Error ? err.message : err);
           });
-      }, KEEP_ALIVE_INTERVAL_MS);
-      console.log(`[Keep-Alive] Render cold-start prevention active -> pinging ${externalUrl}/api/health every 10m`);
+      };
+      // Initial prime ping 15s after boot
+      setTimeout(pingHealth, 15000);
+      setInterval(pingHealth, KEEP_ALIVE_INTERVAL_MS);
+      console.log(`[Keep-Alive] Render cold-start prevention active -> pinging ${externalUrl}/api/health every 8m`);
     }
   });
 }

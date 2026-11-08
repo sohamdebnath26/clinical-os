@@ -176,7 +176,62 @@ export const patientVaultStorage = {
   }
 };
 
-async function fetchWithAuth<T>(url: string, options: RequestInit = {}, isRetry = false): Promise<T> {
+// Fast In-Memory + SessionStorage SWR Cache Layer (<1ms instant retrieval)
+const MEMORY_CACHE = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes sliding freshness
+
+export const fastCache = {
+  get: <T>(key: string): T | null => {
+    // 1. In-memory check
+    const mem = MEMORY_CACHE.get(key);
+    if (mem && Date.now() - mem.timestamp < CACHE_TTL_MS) {
+      return mem.data as T;
+    }
+    // 2. Storage fallback
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = window.sessionStorage.getItem(key) || window.localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.data !== undefined) {
+            MEMORY_CACHE.set(key, { data: parsed.data, timestamp: parsed.timestamp || Date.now() });
+            return parsed.data as T;
+          }
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return null;
+  },
+  set: <T>(key: string, data: T) => {
+    const entry = { data, timestamp: Date.now() };
+    MEMORY_CACHE.set(key, entry);
+    try {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(key, JSON.stringify(entry));
+      }
+    } catch {
+      // ignore storage quota errors
+    }
+  },
+  invalidate: (keyPrefix?: string) => {
+    if (!keyPrefix) {
+      MEMORY_CACHE.clear();
+      return;
+    }
+    for (const k of Array.from(MEMORY_CACHE.keys())) {
+      if (k.startsWith(keyPrefix)) MEMORY_CACHE.delete(k);
+    }
+  }
+};
+
+async function fetchWithAuth<T>(
+  url: string,
+  options: RequestInit & { timeoutMs?: number } = {},
+  isRetry = false
+): Promise<T> {
+  const isGet = !options.method || options.method.toUpperCase() === 'GET';
   const token = authStorage.getToken();
   const storedDoctor = authStorage.getDoctor();
   const headers = new Headers(options.headers || {});
@@ -195,7 +250,33 @@ async function fetchWithAuth<T>(url: string, options: RequestInit = {}, isRetry 
     if (storedDoctor.name) headers.set('X-Doctor-Name', storedDoctor.name);
   }
 
-  const response = await fetch(url, { ...options, headers });
+  // Resilient timeout controller (defaults to 10s so requests never hang indefinitely)
+  const timeoutMs = options.timeoutMs || (isGet ? 10000 : 25000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      signal: options.signal || controller.signal,
+    });
+  } catch (networkErr: unknown) {
+    clearTimeout(timeoutId);
+    // If it's a GET request and network timed out or disconnected (e.g. Render cold start),
+    // transparently fallback to cached data so the user never sees a broken screen!
+    if (isGet) {
+      const cached = fastCache.get<T>(`api_${url}`);
+      if (cached !== null) {
+        console.warn(`[FastCache Fallback] Network request failed for ${url}, serving cached snapshot:`, networkErr);
+        return cached;
+      }
+    }
+    throw networkErr;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (response.status === 401) {
     const isAuthCredentialRoute =
@@ -234,6 +315,15 @@ async function fetchWithAuth<T>(url: string, options: RequestInit = {}, isRetry 
   }
 
   if (!response.ok) {
+    // If server returned 502/503/504 while waking up, try cache fallback for GET
+    if (isGet && (response.status === 502 || response.status === 503 || response.status === 504)) {
+      const cached = fastCache.get<T>(`api_${url}`);
+      if (cached !== null) {
+        console.warn(`[FastCache Fallback] Server status ${response.status} for ${url}, serving cached snapshot.`);
+        return cached;
+      }
+    }
+
     let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
     try {
       const errorJson = await response.json();
@@ -244,7 +334,12 @@ async function fetchWithAuth<T>(url: string, options: RequestInit = {}, isRetry 
     throw new Error(errorMessage);
   }
 
-  return response.json();
+  const resultData = (await response.json()) as T;
+  // Automatically update fastCache on successful GET requests
+  if (isGet) {
+    fastCache.set(`api_${url}`, resultData);
+  }
+  return resultData;
 }
 
 export const api = {
@@ -311,6 +406,25 @@ export const api = {
   },
 
   patients: {
+    getCachedList: (query?: string): Patient[] => {
+      const url = `/api/patients${query ? `?q=${encodeURIComponent(query)}` : ''}`;
+      const cached = fastCache.get<{ patients: Patient[] }>(`api_${url}`);
+      if (cached && Array.isArray(cached.patients)) {
+        return cached.patients;
+      }
+      const vaultPatients = patientVaultStorage.getPatientsForCurrentDoctor();
+      if (vaultPatients.length > 0) {
+        if (!query) return vaultPatients;
+        const q = query.toLowerCase().trim();
+        return vaultPatients.filter(
+          p =>
+            p.fullName.toLowerCase().includes(q) ||
+            p.patientCode.toLowerCase().includes(q) ||
+            (p.mobile && p.mobile.includes(q))
+        );
+      }
+      return [];
+    },
     list: async (query?: string) => {
       const res = await fetchWithAuth<{ patients: Patient[] }>(
         `/api/patients${query ? `?q=${encodeURIComponent(query)}` : ''}`
@@ -583,6 +697,15 @@ export const api = {
   },
 
   appointments: {
+    getCachedList: (params?: { patientId?: string; date?: string; status?: string }): Appointment[] => {
+      const q = new URLSearchParams();
+      if (params?.patientId) q.set('patientId', params.patientId);
+      if (params?.date) q.set('date', params.date);
+      if (params?.status) q.set('status', params.status);
+      const queryStr = q.toString() ? `?${q.toString()}` : '';
+      const cached = fastCache.get<{ appointments: Appointment[] }>(`api_/api/appointments${queryStr}`);
+      return cached?.appointments || [];
+    },
     list: (params?: { patientId?: string; date?: string; status?: string }) => {
       const q = new URLSearchParams();
       if (params?.patientId) q.set('patientId', params.patientId);
@@ -970,18 +1093,25 @@ export const api = {
   },
 
   dashboard: {
+    getCachedStats: () => {
+      return fastCache.get<{
+        stats: ClinicStats;
+        recentVisits: Consultation[];
+        recentPatients: Patient[];
+        revenue?: import('../types').PracticeRevenueAnalytics;
+      }>('api_/api/dashboard/stats');
+    },
     getStats: async () => {
       const currentDoctor = authStorage.getDoctor();
       const vaultPatients = patientVaultStorage.getPatientsForCurrentDoctor(currentDoctor);
+      // Run patient vault sync silently in background without blocking dashboard load
       if (vaultPatients.length > 0) {
-        try {
-          await fetchWithAuth<{ patients: Patient[] }>('/api/patients/sync', {
-            method: 'POST',
-            body: JSON.stringify({ patients: vaultPatients }),
-          });
-        } catch {
-          // ignore
-        }
+        fetchWithAuth<{ patients: Patient[] }>('/api/patients/sync', {
+          method: 'POST',
+          body: JSON.stringify({ patients: vaultPatients }),
+        }).catch(() => {
+          // non-blocking background sync
+        });
       }
       return fetchWithAuth<{
         stats: ClinicStats;
@@ -989,6 +1119,11 @@ export const api = {
         recentPatients: Patient[];
         revenue?: import('../types').PracticeRevenueAnalytics;
       }>('/api/dashboard/stats');
+    },
+    getCachedRevenue: () => {
+      return fastCache.get<{
+        revenue: import('../types').PracticeRevenueAnalytics;
+      }>('api_/api/dashboard/revenue');
     },
     getRevenue: () =>
       fetchWithAuth<{
