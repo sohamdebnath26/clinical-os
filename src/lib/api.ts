@@ -173,6 +173,25 @@ export const patientVaultStorage = {
         patientVaultStorage.savePatient(p, doctor);
       }
     }
+  },
+
+  removePatient: (patientId: string, doctor?: Doctor | null) => {
+    if (typeof window === 'undefined' || !patientId) return;
+    const doc = doctor || authStorage.getDoctor();
+    const keys = patientVaultStorage.getVaultKeys(doc);
+    for (const key of keys) {
+      try {
+        const existingRaw = window.localStorage.getItem(key);
+        if (!existingRaw) continue;
+        const list: Patient[] = JSON.parse(existingRaw);
+        if (Array.isArray(list)) {
+          const filtered = list.filter(p => p.id !== patientId);
+          window.localStorage.setItem(key, JSON.stringify(filtered));
+        }
+      } catch {
+        // ignore
+      }
+    }
   }
 };
 
@@ -416,11 +435,13 @@ export const api = {
       if (vaultPatients.length > 0) {
         if (!query) return vaultPatients;
         const q = query.toLowerCase().trim();
+        const cleanDigits = q.replace(/\D/g, '');
         return vaultPatients.filter(
           p =>
             p.fullName.toLowerCase().includes(q) ||
             p.patientCode.toLowerCase().includes(q) ||
-            (p.mobile && p.mobile.includes(q))
+            (p.mobile && p.mobile.toLowerCase().includes(q)) ||
+            (cleanDigits.length >= 3 && p.mobile && p.mobile.replace(/\D/g, '').includes(cleanDigits))
         );
       }
       return [];
@@ -467,16 +488,30 @@ export const api = {
 
       if (query && query.trim()) {
         const q = query.toLowerCase().trim();
+        const cleanDigits = q.replace(/\D/g, '');
         mergedPatients = mergedPatients.filter(
           p =>
             p.fullName.toLowerCase().includes(q) ||
             p.patientCode.toLowerCase().includes(q) ||
-            (p.mobile && p.mobile.includes(q)) ||
+            (p.mobile && p.mobile.toLowerCase().includes(q)) ||
+            (cleanDigits.length >= 3 && p.mobile && p.mobile.replace(/\D/g, '').includes(cleanDigits)) ||
             (p.primaryDiagnosis && p.primaryDiagnosis.toLowerCase().includes(q))
         );
       }
 
       return { patients: mergedPatients };
+    },
+    delete: async (id: string) => {
+      const res = await fetchWithAuth<{ success: boolean; message: string }>(`/api/patients/${id}`, {
+        method: 'DELETE',
+      });
+      patientVaultStorage.removePatient(id);
+      fastCache.invalidate('api_/api/patients');
+      fastCache.invalidate('api_/api/dashboard');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('clinical_os_patients_updated', { detail: { deletedId: id } }));
+      }
+      return res;
     },
     get: async (id: string) => {
       try {

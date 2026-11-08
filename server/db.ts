@@ -989,10 +989,12 @@ class DatabaseService {
     let list = this.data.patients.filter(p => this.canDoctorAccessPatient(p, doctorId));
     if (query && query.trim()) {
       const q = query.toLowerCase().trim();
+      const cleanDigits = q.replace(/\D/g, '');
       list = list.filter(p =>
         p.fullName.toLowerCase().includes(q) ||
         p.patientCode.toLowerCase().includes(q) ||
-        p.mobile.includes(q) ||
+        p.mobile.toLowerCase().includes(q) ||
+        (cleanDigits.length >= 3 && p.mobile.replace(/\D/g, '').includes(cleanDigits)) ||
         (p.primaryDiagnosis && p.primaryDiagnosis.toLowerCase().includes(q))
       );
     }
@@ -1013,6 +1015,36 @@ class DatabaseService {
     return this.data.patients.find(
       p => p.mobile.replace(/\D/g, '') === clean && this.canDoctorAccessPatient(p, doctorId)
     );
+  }
+
+  public deletePatient(patientId: string, actor: { id: string; name: string }): boolean {
+    const idx = this.data.patients.findIndex(p => p.id === patientId);
+    if (idx === -1) return false;
+    const deleted = this.data.patients[idx];
+
+    // Remove patient
+    this.data.patients.splice(idx, 1);
+
+    // Cascade delete associated records
+    this.data.consultations = this.data.consultations.filter(c => c.patientId !== patientId);
+    this.data.prescriptions = this.data.prescriptions.filter(p => p.patientId !== patientId);
+    this.data.appointments = this.data.appointments.filter(a => a.patientId !== patientId);
+    this.data.clinicalImages = this.data.clinicalImages.filter(img => img.patientId !== patientId);
+    if (this.data.testReports) {
+      this.data.testReports = this.data.testReports.filter(r => r.patientId !== patientId);
+    }
+
+    this.logAudit({
+      actorId: actor.id,
+      actorName: actor.name,
+      action: 'delete_patient',
+      resourceType: 'patient',
+      resourceId: patientId,
+      metadata: { patientCode: deleted.patientCode, patientName: deleted.fullName }
+    });
+
+    this.persist();
+    return true;
   }
 
   public createPatient(

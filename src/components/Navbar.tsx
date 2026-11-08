@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Users, Sparkles, X, ArrowRight, Menu, PanelLeft, UserCog, Stethoscope } from 'lucide-react';
+import { Search, Users, Sparkles, X, ArrowRight, Menu, PanelLeft, UserCog, Stethoscope, Download } from 'lucide-react';
 import { Patient } from '../types';
 import { api } from '../lib/api';
 import { PREDEFINED_DIAGNOSES } from '../data/clinicalCatalogues';
@@ -35,6 +35,44 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // PWA In-App Install Prompt
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true;
+    setIsInstalled(isStandalone);
+
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    const handleAppInstalled = () => {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice && choice.outcome === 'accepted') {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+    }
+  };
 
   // Live network connectivity indicator
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -247,6 +285,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Language selector dropdown */}
         <LanguageSelector variant="compact" />
+
+        {/* PWA In-App Install Button */}
+        {installPrompt && !isInstalled && (
+          <button
+            type="button"
+            onClick={handleInstallApp}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            title="Install Clinical OS on this device"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-700" />
+            <span className="hidden md:inline">Install App</span>
+          </button>
+        )}
 
         {/* Quick Actions */}
         <button

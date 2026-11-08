@@ -663,6 +663,20 @@ app.get('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res) =>
   res.json({ patient });
 });
 
+app.delete('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (req.doctor?.role === 'receptionist') {
+    return res.status(403).json({ error: 'Only doctors can delete or archive patient records.' });
+  }
+  const deleted = db.deletePatient(req.params.id, {
+    id: req.doctor?.id || 'admin',
+    name: req.doctor?.name || 'Doctor'
+  });
+  if (!deleted) {
+    return res.status(404).json({ error: 'Patient not found' });
+  }
+  res.json({ success: true, message: 'Patient and associated clinical records removed successfully.' });
+});
+
 app.post('/api/patients/sync', authMiddleware, (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
   const incoming = Array.isArray(req.body?.patients) ? req.body.patients : [];

@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Clinical OS - Medical EMR",
+  "short_name": "Clinical OS",
+  "description": "Production-grade Clinical EMR & Practice Workspace for Physicians and Medical Clinics.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0d3f3b",
+  "background_color": "#0b1514",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

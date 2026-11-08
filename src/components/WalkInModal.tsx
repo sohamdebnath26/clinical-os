@@ -75,6 +75,7 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
   const [weight, setWeight] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [noKnownAllergies, setNoKnownAllergies] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(true);
 
   // Discount / panel collapsible section
   const [showDiscountPanel, setShowDiscountPanel] = useState(false);
@@ -1869,6 +1870,21 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
             </div>
           )}
 
+          {/* Clinical Informed Consent & Regulatory Notice */}
+          <div className="pt-2.5 pb-1">
+            <label className="flex items-start gap-2.5 cursor-pointer text-[11.5px] text-slate-600 select-none">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={e => setConsentAccepted(e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-[#3f6f66] focus:ring-[#3f6f66] w-4 h-4 cursor-pointer"
+              />
+              <span className="leading-tight">
+                Patient has provided informed consent for medical examination, electronic medical records storage, and digital prescriptions.
+              </span>
+            </label>
+          </div>
+
           {/* Footer Action Row: Cancel | Hand to patient | Next Tab / Save / Add patient */}
           <div className="pt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/80">
             <div className="flex items-center gap-1.5">
@@ -1914,7 +1930,7 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                 <>
                   <button
                     type="button"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !consentAccepted}
                     onClick={() => handleSavePatient(false, 'save_only')}
                     className="px-3.5 py-2 rounded-xl border border-[#3f6f66] bg-white hover:bg-teal-50/70 text-[#3f6f66] text-[12.5px] font-semibold shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
                   >
@@ -1922,7 +1938,7 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
                   </button>
                   <button
                     type="button"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !consentAccepted}
                     onClick={() => handleSavePatient(false, 'start_consultation')}
                     className="px-4 py-2 rounded-xl bg-[#3f6f66] hover:bg-[#335c54] text-white text-[12.5px] font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                   >
@@ -1932,7 +1948,7 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
               ) : (
                 <button
                   type="button"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !consentAccepted}
                   onClick={() => handleSavePatient(false, 'save_only')}
                   className="px-4 py-2 rounded-xl bg-[#3f6f66] hover:bg-[#335c54] text-white text-[13px] font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                 >

@@ -36,7 +36,8 @@ import {
   FileEdit,
   Upload,
   QrCode,
-  Maximize2
+  Maximize2,
+  Trash2
 } from 'lucide-react';
 
 interface PatientProfileViewProps {
@@ -140,6 +141,26 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
   // Mobile QR Code upload modal for comparison
   const [showProfileQrModal, setShowProfileQrModal] = useState(false);
+
+  // Patient Deletion State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeletePatient = async () => {
+    if (!patient || deleteConfirmText.trim() !== 'DELETE' || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.patients.delete(patient.id);
+      setShowDeleteModal(false);
+      onBack();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to delete patient. Ensure you have physician permissions.');
+      setIsDeleting(false);
+    }
+  };
 
   const handleProfileQrImageUploaded = (newImg: ClinicalImage) => {
     setImages(prev => {
@@ -578,6 +599,19 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
           </button>
           {!isReceptionist && (
             <>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirmText('');
+                  setDeleteError(null);
+                  setShowDeleteModal(true);
+                }}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-xl text-xs font-semibold text-slate-600 hover:text-red-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                title="Delete patient and medical records"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-600" />
+                <span>Delete</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setShowPrintRx(true)}
@@ -2113,6 +2147,79 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
         slotLabel="Comparison Medical Image"
         onImageUploaded={handleProfileQrImageUploaded}
       />
+
+      {/* Delete Patient Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-red-100 space-y-4">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Delete Patient Record</h3>
+                <p className="text-xs text-red-600 font-medium">Permanent Clinical Deletion</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to permanently delete <strong className="text-slate-900">{patient.fullName}</strong> (<span className="font-mono">{patient.patientCode}</span>)?
+              This action will remove all associated consultations, prescriptions, timeline events, and medical imaging.
+            </p>
+
+            <div className="bg-red-50/70 border border-red-200/80 rounded-xl p-3">
+              <label className="block text-[11px] font-semibold text-red-900 mb-1">
+                Type <span className="font-mono font-bold">DELETE</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                autoFocus
+                className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-red-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </div>
+
+            {deleteError && (
+              <p className="text-xs text-red-600 font-medium">{deleteError}</p>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmText('');
+                  setDeleteError(null);
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeletePatient}
+                disabled={deleteConfirmText.trim() !== 'DELETE' || isDeleting}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-semibold rounded-xl shadow-sm transition"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Permanently Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

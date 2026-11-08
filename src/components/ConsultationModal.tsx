@@ -127,6 +127,77 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>(consultation.prescriptions || []);
   const [aiSummary, setAiSummary] = useState<string>(consultation.aiSummary || '');
 
+  // Draft Auto-Save & Recovery State
+  const draftKey = `clinical_os_consultation_draft_${consultation.id || patient.id}`;
+  const [draftFound, setDraftFound] = useState<{ timeStr: string; data: any } | null>(null);
+
+  // Check for existing draft on initial open
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.timestamp && Date.now() - parsed.timestamp < 7 * 24 * 60 * 60 * 1000) {
+          const timeAgo = new Date(parsed.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          setDraftFound({
+            timeStr: `${timeAgo} (${new Date(parsed.timestamp).toLocaleDateString()})`,
+            data: parsed
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [draftKey]);
+
+  // Debounced auto-save to localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const timer = setTimeout(() => {
+      try {
+        const draftPayload = {
+          symptoms,
+          diagnoses,
+          secondaryDiagnosis,
+          tests,
+          procedures,
+          clinicalNotes,
+          prescriptions,
+          followUp,
+          fee,
+          timestamp: Date.now()
+        };
+        window.localStorage.setItem(draftKey, JSON.stringify(draftPayload));
+      } catch {
+        // ignore
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [draftKey, symptoms, diagnoses, secondaryDiagnosis, tests, procedures, clinicalNotes, prescriptions, followUp, fee]);
+
+  const handleRestoreDraft = () => {
+    if (!draftFound) return;
+    const d = draftFound.data;
+    if (d.symptoms) setSymptoms(d.symptoms);
+    if (d.diagnoses) setDiagnoses(d.diagnoses);
+    if (d.secondaryDiagnosis) setSecondaryDiagnosis(d.secondaryDiagnosis);
+    if (d.tests) setTests(d.tests);
+    if (d.procedures) setProcedures(d.procedures);
+    if (d.clinicalNotes) setClinicalNotes(d.clinicalNotes);
+    if (d.prescriptions) setPrescriptions(d.prescriptions);
+    if (d.followUp) setFollowUp(d.followUp);
+    if (typeof d.fee === 'number') setFee(d.fee);
+    setDraftFound(null);
+  };
+
+  const handleDiscardDraft = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(draftKey);
+    }
+    setDraftFound(null);
+  };
+
   // Derive clinical baseline morphology & AI image summary from live consultation state or patient condition
   const getInitialDermSummary = (overrideContext?: string) => {
     const primary = (
@@ -1721,6 +1792,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         // ignore
       }
 
+      try {
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem(draftKey);
+        }
+      } catch {
+        // ignore
+      }
+
       onSuccess(res.consultation);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to save consultation';
@@ -1986,6 +2065,36 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
         {/* Tab Body Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4 bg-[#fafcfb]">
+          {draftFound && (
+            <div className="mb-4 p-3.5 bg-amber-50/90 border border-amber-200/90 text-amber-900 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                  <Clock className="w-4 h-4 text-amber-700" />
+                </div>
+                <div>
+                  <span className="font-bold text-slate-900">Unsaved Consultation Draft:</span>{' '}
+                  <span className="text-amber-900">Found auto-saved draft from {draftFound.timeStr}.</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={handleRestoreDraft}
+                  className="px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl font-semibold text-xs transition shadow-xs cursor-pointer"
+                >
+                  Restore Draft
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDiscardDraft}
+                  className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-semibold text-xs transition cursor-pointer"
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center justify-between">
               <span>{error}</span>
