@@ -282,19 +282,17 @@ function MainApp() {
           </div>
         )}
 
-        {/* Top Navbar (shown on inner views; Dashboard has its own integrated header) */}
-        {(activePatientId || currentRoute !== 'dashboard') && (
-          <div className="shrink-0 z-20">
-            <Navbar
-              onOpenWalkIn={() => setShowWalkInModal(true)}
-              onOpenAIAssistant={() => handleOpenAIAssistant()}
-              onSelectPatient={handleSelectPatient}
-              onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
-              onToggleSidebar={toggleSidebar}
-              isSidebarCollapsed={isSidebarCollapsed}
-            />
-          </div>
-        )}
+        {/* Unified Top Navbar across all views */}
+        <div className="shrink-0 z-20">
+          <Navbar
+            onOpenWalkIn={() => setShowWalkInModal(true)}
+            onOpenAIAssistant={() => handleOpenAIAssistant()}
+            onSelectPatient={handleSelectPatient}
+            onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
+            onToggleSidebar={toggleSidebar}
+            isSidebarCollapsed={isSidebarCollapsed}
+          />
+        </div>
 
         {/* Dynamic Route Viewport */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-8">

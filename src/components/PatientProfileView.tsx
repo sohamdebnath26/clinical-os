@@ -80,22 +80,23 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
   const PROFILE_TAB_ORDER: TabType[] = isReceptionist
     ? ['overview', 'appointments']
-    : ['overview', 'images', 'vitals', 'appointments', 'timeline', 'reports', 'prescriptions'];
+    : ['overview', 'timeline', 'images', 'vitals', 'prescriptions'];
 
   const PROFILE_TAB_LABELS: Record<TabType, string> = {
     overview: 'Overview',
-    images: 'Images & Compare',
-    vitals: 'Vitals & Growth',
-    appointments: 'Appointments & Follow-ups',
     timeline: 'Visits & Timeline',
     visits: 'Visits & Timeline',
-    reports: 'Report Results',
-    prescriptions: 'Prescriptions'
+    images: 'Visual & Lesion Compare',
+    vitals: 'Labs & Vitals',
+    reports: 'Labs & Vitals',
+    prescriptions: 'Prescriptions',
+    appointments: 'Appointments'
   };
 
   useEffect(() => {
     if (initialTab) {
-      setActiveTab(normalizeTab(initialTab));
+      const normalized = initialTab === 'reports' ? 'vitals' : normalizeTab(initialTab);
+      setActiveTab(normalized);
     }
   }, [initialTab]);
 
@@ -662,61 +663,38 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
         </div>
       </div>
 
-      {/* Streamlined Single-Row Profile Navigation Tabs */}
-      <div className="bg-white p-1.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2 overflow-x-auto">
-        <div className="flex items-center gap-1 overflow-x-auto">
-          {PROFILE_TAB_ORDER.map(tab => {
-            const isActive = activeTab === tab;
-            return (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`py-2 px-3.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer tabular-nums ${
-                  isActive
-                    ? 'bg-teal-700 text-white'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                {tab === 'overview' && <User className="w-3.5 h-3.5" />}
-                {tab === 'images' && <ImageIcon className="w-3.5 h-3.5" />}
-                {tab === 'vitals' && <Activity className="w-3.5 h-3.5" />}
-                {tab === 'appointments' && <Calendar className="w-3.5 h-3.5" />}
-                {tab === 'timeline' && <Clock className="w-3.5 h-3.5" />}
-                {tab === 'reports' && <FileText className="w-3.5 h-3.5" />}
-                {tab === 'prescriptions' && <Pill className="w-3.5 h-3.5" />}
-                <span>
-                  {tab === 'overview' && 'Overview'}
-                  {tab === 'images' && `Images & Compare (${images.length})`}
-                  {tab === 'vitals' && 'Vitals & Growth'}
-                  {tab === 'appointments' && `Appointments (${appointments.length})`}
-                  {tab === 'timeline' && `Visits & Timeline (${totalUnifiedCount})`}
-                  {tab === 'reports' && `Report Results (${testReports.length})`}
-                  {tab === 'prescriptions' && `Prescriptions (${prescriptions.length})`}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="hidden xl:flex items-center gap-2 pr-1.5 shrink-0">
-          {tabAdvanceToast && (
-            <span className="text-[11px] font-medium text-teal-700 whitespace-nowrap">
-              {tabAdvanceToast}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={handleAdvanceProfileTab}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-600 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            title="Press Enter to jump to the next chart section"
-          >
-            <span>Next: {PROFILE_TAB_LABELS[nextProfileTab]}</span>
-            <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-mono text-slate-700">
-              Enter ↵
-            </kbd>
-          </button>
-        </div>
+      {/* Streamlined 5-Tab Clinical Navigation Bar */}
+      <div className="bg-white p-1.5 rounded-xl border border-slate-200 flex items-center gap-1 overflow-x-auto">
+        {PROFILE_TAB_ORDER.map(tab => {
+          const isActive = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`py-2 px-4 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer tabular-nums ${
+                isActive
+                  ? 'bg-teal-700 text-white'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              {tab === 'overview' && <User className="w-3.5 h-3.5" />}
+              {tab === 'timeline' && <Clock className="w-3.5 h-3.5" />}
+              {tab === 'images' && <ImageIcon className="w-3.5 h-3.5" />}
+              {tab === 'vitals' && <Activity className="w-3.5 h-3.5" />}
+              {tab === 'prescriptions' && <Pill className="w-3.5 h-3.5" />}
+              {tab === 'appointments' && <Calendar className="w-3.5 h-3.5" />}
+              <span>
+                {tab === 'overview' && 'Overview'}
+                {tab === 'timeline' && `Visits & Timeline (${totalUnifiedCount})`}
+                {tab === 'images' && `Visual & Lesion Compare (${images.length})`}
+                {tab === 'vitals' && `Labs & Vitals (${testReports.length})`}
+                {tab === 'prescriptions' && `Prescriptions (${prescriptions.length})`}
+                {tab === 'appointments' && `Appointments (${appointments.length})`}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* TAB 1: OVERVIEW */}
@@ -923,108 +901,78 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               </>
             )}
 
-            {/* 3. Personal & Contact Information */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-900">
-                  Patient Demographics &amp; Contact
-                </h3>
-                {!isReceptionist && (
+            {/* 3. Latest Visit Summary (replaces duplicate Demographics card) */}
+            {!isReceptionist && unifiedChronologicalEntries.length > 0 && (
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      Most Recent Consultation ({new Date(unifiedChronologicalEntries[0].date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })})
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {unifiedChronologicalEntries[0].diagnoses.join(', ') || 'General Consultation'} · Dr. {unifiedChronologicalEntries[0].doctorName.replace(/^Dr\.\s*/i, '')}
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setActiveTab('timeline')}
-                    className="text-xs font-medium text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
+                    className="text-xs font-semibold text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
                   >
-                    <span>View {totalUnifiedCount} Visits</span>
+                    <span>All {totalUnifiedCount} Visits</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
-                )}
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs tabular-nums">
-                <div>
-                  <span className="text-[11px] text-slate-400 block">Full Name</span>
-                  <span className="font-semibold text-slate-800">{patient.fullName}</span>
                 </div>
-                <div>
-                  <span className="text-[11px] text-slate-400 block">Patient ID</span>
-                  <span className="font-mono font-semibold text-teal-800">{patient.patientCode}</span>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-400 block">Age &amp; Gender</span>
-                  <span className="font-semibold text-slate-800">{patient.age}y · {patient.gender}</span>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-400 block">Mobile Number</span>
-                  <span className="font-mono font-medium text-slate-800">{patient.mobile}</span>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-400 block">Blood Group</span>
-                  <span className="font-semibold text-slate-800">{patient.bloodGroup || 'Not recorded'}</span>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-400 block">Date of Birth</span>
-                  <span className="font-medium text-slate-700">{patient.dateOfBirth || 'Not provided'}</span>
-                </div>
-                {patient.emergencyContact && (
-                  <div className="col-span-2">
-                    <span className="text-[11px] text-slate-400 block">Emergency Contact</span>
-                    <span className="font-medium text-slate-700">{patient.emergencyContact}</span>
-                  </div>
-                )}
-                {patient.address && (
-                  <div className="col-span-2 sm:col-span-3">
-                    <span className="text-[11px] text-slate-400 block">Residential Address</span>
-                    <span className="font-medium text-slate-700">{patient.address}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
 
-          {/* Right Column: Clinical Metrics, Follow-up, Vitals & AI Co-Pilot */}
-          <div className="space-y-6">
-            {!isReceptionist && (
-              /* Quick Stats Card (Doctor Only) */
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
-                <h3 className="text-xs font-semibold text-slate-500">
-                  Chart Summary
-                </h3>
-                <div className="grid grid-cols-2 gap-2.5 text-left tabular-nums">
+                {unifiedChronologicalEntries[0].prescriptions?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {unifiedChronologicalEntries[0].prescriptions.map((rx, i) => (
+                      <span
+                        key={rx.id || i}
+                        className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700"
+                      >
+                        <strong className="text-slate-900">{rx.medicineName}</strong> · {rx.dosage} ({rx.frequency})
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Additional Contact Details (only shown if Address / Emergency Contact / DOB exist, without repeating header fields) */}
+            {(patient.address || patient.emergencyContact || patient.dateOfBirth || isReceptionist) && (
+              <div className="bg-white p-5 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Additional Contact &amp; Registration Info
+                  </h3>
                   <button
                     type="button"
-                    onClick={() => setActiveTab('timeline')}
-                    className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
+                    onClick={() => setShowEditModal(true)}
+                    className="text-xs font-medium text-teal-700 hover:text-teal-900 cursor-pointer"
                   >
-                    <span className="text-lg font-bold text-slate-900 block">{totalUnifiedCount}</span>
-                    <span className="text-[11px] text-slate-500">Visits &amp; Timeline</span>
+                    Edit
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('images')}
-                    className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
-                  >
-                    <span className="text-lg font-bold text-slate-900 block">{images.length}</span>
-                    <span className="text-[11px] text-slate-500">Clinical Images</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('prescriptions')}
-                    className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
-                  >
-                    <span className="text-lg font-bold text-slate-900 block">{prescriptions.length}</span>
-                    <span className="text-[11px] text-slate-500">Prescriptions</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('reports')}
-                    className="bg-slate-50 hover:bg-teal-50/60 p-3 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
-                  >
-                    <span className="text-lg font-bold text-slate-900 block">{testReports.length}</span>
-                    <span className="text-[11px] text-slate-500">Report Results</span>
-                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <span className="text-[11px] text-slate-400 block">Date of Birth</span>
+                    <span className="font-medium text-slate-700">{patient.dateOfBirth || 'Not recorded'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-slate-400 block">Emergency Contact</span>
+                    <span className="font-medium text-slate-700">{patient.emergencyContact || 'Not recorded'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-slate-400 block">Residential Address</span>
+                    <span className="font-medium text-slate-700">{patient.address || 'Not recorded'}</span>
+                  </div>
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Right Column: Follow-up & AI Co-Pilot */}
+          <div className="space-y-6">
 
             {/* Upcoming Follow-Up & Appointment Card */}
             {(() => {
@@ -1380,20 +1328,17 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
         </div>
       )}
 
-      {/* TAB: VITALS & GROWTH DATA VISUALIZATION (Recharts) */}
-      {activeTab === 'vitals' && (
+      {/* TAB: LABS & VITALS (Unified Vitals Chart + Lab/Diagnostic Reports) */}
+      {(activeTab === 'vitals' || activeTab === 'reports') && (
         <div className="space-y-6 animate-in fade-in duration-150">
           <PatientVitalsChart patient={patient} consultations={consultations} />
-          <div className="flex justify-end pt-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('appointments')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
-            >
-              <span>Next: Appointments & Follow-ups</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-          </div>
+          <PatientReportsSection
+            patient={patient}
+            reports={testReports}
+            doctorName={doctor?.name}
+            onRefresh={loadPatientData}
+            onOpenAIWithPrompt={onOpenAIWithPrompt}
+          />
         </div>
       )}
 
@@ -1511,25 +1456,6 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               ))}
             </div>
           )}
-
-          {/* Step Navigation */}
-          <div className="flex justify-between items-center pt-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('vitals')}
-              className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
-            >
-              ← Vitals & Growth
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('timeline')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
-            >
-              <span>Next: Visits &amp; Timeline</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-          </div>
         </div>
       )}
 
@@ -1927,55 +1853,6 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               })}
             </div>
           )}
-
-          {/* Step Navigation */}
-          <div className="p-4 bg-white rounded-2xl border border-slate-200 flex justify-between items-center">
-            <button
-              type="button"
-              onClick={() => setActiveTab('appointments')}
-              className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
-            >
-              ← Appointments
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('reports')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition"
-            >
-              <span>Next: Report Results</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* TAB: REPORT RESULTS */}
-      {activeTab === 'reports' && (
-        <div className="space-y-4">
-          <PatientReportsSection
-            patient={patient}
-            reports={testReports}
-            doctorName={doctor?.name}
-            onRefresh={loadPatientData}
-            onOpenAIWithPrompt={onOpenAIWithPrompt}
-          />
-          <div className="p-4 bg-white rounded-2xl border border-slate-200 flex justify-between items-center">
-            <button
-              type="button"
-              onClick={() => setActiveTab('timeline')}
-              className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
-            >
-              ← Visits &amp; Timeline
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('prescriptions')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition"
-            >
-              <span>Next: Prescriptions</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
         </div>
       )}
 
@@ -2047,24 +1924,6 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
               </div>
             ))
           )}
-          {/* Step Navigation */}
-          <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
-            <button
-              type="button"
-              onClick={() => setActiveTab('timeline')}
-              className="text-xs text-slate-500 hover:text-slate-800 font-semibold"
-            >
-              ← Visits &amp; Timeline
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('overview')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs transition"
-            >
-              <span>Back to Overview</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-          </div>
         </div>
       )}
 

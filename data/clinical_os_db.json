@@ -524,6 +524,113 @@
     {
       "actorId": "doc-demo-001",
       "actorName": "Dr. Demo",
+      "action": "ai_lesion_progression_compared",
+      "resourceType": "clinical_progression",
+      "resourceId": "prog_1794156526108",
+      "metadata": {
+        "patientId": "pat-mv0er2l2-uln3",
+        "pastImageDate": "2026-09-24",
+        "currentImageDate": "2026-09-24",
+        "overallProgression": "Stable / Unchanged",
+        "progressionScore": 0
+      },
+      "id": "aud-mw82gzks-novg",
+      "timestamp": "2026-11-08T16:48:46.108Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "ai_lesion_progression_compared",
+      "resourceType": "clinical_progression",
+      "resourceId": "prog_1794156526096",
+      "metadata": {
+        "patientId": "pat-mv0er2l2-uln3",
+        "pastImageDate": "2026-10-15",
+        "currentImageDate": "2026-09-24",
+        "overallProgression": "Significant Flare / Deterioration",
+        "progressionScore": -85
+      },
+      "id": "aud-mw82gzkg-7ojy",
+      "timestamp": "2026-11-08T16:48:46.096Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "ai_lesion_progression_compared",
+      "resourceType": "clinical_progression",
+      "resourceId": "prog_1794156519400",
+      "metadata": {
+        "patientId": "pat-mv0er2l2-uln3",
+        "pastImageDate": "2026-09-24",
+        "currentImageDate": "2026-10-15",
+        "overallProgression": "Marked Improvement",
+        "progressionScore": 85
+      },
+      "id": "aud-mw82gueg-akaf",
+      "timestamp": "2026-11-08T16:48:39.400Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mw82gn5g-7sca",
+      "timestamp": "2026-11-08T16:48:30.004Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "ai_lesion_progression_compared",
+      "resourceType": "clinical_progression",
+      "resourceId": "prog_1794155529426",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "pastImageDate": "2026-09-29",
+        "currentImageDate": "2026-10-17",
+        "overallProgression": "Significant Flare / Deterioration",
+        "progressionScore": -85
+      },
+      "id": "aud-mw81vmj6-s86i",
+      "timestamp": "2026-11-08T16:32:09.426Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "ai_lesion_progression_compared",
+      "resourceType": "clinical_progression",
+      "resourceId": "prog_1794155176627",
+      "metadata": {
+        "patientId": "pat-mumnf2c6-8awj",
+        "pastImageDate": "2026-09-29",
+        "currentImageDate": "2026-10-17",
+        "overallProgression": "Marked Improvement",
+        "progressionScore": 90
+      },
+      "id": "aud-mw81o2b7-yzai",
+      "timestamp": "2026-11-08T16:26:16.627Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mw81nomg-ij3w",
+      "timestamp": "2026-11-08T16:25:58.888Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
+      "id": "aud-mw81nalc-w8o0",
+      "timestamp": "2026-11-08T16:25:40.704Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
       "action": "doctor_login",
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
@@ -1260,7 +1367,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-11-08T16:17:26.697Z"
+    "updatedAt": "2026-11-08T17:56:47.598Z"
   },
   "appointments": [
     {
@@ -2834,6 +2941,286 @@
       "source": "csv_upload",
       "createdAt": "2026-01-01T00:15:04.000Z",
       "updatedAt": "2026-01-01T00:15:04.000Z"
+    }
+  ],
+  "inboxThreads": [
+    {
+      "id": "t-1",
+      "name": "Rohit Sharma",
+      "subtitle": "28y · P-24621 · English",
+      "category": "patients",
+      "channel": "WhatsApp",
+      "priority": "urgent",
+      "stage": "needs_review",
+      "preview": "Chest feels tight since morning with red rash",
+      "timestamp": "2 min ago",
+      "unread": true,
+      "statusLabel": "Red flag · Immediate review",
+      "phone": "+91 98765 43210",
+      "aiSummary": "Patient reports acute rash extension with chest tightness. Immediate clinical triage advised.",
+      "messages": [
+        {
+          "id": "m-101",
+          "sender": "patient",
+          "text": "Doctor, my chest feels tight and the rash is spreading since morning. Is this normal?",
+          "time": "9:30 AM"
+        }
+      ],
+      "draftReply": "Rohit, please stop any newly started medication immediately and visit the nearest emergency room or call our clinic hotline right away for an urgent evaluation of your chest tightness and rash.",
+      "suggestedReplies": [
+        {
+          "id": "s-1a",
+          "label": "Urgent ER & Stop Meds",
+          "intent": "Immediate safety escalation",
+          "text": "Rohit, please stop any newly started medication immediately and visit the nearest emergency room or call our clinic hotline right away for an urgent evaluation of your chest tightness and rash."
+        },
+        {
+          "id": "s-1b",
+          "label": "Immediate Clinic Walk-In",
+          "intent": "Priority in-clinic triage",
+          "text": "Rohit, chest tightness with a spreading rash needs immediate evaluation. Please come directly to the clinic priority desk now or head to the nearest emergency department."
+        },
+        {
+          "id": "s-1c",
+          "label": "Check Anaphylaxis Signs",
+          "intent": "Symptom screening & call",
+          "text": "Rohit, I am calling you now. If you have any difficulty breathing, lip/tongue swelling, or dizziness, please take your emergency antihistamine and go to the nearest ER immediately."
+        }
+      ],
+      "updatedAt": "2026-11-08T16:18:39.200Z"
+    },
+    {
+      "id": "t-2",
+      "name": "Harman Preet",
+      "subtitle": "25y · P-24618 · English & Punjabi",
+      "category": "patients",
+      "channel": "WhatsApp",
+      "priority": "routine",
+      "stage": "draft_ready",
+      "preview": "Itching more at night, is it normal?",
+      "timestamp": "40 min ago",
+      "unread": true,
+      "statusLabel": "Patient question · AI draft ready",
+      "phone": "+91 98765 11223",
+      "aiSummary": "Less redness, mild night itching. Clinical photo shows barrier healing. No fever or swelling.",
+      "messages": [
+        {
+          "id": "m-201",
+          "sender": "patient",
+          "text": "Doctor, the redness is better but the itching is more at night. Is this normal?",
+          "time": "9:41 AM",
+          "status": "photo attached"
+        },
+        {
+          "id": "m-202",
+          "sender": "doctor",
+          "text": "Hi Harman. I received your message and photo. I will reply with advice shortly.",
+          "time": "9:45 AM",
+          "status": "read"
+        }
+      ],
+      "draftReply": "Mild itching at night is common as the skin barrier repairs. Keep the area well moisturised with your prescribed ceramide cream before sleep, avoid scratching, and continue your bedtime antihistamine.",
+      "suggestedReplies": [
+        {
+          "id": "s-2a",
+          "label": "Reassure & Moisturize",
+          "intent": "Barrier healing guidance",
+          "text": "Mild itching at night is common as the skin barrier repairs. Keep the area well moisturised with your prescribed ceramide cream before sleep, avoid scratching, and continue your bedtime antihistamine."
+        },
+        {
+          "id": "s-2b",
+          "label": "Cold Compress & Dosage Adjustment",
+          "intent": "Symptomatic relief",
+          "text": "Hi Harman, the reduced redness is a good sign of healing. For night itching, apply a cool damp compress for 5 minutes before applying your chilled moisturizer, and take your prescribed tablet 1 hour before bed."
+        },
+        {
+          "id": "s-2c",
+          "label": "Bilingual (English + Punjabi)",
+          "intent": "Patient native comfort",
+          "text": "Hi Harman, ਰਾਤ ਨੂੰ ਹਲਕੀ ਖਾਰਸ਼ ਚਮੜੀ ਦੇ ਠੀਕ ਹੋਣ ਦਾ ਹਿੱਸਾ ਹੈ। ਸੌਣ ਤੋਂ ਪਹਿਲਾਂ ਆਪਣੀ ਮਾਇਸਚਰਾਈਜ਼ਰ ਕਰੀਮ ਲਗਾਓ ਅਤੇ ਖੁਰਕਣ ਤੋਂ ਬਚੋ। (Mild night itching is normal during healing; apply moisturizer before bed.)"
+        }
+      ],
+      "updatedAt": "2026-11-08T15:40:39.200Z"
+    },
+    {
+      "id": "t-3",
+      "name": "Simran Kaur",
+      "subtitle": "31y · P-24619 · Refill request",
+      "category": "patients",
+      "channel": "WhatsApp",
+      "priority": "routine",
+      "stage": "draft_ready",
+      "preview": "Need refill for my prescribed tablets",
+      "timestamp": "3 h ago",
+      "unread": false,
+      "statusLabel": "Refill verified · Safe to approve",
+      "phone": "+91 91234 56789",
+      "aiSummary": "Antihistamine tablet 30 days. Seen 3 weeks ago. Safe refill verified against chart.",
+      "messages": [
+        {
+          "id": "m-301",
+          "sender": "patient",
+          "text": "Hello doctor, I need a refill for my allergy tablets for another 30 days.",
+          "time": "7:15 AM"
+        }
+      ],
+      "draftReply": "Hello Simran, your 30-day allergy tablet refill has been approved. We have updated your digital prescription—you can collect it at the clinic pharmacy or order directly.",
+      "suggestedReplies": [
+        {
+          "id": "s-3a",
+          "label": "Approve 30-Day Refill",
+          "intent": "Full authorization",
+          "text": "Hello Simran, your 30-day allergy tablet refill has been approved. We have updated your digital prescription—you can collect it at the clinic pharmacy or order directly."
+        },
+        {
+          "id": "s-3b",
+          "label": "Approve + Book 4-Week Review",
+          "intent": "Refill with follow-up",
+          "text": "Hello Simran, I have authorized your 30-day refill. Since this completes your 2-month course, please book a brief follow-up check next month so we can taper the dose."
+        },
+        {
+          "id": "s-3c",
+          "label": "Short 14-Day Bridge Refill",
+          "intent": "Require in-person check",
+          "text": "Hello Simran, I have approved a 14-day supply to keep your symptoms controlled. Please schedule a quick clinic visit within two weeks so we can review your progress."
+        }
+      ],
+      "updatedAt": "2026-11-08T13:20:39.200Z"
+    },
+    {
+      "id": "t-4",
+      "name": "Anita Verma",
+      "subtitle": "42y · P-24622 · Reschedule request",
+      "category": "patients",
+      "channel": "WhatsApp",
+      "priority": "routine",
+      "stage": "draft_ready",
+      "preview": "Can we move my visit to Friday?",
+      "timestamp": "3 h ago",
+      "unread": false,
+      "statusLabel": "Schedule change · 3 open slots",
+      "phone": "+91 99887 76655",
+      "aiSummary": "Requests moving visit to Friday. Open clinic slots: 10:00 AM, 2:30 PM, 4:00 PM.",
+      "messages": [
+        {
+          "id": "m-401",
+          "sender": "patient",
+          "text": "Can we move my visit from tomorrow to Friday? Something urgent came up.",
+          "time": "6:50 AM"
+        }
+      ],
+      "draftReply": "Hi Anita, certainly. We have open slots this Friday at 10:00 AM, 2:30 PM, or 4:00 PM. Please reply with your preferred time and we will confirm your appointment.",
+      "suggestedReplies": [
+        {
+          "id": "s-4a",
+          "label": "Offer Friday Slots (10 AM / 2:30 PM / 4 PM)",
+          "intent": "Direct slot selection",
+          "text": "Hi Anita, certainly. We have open slots this Friday at 10:00 AM, 2:30 PM, or 4:00 PM. Please reply with your preferred time and we will confirm your appointment."
+        },
+        {
+          "id": "s-4b",
+          "label": "Confirm Friday 10:00 AM Slot",
+          "intent": "Proactive booking",
+          "text": "Hi Anita, I have tentatively reserved the Friday 10:00 AM morning slot for your visit. Let us know if you prefer an afternoon time instead."
+        },
+        {
+          "id": "s-4c",
+          "label": "Offer Tele-Consult Option",
+          "intent": "Remote alternative",
+          "text": "Hi Anita, we can move your in-clinic visit to Friday at 2:30 PM, or if it is more convenient, we can do a quick video follow-up tomorrow evening."
+        }
+      ],
+      "updatedAt": "2026-11-08T13:10:39.200Z"
+    },
+    {
+      "id": "t-5",
+      "name": "Meera Patel",
+      "subtitle": "29y · P-24623 · Follow-up check",
+      "category": "patients",
+      "channel": "SMS",
+      "priority": "routine",
+      "stage": "resolved",
+      "preview": "Thank you for the prescription",
+      "timestamp": "Yesterday",
+      "unread": false,
+      "statusLabel": "Follow-up logged",
+      "phone": "+91 98111 22334",
+      "aiSummary": "Topical cream 2 tubes. Patient confirmed adherence. Next review in 7 days.",
+      "messages": [
+        {
+          "id": "m-501",
+          "sender": "patient",
+          "text": "Thank you for the prescription. I am using the cream as directed.",
+          "time": "Yesterday"
+        }
+      ],
+      "draftReply": "Hi Meera, glad to hear that. Remember to apply SPF 50+ sunscreen every morning while using the night cream, and message us if you notice any dryness.",
+      "suggestedReplies": [
+        {
+          "id": "s-5a",
+          "label": "Sunscreen & Hydration Reminder",
+          "intent": "Adherence support",
+          "text": "Hi Meera, glad to hear that. Remember to apply SPF 50+ sunscreen every morning while using the night cream, and message us if you notice any dryness."
+        },
+        {
+          "id": "s-5b",
+          "label": "1-Week Photo Check-In Request",
+          "intent": "Visual progress tracking",
+          "text": "Hi Meera, great! Please share a clear daylight photo of the treated area after 7 days so we can assess your pigmentation improvement."
+        },
+        {
+          "id": "s-5c",
+          "label": "Confirm 7-Day Review Slot",
+          "intent": "Routine follow-up",
+          "text": "Hi Meera, glad your skin is tolerating the cream well. We will check in with you next week for your 7-day progress review."
+        }
+      ],
+      "updatedAt": "2026-11-07T16:20:39.200Z"
+    },
+    {
+      "id": "t-6",
+      "name": "Apollo Pharmacy Hub",
+      "subtitle": "Partner Pharmacy · Batch verification",
+      "category": "pharmacies",
+      "channel": "SMS",
+      "priority": "routine",
+      "stage": "needs_review",
+      "preview": "Verifying prescription batch #RX-8842",
+      "timestamp": "1 h ago",
+      "unread": true,
+      "statusLabel": "Pharmacy authorization",
+      "phone": "+91 98765 00420",
+      "aiSummary": "Partner pharmacy requesting dispensing confirmation for Harman Preet (P-24618).",
+      "messages": [
+        {
+          "id": "m-601",
+          "sender": "patient",
+          "text": "Hello Doctor, confirming prescription for patient Harman (P-24618). Please authorize.",
+          "time": "11:15 AM"
+        }
+      ],
+      "draftReply": "Prescription batch #RX-8842 for Harman Preet (P-24618) is verified and authorized for dispensing as written.",
+      "suggestedReplies": [
+        {
+          "id": "s-6a",
+          "label": "Authorize Dispensing (#RX-8842)",
+          "intent": "Approve as written",
+          "text": "Prescription batch #RX-8842 for Harman Preet (P-24618) is verified and authorized for dispensing as written."
+        },
+        {
+          "id": "s-6b",
+          "label": "Approve Brand Substitution",
+          "intent": "Allow generic equivalent",
+          "text": "Batch #RX-8842 is authorized. If the primary topical brand is out of stock, you may dispense the equivalent strength ceramide formulation."
+        },
+        {
+          "id": "s-6c",
+          "label": "Request Patient Call Before Dispense",
+          "intent": "Dosage verification",
+          "text": "Please hold batch #RX-8842 briefly and have the pharmacist call our clinic desk to confirm the strength."
+        }
+      ],
+      "updatedAt": "2026-11-08T15:20:39.200Z"
     }
   ]
 }

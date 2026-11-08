@@ -1859,21 +1859,6 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap shrink-0">
-            <button
-              type="button"
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => handleTabChange('aisummary')}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border shadow-2xs shrink-0 cursor-pointer whitespace-nowrap ${
-                activeTab === 'aisummary'
-                  ? 'bg-white text-[#0f2926] border-white ring-2 ring-teal-300/60'
-                  : 'bg-white/15 hover:bg-white/25 text-white border-white/25'
-              }`}
-              title="Open AI-auto-filled consultation summary"
-            >
-              <Sparkles className={`w-3.5 h-3.5 ${activeTab === 'aisummary' ? 'text-[#157a6e]' : 'text-teal-200'}`} />
-              <span>View Summary</span>
-            </button>
-
             <div className="flex items-center gap-2 bg-white/12 border border-white/20 px-3 py-1.5 rounded-xl shrink-0">
               <span className="text-xs font-medium text-[#d4ece8] whitespace-nowrap">Consultation fee</span>
               <span className="text-xs font-semibold text-white/80">₹</span>
@@ -1909,21 +1894,21 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs Bar with Completion Indicators & Enter Hint */}
+        {/* Streamlined 5-Step SOAP Navigation Bar */}
         <div className="flex items-center justify-between gap-3 px-6 border-b border-[#e2ebe8] bg-white overflow-x-auto shrink-0 scrollbar-none">
           <div className="flex items-center gap-1 min-w-max">
             <button
               type="button"
               onMouseDown={e => e.preventDefault()}
-              onClick={() => handleTabChange('diagnosis')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
-                activeTab === 'diagnosis'
+              onClick={() => handleTabChange('notes')}
+              className={`flex items-center gap-1.5 py-3 px-3.5 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+                activeTab === 'notes' || activeTab === 'diagnosis'
                   ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
                   : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
               }`}
             >
               <Stethoscope className="w-3.5 h-3.5 shrink-0" />
-              <span>Diagnosis</span>
+              <span>1. Assessment &amp; Notes</span>
               {diagnoses.length > 0 ? (
                 <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
                   {diagnoses.length}
@@ -1935,71 +1920,33 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => handleTabChange('tests')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
-                activeTab === 'tests'
+              className={`flex items-center gap-1.5 py-3 px-3.5 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+                activeTab === 'tests' || activeTab === 'procedure'
                   ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
                   : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
               }`}
             >
               <FlaskConical className="w-3.5 h-3.5 shrink-0" />
-              <span>Tests</span>
-              {tests.length > 0 ? (
+              <span>2. Orders &amp; Procedures</span>
+              {tests.length + procedures.length > 0 ? (
                 <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
-                  {tests.length}
+                  {tests.length + procedures.length}
                 </span>
               ) : null}
-            </button>
-
-            <button
-              type="button"
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => handleTabChange('procedure')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
-                activeTab === 'procedure'
-                  ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
-                  : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
-              }`}
-            >
-              <Scissors className="w-3.5 h-3.5 shrink-0" />
-              <span>Procedure</span>
-              {procedures.length > 0 ? (
-                <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
-                  {procedures.length}
-                </span>
-              ) : null}
-            </button>
-
-            <button
-              type="button"
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => handleTabChange('notes')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
-                activeTab === 'notes'
-                  ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
-                  : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5 shrink-0" />
-              <span>Clinical notes</span>
-              {isTabComplete('notes') && (
-                <span className="w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center font-bold">
-                  <Check className="w-2.5 h-2.5" />
-                </span>
-              )}
             </button>
 
             <button
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => handleTabChange('images')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+              className={`flex items-center gap-1.5 py-3 px-3.5 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                 activeTab === 'images'
                   ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
                   : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
               }`}
             >
               <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-              <span>Clinical images</span>
+              <span>3. Clinical Images</span>
               {images.length > 0 ? (
                 <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
                   {images.length}
@@ -2011,56 +1958,35 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => handleTabChange('followup')}
-              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+              className={`flex items-center gap-1.5 py-3 px-3.5 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                 activeTab === 'followup'
                   ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
                   : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
               }`}
             >
               <Calendar className="w-3.5 h-3.5 shrink-0" />
-              <span>Follow up &amp; Rx</span>
+              <span>4. Rx &amp; Follow-up</span>
               {prescriptions.length > 0 ? (
                 <span className="w-4 h-4 rounded-full bg-[#157a6e] text-white text-[10px] flex items-center justify-center font-bold">
                   {prescriptions.length}
                 </span>
               ) : null}
             </button>
-          </div>
 
-          {/* Live Enter-to-Next-Tab Status Indicator */}
-          {nextTab && (
             <button
               type="button"
               onMouseDown={e => e.preventDefault()}
-              onClick={() => advanceToNextTab(true)}
-              className={`hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 whitespace-nowrap cursor-pointer border ${
-                isTabComplete(activeTab)
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 shadow-2xs'
-                  : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+              onClick={() => handleTabChange('aisummary')}
+              className={`flex items-center gap-1.5 py-3 px-3.5 text-xs font-medium border-b-2 transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+                activeTab === 'aisummary'
+                  ? 'border-[#157a6e] text-[#115e56] font-semibold bg-teal-50/40'
+                  : 'border-transparent text-[#5c7470] hover:text-[#0f2926]'
               }`}
-              title={
-                isTabComplete(activeTab)
-                  ? `All fields filled! Press Enter or click to move to ${TAB_NEXT_LABELS[activeTab]}`
-                  : `Fill fields or click to move to ${TAB_NEXT_LABELS[activeTab]}`
-              }
             >
-              {isTabComplete(activeTab) ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Ready ·</span>
-                  <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-white text-emerald-900 border border-emerald-300 rounded shadow-2xs">
-                    Enter ↵
-                  </kbd>
-                  <span>→ {TAB_NEXT_LABELS[activeTab]}</span>
-                </>
-              ) : (
-                <>
-                  <span>Next: {TAB_NEXT_LABELS[activeTab]}</span>
-                  <ArrowRight className="w-3 h-3" />
-                </>
-              )}
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span>5. Review &amp; Sign</span>
             </button>
-          )}
+          </div>
         </div>
 
         {/* Tab Body Content */}
@@ -2102,18 +2028,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             </div>
           )}
 
-          {/* TAB 1: DIAGNOSIS */}
-          {activeTab === 'diagnosis' && (
-            <div className="space-y-4 animate-in fade-in duration-150">
+          {/* STEP 1: ASSESSMENT & CLINICAL NOTES (Diagnosis + Notes combined) */}
+          {(activeTab === 'diagnosis' || activeTab === 'notes') && (
+            <div className="space-y-4 animate-in fade-in duration-150 mb-6 pb-6 border-b border-slate-200">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <p className="text-xs text-slate-500">
-                  Tap to add a diagnosis. Once selected, press <strong className="text-teal-800">Enter ↵</strong> to move to Skin Tests.
-                </p>
-                {isTabComplete('diagnosis') && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                    <Check className="w-3 h-3" /> Diagnosis selected · Press Enter ↵ for Skin Tests
-                  </span>
-                )}
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Primary &amp; Differential Diagnosis
+                </h4>
               </div>
 
               {/* Selected Diagnoses Box */}
@@ -2231,36 +2152,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </button>
               </div>
 
-              {/* Step Navigation */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <span className="text-xs text-slate-500 font-medium">
-                  {diagnoses.length > 0 ? `${diagnoses.length} diagnosis selected · Press Enter ↵ to continue` : 'Select or enter diagnoses'}
-                </span>
-                <button
-                  type="button"
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={() => handleTabChange('tests')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-                >
-                  <span>Continue to Skin Tests</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
             </div>
           )}
 
-          {/* TAB 2: TESTS */}
-          {activeTab === 'tests' && (
-            <div className="space-y-4 animate-in fade-in duration-150">
+          {/* STEP 2: ORDERS & PROCEDURES (Tests + Procedures combined) */}
+          {(activeTab === 'tests' || activeTab === 'procedure') && (
+            <div className="space-y-4 animate-in fade-in duration-150 mb-6 pb-6 border-b border-slate-200">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <p className="text-xs text-slate-500">
-                  Select skin-related tests for this patient. Once selected, press <strong className="text-teal-800">Enter ↵</strong> to move to Procedures.
-                </p>
-                {isTabComplete('tests') && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                    <Check className="w-3 h-3" /> Tests selected · Press Enter ↵ for Procedures
-                  </span>
-                )}
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Skin Tests &amp; Diagnostic Investigations
+                </h4>
               </div>
 
               {/* Selected Tests Box */}
@@ -2378,42 +2279,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </button>
               </div>
 
-              {/* Step Navigation */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={() => handleTabChange('diagnosis')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Back to Diagnosis</span>
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={() => handleTabChange('procedure')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-                >
-                  <span>Continue to Procedures</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
             </div>
           )}
 
-          {/* TAB 3: PROCEDURE */}
-          {activeTab === 'procedure' && (
+          {/* IN-CLINIC PROCEDURES (shown with Orders & Procedures) */}
+          {(activeTab === 'tests' || activeTab === 'procedure') && (
             <div className="space-y-4 animate-in fade-in duration-150">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <p className="text-xs text-slate-500">
-                  Add procedures performed today. Once added, press <strong className="text-teal-800">Enter ↵</strong> to move to Clinical Notes.
-                </p>
-                {isTabComplete('procedure') && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                    <Check className="w-3 h-3" /> Procedure added · Press Enter ↵ for Clinical Notes
-                  </span>
-                )}
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  In-Clinic Procedures &amp; Charges
+                </h4>
               </div>
 
               {/* Common procedure catalogue chips */}
@@ -2559,27 +2434,27 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <button
                   type="button"
                   onMouseDown={e => e.preventDefault()}
-                  onClick={() => handleTabChange('tests')}
+                  onClick={() => handleTabChange('notes')}
                   className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Back to Tests</span>
+                  <span>Back to Assessment &amp; Notes</span>
                 </button>
                 <button
                   type="button"
                   onMouseDown={e => e.preventDefault()}
-                  onClick={() => handleTabChange('notes')}
+                  onClick={() => handleTabChange('images')}
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
-                  <span>Continue to Clinical Notes</span>
+                  <span>Continue to Clinical Images</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* TAB 4: CLINICAL NOTES */}
-          {activeTab === 'notes' && (
+          {/* CLINICAL NOTES (shown together with Diagnosis in Step 1) */}
+          {(activeTab === 'notes' || activeTab === 'diagnosis') && (
             <div className="space-y-4 animate-in fade-in duration-150">
               {/* Single Voice-to-Text Clinical Dictation Card (Auto-Fills AI Summary) */}
               <div className="p-4 bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50 border border-teal-200 rounded-2xl space-y-3 shadow-2xs">
@@ -2824,41 +2699,21 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               </div>
 
               {/* Step Navigation */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-200 flex-wrap gap-2">
+              <div className="flex items-center justify-end pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onMouseDown={e => e.preventDefault()}
-                  onClick={() => handleTabChange('procedure')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
+                  onClick={() => handleTabChange('tests')}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Back to Procedures</span>
+                  <span>Continue to Orders &amp; Procedures</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </button>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={() => handleTabChange('aisummary')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-teal-900 border border-teal-200 text-xs font-bold rounded-xl transition-colors cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-teal-700" />
-                    <span>Review Auto-Filled AI Summary</span>
-                  </button>
-                  <button
-                    type="button"
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={() => handleTabChange('images')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-                  >
-                    <span>Continue to Clinical Images</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
               </div>
             </div>
           )}
 
-          {/* TAB 5: CLINICAL IMAGES */}
+          {/* STEP 3: CLINICAL IMAGES */}
           {activeTab === 'images' && (
             <div className="space-y-4 animate-in fade-in duration-150">
               <ClinicalImageUploader
@@ -2890,11 +2745,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <button
                   type="button"
                   onMouseDown={e => e.preventDefault()}
-                  onClick={() => handleTabChange('notes')}
+                  onClick={() => handleTabChange('tests')}
                   className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Back to Clinical Notes</span>
+                  <span>Back to Orders &amp; Procedures</span>
                 </button>
                 <button
                   type="button"

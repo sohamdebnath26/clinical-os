@@ -390,154 +390,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Top Integrated Header Row */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          {onToggleMobileMenu && (
-            <button
-              type="button"
-              onClick={onToggleMobileMenu}
-              className="md:hidden mt-1 text-[#0f2926] hover:bg-white/60 p-2 rounded-xl transition-colors"
-              aria-label="Open menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          )}
-          <div>
-            <h1 className="text-3xl sm:text-[34px] font-extrabold text-[#0f2926] tracking-tight leading-tight">
-              {greeting}, {formatDoctorShortName(doctor?.name)}
-            </h1>
-            <p className="text-sm text-[#5c7c77] mt-1 font-normal">
-              {dateString} ·{' '}
-              {isReceptionist
-                ? 'Front-Desk Receptionist Workspace · Patient Queue & Check-In'
-                : 'Here is what is happening at your clinic today'}
-            </p>
-          </div>
+      {/* Clean Clinic Header + Primary Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-1">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0f2926] tracking-tight leading-tight">
+            {greeting}, {formatDoctorShortName(doctor?.name)}
+          </h1>
+          <p className="text-xs sm:text-sm text-[#5c7c77] mt-1 font-normal">
+            {dateString} ·{' '}
+            {isReceptionist
+              ? 'Front-Desk Receptionist Workspace · Patient Queue & Check-In'
+              : 'Today’s clinical overview, active queue, and patient progression'}
+          </p>
         </div>
 
-        {/* Right Controls: Dashed Search Box + Walk-in + AI Assistant / Role Switcher */}
-        <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-          {/* Search Box with Dashed Border */}
-          <div ref={searchRef} className="relative w-full sm:w-72">
-            <div
-              onClick={() => inputRef.current?.focus()}
-              className="bg-white/80 hover:bg-white focus-within:bg-white border border-dashed border-[#b8ccc8] focus-within:border-[#116960] rounded-2xl px-4 py-2 transition-all cursor-text"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  placeholder="Search patients, diagnoses..."
-                  value={query}
-                  onChange={e => {
-                    let val = e.target.value;
-                    if (/^\d+$/.test(val)) {
-                      val = val.slice(0, 10);
-                    }
-                    setQuery(val);
-                  }}
-                  onFocus={() => query.trim() && setIsSearchOpen(true)}
-                  className="w-full text-sm text-[#0f2926] placeholder-[#688580] bg-transparent focus:outline-none"
-                />
-                {query && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setQuery('');
-                      setIsSearchOpen(false);
-                    }}
-                    className="text-[#688580] hover:text-[#0f2926]"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-              <span className="text-xs text-[#688580] font-medium block leading-tight mt-0.5">
-                ⌘K
-              </span>
-            </div>
-
-            {/* Instant Search Results Dropdown */}
-            {isSearchOpen && (
-              <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl border border-[#dce5e3] divide-y divide-slate-100 overflow-hidden max-h-80 overflow-y-auto z-50">
-                {searchPatients.length > 0 && (
-                  <div className="p-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#688580] px-3 py-1 block">
-                      Patients ({searchPatients.length})
-                    </span>
-                    {searchPatients.map(p => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          onSelectPatient(p.id);
-                          setIsSearchOpen(false);
-                          setQuery('');
-                        }}
-                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#f2f6f5] flex items-center justify-between text-xs group"
-                      >
-                        <div>
-                          <span className="font-bold text-[#0f2926] group-hover:text-[#116960]">
-                            {p.fullName}
-                          </span>
-                          <span className="text-[11px] text-[#688580] ml-2">
-                            {p.patientCode} · {p.mobile}
-                          </span>
-                        </div>
-                        <ArrowRight className="w-3.5 h-3.5 text-[#688580] group-hover:text-[#116960]" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {matchingDiagnoses.length > 0 && (
-                  <div className="p-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#688580] px-3 py-1 block">
-                      Diagnoses
-                    </span>
-                    {matchingDiagnoses.map(d => (
-                      <div
-                        key={d}
-                        className="px-3 py-1.5 text-xs text-[#0f2926] flex items-center gap-2"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#116960]" />
-                        <span>{d}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {searchPatients.length === 0 && matchingDiagnoses.length === 0 && !isSearching && (
-                  <div className="p-5 text-center text-xs text-[#688580]">
-                    No records matching &quot;{query}&quot;.
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Dark / Light Mode Toggle */}
-          <ThemeToggleButton variant="dashboard" />
-
-          {/* Walk-in Button */}
+        {/* Non-redundant Primary Clinic Actions */}
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
             type="button"
-            onClick={onOpenWalkIn}
-            className="px-5 py-3.5 bg-white hover:bg-[#f7faf9] border border-[#dce5e3] rounded-2xl text-sm font-bold text-[#0f2926] transition-colors shrink-0 cursor-pointer"
+            onClick={() => setShowAddPatientModal(true)}
+            className="px-3.5 py-2 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs font-bold text-[#0f2926] transition-colors cursor-pointer"
           >
-            Walk-in
+            + New Patient
           </button>
-
-          {/* + AI Assistant Button (Doctor only) */}
-          {!isReceptionist && (
+          <button
+            type="button"
+            onClick={() => setShowScheduleModal(true)}
+            className="px-3.5 py-2 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs font-bold text-[#0f2926] transition-colors cursor-pointer"
+          >
+            + Book Visit
+          </button>
+          {!isReceptionist && onNavigateToImageAnalyzer && (
             <button
               type="button"
-              onClick={onOpenAIAssistant}
-              className="px-5 py-3.5 bg-[#0d4a44] hover:bg-[#093834] text-white rounded-2xl text-sm font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1.5"
+              onClick={onNavigateToImageAnalyzer}
+              className="px-3.5 py-2 bg-[#0d4a44] hover:bg-[#093834] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
             >
-              <span>✦ AI Assistant</span>
+              AI Skin &amp; Lesion Compare
             </button>
           )}
         </div>
@@ -548,26 +437,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* TOTAL PATIENTS */}
         <div
           onClick={() => onNavigateToPatients && onNavigateToPatients()}
-          className="bg-white rounded-2xl border border-[#e4ecea] p-6 hover:border-[#bfd3cf] transition-colors cursor-pointer"
+          className="bg-white rounded-2xl border border-[#e4ecea] p-5 hover:border-[#bfd3cf] transition-colors cursor-pointer"
         >
-          <span className="text-xs font-bold uppercase tracking-wider text-[#5c7c77] block">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#5c7c77] block">
             TOTAL PATIENTS
           </span>
-          <div className="text-4xl font-extrabold text-[#115e56] tracking-tight tabular-nums mt-2.5 mb-1">
+          <div className="text-3xl font-extrabold text-[#115e56] tracking-tight tabular-nums mt-2 mb-0.5">
             {stats ? stats.totalPatients : 2}
           </div>
-          <span className="text-sm text-[#5c7c77] block">active in clinic</span>
+          <span className="text-xs text-[#5c7c77] block">active in clinic</span>
         </div>
 
         {/* TODAY VISITS */}
-        <div className="bg-white rounded-2xl border border-[#e4ecea] p-6">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#5c7c77] block">
+        <div className="bg-white rounded-2xl border border-[#e4ecea] p-5">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#5c7c77] block">
             TODAY VISITS
           </span>
-          <div className="text-4xl font-extrabold text-[#115e56] tracking-tight tabular-nums mt-2.5 mb-1">
+          <div className="text-3xl font-extrabold text-[#115e56] tracking-tight tabular-nums mt-2 mb-0.5">
             {stats ? stats.visitsToday : 0}
           </div>
-          <span className="text-sm text-[#5c7c77] block">
+          <span className="text-xs text-[#5c7c77] block">
             {stats ? `${stats.visitsLast7Days} in last 7 days` : '1 in last 7 days'}
           </span>
         </div>
@@ -575,15 +464,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* WAITING QUEUE */}
         <div
           onClick={() => onNavigateToAppointments && onNavigateToAppointments()}
-          className="bg-white rounded-2xl border border-[#e4ecea] p-6 hover:border-[#bfd3cf] transition-colors cursor-pointer"
+          className="bg-white rounded-2xl border border-[#e4ecea] p-5 hover:border-[#bfd3cf] transition-colors cursor-pointer"
         >
-          <span className="text-xs font-bold uppercase tracking-wider text-[#5c7c77] block">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#5c7c77] block">
             WAITING QUEUE
           </span>
-          <div className="text-4xl font-extrabold text-[#c86d18] tracking-tight tabular-nums mt-2.5 mb-1">
+          <div className="text-3xl font-extrabold text-[#c86d18] tracking-tight tabular-nums mt-2 mb-0.5">
             {stats ? Math.max(1, stats.followUpsDue) : 1}
           </div>
-          <span className="text-sm text-[#5c7c77] block">needs attention</span>
+          <span className="text-xs text-[#5c7c77] block">needs attention</span>
         </div>
 
         {/* ACTIVE RX (or FRONT DESK APPOINTMENTS for Receptionist) */}
@@ -595,21 +484,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               onNavigateToPrescriptions();
             }
           }}
-          className="bg-white rounded-2xl border border-[#e4ecea] p-6 hover:border-[#bfd3cf] transition-colors cursor-pointer"
+          className="bg-white rounded-2xl border border-[#e4ecea] p-5 hover:border-[#bfd3cf] transition-colors cursor-pointer"
         >
-          <span className="text-xs font-bold uppercase tracking-wider text-[#5c7c77] block">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#5c7c77] block">
             {isReceptionist ? 'SCHEDULED APPOINTMENTS' : 'ACTIVE RX'}
           </span>
-          <div className="text-4xl font-extrabold text-[#115e56] tracking-tight tabular-nums mt-2.5 mb-1">
+          <div className="text-3xl font-extrabold text-[#115e56] tracking-tight tabular-nums mt-2 mb-0.5">
             {isReceptionist ? appointments.length : stats ? stats.activePrescriptions : 0}
           </div>
-          <span className="text-sm text-[#5c7c77] block">
+          <span className="text-xs text-[#5c7c77] block">
             {isReceptionist ? 'front-desk check-in queue' : 'prescribed regimens'}
           </span>
         </div>
       </div>
 
-      {/* Row 2: Receptionist Front-Desk Card vs. Doctor Clinical Pre-Visit Brief + Quick Actions */}
+      {/* Row 2: Active Patient Pre-Visit Brief + Live OPD Queue */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {isReceptionist ? (
           <div className="lg:col-span-8 bg-[#faf7f0] border border-[#e5dfd3] rounded-2xl p-6 sm:p-7 text-[#102a26] shadow-2xs flex flex-col justify-between">
@@ -624,7 +513,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {nextQueueDisplay.age}y · {nextQueueDisplay.gender} · {nextQueueDisplay.code}
               </p>
               <p className="text-xs text-[#45615a] mt-3 leading-relaxed">
-                As a Receptionist, you can register new patients, check in walk-in patients, and book or manage clinic appointments. Clinical notes, AI diagnostics, prescriptions, and role settings are restricted to Doctors.
+                Register new patients, check in walk-ins, and manage clinic appointments. Clinical notes, AI diagnostics, and prescriptions are restricted to Doctors.
               </p>
             </div>
 
@@ -643,13 +532,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               >
                 + Book Appointment
               </button>
-              <button
-                type="button"
-                onClick={onOpenWalkIn}
-                className="px-5 py-2.5 bg-transparent hover:bg-[#102a26]/5 border border-[#102a26]/45 text-[#102a26] rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-              >
-                + Walk-In Check-In
-              </button>
             </div>
           </div>
         ) : (
@@ -665,12 +547,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                   <h2
                     onClick={() => nextQueueDisplay.patientId && onSelectPatient(nextQueueDisplay.patientId)}
-                    className="font-serif text-3xl sm:text-[38px] font-normal text-[#102a26] tracking-tight leading-tight mt-1.5 cursor-pointer hover:underline"
+                    className="font-serif text-3xl sm:text-[36px] font-normal text-[#102a26] tracking-tight leading-tight mt-1.5 cursor-pointer hover:underline"
                   >
                     {nextQueueDisplay.name}
                   </h2>
 
-                  <p className="text-[14px] text-[#4e6660] mt-1 font-normal">
+                  <p className="text-[13.5px] text-[#4e6660] mt-1 font-normal">
                     {nextQueueDisplay.age}y · {nextQueueDisplay.gender} · {nextQueueDisplay.code} ·{' '}
                     {nextQueueDisplay.diagnosis && nextQueueDisplay.diagnosis !== 'Pigmentation / Dark spots'
                       ? nextQueueDisplay.diagnosis
@@ -678,7 +560,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </p>
 
                   {/* AI Pre-Visit Brief Bullet Points */}
-                  <ul className="space-y-2 mt-4 text-[13.5px] text-[#142e2a]">
+                  <ul className="space-y-2 mt-4 text-[13px] text-[#142e2a]">
                     <li className="flex items-start gap-2.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#102a26] mt-2 shrink-0" />
                       <span>
@@ -752,7 +634,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     }}
                     className="px-5 py-2.5 bg-transparent hover:bg-[#102a26]/5 border border-[#102a26]/45 text-[#102a26] rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                   >
-                    Open history
+                    Open patient chart
                   </button>
                 </div>
               </div>
@@ -847,67 +729,57 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         )}
 
-        {/* QUICK ACTIONS Card */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-[#e4ecea] p-6 flex flex-col justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#5c7c77] block mb-3.5">
-            {isReceptionist ? 'FRONT-DESK QUICK ACTIONS' : 'QUICK ACTIONS'}
-          </span>
-          <div className="grid grid-cols-2 gap-3">
-            {isReceptionist ? (
-              <>
+        {/* TODAY'S OPD QUEUE Card (replaces duplicate Quick Actions grid) */}
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-[#e4ecea] p-5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#5c7c77]">
+                RECENT &amp; QUEUED PATIENTS
+              </span>
+              {onNavigateToPatients && (
                 <button
                   type="button"
-                  onClick={onOpenWalkIn}
-                  className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
+                  onClick={onNavigateToPatients}
+                  className="text-xs font-semibold text-[#116960] hover:underline cursor-pointer"
                 >
-                  + Walk-in check-in
+                  All patients →
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigateToAppointments && onNavigateToAppointments()}
-                  className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
+              )}
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {recentPatients.slice(0, 4).map((pat) => (
+                <div
+                  key={pat.id}
+                  onClick={() => onSelectPatient(pat.id)}
+                  className="py-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/80 px-2 -mx-2 rounded-xl transition-colors cursor-pointer group"
                 >
-                  Open schedule
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onNavigateToPrescriptions) {
-                      onNavigateToPrescriptions();
-                    } else {
-                      handleStartNextConsultation();
-                    }
-                  }}
-                  className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
-                >
-                  + New Rx
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigateToImageAnalyzer && onNavigateToImageAnalyzer()}
-                  className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
-                >
-                  Scan skin image
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowAddPatientModal(true)}
-              className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
-            >
-              Add patient
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowScheduleModal(true)}
-              className="py-3 px-3 bg-white hover:bg-[#f2f7f6] border border-[#dce5e3] rounded-xl text-xs sm:text-sm font-bold text-[#0f4842] transition-colors cursor-pointer"
-            >
-              Book visit
-            </button>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-[#0f2926] group-hover:text-[#116960] truncate">
+                      {pat.fullName}
+                    </p>
+                    <p className="text-[11px] text-[#5c7c77] truncate">
+                      {pat.age}y · {pat.gender} · {pat.primaryDiagnosis || 'General Dermatology'}
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-mono text-slate-400 shrink-0">
+                    {pat.patientCode}
+                  </span>
+                </div>
+              ))}
+              {recentPatients.length === 0 && (
+                <p className="text-xs text-slate-400 py-6 text-center">
+                  No patients in queue yet.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="pt-3 mt-2 border-t border-slate-100 flex items-center justify-between text-xs text-[#5c7c77]">
+            <span>Avg. Revenue / Patient</span>
+            <span className="font-bold text-[#0f2926] tabular-nums">
+              ₹{avgPerPatient.toLocaleString('en-IN')}
+            </span>
           </div>
         </div>
       </div>

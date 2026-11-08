@@ -1,19 +1,16 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { ThemeToggleButton } from '../context/ThemeContext';
 import {
   LayoutDashboard,
   Users,
   Calendar,
   FileText,
   IndianRupee,
-  Sparkles,
   Settings,
   LogOut,
   Plus,
   ScanEye,
-  UserPlus,
   PanelLeftClose,
   PanelLeftOpen,
   MessageSquare
@@ -33,8 +30,8 @@ export type NavRoute =
 interface SidebarProps {
   currentRoute: NavRoute;
   onNavigate: (route: NavRoute) => void;
-  onOpenWalkIn: () => void;
-  onOpenAIAssistant: () => void;
+  onOpenWalkIn?: () => void;
+  onOpenAIAssistant?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   queueCount?: number;
@@ -43,11 +40,8 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   currentRoute,
   onNavigate,
-  onOpenWalkIn,
-  onOpenAIAssistant,
   isCollapsed = true,
-  onToggleCollapse,
-  queueCount = 1
+  onToggleCollapse
 }) => {
   const { doctor, logout } = useAuth();
   const { t } = useLanguage();
@@ -72,53 +66,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
     icon: React.ComponentType<{ className?: string }>;
   }[] = [
     { id: 'dashboard', label: t('dashboard'), shortLabel: 'Dashboard', icon: LayoutDashboard },
-    { id: 'appointments', label: t('appointments'), shortLabel: 'Calendar', icon: Calendar },
+    { id: 'appointments', label: t('appointments'), shortLabel: 'Schedule', icon: Calendar },
     { id: 'patients', label: t('patients'), shortLabel: 'Patients', icon: Users },
     ...(!isReceptionist
       ? [
           { id: 'prescriptions' as NavRoute, label: t('prescriptions'), shortLabel: 'Rx Notes', icon: FileText },
+          { id: 'image-analyzer' as NavRoute, label: t('aiImageAnalyzer'), shortLabel: 'AI Vision', icon: ScanEye },
           { id: 'messages' as NavRoute, label: 'Messages', shortLabel: 'Inbox', icon: MessageSquare },
-          { id: 'revenue' as NavRoute, label: 'Revenue', shortLabel: 'Billing', icon: IndianRupee }
+          { id: 'revenue' as NavRoute, label: 'Revenue', shortLabel: 'Ledger', icon: IndianRupee }
         ]
       : [])
   ];
 
-  const intelligenceNavItems = isReceptionist
-    ? []
-    : [
-        {
-          id: 'image-analyzer' as NavRoute,
-          label: t('aiImageAnalyzer'),
-          shortLabel: 'AI Vision',
-          icon: ScanEye,
-          onClick: () => onNavigate('image-analyzer'),
-          isActive: currentRoute === 'image-analyzer'
-        },
-        {
-          id: 'ai-assistant' as NavRoute,
-          label: t('aiAssistant'),
-          shortLabel: 'AI Chat',
-          icon: Sparkles,
-          onClick: onOpenAIAssistant,
-          isActive: false
-        }
-      ];
-
-  // Compact rail mode (default: 80px wide with icon + label stacked like reference UI)
-  // Expanded mode (optional: 188px slim sidebar)
   const isRail = isCollapsed;
 
   return (
     <aside
       className={`bg-[#0d3f3b] text-white border-r border-white/10 flex flex-col justify-between h-screen shrink-0 select-none sticky top-0 z-30 transition-all duration-200 ease-in-out ${
-        isRail ? 'w-[80px]' : 'w-[188px]'
+        isRail ? 'w-[76px]' : 'w-[188px]'
       }`}
     >
       {/* Top Logo & Main Navigation */}
       <div className="flex flex-col flex-1 min-h-0">
         {/* Compact Brand Header */}
         <div
-          className={`h-14 border-b border-white/10 flex items-center shrink-0 ${
+          className={`h-16 border-b border-white/10 flex items-center shrink-0 ${
             isRail ? 'justify-center px-2' : 'justify-between px-3.5'
           }`}
         >
@@ -137,7 +109,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {t('appName')}
                 </span>
                 <span className="text-[10px] text-[#8abcb5] block truncate">
-                  {isReceptionist ? 'Front-Desk Mode' : 'Clinic EMR'}
+                  {isReceptionist ? 'Front-Desk Mode' : 'Clinical OS'}
                 </span>
               </div>
             )}
@@ -156,132 +128,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Scrollable Navigation Rail */}
-        <div className="flex-1 overflow-y-auto py-2.5 px-2 space-y-2 scrollbar-none">
-          {/* Quick Walk-In Button */}
-          <div>
-            <button
-              type="button"
-              onClick={onOpenWalkIn}
-              title={`${t('walkIn')} (Queue ${queueCount})`}
-              className={`w-full rounded-xl bg-[#195650] hover:bg-[#216b63] text-white transition-all cursor-pointer relative ${
-                isRail
-                  ? 'flex flex-col items-center justify-center py-2 px-1 gap-1'
-                  : 'flex items-center justify-between px-3 py-2'
-              }`}
-            >
-              {isRail ? (
-                <>
-                  <div className="relative">
-                    <UserPlus className="w-4 h-4 text-[#9fe5db]" />
-                    {queueCount > 0 && (
-                      <span className="absolute -top-1.5 -right-2.5 min-w-[14px] h-[14px] px-1 rounded-full bg-[#f6dcb8] text-[#7c4d15] text-[9px] font-extrabold flex items-center justify-center">
-                        {queueCount}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[10px] font-semibold text-[#e4f2f0] leading-none truncate max-w-full">
-                    Walk-In
-                  </span>
-                </>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <UserPlus className="w-4 h-4 text-[#9fe5db] shrink-0" />
-                    <span className="text-xs font-semibold text-[#e4f2f0] truncate">
-                      {t('walkIn')}
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-extrabold bg-[#f6dcb8] text-[#7c4d15] px-1.5 py-0.5 rounded-full shrink-0">
-                    {queueCount}
-                  </span>
-                </>
-              )}
-            </button>
-          </div>
-
-          <div className="h-px bg-white/10 mx-1" />
-
-          {/* Primary Clinical Workspace Items */}
-          <div className="space-y-1">
-            {primaryNavItems.map(item => {
-              const Icon = item.icon;
-              const isActive = currentRoute === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onNavigate(item.id)}
-                  title={item.label}
-                  className={`w-full rounded-xl transition-all cursor-pointer ${
+        <div className="flex-1 overflow-y-auto py-3 px-2 space-y-1 scrollbar-none">
+          {primaryNavItems.map(item => {
+            const Icon = item.icon;
+            const isActive = currentRoute === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onNavigate(item.id)}
+                title={item.label}
+                className={`w-full rounded-xl transition-all cursor-pointer ${
+                  isRail
+                    ? 'flex flex-col items-center justify-center py-2.5 px-1 gap-1'
+                    : 'flex items-center gap-2.5 px-3 py-2.5 text-xs'
+                } ${
+                  isActive
+                    ? 'bg-[#157a6e] text-white font-semibold shadow-2xs'
+                    : 'text-[#c9e3df] hover:bg-white/8 hover:text-white font-medium'
+                }`}
+              >
+                <Icon className="w-[18px] h-[18px] shrink-0" />
+                <span
+                  className={
                     isRail
-                      ? 'flex flex-col items-center justify-center py-2 px-1 gap-1'
-                      : 'flex items-center gap-2.5 px-3 py-2 text-xs'
-                  } ${
-                    isActive
-                      ? 'bg-[#157a6e] text-white font-semibold shadow-2xs'
-                      : 'text-[#c9e3df] hover:bg-white/8 hover:text-white font-medium'
-                  }`}
+                      ? 'text-[10px] leading-tight text-center truncate max-w-full'
+                      : 'truncate'
+                  }
                 >
-                  <Icon className="w-[18px] h-[18px] shrink-0" />
-                  <span
-                    className={
-                      isRail
-                        ? 'text-[10px] leading-tight text-center truncate max-w-full'
-                        : 'truncate'
-                    }
-                  >
-                    {isRail ? item.shortLabel : item.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="h-px bg-white/10 mx-1" />
-
-          {/* AI Intelligence Items */}
-          <div className="space-y-1">
-            {intelligenceNavItems.map(item => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={item.onClick}
-                  title={item.label}
-                  className={`w-full rounded-xl transition-all cursor-pointer ${
-                    isRail
-                      ? 'flex flex-col items-center justify-center py-2 px-1 gap-1'
-                      : 'flex items-center gap-2.5 px-3 py-2 text-xs'
-                  } ${
-                    item.isActive
-                      ? 'bg-[#157a6e] text-white font-semibold shadow-2xs'
-                      : 'text-[#c9e3df] hover:bg-white/8 hover:text-white font-medium'
-                  }`}
-                >
-                  <Icon className="w-[18px] h-[18px] shrink-0" />
-                  <span
-                    className={
-                      isRail
-                        ? 'text-[10px] leading-tight text-center truncate max-w-full'
-                        : 'truncate'
-                    }
-                  >
-                    {isRail ? item.shortLabel : item.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                  {isRail ? item.shortLabel : item.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Bottom Theme Toggle, Settings, Doctor Profile & Collapse Toggle */}
+      {/* Bottom Settings, Doctor Profile & Collapse Toggle */}
       <div className="border-t border-white/10 p-2 space-y-1.5 shrink-0">
-        {/* Dark / Light Mode Toggle */}
-        <ThemeToggleButton variant={isRail ? 'sidebar-rail' : 'sidebar-expanded'} />
-
-        {/* Settings (Doctor Only — contains Email Role Assignment & Clinic Config) */}
         {!isReceptionist && (
           <button
             type="button"

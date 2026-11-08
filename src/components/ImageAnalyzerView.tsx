@@ -108,29 +108,16 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
   const [abcdeResult, setAbcdeResult] = useState<ABCDEScoreResult | null>(null);
   const [pinnedSuccess, setPinnedSuccess] = useState<string | null>(null);
 
-  // Clinic Subscription & Credit Meter state
-  const [subscription, setSubscription] = useState<ClinicSubscriptionState | null>(null);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [checkoutPlanType, setCheckoutPlanType] = useState<'pro' | 'topup'>('pro');
-  const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'Card'>('UPI');
-  const [upiId, setUpiId] = useState('clinic@okaxis');
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [paymentSuccessMsg, setPaymentSuccessMsg] = useState<string | null>(null);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const reportChatInputRef = useRef<HTMLInputElement>(null);
 
-  // Load patients & clinic subscription credit meter on mount
+  // Load patients on mount
   useEffect(() => {
     api.patients.list()
       .then(res => setPatients(res.patients || []))
       .catch(err => console.warn('Failed to load patients:', err));
-
-    api.subscription.get()
-      .then(res => setSubscription(res.subscription))
-      .catch(err => console.warn('Failed to load subscription:', err));
   }, []);
 
   // When selectedPatientId changes, fetch details & timeline & images
@@ -349,14 +336,6 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
       return;
     }
 
-    if (subscription && subscription.aiScansRemaining <= 0) {
-      setErrorMsg(
-        'Your 10 free AI Diagnostic Scans are complete. Upgrade to the Pro Monthly Plan (₹3,999/mo) or Top Up 100 Credits to continue.'
-      );
-      setShowUpgradeModal(true);
-      return;
-    }
-
     setIsAnalyzing(true);
     setErrorMsg(null);
     setAnalysisStep('Preprocessing visual image morphology...');
@@ -390,9 +369,6 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
       });
 
       setAnalysisResult(res.analysis);
-      if (res.subscription) {
-        setSubscription(res.subscription);
-      }
       if (res.analysis.visualMetrics) {
         setVisualMetrics(res.analysis.visualMetrics);
       }
@@ -400,51 +376,17 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
         setSelectedPatient(res.patient);
       }
 
-      // Automatically advance view to results section
       setTimeout(() => {
         document.getElementById('analysis-results-section')?.scrollIntoView({ behavior: 'smooth' });
       }, 150);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Analysis failed';
       setErrorMsg(`AI analysis could not complete: ${msg}`);
-      if (msg.toLowerCase().includes('upgrade') || msg.toLowerCase().includes('free ai')) {
-        setShowUpgradeModal(true);
-        api.subscription.get().then(r => setSubscription(r.subscription)).catch(() => {});
-      }
     } finally {
       clearTimeout(timer1);
       clearTimeout(timer2);
       setIsAnalyzing(false);
       setAnalysisStep('');
-    }
-  };
-
-  const handleCompletePurchase = async () => {
-    setIsProcessingPayment(true);
-    try {
-      if (checkoutPlanType === 'pro') {
-        const res = await api.subscription.upgradeToPro(paymentMethod);
-        setSubscription(res.subscription);
-        setPaymentSuccessMsg(res.message);
-      } else {
-        const res = await api.subscription.topUpCredits({
-          credits: 100,
-          amountInr: 999,
-          paymentMethod
-        });
-        setSubscription(res.subscription);
-        setPaymentSuccessMsg(res.message);
-      }
-      setErrorMsg(null);
-      setTimeout(() => {
-        setShowUpgradeModal(false);
-        setTimeout(() => setPaymentSuccessMsg(null), 5000);
-      }, 900);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Payment failed';
-      setErrorMsg(msg);
-    } finally {
-      setIsProcessingPayment(false);
     }
   };
 
@@ -527,121 +469,39 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Credit Meter Header */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+      {/* Clean Workspace Header + Mode Switcher */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-800 border border-teal-200">
-              <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-              {subscription?.activeProvider === 'openrouter'
-                ? `OpenRouter Vision (${subscription.activeModel})`
-                : 'Multimodal Vision AI'}
-            </span>
-            <span className="text-xs font-medium text-slate-500">
-              Grounded in Patient Timeline
-            </span>
-          </div>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700 block mb-1">
+            MULTIMODAL CLINICAL VISION · TIMELINE-GROUNDED
+          </span>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            AI Clinical Image Analyzer
+            AI Clinical Image Analyzer &amp; Lesion Progression
           </h1>
-          <p className="text-sm text-slate-600 mt-0.5 max-w-2xl">
-            Upload lesion, rash, dermoscopic, or clinical photographs. Generates a structured, one-click printable clinical diagnostic report cross-referenced with patient history.
+          <p className="text-xs sm:text-sm text-slate-600 mt-0.5 max-w-2xl">
+            Analyze single cutaneous specimens or compare Old vs. New clinical photographs side-by-side with objective delta telemetry.
           </p>
         </div>
 
-        {/* Clinic AI Scan Credit Meter Box */}
-        {subscription && (
-          <div className="bg-slate-50 rounded-xl border border-slate-200/90 p-4 min-w-[300px] sm:min-w-[350px] shrink-0">
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wide ${
-                    subscription.plan === 'pro_monthly'
-                      ? 'bg-teal-700 text-white'
-                      : 'bg-amber-100 text-amber-900 border border-amber-300'
-                  }`}
-                >
-                  {subscription.plan === 'pro_monthly' ? 'PRO MONTHLY PLAN' : 'FREE CLINIC TRIAL'}
-                </span>
-                <span className="text-xs font-semibold text-slate-700">
-                  {subscription.aiScansRemaining} / {subscription.aiScansTotalQuota} Scans Left
-                </span>
-              </div>
-              {subscription.aiScansRemaining <= 3 && (
-                <span className="text-[11px] font-bold text-rose-600">
-                  {subscription.aiScansRemaining === 0 ? 'Locked — 0 Credits' : 'Low Credits'}
-                </span>
-              )}
-            </div>
-
-            {/* Credit Meter Bar */}
-            <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden mb-3">
-              <div
-                className={`h-full transition-all duration-300 ${
-                  subscription.aiScansRemaining === 0
-                    ? 'bg-rose-500'
-                    : subscription.aiScansRemaining <= 3
-                    ? 'bg-amber-500'
-                    : 'bg-teal-600'
-                }`}
-                style={{
-                  width: `${Math.min(
-                    100,
-                    Math.max(
-                      4,
-                      Math.round(
-                        (subscription.aiScansRemaining / Math.max(1, subscription.aiScansTotalQuota)) * 100
-                      )
-                    )
-                  )}%`
-                }}
-              />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setCheckoutPlanType('pro');
-                  setShowUpgradeModal(true);
-                }}
-                className="flex-1 py-1.5 px-3 rounded-lg bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs"
-              >
-                <Zap className="w-3.5 h-3.5 text-amber-300" />
-                <span>{subscription.plan === 'pro_monthly' ? 'Extend Pro (₹3,999)' : 'Upgrade Pro (₹3,999/mo)'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setCheckoutPlanType('topup');
-                  setShowUpgradeModal(true);
-                }}
-                className="py-1.5 px-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 transition"
-              >
-                <CreditCard className="w-3.5 h-3.5 text-teal-700" />
-                <span>Top Up +100</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {paymentSuccessMsg && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm font-semibold flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-            <span>{paymentSuccessMsg}</span>
-          </div>
+        {/* Clean 2-Segment Mode Switcher */}
+        <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200 self-start lg:self-center shrink-0">
           <button
             type="button"
-            onClick={() => setPaymentSuccessMsg(null)}
-            className="text-xs text-emerald-700 hover:underline"
+            onClick={() => setShowComparePrevCurrModal(false)}
+            className="px-3.5 py-2 rounded-lg text-xs font-bold bg-white text-slate-900 shadow-2xs transition cursor-pointer"
           >
-            Dismiss
+            Single Lesion Analysis
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowComparePrevCurrModal(true)}
+            className="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-700 hover:text-teal-800 flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+            <span>Old vs. New Progression</span>
           </button>
         </div>
-      )}
+      </div>
 
       {/* Main Grid: Left = Input & Timeline, Right = Results */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -810,54 +670,20 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
               </div>
             )}
 
-            {/* Compare Previous vs. Current Image Quick Action (Always accessible) */}
-            <div className="mt-3 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowComparePrevCurrModal(true)}
-                className="w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-950 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Compare Previous Image vs. Current Image</span>
-              </button>
-            </div>
           </div>
 
           {/* 2. Image Capture / Upload Area */}
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center justify-between gap-2">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                 <Camera className="w-3.5 h-3.5 text-teal-700" />
-                Clinical Image Input
+                Clinical Specimen Input
               </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowMobileQrModal(true)}
-                  className="px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer"
-                  title="Scan QR code with phone camera to snap lesion photo"
-                >
-                  <QrCode className="w-3 h-3 text-teal-700" />
-                  <span>Scan QR from Mobile</span>
-                </button>
-                {imageSrc && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImageSrc(null);
-                      setAnalysisResult(null);
-                      setVisualMetrics(null);
-                      setErrorMsg(null);
-                      if (fileInputRef.current) {
-                        fileInputRef.current.value = '';
-                      }
-                    }}
-                    className="text-xs text-rose-600 hover:text-rose-800 font-medium"
-                  >
-                    Clear Image
-                  </button>
-                )}
-              </div>
+              {imageSrc && (
+                <span className="text-[11px] font-medium text-slate-500">
+                  {analysisResult ? 'Analyzed' : 'Ready for Analysis'}
+                </span>
+              )}
             </div>
 
             {/* Quick Clinical Presets for instant testing of diverse dermatological conditions */}
@@ -938,49 +764,33 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                   alt="Clinical specimen"
                   className="w-full max-h-72 object-contain mx-auto bg-slate-900/5 p-2"
                 />
-                <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setShowDermoscopicModal(true)}
-                    className="px-2 py-1 rounded-lg bg-slate-900/80 hover:bg-slate-900 text-teal-300 text-[10px] font-bold flex items-center gap-1 backdrop-blur-xs transition shadow-xs"
-                    title="Open Dermoscopy Magnifier & Caliper"
-                  >
-                    <Ruler className="w-3 h-3 text-teal-400" />
-                    <span>Dermoscopy & Caliper</span>
-                  </button>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-                    analysisResult ? 'bg-teal-700 text-white' : 'bg-black/60 text-white'
-                  }`}>
-                    {analysisResult ? 'Analyzed' : 'Ready to Analyze'}
-                  </span>
-                </div>
 
-                {/* Convenient quick action bar beneath loaded image */}
+                {/* Single Clean Image Toolbar */}
                 <div className="p-2.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setShowMobileQrModal(true)}
-                      className="px-2.5 py-1.5 rounded-lg border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 font-medium text-[11px] flex items-center gap-1 shadow-2xs cursor-pointer"
-                    >
-                      <QrCode className="w-3 h-3 text-teal-700" />
-                      Scan QR from Mobile
-                    </button>
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-medium text-[11px] flex items-center gap-1 shadow-2xs cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-medium text-[11px] flex items-center gap-1 cursor-pointer"
                     >
                       <Upload className="w-3 h-3 text-teal-600" />
-                      Upload Different Image
+                      Replace
                     </button>
                     <button
                       type="button"
-                      onClick={startCamera}
-                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-medium text-[11px] flex items-center gap-1 shadow-2xs cursor-pointer"
+                      onClick={() => setShowMobileQrModal(true)}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-medium text-[11px] flex items-center gap-1 cursor-pointer"
                     >
-                      <Camera className="w-3 h-3 text-teal-600" />
-                      Take Photo
+                      <QrCode className="w-3 h-3 text-teal-700" />
+                      Mobile QR
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowDermoscopicModal(true)}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-medium text-[11px] flex items-center gap-1 cursor-pointer"
+                    >
+                      <Ruler className="w-3 h-3 text-teal-700" />
+                      Dermoscope
                     </button>
                   </div>
                   <button
@@ -988,7 +798,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                     onClick={resetImageState}
                     className="text-[11px] text-rose-600 hover:text-rose-800 font-medium px-2 py-1 cursor-pointer"
                   >
-                    Clear Specimen
+                    Clear
                   </button>
                 </div>
               </div>
@@ -1206,45 +1016,28 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
             )}
 
             {/* Primary Analyze Action Button */}
-            {subscription && subscription.aiScansRemaining <= 0 ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setCheckoutPlanType('pro');
-                  setShowUpgradeModal(true);
-                }}
-                className="w-full py-3 px-4 rounded-xl font-bold text-sm text-white bg-amber-600 hover:bg-amber-700 flex items-center justify-center gap-2 shadow-sm transition"
-              >
-                <Lock className="w-4 h-4 text-amber-100" />
-                <span>10 Free Scans Used — Upgrade to Pro or Top Up Credits</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={!imageSrc || isAnalyzing}
-                onClick={handleAnalyze}
-                className={`w-full py-3 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 shadow-sm transition ${
-                  !imageSrc || isAnalyzing
-                    ? 'bg-slate-300 cursor-not-allowed text-slate-500'
-                    : 'bg-teal-800 hover:bg-teal-900 active:scale-[0.99]'
-                }`}
-              >
-                {isAnalyzing ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-teal-200" />
-                    <span>Analyzing Clinical Image...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-teal-200" />
-                    <span>
-                      Analyze Clinical Image with AI
-                      {subscription ? ` (${subscription.aiScansRemaining} Credits Left)` : ''}
-                    </span>
-                  </>
-                )}
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={!imageSrc || isAnalyzing}
+              onClick={handleAnalyze}
+              className={`w-full py-3 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 shadow-sm transition ${
+                !imageSrc || isAnalyzing
+                  ? 'bg-slate-300 cursor-not-allowed text-slate-500'
+                  : 'bg-teal-800 hover:bg-teal-900 active:scale-[0.99] cursor-pointer'
+              }`}
+            >
+              {isAnalyzing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-teal-200" />
+                  <span>Analyzing Clinical Image...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 text-teal-200" />
+                  <span>Analyze Clinical Image with AI</span>
+                </>
+              )}
+            </button>
 
             {isAnalyzing && analysisStep && (
               <p className="text-center text-xs text-teal-700 font-medium animate-pulse">
@@ -1651,170 +1444,7 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
         />
       )}
 
-      {/* Clinic Pro Monthly Plan & Credit Top-Up Modal */}
-      {showUpgradeModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-teal-300">
-                  Clinical OS · AI Diagnostics Billing
-                </span>
-                <h3 className="text-lg font-bold">
-                  Upgrade Clinic Plan or Top Up Scan Credits
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowUpgradeModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="p-6 space-y-5">
-              {/* Plan Selection Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div
-                  onClick={() => setCheckoutPlanType('pro')}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition ${
-                    checkoutPlanType === 'pro'
-                      ? 'border-teal-700 bg-teal-50/40'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold uppercase text-teal-800">
-                      Pro Monthly Plan
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-teal-700 text-white text-[10px] font-bold">
-                      POPULAR
-                    </span>
-                  </div>
-                  <div className="text-2xl font-extrabold text-slate-900">
-                    ₹3,999<span className="text-xs font-normal text-slate-500">/mo</span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1.5">
-                    Includes <strong>150 AI Clinical Image Scans/mo</strong>, printable hospital PDF reports & longitudinal lesion comparison.
-                  </p>
-                </div>
-
-                <div
-                  onClick={() => setCheckoutPlanType('topup')}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition ${
-                    checkoutPlanType === 'topup'
-                      ? 'border-teal-700 bg-teal-50/40'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold uppercase text-slate-700">
-                      Top-Up Credit Pack
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 text-[10px] font-bold">
-                      INSTANT
-                    </span>
-                  </div>
-                  <div className="text-2xl font-extrabold text-slate-900">
-                    ₹999<span className="text-xs font-normal text-slate-500"> / 100 scans</span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1.5">
-                    Add <strong>+100 AI Diagnostic Scans</strong> (₹9.99/scan) with no expiry. Ideal for high-volume OPD weeks.
-                  </p>
-                </div>
-              </div>
-
-              {/* Payment Method Selector (UPI / Card) */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                  Select Payment Method
-                </label>
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('UPI')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
-                      paymentMethod === 'UPI'
-                        ? 'border-teal-700 bg-teal-50 text-teal-900'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Zap className="w-4 h-4 text-teal-700" />
-                    <span>Instant UPI / QR</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('Card')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
-                      paymentMethod === 'Card'
-                        ? 'border-teal-700 bg-teal-50 text-teal-900'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <CreditCard className="w-4 h-4 text-teal-700" />
-                    <span>Clinic Debit / Credit Card</span>
-                  </button>
-                </div>
-
-                {paymentMethod === 'UPI' ? (
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Enter Clinic UPI ID (GPay / PhonePe / Paytm)
-                    </label>
-                    <input
-                      type="text"
-                      value={upiId}
-                      onChange={e => setUpiId(e.target.value)}
-                      placeholder="doctor@okicici"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white"
-                    />
-                  </div>
-                ) : (
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Clinic Corporate / Doctor Card
-                    </label>
-                    <input
-                      type="text"
-                      defaultValue="•••• •••• •••• 4242"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white font-mono"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Action Footer */}
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowUpgradeModal(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={isProcessingPayment}
-                  onClick={handleCompletePurchase}
-                  className="px-5 py-2.5 rounded-xl bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold flex items-center gap-2 shadow-sm"
-                >
-                  {isProcessingPayment ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Verifying Payment...</span>
-                    </>
-                  ) : checkoutPlanType === 'pro' ? (
-                    <span>Pay ₹3,999 & Unlock 150 Scans</span>
-                  ) : (
-                    <span>Pay ₹999 & Add 100 Scans</span>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Compare Stored Past Medical Image vs. Current Uploaded Image Modal */}
       {showComparePrevCurrModal && (
