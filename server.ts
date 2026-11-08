@@ -3791,6 +3791,25 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Clinical OS running on http://0.0.0.0:${PORT}`);
+
+    // Prevent Render Free Tier 15-minute inactivity spin-down (cold start)
+    // Render automatically sets RENDER_EXTERNAL_URL (e.g., https://clinical-os.onrender.com)
+    const externalUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || '').replace(/\/+$/, '');
+    if (isProduction && externalUrl && externalUrl.startsWith('http')) {
+      const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000; // Every 10 minutes (before Render's 15-min idle timeout)
+      setInterval(() => {
+        fetch(`${externalUrl}/api/health`)
+          .then(res => {
+            if (!res.ok) {
+              console.warn(`[Keep-Alive] Ping returned status ${res.status}`);
+            }
+          })
+          .catch(err => {
+            console.warn('[Keep-Alive] Ping error:', err instanceof Error ? err.message : err);
+          });
+      }, KEEP_ALIVE_INTERVAL_MS);
+      console.log(`[Keep-Alive] Render cold-start prevention active -> pinging ${externalUrl}/api/health every 10m`);
+    }
   });
 }
 
