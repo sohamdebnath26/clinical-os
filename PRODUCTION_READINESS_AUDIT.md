@@ -11,7 +11,7 @@
 4. **In walk in, in summary option in 6., remove comparison from there as well** ✅
    - Removed the duplicate lesion progression comparison block from Step 6 (Summary) in `WalkInModal.tsx`.
 5. **Add QR image upload feature in patient profile in comparison mode and in image AI analysis as well** ✅
-   - Added `MobileQrUploadModal.tsx` and backend session pairing (`/api/mobile-upload/session`) across Patient Profile, Lesion Comparison Modal, and AI Image Analyzer.
+   - Added `MobileQrUploadModal.tsx` and backend session pairing (`/api/images/mobile-session`) across Patient Profile, Lesion Comparison Modal, and AI Image Analyzer.
 6. **Sidebar goes up while scrolling — fix it, sidebar should not move** ✅
    - Locked the app layout (`h-screen overflow-hidden`) and Sidebar (`shrink-0 h-screen sticky top-0`) so scrolling the main workspace never moves the sidebar.
 7. **In comparison modal using feature on full screen gets me back to previous page — fix it** ✅
@@ -27,7 +27,7 @@
 12. **In dashboard next in queue add images of Day 1 and recent visit image, also add feature to click and zoom in** ✅
     - Updated the Dashboard `NEXT IN QUEUE` card (`DashboardView.tsx`) with **Day 1** and **Recent Visit** clinical thumbnails and an interactive **Click-to-Zoom Lightbox Modal** (100%–400% zoom slider + Day 1 / Recent Visit / Side-by-Side view toggle).
 13. **Add team feature — all logins should be kept there** ✅
-    - Centrally listed all clinic logins (Doctors and Receptionists) in `SettingsView.tsx` with role badges, email-based role assignment (`POST /api/team/assign-role`), and 1-click session switching.
+    - Centrally listed all clinic logins (Doctors and Receptionists) in `SettingsView.tsx` with role badges, email-based role assignment (`POST /api/staff/assign`), and 1-click session switching.
 
 ---
 
@@ -35,36 +35,28 @@
 
 To transition Clinical OS from staging/preview to a live multi-user healthcare production environment on Render, complete the following production checklist:
 
-### 1. Database Persistence (Render Persistent Disk or Managed PostgreSQL)
-- **Current Architecture**: Uses local JSON persistence (`data/clinical-os-db.json` via `server/db.ts`). On Render's ephemeral filesystem, local files outside a mounted persistent disk reset on redeploy.
-- **Production Change**:
-  - **Option A (Fastest on Render)**: Attach a **Render Persistent Disk** mounted at `/var/data` and set environment variable `DATA_DIR=/var/data` so `clinical-os-db.json` persists across all deployments.
-  - **Option B (Recommended for Scale)**: Migrate `server/db.ts` to **Managed PostgreSQL** (Render PostgreSQL / Supabase / Google Cloud SQL) with automated daily backups and point-in-time recovery.
+### 1. Database Persistence (Free Off-Site Backup or Managed Database)
+- **Current Architecture**: Uses local JSON persistence (`data/clinical_os_db.json` via `server/db.ts`) with self-healing base64 `dataUrl` image hydration and 1-click JSON export/restore (`/api/clinic/backup` and `/api/clinic/restore`).
 
-### 2. Cloud Object Storage for Clinical Photos & PDF Reports
-- **Current Architecture**: Clinical photos, voice notes, and generated AI PDF reports are stored as Base64 `dataUrl` strings inside the JSON database.
-- **Production Change**:
-  - Offload binary uploads (`/api/patients/:id/images`, `/api/mobile-upload/:token`, and PDF attachments) to **AWS S3, Cloudflare R2, or Google Cloud Storage** using signed URLs, storing only the secure object URL and metadata in the database.
+### 2. Clinical Photos & Mobile QR Session Uploads
+- **Current Architecture**: Clinical photos, Mobile QR uploads (`/api/images/mobile-session/:token/upload`), and generated AI PDF reports store both `/uploads/...` static files and embedded `dataUrl` payloads so images automatically re-hydrate on container startup.
 
 ### 3. Production Environment Variables & Session Hardening
-- **Current Architecture**: In-memory session map (`sessions` in `server.ts`) and SHA-256 demo credential hashing.
+- **Current Architecture**: HMAC-SHA256 signed session tokens (`sess_...`) and `bcrypt` password hashing in `server/db.ts`.
 - **Production Change**:
-  - Upgrade password hashing to `bcrypt` or `argon2id` and persist sessions in PostgreSQL/Redis with `HttpOnly`, `Secure`, `SameSite=Lax` cookies.
   - Set the following environment variables in Render:
     - `NODE_ENV=production`
     - `GEMINI_API_KEY=<production-gemini-api-key>`
     - `SESSION_SECRET=<strong-64-char-secret>`
-    - `GOOGLE_CLIENT_ID=<production-google-oauth-client-id>`
-    - `GOOGLE_CLIENT_SECRET=<production-google-oauth-client-secret>`
     - `APP_URL=https://<your-production-domain>`
 
 ### 4. Official WhatsApp Business Cloud API Integration
-- **Current Architecture**: Background dispatch via `/api/inbox/send-message` and webhook listener at `/api/inbox/webhook/whatsapp`.
+- **Current Architecture**: Background dispatch via `/api/whatsapp/send` and webhook listener at `/api/whatsapp/webhook`.
 - **Production Change**:
-  - Configure `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, and `WHATSAPP_VERIFY_TOKEN` from Meta Business Manager (or Twilio WhatsApp API).
-  - Register `https://<your-production-domain>/api/inbox/webhook/whatsapp` in Meta App Dashboard and verify `X-Hub-Signature-256` headers on incoming webhooks.
+  - Configure `WHATSAPP_API_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID` from Meta Business Manager (or Twilio WhatsApp API).
+  - Register `https://<your-production-domain>/api/whatsapp/webhook` in Meta App Dashboard.
 
 ### 5. Healthcare Compliance, Rate Limiting & Audit Logging (HIPAA / India DPDP Act)
-- **Production Change**:
-  - Add `helmet` security headers and `express-rate-limit` on `/api/auth/*`, `/api/ai/*`, and `/api/mobile-upload/*`.
-  - Add an immutable `audit_logs` table recording every patient chart access, prescription sign-off, and staff role change (`actorId`, `role`, `action`, `patientId`, `timestamp`, `ip`).
+- **Current Architecture**:
+  - `helmet` security headers and `express-rate-limit` on `/api/auth/*` and `/api/ai/*`.
+  - Immutable `auditLogs` recording every patient chart access, prescription sign-off, and staff role change (`actorId`, `actorName`, `action`, `resourceType`, `resourceId`, `timestamp`).

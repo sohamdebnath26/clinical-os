@@ -1260,7 +1260,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-11-08T15:00:09.500Z"
+    "updatedAt": "2026-11-08T16:17:26.697Z"
   },
   "appointments": [
     {
@@ -1476,7 +1476,7 @@
     "aiScansTotalQuota": 10,
     "aiScansUsed": 0,
     "activeProvider": "gemini",
-    "activeModel": "gemini-2.5-flash",
+    "activeModel": "gemini-3.8-flash",
     "transactions": [
       {
         "id": "tx-init-mvjdu9mv",

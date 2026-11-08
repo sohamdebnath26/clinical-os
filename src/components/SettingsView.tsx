@@ -166,6 +166,7 @@ export const SettingsView: React.FC = () => {
 
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
 
   const handleDownloadBackup = async () => {
     setIsBackingUp(true);
@@ -183,13 +184,19 @@ export const SettingsView: React.FC = () => {
     }
   };
 
-  const handleRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRestoreFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!window.confirm(`Are you sure you want to restore clinic data from "${file.name}"? A safety backup will be created automatically before restoring.`)) {
-      e.target.value = '';
-      return;
-    }
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setPendingRestoreFile(file);
+    e.target.value = '';
+  };
+
+  const handleConfirmRestoreFile = async () => {
+    if (!pendingRestoreFile) return;
+    const file = pendingRestoreFile;
+    setPendingRestoreFile(null);
     setIsRestoring(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -204,7 +211,6 @@ export const SettingsView: React.FC = () => {
       setErrorMsg(msg);
     } finally {
       setIsRestoring(false);
-      e.target.value = '';
     }
   };
 
@@ -229,8 +235,8 @@ export const SettingsView: React.FC = () => {
       });
       setSuccessMsg('Doctor profile & clinical defaults updated successfully.');
       setTimeout(() => setSuccessMsg(null), 3000);
-    } catch {
-      // ignore
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to save doctor profile settings.');
     } finally {
       setIsSaving(false);
     }
@@ -286,89 +292,71 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Doctor-Only Form to Assign an Email Address as Doctor or Receptionist */}
-        {!isReceptionist ? (
-          <form onSubmit={handleAssignEmailRole} className="bg-slate-50 p-4 rounded-xl border border-slate-200/90 space-y-3 text-xs">
-            <div className="font-bold text-slate-800">
-              Assign Role to an Email Address
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-              <div className="sm:col-span-5">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Email Address *
-                </label>
-                <div className="relative">
-                  <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="e.g. frontdesk@clinic.com or doctor@gmail.com"
-                    value={assignEmail}
-                    onChange={e => setAssignEmail(e.target.value)}
-                    className="w-full text-xs pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="sm:col-span-3">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Full Name (Optional)
-                </label>
+        <form onSubmit={handleAssignEmailRole} className="bg-slate-50 p-4 rounded-xl border border-slate-200/90 space-y-3 text-xs">
+          <div className="font-bold text-slate-800">
+            Assign Role to an Email Address
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div className="sm:col-span-5">
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Email Address *
+              </label>
+              <div className="relative">
+                <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
-                  type="text"
-                  placeholder={assignRole === 'receptionist' ? 'e.g. Priya Sharma' : 'e.g. Dr. Rohan'}
-                  value={assignName}
-                  onChange={e => setAssignName(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                  type="email"
+                  required
+                  placeholder="e.g. frontdesk@clinic.com or doctor@gmail.com"
+                  value={assignEmail}
+                  onChange={e => setAssignEmail(e.target.value)}
+                  className="w-full text-xs pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
                 />
               </div>
-
-              <div className="sm:col-span-4">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Assigned Role *
-                </label>
-                <select
-                  value={assignRole}
-                  onChange={e => setAssignRole(e.target.value as 'doctor' | 'receptionist')}
-                  className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none font-semibold"
-                >
-                  <option value="receptionist">Receptionist (Front-Desk &amp; Queue)</option>
-                  <option value="doctor">Doctor (Full Clinical &amp; Admin)</option>
-                </select>
-              </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
-              <span className="text-[11px] text-slate-500">
-                When this user signs in with their email on the login screen, Clinical OS automatically loads their assigned role and links them to <strong>{doctor?.clinicName || 'your clinic'}</strong>.
-              </span>
-              <button
-                type="submit"
-                disabled={isAssigningRole}
-                className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+            <div className="sm:col-span-3">
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Full Name (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder={assignRole === 'receptionist' ? 'e.g. Priya Sharma' : 'e.g. Dr. Rohan'}
+                value={assignName}
+                onChange={e => setAssignName(e.target.value)}
+                className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
+              />
+            </div>
+
+            <div className="sm:col-span-4">
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                Assigned Role *
+              </label>
+              <select
+                value={assignRole}
+                onChange={e => setAssignRole(e.target.value as 'doctor' | 'receptionist')}
+                className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none font-semibold"
               >
-                {isAssigningRole
-                  ? 'Assigning...'
-                  : `Assign as ${assignRole === 'receptionist' ? 'Receptionist' : 'Doctor'}`}
-              </button>
+                <option value="receptionist">Receptionist (Front-Desk &amp; Queue)</option>
+                <option value="doctor">Doctor (Full Clinical &amp; Admin)</option>
+              </select>
             </div>
-          </form>
-        ) : (
-          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="font-bold">Receptionist Access Mode Active</div>
-              <p className="text-[11px] mt-0.5">
-                You have access to Walk-In Check-In, Patient Registration, Appointments, and Front-Desk Inbox. Role assignment and clinical prescriptions are reserved for Doctors.
-              </p>
-            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+            <span className="text-[11px] text-slate-500">
+              When this user signs in with their email on the login screen, Clinical OS automatically loads their assigned role and links them to <strong>{doctor?.clinicName || 'your clinic'}</strong>.
+            </span>
             <button
-              type="button"
-              onClick={() => handleSwitchToAccount({ targetRole: 'doctor' })}
-              className="px-3.5 py-2 bg-[#0d3f3b] text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer"
+              type="submit"
+              disabled={isAssigningRole}
+              className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 shrink-0"
             >
-              Switch to Doctor Account
+              {isAssigningRole
+                ? 'Assigning...'
+                : `Assign as ${assignRole === 'receptionist' ? 'Receptionist' : 'Doctor'}`}
             </button>
           </div>
-        )}
+        </form>
 
         {/* Assigned Clinic Team Accounts Table */}
         <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -714,17 +702,43 @@ export const SettingsView: React.FC = () => {
                   Restore from a previously saved JSON backup file. A timestamped safety backup of your existing data is preserved automatically.
                 </p>
               </div>
-              <label className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold cursor-pointer shadow-2xs transition-colors">
-                <Upload className="w-3.5 h-3.5 text-slate-500" />
-                <span>{isRestoring ? 'Restoring Data...' : 'Upload & Restore Backup'}</span>
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={handleRestoreFile}
-                  disabled={isRestoring}
-                  className="hidden"
-                />
-              </label>
+              {pendingRestoreFile ? (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-xs">
+                  <p className="text-[11px] text-amber-900 font-medium">
+                    Restore clinic data from <strong>{pendingRestoreFile.name}</strong>? A safety backup will be created automatically.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleConfirmRestoreFile}
+                      disabled={isRestoring}
+                      className="flex-1 py-1.5 px-3 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-[11px] font-bold cursor-pointer disabled:opacity-50"
+                    >
+                      {isRestoring ? 'Restoring...' : 'Confirm Restore'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingRestoreFile(null)}
+                      disabled={isRestoring}
+                      className="py-1.5 px-3 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-semibold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold cursor-pointer shadow-2xs transition-colors">
+                  <Upload className="w-3.5 h-3.5 text-slate-500" />
+                  <span>{isRestoring ? 'Restoring Data...' : 'Upload & Restore Backup'}</span>
+                  <input
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={handleRestoreFile}
+                    disabled={isRestoring}
+                    className="hidden"
+                  />
+                </label>
+              )}
             </div>
           </div>
         </div>

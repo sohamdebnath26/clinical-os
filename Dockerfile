@@ -24,6 +24,8 @@ COPY --from=builder /app/server ./server
 COPY --from=builder /app/server.ts ./server.ts
 COPY --from=builder /app/src/types ./src/types
 COPY --from=builder /app/src/data ./src/data
+COPY --from=builder /app/src/utils ./src/utils
+COPY --from=builder /app/data ./data
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
 # Create persistent storage directories

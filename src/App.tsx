@@ -366,7 +366,7 @@ function MainApp() {
                 />
               ) : currentRoute === 'prescriptions' && !isReceptionist ? (
                 <PrescriptionsView onSelectPatient={handleSelectPatient} />
-              ) : currentRoute === 'messages' ? (
+              ) : currentRoute === 'messages' && !isReceptionist ? (
                 <MessagesView />
               ) : currentRoute === 'revenue' && !isReceptionist ? (
                 <RevenueView onSelectPatient={handleSelectPatient} />
@@ -376,7 +376,7 @@ function MainApp() {
                   onSelectPatient={handleSelectPatient}
                   onStartConsultationForPatient={handleStartConsultationForPatient}
                 />
-              ) : currentRoute === 'settings' ? (
+              ) : currentRoute === 'settings' && !isReceptionist ? (
                 <SettingsView />
               ) : null}
             </ErrorBoundary>

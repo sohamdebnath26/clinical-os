@@ -34,6 +34,8 @@ interface DatabaseSchema {
   testReports?: PatientTestReport[];
   formularyItems?: DoctorFormularyItem[];
   subscription?: ClinicSubscriptionState;
+  inboxThreads?: any[];
+  dispatchedWhatsAppMessages?: any[];
   auditLogs: AuditLog[];
   meta: {
     lastPatientNumber: number;
@@ -51,6 +53,7 @@ class DatabaseService {
   private data: DatabaseSchema;
   private isSaving = false;
   private pendingSave = false;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.data = this.loadDatabase();
@@ -386,29 +389,43 @@ class DatabaseService {
   }
 
   private persist() {
+    this.data.meta.updatedAt = new Date().toISOString();
+    if (this.saveTimer) {
+      return;
+    }
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      void this.writeAsync();
+    }, 60);
+  }
+
+  private async writeAsync() {
     if (this.isSaving) {
       this.pendingSave = true;
       return;
     }
     this.isSaving = true;
-    this.data.meta.updatedAt = new Date().toISOString();
-
     const tempPath = `${DB_PATH}.tmp`;
     try {
-      fs.writeFileSync(tempPath, JSON.stringify(this.data, null, 2), 'utf-8');
-      fs.renameSync(tempPath, DB_PATH);
+      const serialized = JSON.stringify(this.data, null, 2);
+      await fs.promises.writeFile(tempPath, serialized, 'utf-8');
+      await fs.promises.rename(tempPath, DB_PATH);
     } catch (err) {
       console.error('Error persisting database:', err);
     } finally {
       this.isSaving = false;
       if (this.pendingSave) {
         this.pendingSave = false;
-        this.persist();
+        void this.writeAsync();
       }
     }
   }
 
   public flushPendingSaves() {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
     this.data.meta.updatedAt = new Date().toISOString();
     try {
       const tempPath = `${DB_PATH}.tmp`;
@@ -420,11 +437,64 @@ class DatabaseService {
     }
   }
 
-  public exportBackup(): DatabaseSchema {
-    return JSON.parse(JSON.stringify(this.data));
+  public getAllClinicalImagesForHydration(): ClinicalImage[] {
+    return this.data.clinicalImages || [];
   }
 
-  public restoreBackup(imported: any): { success: boolean; message: string; count?: number } {
+  public exportBackup(doctorId?: string): Omit<DatabaseSchema, 'doctorPasswords'> {
+    const accessibleIds = doctorId ? this.getAccessiblePatientIds(doctorId) : null;
+    const staffDoctors = doctorId ? this.getClinicStaffAccounts(doctorId) : this.data.doctors;
+    const patients = accessibleIds
+      ? this.data.patients.filter(p => accessibleIds.has(p.id))
+      : this.data.patients;
+    const consultations = accessibleIds
+      ? this.data.consultations.filter(c => accessibleIds.has(c.patientId))
+      : this.data.consultations;
+    const prescriptions = accessibleIds
+      ? this.data.prescriptions.filter(rx => accessibleIds.has(rx.patientId))
+      : this.data.prescriptions;
+    const appointments = accessibleIds
+      ? (this.data.appointments || []).filter(a => accessibleIds.has(a.patientId))
+      : this.data.appointments || [];
+    const bodyMarkers = accessibleIds
+      ? (this.data.bodyMarkers || []).filter(m => accessibleIds.has(m.patientId))
+      : this.data.bodyMarkers || [];
+    const clinicalImages = accessibleIds
+      ? (this.data.clinicalImages || []).filter(img => accessibleIds.has(img.patientId))
+      : this.data.clinicalImages || [];
+    const testReports = accessibleIds
+      ? (this.data.testReports || []).filter(r => accessibleIds.has(r.patientId))
+      : this.data.testReports || [];
+    const formularyItems = doctorId
+      ? this.getDoctorFormulary(doctorId)
+      : this.data.formularyItems || [];
+    const auditLogs = this.getAuditLogs(500, doctorId);
+
+    return JSON.parse(
+      JSON.stringify({
+        doctors: staffDoctors,
+        patients,
+        consultations,
+        prescriptions,
+        appointments,
+        bodyMarkers,
+        clinicalImages,
+        testReports,
+        formularyItems,
+        subscription: this.data.subscription,
+        auditLogs,
+        meta: {
+          ...this.data.meta,
+          updatedAt: new Date().toISOString()
+        }
+      })
+    );
+  }
+
+  public restoreBackup(
+    imported: any,
+    doctorId?: string
+  ): { success: boolean; message: string; count?: number } {
     if (!imported || typeof imported !== 'object') {
       throw new Error('Invalid backup format: root must be an object.');
     }
@@ -439,34 +509,47 @@ class DatabaseService {
       console.warn('Could not write pre-restore safety backup:', backupErr);
     }
 
-    this.data = {
-      doctors: Array.isArray(imported.doctors) ? imported.doctors : this.data.doctors,
-      doctorPasswords: imported.doctorPasswords && typeof imported.doctorPasswords === 'object' ? imported.doctorPasswords : this.data.doctorPasswords,
-      patients: Array.isArray(imported.patients) ? imported.patients : [],
-      consultations: Array.isArray(imported.consultations) ? imported.consultations : [],
-      prescriptions: Array.isArray(imported.prescriptions) ? imported.prescriptions : [],
-      appointments: Array.isArray(imported.appointments) ? imported.appointments : [],
-      bodyMarkers: Array.isArray(imported.bodyMarkers) ? imported.bodyMarkers : [],
-      clinicalImages: Array.isArray(imported.clinicalImages) ? imported.clinicalImages : [],
-      testReports: Array.isArray(imported.testReports) ? imported.testReports : [],
-      formularyItems: Array.isArray(imported.formularyItems) ? imported.formularyItems : [],
-      subscription: imported.subscription || this.data.subscription,
-      auditLogs: Array.isArray(imported.auditLogs) ? imported.auditLogs : [],
-      meta: {
-        lastPatientNumber: imported.meta?.lastPatientNumber || 24620,
-        version: 1,
-        updatedAt: new Date().toISOString()
+    const effectiveDoctorId = this.resolveEffectiveClinicDoctorId(doctorId) || doctorId;
+    const callerDoc = effectiveDoctorId ? this.findDoctorById(effectiveDoctorId) : undefined;
+
+    const mergeById = <T extends { id: string }>(existingList: T[], incomingList: T[]): T[] => {
+      const map = new Map<string, T>();
+      for (const item of existingList) {
+        if (item && item.id) map.set(item.id, item);
       }
+      for (const item of incomingList) {
+        if (item && item.id) map.set(item.id, item);
+      }
+      return Array.from(map.values());
     };
+
+    const incomingPatients: Patient[] = (imported.patients as Patient[]).map(p => ({
+      ...p,
+      createdById: p.createdById || effectiveDoctorId,
+      createdByEmail: p.createdByEmail || callerDoc?.email?.toLowerCase()
+    }));
+
+    this.data.patients = mergeById(this.data.patients, incomingPatients);
+    this.data.consultations = mergeById(this.data.consultations, imported.consultations || []);
+    this.data.prescriptions = mergeById(this.data.prescriptions, imported.prescriptions || []);
+    this.data.appointments = mergeById(this.data.appointments || [], imported.appointments || []);
+    this.data.bodyMarkers = mergeById(this.data.bodyMarkers || [], imported.bodyMarkers || []);
+    this.data.clinicalImages = mergeById(this.data.clinicalImages || [], imported.clinicalImages || []);
+    this.data.testReports = mergeById(this.data.testReports || [], imported.testReports || []);
+    this.data.formularyItems = mergeById(this.data.formularyItems || [], imported.formularyItems || []);
+    if (imported.meta?.lastPatientNumber && imported.meta.lastPatientNumber > this.data.meta.lastPatientNumber) {
+      this.data.meta.lastPatientNumber = imported.meta.lastPatientNumber;
+    }
 
     this.ensureDefaultDoctor();
     this.ensureDefaultSubscription();
     this.flushPendingSaves();
 
+    const accessibleCount = doctorId ? this.getPatients(undefined, doctorId).length : this.data.patients.length;
     return {
       success: true,
       message: 'Clinic data restored successfully',
-      count: this.data.patients.length
+      count: accessibleCount
     };
   }
 
@@ -788,10 +871,14 @@ class DatabaseService {
     return restoredDoc;
   }
 
+  public isKnownPresetEmail(email: string): boolean {
+    return DatabaseService.DEMO_EMAILS.has(email.trim().toLowerCase());
+  }
+
   public verifyPassword(doctorId: string, passwordAttempt: string): boolean {
     const hash = this.data.doctorPasswords[doctorId];
     if (!hash) {
-      if (passwordAttempt === 'Demo@1234') return true;
+      if (this.isDemoAccount(doctorId) && passwordAttempt === 'Demo@1234') return true;
       return false;
     }
     return bcrypt.compareSync(passwordAttempt, hash);
@@ -809,12 +896,15 @@ class DatabaseService {
     role?: 'doctor' | 'receptionist';
     assignedByDoctorId?: string;
     assignedByEmail?: string;
+    allowOverwritePassword?: boolean;
   }): Doctor {
     const cleanEmail = params.email.trim().toLowerCase();
     const existing = this.findDoctorByEmail(cleanEmail);
     if (existing) {
-      const salt = bcrypt.genSaltSync(10);
-      this.data.doctorPasswords[existing.id] = bcrypt.hashSync(params.password, salt);
+      if (params.allowOverwritePassword || !this.data.doctorPasswords[existing.id]) {
+        const salt = bcrypt.genSaltSync(10);
+        this.data.doctorPasswords[existing.id] = bcrypt.hashSync(params.password, salt);
+      }
       if (params.name) existing.name = params.name;
       if (params.speciality) existing.speciality = params.speciality;
       if (params.clinicName) existing.clinicName = params.clinicName;
@@ -1754,9 +1844,12 @@ class DatabaseService {
   }
 
   // --- Patient Test & Diagnostic Reports methods ---
+  public getTestReportById(id: string): PatientTestReport | undefined {
+    return (this.data.testReports || []).find(r => r.id === id);
+  }
+
   public getTestReportsByPatient(patientId: string): PatientTestReport[] {
     if (!this.data.testReports) this.data.testReports = [];
-    this.syncTestReportsFromConsultations();
     return this.data.testReports
       .filter(r => r.patientId === patientId)
       .sort(
@@ -2315,7 +2408,7 @@ class DatabaseService {
     if (geminiKey.trim().length > 5) {
       return {
         activeProvider: 'gemini',
-        activeModel: process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash'
+        activeModel: process.env.GEMINI_VISION_MODEL || 'gemini-3.8-flash'
       };
     }
     return {
@@ -2702,6 +2795,79 @@ class DatabaseService {
       this.persist();
     }
     return true;
+  }
+
+  // --- Persistent WhatsApp Inbox & Dispatched Messages ---
+  public getStoredInboxThreads<T extends { id: string; doctorId?: string; patientId?: string }>(
+    defaultThreads: T[],
+    doctorId?: string
+  ): T[] {
+    if (!Array.isArray(this.data.inboxThreads) || this.data.inboxThreads.length === 0) {
+      this.data.inboxThreads = JSON.parse(JSON.stringify(defaultThreads));
+      this.persist();
+    }
+    const allThreads = this.data.inboxThreads as T[];
+    if (!doctorId) return allThreads;
+
+    const effectiveDoctorId = this.resolveEffectiveClinicDoctorId(doctorId) || doctorId;
+    const isDemo = this.isDemoAccount(effectiveDoctorId);
+    const accessiblePatientIds = this.getAccessiblePatientIds(effectiveDoctorId);
+
+    return allThreads.filter(t => {
+      if (t.doctorId) {
+        return t.doctorId === effectiveDoctorId || t.doctorId === doctorId;
+      }
+      if (t.patientId) {
+        return accessiblePatientIds.has(t.patientId);
+      }
+      // Seeded demo threads are visible to demo accounts
+      return isDemo;
+    });
+  }
+
+  public getAllRawInboxThreads<T extends { id: string }>(defaultThreads: T[]): T[] {
+    if (!Array.isArray(this.data.inboxThreads) || this.data.inboxThreads.length === 0) {
+      this.data.inboxThreads = JSON.parse(JSON.stringify(defaultThreads));
+      this.persist();
+    }
+    return this.data.inboxThreads as T[];
+  }
+
+  public saveStoredInboxThreads(threads: any[]) {
+    this.data.inboxThreads = threads;
+    this.persist();
+  }
+
+  public getStoredWhatsAppMessages<T extends { doctorId?: string; patientId?: string }>(
+    doctorId?: string,
+    patientId?: string
+  ): T[] {
+    if (!Array.isArray(this.data.dispatchedWhatsAppMessages)) {
+      this.data.dispatchedWhatsAppMessages = [];
+    }
+    const effectiveDoctorId = this.resolveEffectiveClinicDoctorId(doctorId) || doctorId;
+    const accessiblePatientIds = effectiveDoctorId ? this.getAccessiblePatientIds(effectiveDoctorId) : null;
+    let list = (this.data.dispatchedWhatsAppMessages as T[]).filter(m => {
+      if (!effectiveDoctorId) return true;
+      if (m.doctorId && (m.doctorId === effectiveDoctorId || m.doctorId === doctorId)) return true;
+      if (m.patientId && accessiblePatientIds?.has(m.patientId)) return true;
+      return false;
+    });
+    if (patientId) {
+      list = list.filter(m => m.patientId === patientId);
+    }
+    return list.slice(0, 100);
+  }
+
+  public addStoredWhatsAppMessage(msg: any) {
+    if (!Array.isArray(this.data.dispatchedWhatsAppMessages)) {
+      this.data.dispatchedWhatsAppMessages = [];
+    }
+    this.data.dispatchedWhatsAppMessages.unshift(msg);
+    if (this.data.dispatchedWhatsAppMessages.length > 500) {
+      this.data.dispatchedWhatsAppMessages.pop();
+    }
+    this.persist();
   }
 }
 

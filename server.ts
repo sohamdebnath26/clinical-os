@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
+import crypto from 'crypto';
 import { db } from './server/db.js';
 import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI, askImageReportAssistant, extractBufferVisualMetrics } from './server/ai.js';
 import dotenv from 'dotenv';
@@ -58,27 +59,78 @@ app.use('/api/ai', aiLimiter);
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-// Ensure upload directory exists (supports persistent DATA_DIR on Render)
-const BASE_DATA_DIR = process.env.DATA_DIR
+// Ensure upload directory exists (aligned with server/db.ts DATA_DIR resolution)
+const DATA_DIR = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
-  : process.cwd();
+  : path.resolve(process.cwd(), 'data');
 const UPLOADS_DIR = process.env.DATA_DIR
-  ? path.join(BASE_DATA_DIR, 'uploads')
+  ? path.join(DATA_DIR, 'uploads')
   : path.resolve(process.cwd(), 'uploads');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 app.use('/uploads', express.static(UPLOADS_DIR));
+
+// Re-hydrate any /uploads/... image files from persistent dataUrl on container boot
+function hydrateDiskFilesFromDb() {
+  try {
+    const images = db.getAllClinicalImagesForHydration();
+    for (const img of images) {
+      if (img.dataUrl && img.filename) {
+        const targetPath = path.join(UPLOADS_DIR, path.basename(img.filename));
+        if (!fs.existsSync(targetPath)) {
+          const match = img.dataUrl.match(/^data:([^;,]+);base64,([\s\S]+)$/);
+          if (match) {
+            fs.writeFileSync(targetPath, Buffer.from(match[2], 'base64'));
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Storage] Image disk hydration warning:', err);
+  }
+}
+hydrateDiskFilesFromDb();
 
 // Public health check endpoint for Render uptime monitors (prevents spin-down)
 app.get('/api/health', (_req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Session store (token -> doctorId) with restart-resilient token verification
+// Session store (token -> doctorId) with HMAC-signed stateless token verification
 const activeSessions = new Map<string, { doctorId: string; expiresAt: number }>();
 const revokedTokens = new Set<string>();
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days sliding window
+const SESSION_SECRET =
+  process.env.SESSION_SECRET ||
+  process.env.GEMINI_API_KEY ||
+  'clinical-os-hmac-session-secret-2026-v1';
+
+function signPayloadHmac(encodedPayload: string): string {
+  return crypto
+    .createHmac('sha256', SESSION_SECRET)
+    .update(encodedPayload)
+    .digest('base64url')
+    .slice(0, 24);
+}
+
+function pruneExpiredSessions() {
+  const now = Date.now();
+  if (activeSessions.size > 500) {
+    for (const [tok, sess] of activeSessions.entries()) {
+      if (sess.expiresAt < now) {
+        activeSessions.delete(tok);
+      }
+    }
+  }
+  if (revokedTokens.size > 1000) {
+    const first = revokedTokens.values().next().value;
+    if (first) revokedTokens.delete(first);
+  }
+}
 
 function generateToken(
   doctorOrId?:
@@ -93,6 +145,7 @@ function generateToken(
         accountType?: 'individual' | 'organisational';
       }
 ): string {
+  pruneExpiredSessions();
   let payloadStr = '';
   if (typeof doctorOrId === 'string' && doctorOrId) {
     const doc = db.findDoctorById(doctorOrId);
@@ -107,7 +160,7 @@ function generateToken(
         accountType: doc.accountType
       });
     } else {
-      payloadStr = doctorOrId;
+      payloadStr = JSON.stringify({ id: doctorOrId });
     }
   } else if (doctorOrId && typeof doctorOrId === 'object') {
     payloadStr = JSON.stringify({
@@ -122,9 +175,12 @@ function generateToken(
   }
 
   const encodedDoc = payloadStr ? Buffer.from(payloadStr, 'utf8').toString('base64url') : '';
-  return encodedDoc
-    ? `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}_${encodedDoc}`
-    : `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
+  if (!encodedDoc) {
+    const nonce = `${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
+    return `sess_${nonce}_${signPayloadHmac(nonce)}`;
+  }
+  const sig = signPayloadHmac(encodedDoc);
+  return `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}_${encodedDoc}.${sig}`;
 }
 
 // Authentication middleware
@@ -134,89 +190,53 @@ interface AuthenticatedRequest extends Request {
 
 function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  const headerDoctorId = typeof req.headers['x-doctor-id'] === 'string' ? req.headers['x-doctor-id'].trim() : '';
-  const headerDoctorEmail = typeof req.headers['x-doctor-email'] === 'string' ? req.headers['x-doctor-email'].trim() : '';
-  const headerDoctorName = typeof req.headers['x-doctor-name'] === 'string' ? req.headers['x-doctor-name'].trim() : '';
-
   const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1]?.trim() : '';
 
-  if (!token && !headerDoctorId && !headerDoctorEmail) {
+  if (!token) {
     return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
   }
 
-  if (token && revokedTokens.has(token)) {
+  if (revokedTokens.has(token)) {
     return res.status(401).json({ error: 'Session expired or invalid' });
   }
 
-  let session = token ? activeSessions.get(token) : undefined;
-
-  // If the client sends explicit logged-in doctor headers, verify the session matches the logged-in doctor account
-  if (session && (headerDoctorEmail || headerDoctorId)) {
-    const currentSessionDoc = db.findDoctorById(session.doctorId);
-    const emailMismatch =
-      headerDoctorEmail &&
-      currentSessionDoc &&
-      currentSessionDoc.email.toLowerCase() !== headerDoctorEmail.toLowerCase();
-    const idMismatch =
-      !headerDoctorEmail &&
-      headerDoctorId &&
-      session.doctorId !== headerDoctorId;
-
-    if (!currentSessionDoc || emailMismatch || idMismatch) {
-      const alignedDoc = db.restoreOrEnsureDoctor({
-        id: headerDoctorId || undefined,
-        email: headerDoctorEmail || undefined,
-        name: headerDoctorName || undefined
-      });
-      if (alignedDoc) {
-        session = {
-          doctorId: alignedDoc.id,
-          expiresAt: Date.now() + SESSION_TTL_MS
-        };
-        if (token) {
-          activeSessions.set(token, session);
-        }
-      }
-    }
+  let session = activeSessions.get(token);
+  if (session && session.expiresAt < Date.now()) {
+    activeSessions.delete(token);
+    session = undefined;
   }
 
-  // Restore valid client tokens seamlessly if the server restarted in dev/Render
-  if (!session && token && token.startsWith('sess_')) {
+  // Restore valid signed client tokens seamlessly if the server restarted in dev/Render
+  if (!session && token.startsWith('sess_')) {
     const parts = token.split('_');
     let restoredDoctor = undefined;
     if (parts.length >= 4) {
       try {
-        const decodedRaw = Buffer.from(parts.slice(3).join('_'), 'base64url').toString('utf8');
-        if (decodedRaw.startsWith('{')) {
-          const parsed = JSON.parse(decodedRaw);
-          restoredDoctor = db.restoreOrEnsureDoctor({
-            ...parsed,
-            email: parsed.email || headerDoctorEmail || undefined,
-            name: parsed.name || headerDoctorName || undefined
-          });
-        } else {
-          restoredDoctor = db.restoreOrEnsureDoctor({
-            id: decodedRaw,
-            email: headerDoctorEmail || undefined,
-            name: headerDoctorName || undefined
-          });
+        const rawTail = parts.slice(3).join('_');
+        const dotIdx = rawTail.lastIndexOf('.');
+        let encodedPart = '';
+        if (dotIdx > 0) {
+          const candidateEncoded = rawTail.slice(0, dotIdx);
+          const candidateSig = rawTail.slice(dotIdx + 1);
+          const expectedSig = signPayloadHmac(candidateEncoded);
+          if (
+            candidateSig.length === expectedSig.length &&
+            crypto.timingSafeEqual(Buffer.from(candidateSig), Buffer.from(expectedSig))
+          ) {
+            encodedPart = candidateEncoded;
+          }
+        }
+
+        if (encodedPart) {
+          const decodedRaw = Buffer.from(encodedPart, 'base64url').toString('utf8');
+          if (decodedRaw.startsWith('{')) {
+            const parsed = JSON.parse(decodedRaw);
+            restoredDoctor = db.restoreOrEnsureDoctor(parsed);
+          }
         }
       } catch {
         // invalid encoded payload
       }
-    }
-
-    if (!restoredDoctor && (headerDoctorId || headerDoctorEmail)) {
-      restoredDoctor = db.restoreOrEnsureDoctor({
-        id: headerDoctorId || undefined,
-        email: headerDoctorEmail || undefined,
-        name: headerDoctorName || undefined
-      });
-    }
-
-    // Fallback for legacy tokens only when no doctor headers were provided
-    if (!restoredDoctor) {
-      restoredDoctor = db.findDoctorById('doc-demo-001');
     }
 
     if (restoredDoctor) {
@@ -228,26 +248,6 @@ function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunc
     }
   }
 
-  // Also allow restoration from X-Doctor-Id / X-Doctor-Email headers if token was lost or legacy
-  if (!session && (headerDoctorId || headerDoctorEmail)) {
-    const restoredDoctor =
-      db.restoreOrEnsureDoctor({
-        id: headerDoctorId || undefined,
-        email: headerDoctorEmail || undefined,
-        name: headerDoctorName || undefined
-      }) || db.findDoctorById('doc-demo-001');
-
-    if (restoredDoctor) {
-      session = {
-        doctorId: restoredDoctor.id,
-        expiresAt: Date.now() + SESSION_TTL_MS
-      };
-      if (token) {
-        activeSessions.set(token, session);
-      }
-    }
-  }
-
   if (!session) {
     return res.status(401).json({ error: 'Session expired or invalid' });
   }
@@ -255,22 +255,20 @@ function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunc
   // Sliding window expiration refresh
   session.expiresAt = Date.now() + SESSION_TTL_MS;
 
-  let doctor = db.findDoctorById(session.doctorId);
+  const doctor = db.findDoctorById(session.doctorId);
   if (!doctor) {
-    doctor =
-      db.restoreOrEnsureDoctor({
-        id: session.doctorId,
-        email: headerDoctorEmail || undefined,
-        name: headerDoctorName || undefined
-      }) || db.findDoctorById('doc-demo-001');
-  }
-
-  if (!doctor) {
-    if (token) activeSessions.delete(token);
+    activeSessions.delete(token);
     return res.status(401).json({ error: 'Doctor account not found' });
   }
 
   req.doctor = doctor;
+  next();
+}
+
+function requireDoctorRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (req.doctor?.role === 'receptionist') {
+    return res.status(403).json({ error: 'This clinical action is restricted to Doctors.' });
+  }
   next();
 }
 
@@ -286,25 +284,28 @@ app.post('/api/auth/login', (req, res) => {
   const cleanEmail = String(email).trim().toLowerCase();
   let doctor = db.findDoctorByEmail(cleanEmail);
 
-  // If a registered doctor's account is missing after a container restart on Render,
-  // seamlessly provision/restore their account with deterministic ID
   if (!doctor) {
-    const emailPrefix = cleanEmail.split('@')[0].replace(/[._-]+/g, ' ');
-    const formattedName =
-      name ||
-      `Dr. ${emailPrefix
-        .split(' ')
-        .filter(Boolean)
-        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ')}`;
+    // Only auto-provision if it is a known preset demo account using the demo password
+    if (db.isKnownPresetEmail(cleanEmail) && password === 'Demo@1234') {
+      const emailPrefix = cleanEmail.split('@')[0].replace(/[._-]+/g, ' ');
+      const formattedName =
+        name ||
+        `Dr. ${emailPrefix
+          .split(' ')
+          .filter(Boolean)
+          .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ')}`;
 
-    doctor = db.createDoctor({
-      name: formattedName,
-      email: cleanEmail,
-      password,
-      speciality: speciality || 'Dermatologist & Cosmetologist',
-      clinicName: clinicName || 'Cliniq Dermatology Center'
-    });
+      doctor = db.createDoctor({
+        name: formattedName,
+        email: cleanEmail,
+        password,
+        speciality: speciality || 'Dermatologist & Cosmetologist',
+        clinicName: clinicName || 'Cliniq Dermatology Center'
+      });
+    } else {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
   } else {
     const isValid = db.verifyPassword(doctor.id, password);
     if (!isValid) {
@@ -667,6 +668,10 @@ app.delete('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res)
   if (req.doctor?.role === 'receptionist') {
     return res.status(403).json({ error: 'Only doctors can delete or archive patient records.' });
   }
+  const existing = db.findPatientById(req.params.id, req.doctor?.id);
+  if (!existing) {
+    return res.status(404).json({ error: 'Patient not found' });
+  }
   const deleted = db.deletePatient(req.params.id, {
     id: req.doctor?.id || 'admin',
     name: req.doctor?.name || 'Doctor'
@@ -757,6 +762,9 @@ app.post('/api/patients', authMiddleware, (req: AuthenticatedRequest, res) => {
 
 app.put('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
+  const existing = db.findPatientById(req.params.id, doctor.id);
+  if (!existing) return res.status(404).json({ error: 'Patient not found' });
+
   const updates = { ...req.body };
   if (updates.mobile !== undefined) {
     const rawDigits = String(updates.mobile).replace(/\D/g, '');
@@ -768,13 +776,17 @@ app.put('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res) =>
 });
 
 // Patient Historical Consultations
-app.get('/api/patients/:id/consultations', authMiddleware, (req, res) => {
+app.get('/api/patients/:id/consultations', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const patient = db.findPatientById(req.params.id, req.doctor?.id);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const consultations = db.getConsultationsByPatient(req.params.id);
   res.json({ consultations });
 });
 
 // Clinical Timeline (Sanitized for Privacy: Never reveals address/mobile in timeline)
-app.get('/api/patients/:id/timeline', authMiddleware, (req, res) => {
+app.get('/api/patients/:id/timeline', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const patient = db.findPatientById(req.params.id, req.doctor?.id);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const consultations = db.getConsultationsByPatient(req.params.id);
   const events = consultations
     .filter(c => c.status === 'signed')
@@ -800,12 +812,16 @@ app.get('/api/patients/:id/timeline', authMiddleware, (req, res) => {
 });
 
 // Patient body markers
-app.get('/api/patients/:id/markers', authMiddleware, (req, res) => {
+app.get('/api/patients/:id/markers', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const patient = db.findPatientById(req.params.id, req.doctor?.id);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const markers = db.getPatientBodyMarkers(req.params.id);
   res.json({ markers });
 });
 
 app.post('/api/patients/:id/markers', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const patient = db.findPatientById(req.params.id, req.doctor?.id);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const { view, x, y, type, notes, anatomicalPart, bodyPart, color, consultationId } = req.body;
   if (!view || x === undefined || y === undefined) {
     return res.status(400).json({ error: 'view, x, and y coordinates are required' });
@@ -981,13 +997,17 @@ function storePatientClinicalImage(params: {
 }
 
 // Patient clinical images
-app.get('/api/patients/:id/images', authMiddleware, (req, res) => {
+app.get('/api/patients/:id/images', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const patient = db.findPatientById(req.params.id, req.doctor?.id);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const images = db.getPatientImages(req.params.id);
   res.json({ images });
 });
 
 app.post('/api/patients/:id/images', authMiddleware, (req: AuthenticatedRequest, res) => {
   try {
+    const patient = db.findPatientById(req.params.id, req.doctor?.id);
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
     const rawDataUrl = req.body.dataUrl || req.body.url;
     if (!rawDataUrl) {
       return res.status(400).json({ error: 'Image dataUrl or url is required' });
@@ -1018,25 +1038,34 @@ app.post('/api/patients/:id/images', authMiddleware, (req: AuthenticatedRequest,
   }
 });
 
-app.delete('/api/patients/:id/images/:imageId', authMiddleware, (req, res) => {
+app.delete('/api/patients/:id/images/:imageId', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const patient = db.findPatientById(req.params.id, req.doctor?.id);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const success = db.deleteClinicalImage(req.params.imageId);
   if (!success) return res.status(404).json({ error: 'Medical image not found' });
   res.json({ success: true, message: 'Medical image removed' });
 });
 
 // Patient prescriptions
-app.get('/api/patients/:id/prescriptions', authMiddleware, (req, res) => {
-  const prescriptions = db.getPrescriptions(req.params.id);
+app.get('/api/patients/:id/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const patient = db.findPatientById(req.params.id, req.doctor?.id);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  const prescriptions = db.getPrescriptions(req.params.id, req.doctor?.id);
   res.json({ prescriptions });
 });
 
 // Patient test & diagnostic report results
-app.get('/api/patients/:id/reports', authMiddleware, (req, res) => {
+app.get('/api/patients/:id/reports', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const patient = db.findPatientById(req.params.id, req.doctor?.id);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const reports = db.getTestReportsByPatient(req.params.id);
   res.json({ reports });
 });
 
-app.post('/api/patients/:id/reports', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.post('/api/patients/:id/reports', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
+  const patient = db.findPatientById(req.params.id, req.doctor?.id);
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
   const {
     testName,
     category,
@@ -1091,8 +1120,12 @@ app.post('/api/patients/:id/reports', authMiddleware, (req: AuthenticatedRequest
   res.status(201).json({ report });
 });
 
-app.put('/api/reports/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.put('/api/reports/:id', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
+  const existingReport = db.getTestReportById(req.params.id);
+  if (!existingReport || !db.findPatientById(existingReport.patientId, doctor.id)) {
+    return res.status(404).json({ error: 'Report not found' });
+  }
   const updated = db.updateTestReport(req.params.id, req.body, {
     id: doctor.id,
     name: doctor.name
@@ -1101,8 +1134,12 @@ app.put('/api/reports/:id', authMiddleware, (req: AuthenticatedRequest, res) => 
   res.json({ report: updated });
 });
 
-app.delete('/api/reports/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.delete('/api/reports/:id', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
+  const existingReport = db.getTestReportById(req.params.id);
+  if (!existingReport || !db.findPatientById(existingReport.patientId, doctor.id)) {
+    return res.status(404).json({ error: 'Report not found' });
+  }
   const deleted = db.deleteTestReport(req.params.id, {
     id: doctor.id,
     name: doctor.name
@@ -1124,6 +1161,11 @@ app.post('/api/consultations', authMiddleware, (req: AuthenticatedRequest, res) 
   }
 
   const doctor = req.doctor!;
+  const patient = db.findPatientById(patientId, doctor.id);
+  if (!patient) {
+    return res.status(404).json({ error: 'Patient not found' });
+  }
+
   try {
     const consultation = db.createConsultation({
       patientId,
@@ -1139,9 +1181,11 @@ app.post('/api/consultations', authMiddleware, (req: AuthenticatedRequest, res) 
   }
 });
 
-app.get('/api/consultations/:id', authMiddleware, (req, res) => {
+app.get('/api/consultations/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
   const consultation = db.getConsultationById(req.params.id);
-  if (!consultation) return res.status(404).json({ error: 'Consultation not found' });
+  if (!consultation || !db.findPatientById(consultation.patientId, req.doctor?.id)) {
+    return res.status(404).json({ error: 'Consultation not found' });
+  }
   res.json({ consultation });
 });
 
@@ -1151,6 +1195,10 @@ app.put('/api/consultations/:id/sign', authMiddleware, (req: AuthenticatedReques
     return res.status(403).json({ error: 'Only doctors can sign clinical consultations.' });
   }
   const doctor = req.doctor!;
+  const existingConsult = db.getConsultationById(req.params.id);
+  if (!existingConsult || !db.findPatientById(existingConsult.patientId, doctor.id)) {
+    return res.status(404).json({ error: 'Consultation not found' });
+  }
   const signed = db.saveAndSignConsultation(req.params.id, req.body, {
     id: doctor.id,
     name: doctor.name
@@ -1163,7 +1211,7 @@ app.put('/api/consultations/:id/sign', authMiddleware, (req: AuthenticatedReques
 // ==========================================
 // PRESCRIPTIONS ROUTES
 // ==========================================
-app.get('/api/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.get('/api/prescriptions', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const patientId = req.query.patientId as string | undefined;
   const prescriptions = db.getPrescriptions(patientId, req.doctor?.id);
   res.json({ prescriptions });
@@ -1179,6 +1227,11 @@ app.post('/api/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) 
   }
 
   const doctor = req.doctor!;
+  const patient = db.findPatientById(patientId, doctor.id);
+  if (!patient) {
+    return res.status(404).json({ error: 'Patient not found' });
+  }
+
   const rx = db.addPrescription(
     {
       patientId,
@@ -1665,13 +1718,13 @@ function parseMedicationsFromCellsOrText(cells: string[], rawTextFallback = ''):
   return results;
 }
 
-app.get('/api/formulary', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.get('/api/formulary', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
   const items = db.getDoctorFormulary(doctor.id);
   res.json({ items });
 });
 
-app.post('/api/formulary', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.post('/api/formulary', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
   const { name, dosage, route, frequency, duration, instructions, category, source } = req.body;
   if (!name || !String(name).trim()) {
@@ -1696,7 +1749,7 @@ app.post('/api/formulary', authMiddleware, (req: AuthenticatedRequest, res) => {
   res.status(201).json({ item });
 });
 
-app.post('/api/formulary/import', authMiddleware, async (req: AuthenticatedRequest, res) => {
+app.post('/api/formulary/import', authMiddleware, requireDoctorRole, async (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
   const { fileDataUrl, filename, rawText, items: directItems } = req.body;
 
@@ -1825,7 +1878,7 @@ app.post('/api/formulary/import', authMiddleware, async (req: AuthenticatedReque
   }
 });
 
-app.delete('/api/formulary/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.delete('/api/formulary/:id', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
   const deleted = db.deleteFormularyItem(doctor.id, req.params.id, {
     id: doctor.id,
@@ -1849,9 +1902,11 @@ app.get('/api/appointments', authMiddleware, (req: AuthenticatedRequest, res) =>
   res.json({ appointments });
 });
 
-app.get('/api/appointments/:id', authMiddleware, (req, res) => {
+app.get('/api/appointments/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
   const appt = db.getAppointmentById(req.params.id);
-  if (!appt) return res.status(404).json({ error: 'Appointment not found' });
+  if (!appt || !db.findPatientById(appt.patientId, req.doctor?.id)) {
+    return res.status(404).json({ error: 'Appointment not found' });
+  }
   res.json({ appointment: appt });
 });
 
@@ -1861,12 +1916,12 @@ app.post('/api/appointments', authMiddleware, (req: AuthenticatedRequest, res) =
     return res.status(400).json({ error: 'patientId and date are required' });
   }
 
-  const patient = db.findPatientById(patientId);
+  const doctor = req.doctor!;
+  const patient = db.findPatientById(patientId, doctor.id);
   if (!patient) {
     return res.status(404).json({ error: 'Patient not found' });
   }
 
-  const doctor = req.doctor!;
   const appt = db.createAppointment(
     {
       patientId: patient.id,
@@ -1893,6 +1948,10 @@ app.post('/api/appointments', authMiddleware, (req: AuthenticatedRequest, res) =
 
 app.put('/api/appointments/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
+  const existing = db.getAppointmentById(req.params.id);
+  if (!existing || !db.findPatientById(existing.patientId, doctor.id)) {
+    return res.status(404).json({ error: 'Appointment not found' });
+  }
   const updated = db.updateAppointment(req.params.id, req.body, { id: doctor.id, name: doctor.name });
   if (!updated) return res.status(404).json({ error: 'Appointment not found' });
   res.json({ appointment: updated });
@@ -1900,6 +1959,10 @@ app.put('/api/appointments/:id', authMiddleware, (req: AuthenticatedRequest, res
 
 app.delete('/api/appointments/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
+  const existing = db.getAppointmentById(req.params.id);
+  if (!existing || !db.findPatientById(existing.patientId, doctor.id)) {
+    return res.status(404).json({ error: 'Appointment not found' });
+  }
   const success = db.deleteAppointment(req.params.id, { id: doctor.id, name: doctor.name });
   if (!success) return res.status(404).json({ error: 'Appointment not found' });
   res.json({ success: true, message: 'Appointment deleted' });
@@ -1934,6 +1997,10 @@ app.post('/api/images/upload', authMiddleware, (req: AuthenticatedRequest, res) 
 
   try {
     const doctor = req.doctor!;
+    const patient = db.findPatientById(patientId, doctor.id);
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
     const clinicalImage = storePatientClinicalImage({
       patientId,
       consultationId,
@@ -1960,7 +2027,11 @@ app.post('/api/images/upload', authMiddleware, (req: AuthenticatedRequest, res) 
   }
 });
 
-app.delete('/api/images/:id', authMiddleware, (req, res) => {
+app.delete('/api/images/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const existingImg = db.getClinicalImageById(req.params.id);
+  if (!existingImg || !db.findPatientById(existingImg.patientId, req.doctor?.id)) {
+    return res.status(404).json({ error: 'Image not found' });
+  }
   const success = db.deleteClinicalImage(req.params.id);
   if (!success) return res.status(404).json({ error: 'Image not found' });
   res.json({ message: 'Image deleted' });
@@ -2182,6 +2253,7 @@ app.post('/api/images/mobile-session/:token/upload', (req, res) => {
       patientId: session.patientId,
       consultationId: session.consultationId,
       url: publicUrl,
+      dataUrl,
       filename: filename || `mobile_${savedFilename}`,
       mimeType,
       sizeBytes: buffer.length,
@@ -2438,7 +2510,7 @@ app.post('/api/walkin/mobile-session/:token/submit', (req, res) => {
 // ==========================================
 // AI ASSISTANT ROUTES
 // ==========================================
-app.post('/api/ai/summarize-consultation', authMiddleware, async (req, res) => {
+app.post('/api/ai/summarize-consultation', authMiddleware, requireDoctorRole, async (req, res) => {
   try {
     const summary = await summarizeConsultationWithAI(req.body);
     res.json({ summary });
@@ -2448,7 +2520,7 @@ app.post('/api/ai/summarize-consultation', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/api/ai/parse-clinical-note', authMiddleware, async (req, res) => {
+app.post('/api/ai/parse-clinical-note', authMiddleware, requireDoctorRole, async (req, res) => {
   try {
     const parsed = await parseClinicalNoteWithAI(req.body || {});
     res.json({ parsed });
@@ -2458,7 +2530,7 @@ app.post('/api/ai/parse-clinical-note', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/api/ai/chat', authMiddleware, async (req: AuthenticatedRequest, res) => {
+app.post('/api/ai/chat', authMiddleware, requireDoctorRole, async (req: AuthenticatedRequest, res) => {
   const { question, patientId, contextType } = req.body;
   if (!question) {
     return res.status(400).json({ error: 'Question is required' });
@@ -2526,7 +2598,7 @@ app.post('/api/ai/chat', authMiddleware, async (req: AuthenticatedRequest, res) 
   }
 });
 
-app.post('/api/ai/report-chat', authMiddleware, async (req, res) => {
+app.post('/api/ai/report-chat', authMiddleware, requireDoctorRole, async (req: AuthenticatedRequest, res) => {
   const { question, report, anatomicalSite, clinicalNotes, abcdeScore, patientId, conversationHistory } = req.body || {};
   if (!question) {
     return res.status(400).json({ error: 'Question is required' });
@@ -2535,7 +2607,7 @@ app.post('/api/ai/report-chat', authMiddleware, async (req, res) => {
   let patient = undefined;
   let history = undefined;
   if (patientId) {
-    patient = db.findPatientById(patientId);
+    patient = db.findPatientById(patientId, req.doctor?.id);
     if (patient) {
       history = db.getConsultationsByPatient(patient.id);
     }
@@ -2562,12 +2634,12 @@ app.post('/api/ai/report-chat', authMiddleware, async (req, res) => {
 // ==========================================
 // CLINIC SUBSCRIPTION & AI CREDIT METER ROUTES
 // ==========================================
-app.get('/api/subscription', authMiddleware, (req, res) => {
+app.get('/api/subscription', authMiddleware, requireDoctorRole, (_req, res) => {
   const subscription = db.getSubscription();
   res.json({ subscription });
 });
 
-app.post('/api/subscription/upgrade', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.post('/api/subscription/upgrade', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const paymentMethod: 'UPI' | 'Card' = req.body?.paymentMethod === 'Card' ? 'Card' : 'UPI';
   const subscription = db.upgradeToProPlan(paymentMethod);
   const doctor = req.doctor!;
@@ -2593,7 +2665,7 @@ app.post('/api/subscription/upgrade', authMiddleware, (req: AuthenticatedRequest
   });
 });
 
-app.post('/api/subscription/topup', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.post('/api/subscription/topup', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const paymentMethod: 'UPI' | 'Card' = req.body?.paymentMethod === 'Card' ? 'Card' : 'UPI';
   const credits = Number(req.body?.credits) || 100;
   const amountInr = Number(req.body?.amountInr) || 999;
@@ -2620,14 +2692,14 @@ app.post('/api/subscription/topup', authMiddleware, (req: AuthenticatedRequest, 
   });
 });
 
-app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedRequest, res) => {
+app.post('/api/ai/analyze-image', authMiddleware, requireDoctorRole, async (req: AuthenticatedRequest, res) => {
   const { imageBase64, mimeType, patientId, clinicalNotes, imageUrl, visualMetrics } = req.body;
 
   if (!imageBase64) {
     return res.status(400).json({ error: 'Clinical image data (imageBase64) is required for analysis' });
   }
 
-  // Ensure AI Scan Credit Meter never blocks active clinical consultations
+  // Ensure AI Scan Credit Meter never blocks active clinical consultations (100% free)
   let currentSub = db.getSubscription();
   if (currentSub.aiScansRemaining <= 0) {
     currentSub = db.topUpScanCredits(50, 0, 'UPI');
@@ -2638,7 +2710,7 @@ app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedReque
   let testReports = undefined;
 
   if (patientId) {
-    patient = db.findPatientById(patientId);
+    patient = db.findPatientById(patientId, req.doctor?.id);
     if (patient) {
       history = db.getConsultationsByPatient(patient.id);
       testReports = db.getTestReportsByPatient(patient.id);
@@ -2686,7 +2758,7 @@ app.post('/api/ai/analyze-image', authMiddleware, async (req: AuthenticatedReque
   }
 });
 
-app.post('/api/ai/compare-progression', authMiddleware, async (req: AuthenticatedRequest, res) => {
+app.post('/api/ai/compare-progression', authMiddleware, requireDoctorRole, async (req: AuthenticatedRequest, res) => {
   const { imageA, imageB, patientId, clinicalContext } = req.body;
 
   if (!imageA || !imageB) {
@@ -2741,7 +2813,7 @@ app.post('/api/ai/compare-progression', authMiddleware, async (req: Authenticate
 
   let patient = undefined;
   if (patientId) {
-    patient = db.findPatientById(patientId);
+    patient = db.findPatientById(patientId, req.doctor?.id);
   }
 
   try {
@@ -2779,7 +2851,7 @@ app.post('/api/ai/compare-progression', authMiddleware, async (req: Authenticate
 // ==========================================
 // AI DERMOSCOPIC ABCDE ASSESSMENT
 // ==========================================
-app.post('/api/ai/assess-abcde', authMiddleware, async (req: AuthenticatedRequest, res) => {
+app.post('/api/ai/assess-abcde', authMiddleware, requireDoctorRole, async (req: AuthenticatedRequest, res) => {
   const { imageBase64, mimeType, patientId, clinicalNotes, estimatedDiameterMm, visualMetrics } = req.body;
 
   if (!imageBase64) {
@@ -2788,7 +2860,7 @@ app.post('/api/ai/assess-abcde', authMiddleware, async (req: AuthenticatedReques
 
   let patient = undefined;
   if (patientId) {
-    patient = db.findPatientById(patientId);
+    patient = db.findPatientById(patientId, req.doctor?.id);
   }
 
   try {
@@ -2826,14 +2898,14 @@ app.post('/api/ai/assess-abcde', authMiddleware, async (req: AuthenticatedReques
 // ==========================================
 // VISIT & CLINICAL REPORT COMPARISON
 // ==========================================
-app.post('/api/ai/compare-visits', authMiddleware, async (req: AuthenticatedRequest, res) => {
+app.post('/api/ai/compare-visits', authMiddleware, requireDoctorRole, async (req: AuthenticatedRequest, res) => {
   const { visitAId, visitBId, patientId, doctorNotes, markedAreas } = req.body;
 
   if (!visitAId || !visitBId || !patientId) {
     return res.status(400).json({ error: 'visitAId, visitBId, and patientId are required' });
   }
 
-  const patient = db.findPatientById(patientId);
+  const patient = db.findPatientById(patientId, req.doctor?.id);
   if (!patient) {
     return res.status(404).json({ error: 'Patient not found' });
   }
@@ -2841,7 +2913,7 @@ app.post('/api/ai/compare-visits', authMiddleware, async (req: AuthenticatedRequ
   const visitA = db.getConsultationById(visitAId);
   const visitB = db.getConsultationById(visitBId);
 
-  if (!visitA || !visitB) {
+  if (!visitA || !visitB || visitA.patientId !== patient.id || visitB.patientId !== patient.id) {
     return res.status(404).json({ error: 'One or both consultation visits not found' });
   }
 
@@ -2931,6 +3003,7 @@ interface InboxMessageRecord {
 
 interface InboxThreadRecord {
   id: string;
+  doctorId?: string;
   name: string;
   subtitle: string;
   category: 'patients' | 'pharmacies' | 'collaborations';
@@ -2950,9 +3023,7 @@ interface InboxThreadRecord {
   updatedAt: string;
 }
 
-const dispatchedWhatsAppMessages: DispatchedWhatsAppMessage[] = [];
-
-const inboxThreads: InboxThreadRecord[] = [
+const defaultInboxThreads: InboxThreadRecord[] = [
   {
     id: 't-1',
     name: 'Rohit Sharma',
@@ -3329,10 +3400,12 @@ function findOrCreateInboxThread(params: {
   patientId?: string;
   patientName?: string;
   phoneDigits: string;
+  doctorId?: string;
 }): InboxThreadRecord {
+  const allThreads = db.getAllRawInboxThreads(defaultInboxThreads);
   const last10 = params.phoneDigits.replace(/\D/g, '').slice(-10);
 
-  let thread = inboxThreads.find(
+  let thread = allThreads.find(
     t =>
       (params.threadId && t.id === params.threadId) ||
       (params.patientId && (t.patientId === params.patientId || t.id === params.patientId)) ||
@@ -3341,8 +3414,8 @@ function findOrCreateInboxThread(params: {
 
   if (!thread) {
     const matchedPatient =
-      (params.patientId ? db.findPatientById(params.patientId) : undefined) ||
-      (last10.length === 10 ? db.findPatientByMobile(last10) : undefined);
+      (params.patientId ? db.findPatientById(params.patientId, params.doctorId) : undefined) ||
+      (last10.length === 10 ? db.findPatientByMobile(last10, params.doctorId) : undefined);
 
     const resolvedName =
       matchedPatient?.fullName || params.patientName || `Patient (${last10 || 'New'})`;
@@ -3351,6 +3424,7 @@ function findOrCreateInboxThread(params: {
 
     thread = {
       id: params.threadId || (matchedPatient ? `p-thread-${matchedPatient.id}` : `t-in-${Date.now().toString(36)}`),
+      doctorId: params.doctorId || matchedPatient?.createdById,
       name: resolvedName,
       subtitle: matchedPatient
         ? `${matchedPatient.age}y · ${matchedPatient.patientCode} · ${matchedPatient.gender}`
@@ -3381,7 +3455,8 @@ function findOrCreateInboxThread(params: {
       updatedAt: new Date().toISOString()
     };
 
-    inboxThreads.unshift(thread);
+    allThreads.unshift(thread);
+    db.saveStoredInboxThreads(allThreads);
   }
 
   return thread;
@@ -3394,13 +3469,16 @@ function routeIncomingPatientMessageToInbox(params: {
   senderPhone: string;
   messageText: string;
   channel?: 'WhatsApp' | 'SMS';
+  doctorId?: string;
 }): { thread: InboxThreadRecord; message: InboxMessageRecord } {
+  const allThreads = db.getAllRawInboxThreads(defaultInboxThreads);
   const cleanDigits = String(params.senderPhone || '').replace(/\D/g, '') || '919876543210';
   const thread = findOrCreateInboxThread({
     threadId: params.threadId,
     patientId: params.patientId,
     patientName: params.patientName,
-    phoneDigits: cleanDigits
+    phoneDigits: cleanDigits,
+    doctorId: params.doctorId
   });
 
   const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -3431,31 +3509,33 @@ function routeIncomingPatientMessageToInbox(params: {
   thread.updatedAt = new Date().toISOString();
 
   // Move updated thread to top of inbox
-  const idx = inboxThreads.findIndex(t => t.id === thread.id);
+  const idx = allThreads.findIndex(t => t.id === thread.id);
   if (idx > 0) {
-    inboxThreads.splice(idx, 1);
-    inboxThreads.unshift(thread);
+    allThreads.splice(idx, 1);
+    allThreads.unshift(thread);
   }
+  db.saveStoredInboxThreads(allThreads);
 
   return { thread, message: incomingMsg };
 }
 
 // Get all native Clinical OS Inbox threads
-app.get('/api/whatsapp/threads', authMiddleware, (_req: AuthenticatedRequest, res) => {
+app.get('/api/whatsapp/threads', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   res.json({
-    threads: inboxThreads,
+    threads: db.getStoredInboxThreads(defaultInboxThreads, req.doctor?.id),
     lastUpdatedAt: new Date().toISOString()
   });
 });
 
 // Receive an incoming patient reply directly into the native Clinical OS Inbox UI
-app.post('/api/whatsapp/incoming', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.post('/api/whatsapp/incoming', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const { threadId, patientId, patientName, senderPhone, messageText, channel } = req.body || {};
   if (!messageText || !String(messageText).trim()) {
     return res.status(400).json({ error: 'messageText is required' });
   }
 
-  const targetThread = threadId ? inboxThreads.find(t => t.id === threadId) : undefined;
+  const doctorThreads = db.getStoredInboxThreads(defaultInboxThreads, req.doctor?.id);
+  const targetThread = threadId ? doctorThreads.find(t => t.id === threadId) : undefined;
   const resolvedPhone = senderPhone || targetThread?.phone || '+91 98765 43210';
 
   const result = routeIncomingPatientMessageToInbox({
@@ -3464,19 +3544,20 @@ app.post('/api/whatsapp/incoming', authMiddleware, (req: AuthenticatedRequest, r
     patientName: patientName || targetThread?.name,
     senderPhone: resolvedPhone,
     messageText: String(messageText),
-    channel: channel === 'SMS' ? 'SMS' : 'WhatsApp'
+    channel: channel === 'SMS' ? 'SMS' : 'WhatsApp',
+    doctorId: req.doctor?.id
   });
 
   res.json({
     success: true,
     thread: result.thread,
     incomingMessage: result.message,
-    threads: inboxThreads
+    threads: db.getStoredInboxThreads(defaultInboxThreads, req.doctor?.id)
   });
 });
 
 // Meta WhatsApp Cloud API / Twilio Webhook Verification (GET) & Inbound Routing (POST)
-app.get('/api/whatsapp/webhook', (req, res) => {
+const handleWhatsAppWebhookGet = (req: Request, res: Response) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
@@ -3484,9 +3565,9 @@ app.get('/api/whatsapp/webhook', (req, res) => {
     return res.status(200).send(challenge);
   }
   res.status(200).json({ status: 'Clinical OS Native WhatsApp/SMS Webhook Active', token: Boolean(token) });
-});
+};
 
-app.post('/api/whatsapp/webhook', (req, res) => {
+const handleWhatsAppWebhookPost = (req: Request, res: Response) => {
   try {
     const body = req.body || {};
 
@@ -3533,9 +3614,14 @@ app.post('/api/whatsapp/webhook', (req, res) => {
     console.error('Webhook routing error:', err);
     res.status(200).json({ received: true });
   }
-});
+};
 
-app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
+app.get('/api/whatsapp/webhook', handleWhatsAppWebhookGet);
+app.post('/api/whatsapp/webhook', handleWhatsAppWebhookPost);
+app.get('/api/inbox/webhook/whatsapp', handleWhatsAppWebhookGet);
+app.post('/api/inbox/webhook/whatsapp', handleWhatsAppWebhookPost);
+
+const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
   const {
     threadId,
     patientId,
@@ -3558,19 +3644,19 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
     rawDigits.length === 10 ? `91${rawDigits}` : rawDigits.replace(/^0+/, '');
   const bodyText = String(messageText || note || 'Clinical update from your doctor.').trim();
 
+  const doctor = req.doctor!;
   let patient = undefined;
   if (patientId) {
-    patient = db.findPatientById(patientId);
+    patient = db.findPatientById(patientId, doctor.id);
   }
 
-  const doctor = req.doctor!;
   const resolvedClinicPhone = String(clinicPhone || doctor.phone || '+91 98765 00001').trim();
   const whatsappUrl = `https://wa.me/${normalizedRecipient}?text=${encodeURIComponent(bodyText)}`;
 
   let deliveryMode: 'cloud_api' | 'whatsapp_gateway' = 'whatsapp_gateway';
 
   // If Meta WhatsApp Cloud API credentials are configured in environment, dispatch directly via Graph API in background
-  const waToken = process.env.WHATSAPP_API_TOKEN;
+  const waToken = process.env.WHATSAPP_API_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN;
   const waPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   if (waToken && waPhoneId) {
     try {
@@ -3634,17 +3720,15 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
     doctorName: doctor.name
   };
 
-  dispatchedWhatsAppMessages.unshift(dispatchRecord);
-  if (dispatchedWhatsAppMessages.length > 500) {
-    dispatchedWhatsAppMessages.pop();
-  }
+  db.addStoredWhatsAppMessage(dispatchRecord);
 
   // Update or create the conversation thread natively inside Clinical OS
   const thread = findOrCreateInboxThread({
     threadId,
     patientId: patient?.id || patientId,
     patientName: patient?.fullName || patientName,
-    phoneDigits: normalizedRecipient
+    phoneDigits: normalizedRecipient,
+    doctorId: doctor.id
   });
 
   const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -3673,6 +3757,7 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
     pdfAttachment: sanitizedPdfAttachment,
     createdAt: dispatchRecord.sentAt
   });
+  db.saveStoredInboxThreads(db.getAllRawInboxThreads(defaultInboxThreads));
 
   // Optionally schedule an automatic simulated patient reply routed back into Clinical OS Inbox after 3 seconds
   if (autoSimulateReply) {
@@ -3695,7 +3780,8 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
         patientName: thread.name,
         senderPhone: normalizedRecipient,
         messageText: contextualReply,
-        channel: thread.channel === 'SMS' ? 'SMS' : 'WhatsApp'
+        channel: thread.channel === 'SMS' ? 'SMS' : 'WhatsApp',
+        doctorId: doctor.id
       });
     }, 2800);
   }
@@ -3723,18 +3809,19 @@ app.post('/api/whatsapp/send', authMiddleware, async (req: AuthenticatedRequest,
     success: true,
     dispatch: dispatchRecord,
     thread,
-    threads: inboxThreads,
+    threads: db.getStoredInboxThreads(defaultInboxThreads, doctor.id),
     whatsappUrl,
     message: `Message dispatched in background to +${normalizedRecipient}`,
     timestamp: dispatchRecord.sentAt
   });
-});
+};
 
-app.get('/api/whatsapp/messages', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.post('/api/whatsapp/send', authMiddleware, requireDoctorRole, handleWhatsAppSend);
+app.post('/api/inbox/send-message', authMiddleware, requireDoctorRole, handleWhatsAppSend);
+
+app.get('/api/whatsapp/messages', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const patientId = req.query.patientId as string | undefined;
-  const list = patientId
-    ? dispatchedWhatsAppMessages.filter(m => m.patientId === patientId)
-    : dispatchedWhatsAppMessages.slice(0, 100);
+  const list = db.getStoredWhatsAppMessages<DispatchedWhatsAppMessage>(req.doctor?.id, patientId);
   res.json({ messages: list });
 });
 
@@ -3744,12 +3831,12 @@ app.post('/api/reports/log-whatsapp', authMiddleware, (req: AuthenticatedRequest
     return res.status(400).json({ error: 'recipientMobile is required' });
   }
 
+  const doctor = req.doctor!;
   let patient = undefined;
   if (patientId) {
-    patient = db.findPatientById(patientId);
+    patient = db.findPatientById(patientId, doctor.id);
   }
 
-  const doctor = req.doctor!;
   db.logAudit({
     actorId: doctor.id,
     actorName: doctor.name,
@@ -3785,22 +3872,22 @@ app.get('/api/dashboard/stats', authMiddleware, (req: AuthenticatedRequest, res)
   res.json({ stats, recentVisits, recentPatients, revenue });
 });
 
-app.get('/api/dashboard/revenue', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.get('/api/dashboard/revenue', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const revenue = db.getPracticeRevenueAnalytics(req.doctor?.id);
   res.json({ revenue });
 });
 
-app.get('/api/audit', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.get('/api/audit', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const logs = db.getAuditLogs(100, req.doctor?.id);
   res.json({ logs });
 });
 
-// Clinic Database Export & Backup (100% Free off-site backup tool)
+// Clinic Database Export & Backup (100% Free off-site backup tool, scoped to current doctor/clinic)
 app.get('/api/clinic/backup', authMiddleware, (req: AuthenticatedRequest, res) => {
   if (req.doctor?.role === 'receptionist') {
     return res.status(403).json({ error: 'Only doctors or clinic administrators can export database backups.' });
   }
-  const backup = db.exportBackup();
+  const backup = db.exportBackup(req.doctor?.id);
   const dateStr = new Date().toISOString().split('T')[0];
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', `attachment; filename="clinical_os_backup_${dateStr}.json"`);
@@ -3814,7 +3901,8 @@ app.post('/api/clinic/restore', authMiddleware, (req: AuthenticatedRequest, res)
   }
   try {
     const backupData = req.body;
-    const result = db.restoreBackup(backupData);
+    const result = db.restoreBackup(backupData, req.doctor?.id);
+    hydrateDiskFilesFromDb();
     if (req.doctor) {
       db.logAudit({
         actorId: req.doctor.id,

@@ -1,5 +1,6 @@
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { Consultation, Patient, AIImageAnalysisResult, DifferentialDiagnosis, ProgressionAnalysisResult, ExtractedImageSnapshot, ConditionImprovementMetric, DoctorMedicalSuggestion, ABCDEScoreResult, VisualMorphologyMetrics, VisitComparisonResult, PatientTestReport } from '../src/types/index.js';
+import { parseClinicalNoteToStructuredSummary, ParsedClinicalNoteSummary } from '../src/utils/clinicalNoteAutoFill.js';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 
@@ -126,9 +127,10 @@ async function generateWithGemini(
 
   // Fallback to Gemini with production model chain
   if (ai && Date.now() > geminiCooldownUntil) {
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+    const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
     for (const model of models) {
       try {
+        const isGemini3Or4 = model.startsWith('gemini-3') || model.startsWith('gemini-4');
         const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs));
         const generatePromise = ai.models
           .generateContent({
@@ -136,10 +138,15 @@ async function generateWithGemini(
             contents: prompt,
             config: {
               ...(systemInstruction ? { systemInstruction } : {}),
-              temperature: 0.35,
-              thinkingConfig: {
-                thinkingLevel: ThinkingLevel.LOW
-              }
+              ...(isGemini3Or4
+                ? {
+                    thinkingConfig: {
+                      thinkingLevel: ThinkingLevel.LOW
+                    }
+                  }
+                : {
+                    temperature: 0.35
+                  })
             }
           })
           .then(res => res.text?.trim() || null);
@@ -722,8 +729,10 @@ Regarding your query (*"${qRaw}"*), here are the verified clinical details from 
 // CLINICAL IMAGE ANALYZER (MULTIMODAL - GEMINI 2.5 FLASH)
 // ==========================================
 
-export const PRIMARY_VISION_MODEL = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
-const VISION_MODEL_CHAIN = [PRIMARY_VISION_MODEL, 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+export const PRIMARY_VISION_MODEL = process.env.GEMINI_VISION_MODEL || 'gemini-3.8-flash';
+const VISION_MODEL_CHAIN = Array.from(
+  new Set([PRIMARY_VISION_MODEL, 'gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'])
+);
 
 // SHA-256 Image + Clinical Context Cache (eliminates duplicate Gemini API calls & cost)
 const IMAGE_CACHE_MAX_ENTRIES = 200;
@@ -1821,10 +1830,9 @@ export async function analyzeClinicalImage(params: AnalyzeImageParams): Promise<
           }).join('\n');
         }
 
-        const prompt = `You are an expert clinical diagnostic assistance system and dermatological consultant working with a licensed physician.
-Examine this clinical image/photograph in detail, integrating the patient's full longitudinal health record, previous consultation timeline, and documented laboratory/diagnostic test reports.
-
-DETECTED VISUAL TELEMETRY PARAMETERS (CIE-LAB FITZPATRICK NORMALIZED):
+        const hasClientCanvasMetrics = Boolean(params.visualMetrics);
+        const telemetryPromptBlock = hasClientCanvasMetrics
+          ? `DETECTED VISUAL TELEMETRY PARAMETERS (CIE-LAB FITZPATRICK NORMALIZED):
 - Calibrated Fitzpatrick Phototype: ${resolvedMetrics.fitzpatrickType || 'Type IV'} (ITA° Angle: ${resolvedMetrics.itaAngleDeg ?? 18.5}°)
 - Erythema / Redness Index: ${resolvedMetrics.erythemaIndex}/100 (CIE-LAB Δa* Shift: +${resolvedMetrics.cieLabDeltaA ?? 8.5})
 - Melanin / Pigmentation Index: ${resolvedMetrics.pigmentationIndex}/100 (CIE-LAB ΔL* Shift: -${resolvedMetrics.cieLabDeltaL ?? 5.0})
@@ -1834,7 +1842,14 @@ DETECTED VISUAL TELEMETRY PARAMETERS (CIE-LAB FITZPATRICK NORMALIZED):
 - Dominant Colors: ${resolvedMetrics.dominantColors.map(c => `${c.name} (${c.percentage}%)`).join(', ')}
 - Pre-Scan Skin Specimen Ratio: ${resolvedMetrics.skinPixelRatio ?? 85}% (Pre-Scan Gatekeeper: ${Boolean(resolvedMetrics.isSkinSpecimen) === false ? 'NON-SKIN / INVALID SPECIMEN SUSPECTED' : 'HUMAN SKIN VERIFIED'})
 - Photometric Lighting Telemetry: Status="${resolvedMetrics.lightingStatus || 'Optimal'}", Mean Luminance=${resolvedMetrics.meanLuminance ?? 140}/255, Glare=${resolvedMetrics.glareRatio ?? 2}%, Shadow=${resolvedMetrics.shadowRatio ?? 4}%, Sharpness=${resolvedMetrics.perceivedSharpness ?? 75}/100
-${resolvedMetrics.qualityWarnings && resolvedMetrics.qualityWarnings.length > 0 ? `- Photometric Warnings: ${resolvedMetrics.qualityWarnings.join(' | ')}` : ''}
+${resolvedMetrics.qualityWarnings && resolvedMetrics.qualityWarnings.length > 0 ? `- Photometric Warnings: ${resolvedMetrics.qualityWarnings.join(' | ')}` : ''}`
+          : `PRE-SCAN TELEMETRY NOTE:
+- Image uploaded without pre-computed client-side canvas pixel telemetry. Perform direct visual inspection of the photograph in Step 1 to verify whether this is a valid human skin/mucosa/hair/nail specimen and evaluate lighting, erythema, pigmentation, and border characteristics directly from the image.`;
+
+        const prompt = `You are an expert clinical diagnostic assistance system and dermatological consultant working with a licensed physician.
+Examine this clinical image/photograph in detail, integrating the patient's full longitudinal health record, previous consultation timeline, and documented laboratory/diagnostic test reports.
+
+${telemetryPromptBlock}
 
 PATIENT MEDICAL BACKGROUND:
 ${patientContext}
@@ -2862,6 +2877,13 @@ export function generateABCDEFallback(params: AssessABCDEParams): ABCDEScoreResu
       ? `2 to 3 discrete color tones detected across lesion (${metrics.dominantColors.map(c => c.name).join(', ')}).`
       : `High color variegation (${metrics.colorVariationScore}/100) with 4+ discrete pigment tones (tan, dark brown, black, erythematous flare).`;
 
+  const primaryRec =
+    total >= 5
+      ? 'Urgent dermatology referral for high-magnification dermoscopy and consideration of 2mm excisional biopsy'
+      : total >= 3
+        ? 'Perform baseline digital dermoscopy photography and schedule 3-month follow-up comparison'
+        : 'Reassure patient regarding benign morphological characteristics; routine annual skin surveillance';
+
   return {
     id: `abcde_${Date.now()}`,
     asymmetryScore,
@@ -2882,14 +2904,11 @@ export function generateABCDEFallback(params: AssessABCDEParams): ABCDEScoreResu
     totalScore: total,
     riskLevel,
     recommendations: [
-      total >= 5
-        ? 'Urgent dermatology referral for high-magnification dermoscopy and consideration of 2mm excisional biopsy'
-        : total >= 3
-          ? 'Perform baseline digital dermoscopy photography and schedule 3-month follow-up comparison'
-          : 'Reassure patient regarding benign morphological characteristics; routine annual skin surveillance',
+      primaryRec,
       'Educate patient on monthly skin self-examination using the ABCDE mnemonic',
       'Recommend daily broad-spectrum UVA/UVB photoprotection (SPF 50+)'
     ],
+    clinicalRecommendation: primaryRec,
     disclaimer: 'Dermoscopic ABCDE decision support only. Physician clinical judgment and dermoscopy examination are essential.',
     isAiPowered: false,
     analyzedAt: new Date().toISOString()
@@ -3038,6 +3057,10 @@ Return ONLY a raw JSON object (strictly no markdown, no code fences):
               else risk = 'Low Risk / Benign Characteristics';
             }
 
+            const resolvedRecs = Array.isArray(parsed.recommendations) && parsed.recommendations.length > 0
+              ? parsed.recommendations
+              : ['Routine clinical surveillance'];
+
             const abcdeResult: ABCDEScoreResult = {
               id: `abcde_${Date.now()}`,
               asymmetryScore: aScore,
@@ -3053,7 +3076,8 @@ Return ONLY a raw JSON object (strictly no markdown, no code fences):
               evolutionNotes: parsed.evolutionNotes || 'Assessment of morphology changes.',
               totalScore: total,
               riskLevel: risk,
-              recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : ['Routine clinical surveillance'],
+              recommendations: resolvedRecs,
+              clinicalRecommendation: resolvedRecs[0],
               disclaimer: parsed.disclaimer || 'Dermoscopy assistive evaluation. Clinical correlation required.',
               isAiPowered: true,
               analyzedAt: new Date().toISOString()
@@ -3386,7 +3410,7 @@ Compare these encounters, explain how the medical condition has improved (or pro
   ]
 }`;
 
-      const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+      const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
       for (const model of models) {
         try {
           const response = await ai.models.generateContent({
@@ -3424,8 +3448,6 @@ Compare these encounters, explain how the medical condition has improved (or pro
 
   return fallback;
 }
-
-import { parseClinicalNoteToStructuredSummary, ParsedClinicalNoteSummary } from '../src/utils/clinicalNoteAutoFill.js';
 
 export async function parseClinicalNoteWithAI(params: {
   rawNote: string;
@@ -3816,7 +3838,7 @@ export async function askImageReportAssistant(
     : 'Visual metrics not separately indexed';
 
   const abcdeSummary = abcdeScore
-    ? `ABCDE Dermoscopic Score: ${abcdeScore.totalScore}/9 (${abcdeScore.riskLevel}) · Diameter: ${abcdeScore.diameterMm.toFixed(1)} mm · Recommendation: ${abcdeScore.clinicalRecommendation}`
+    ? `ABCDE Dermoscopic Score: ${abcdeScore.totalScore}/9 (${abcdeScore.riskLevel}) · Diameter: ${abcdeScore.diameterMm.toFixed(1)} mm · Recommendation: ${abcdeScore.clinicalRecommendation || abcdeScore.recommendations?.[0] || 'Clinical correlation advised'}`
     : 'Not yet scored with ABCDE caliper';
 
   const patientSummary = patient
@@ -4114,7 +4136,7 @@ HOW TO RESPOND (CRITICAL):
             }**\n`
           : '') +
         (abcdeScore
-          ? `- **ABCDE Dermoscopic Score**: **${abcdeScore.totalScore}/9 (${abcdeScore.riskLevel})** — *${abcdeScore.clinicalRecommendation}*`
+          ? `- **ABCDE Dermoscopic Score**: **${abcdeScore.totalScore}/9 (${abcdeScore.riskLevel})** — *${abcdeScore.clinicalRecommendation || abcdeScore.recommendations?.[0] || 'Clinical correlation advised'}*`
           : '')
     );
   }
