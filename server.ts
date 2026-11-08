@@ -1,5 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import compression from 'compression';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
@@ -13,6 +15,15 @@ const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Production HTTP Security Headers
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Vite React SPA handles dynamic script loading and local blob URLs
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
+
 // HTTP response compression for JSON payloads & static assets (reduces transfer latency by ~75%)
 app.use(compression({
   threshold: 1024,
@@ -21,6 +32,27 @@ app.use(compression({
     return compression.filter(req, res);
   }
 }));
+
+// API Rate Limiting (Protects auth from brute-force & AI from quota exhaustion)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // 30 attempts per 15 minutes per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts. Please wait 15 minutes before trying again.' }
+});
+
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 50, // 50 requests per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'AI scan rate limit reached. Please wait a moment before trying again.' }
+});
+
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/ai', aiLimiter);
 
 // Increase body parser limits for clinical images
 app.use(express.json({ limit: '15mb' }));
@@ -617,6 +649,17 @@ app.get('/api/patients/check-mobile/:mobile', authMiddleware, (req: Authenticate
 app.get('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
   const patient = db.findPatientById(req.params.id, req.doctor?.id);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  // Regulatory compliance: audit log every chart view access
+  if (req.doctor) {
+    db.logAudit({
+      actorId: req.doctor.id,
+      actorName: req.doctor.name,
+      action: 'view_patient_chart',
+      resourceType: 'patient',
+      resourceId: patient.id,
+      metadata: { patientCode: patient.patientCode }
+    });
+  }
   res.json({ patient });
 });
 
@@ -3738,6 +3781,43 @@ app.get('/api/audit', authMiddleware, (req: AuthenticatedRequest, res) => {
   res.json({ logs });
 });
 
+// Clinic Database Export & Backup (100% Free off-site backup tool)
+app.get('/api/clinic/backup', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (req.doctor?.role === 'receptionist') {
+    return res.status(403).json({ error: 'Only doctors or clinic administrators can export database backups.' });
+  }
+  const backup = db.exportBackup();
+  const dateStr = new Date().toISOString().split('T')[0];
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="clinical_os_backup_${dateStr}.json"`);
+  res.json(backup);
+});
+
+// Clinic Database Restore
+app.post('/api/clinic/restore', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (req.doctor?.role === 'receptionist') {
+    return res.status(403).json({ error: 'Only doctors or clinic administrators can restore backups.' });
+  }
+  try {
+    const backupData = req.body;
+    const result = db.restoreBackup(backupData);
+    if (req.doctor) {
+      db.logAudit({
+        actorId: req.doctor.id,
+        actorName: req.doctor.name,
+        action: 'restore_clinic_backup',
+        resourceType: 'clinic',
+        resourceId: 'clinical_os_db',
+        metadata: { restoredCount: result.count }
+      });
+    }
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to restore backup';
+    res.status(400).json({ error: msg });
+  }
+});
+
 // ==========================================
 // FRONTEND INTEGRATION (DEV / PROD)
 // ==========================================
@@ -3799,7 +3879,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Clinical OS running on http://0.0.0.0:${PORT}`);
 
     // Prevent Render Free Tier 15-minute inactivity spin-down (cold start)
@@ -3824,6 +3904,29 @@ async function startServer() {
       console.log(`[Keep-Alive] Render cold-start prevention active -> pinging ${externalUrl}/api/health every 8m`);
     }
   });
+
+  // Graceful shutdown handling for Render container lifecycle
+  const handleShutdown = (signal: string) => {
+    console.log(`[Lifecycle] ${signal} signal received: flushing database and closing server...`);
+    try {
+      db.flushPendingSaves();
+    } catch (flushErr) {
+      console.error('[Lifecycle] Error during pre-shutdown flush:', flushErr);
+    }
+    server.close(() => {
+      console.log('[Lifecycle] HTTP server closed cleanly. Exiting.');
+      process.exit(0);
+    });
+
+    // Fallback: force exit after 8s
+    setTimeout(() => {
+      console.error('[Lifecycle] Forced shutdown after timeout.');
+      process.exit(1);
+    }, 8000);
+  };
+
+  process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+  process.on('SIGINT', () => handleShutdown('SIGINT'));
 }
 
 startServer().catch(err => {

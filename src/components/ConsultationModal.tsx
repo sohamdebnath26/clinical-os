@@ -34,7 +34,8 @@ import {
   Mic,
   Search,
   Upload,
-  BookOpen
+  BookOpen,
+  Printer
 } from 'lucide-react';
 
 interface ConsultationModalProps {
@@ -1806,6 +1807,17 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 className="w-16 text-xs font-bold text-[#0f2926] bg-white rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-teal-300 text-center"
               />
             </div>
+
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => window.print()}
+              title="Print Clinical Prescription / Letterhead"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/12 hover:bg-white/20 border border-white/15 text-xs font-semibold text-white transition-colors cursor-pointer shrink-0"
+            >
+              <Printer className="w-3.5 h-3.5 text-teal-200" />
+              <span className="hidden sm:inline">Print Rx</span>
+            </button>
 
             <button
               type="button"

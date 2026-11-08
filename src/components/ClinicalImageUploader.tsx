@@ -147,30 +147,57 @@ export const ClinicalImageUploader: React.FC<ClinicalImageUploaderProps> = ({
     if (!file) return;
 
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setErrorMsg('Only JPG and PNG images are supported.');
-      return;
-    }
-
-    if (file.size > 4 * 1024 * 1024) {
-      setErrorMsg('Image size exceeds 4 MB limit.');
+      setErrorMsg('Only JPG, PNG, and WebP images are supported.');
       return;
     }
 
     setErrorMsg(null);
     setIsUploading(true);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        await onUpload(reader.result as string, file.name);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Upload failed';
-        setErrorMsg(message);
-      } finally {
-        setIsUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }
-    };
-    reader.readAsDataURL(file);
+
+    try {
+      // Client-side canvas compression: scales max dimension to 1600px & compresses to JPEG 0.85
+      // Reduces 8MB smartphone photos down to ~150KB while preserving fine dermatological detail
+      const compressedDataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 1600;
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return resolve(reader.result as string);
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+          };
+          img.onerror = () => resolve(reader.result as string);
+          img.src = reader.result as string;
+        };
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+      });
+
+      if (!compressedDataUrl) throw new Error('Failed to process image file');
+      await onUpload(compressedDataUrl, file.name);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      setErrorMsg(message);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const startCamera = async () => {

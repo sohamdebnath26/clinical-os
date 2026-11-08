@@ -147,3 +147,50 @@ html.dark textarea::placeholder {
   color: #64748b;
 }
 
+/* =========================================================
+   MEDICAL LETTERHEAD & PRESCRIPTION PRINT STYLESHEET
+   ========================================================= */
+@media print {
+  /* Reset page & canvas for physical printing */
+  body, html, #root {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10.5pt !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide navigation, sidebars, toast banners, action buttons */
+  aside,
+  nav,
+  header,
+  button,
+  input,
+  select,
+  textarea,
+  .no-print,
+  [data-no-print="true"] {
+    display: none !important;
+  }
+
+  /* Ensure printable prescription container expands to full width with crisp lines */
+  .printable-prescription-document {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 1.5cm !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    page-break-inside: avoid;
+  }
+
+  .printable-prescription-document * {
+    box-shadow: none !important;
+  }
+}
+
+

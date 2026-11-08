@@ -527,6 +527,15 @@
       "action": "doctor_login",
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
+      "id": "aud-mw7ylbbw-hvhv",
+      "timestamp": "2026-11-08T15:00:09.500Z"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
+      "action": "doctor_login",
+      "resourceType": "auth",
+      "resourceId": "doc-demo-001",
       "id": "aud-mw7xi2q8-qcr0",
       "timestamp": "2026-11-08T14:29:38.768Z"
     },
@@ -1251,7 +1260,7 @@
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-11-08T14:37:15.765Z"
+    "updatedAt": "2026-11-08T15:00:09.500Z"
   },
   "appointments": [
     {

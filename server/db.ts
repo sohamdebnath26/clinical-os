@@ -408,6 +408,68 @@ class DatabaseService {
     }
   }
 
+  public flushPendingSaves() {
+    this.data.meta.updatedAt = new Date().toISOString();
+    try {
+      const tempPath = `${DB_PATH}.tmp`;
+      fs.writeFileSync(tempPath, JSON.stringify(this.data, null, 2), 'utf-8');
+      fs.renameSync(tempPath, DB_PATH);
+      console.log('[Database] Flushed all pending database changes to disk successfully.');
+    } catch (err) {
+      console.error('[Database] Failed to flush database before shutdown:', err);
+    }
+  }
+
+  public exportBackup(): DatabaseSchema {
+    return JSON.parse(JSON.stringify(this.data));
+  }
+
+  public restoreBackup(imported: any): { success: boolean; message: string; count?: number } {
+    if (!imported || typeof imported !== 'object') {
+      throw new Error('Invalid backup format: root must be an object.');
+    }
+    if (!Array.isArray(imported.patients) || !Array.isArray(imported.consultations)) {
+      throw new Error('Invalid backup schema: missing patients or consultations array.');
+    }
+
+    try {
+      const safetyBackupPath = path.join(DATA_DIR, `clinical_os_safety_backup_${Date.now()}.json`);
+      fs.writeFileSync(safetyBackupPath, JSON.stringify(this.data, null, 2), 'utf-8');
+    } catch (backupErr) {
+      console.warn('Could not write pre-restore safety backup:', backupErr);
+    }
+
+    this.data = {
+      doctors: Array.isArray(imported.doctors) ? imported.doctors : this.data.doctors,
+      doctorPasswords: imported.doctorPasswords && typeof imported.doctorPasswords === 'object' ? imported.doctorPasswords : this.data.doctorPasswords,
+      patients: Array.isArray(imported.patients) ? imported.patients : [],
+      consultations: Array.isArray(imported.consultations) ? imported.consultations : [],
+      prescriptions: Array.isArray(imported.prescriptions) ? imported.prescriptions : [],
+      appointments: Array.isArray(imported.appointments) ? imported.appointments : [],
+      bodyMarkers: Array.isArray(imported.bodyMarkers) ? imported.bodyMarkers : [],
+      clinicalImages: Array.isArray(imported.clinicalImages) ? imported.clinicalImages : [],
+      testReports: Array.isArray(imported.testReports) ? imported.testReports : [],
+      formularyItems: Array.isArray(imported.formularyItems) ? imported.formularyItems : [],
+      subscription: imported.subscription || this.data.subscription,
+      auditLogs: Array.isArray(imported.auditLogs) ? imported.auditLogs : [],
+      meta: {
+        lastPatientNumber: imported.meta?.lastPatientNumber || 24620,
+        version: 1,
+        updatedAt: new Date().toISOString()
+      }
+    };
+
+    this.ensureDefaultDoctor();
+    this.ensureDefaultSubscription();
+    this.flushPendingSaves();
+
+    return {
+      success: true,
+      message: 'Clinic data restored successfully',
+      count: this.data.patients.length
+    };
+  }
+
   private ensureDefaultDoctor() {
     // 1. Ensure Individual Demo Doctor
     let demoDoc = this.data.doctors.find(d => d.email.toLowerCase() === 'demo@clinicalos.med');

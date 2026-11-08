@@ -20,7 +20,11 @@ import {
   UserCog,
   Mail,
   Trash2,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Download,
+  Upload,
+  Database,
+  AlertTriangle
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
@@ -157,6 +161,50 @@ export const SettingsView: React.FC = () => {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to switch view.');
     } finally {
       setIsSwitchingView(false);
+    }
+  };
+
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  const handleDownloadBackup = async () => {
+    setIsBackingUp(true);
+    setSuccessMsg(null);
+    setErrorMsg(null);
+    try {
+      await api.clinic.downloadBackup();
+      setSuccessMsg('Clinic database backup downloaded successfully.');
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to download backup';
+      setErrorMsg(msg);
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!window.confirm(`Are you sure you want to restore clinic data from "${file.name}"? A safety backup will be created automatically before restoring.`)) {
+      e.target.value = '';
+      return;
+    }
+    setIsRestoring(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const res = await api.clinic.restoreBackup(parsed);
+      setSuccessMsg(`${res.message} (${res.count} patient records loaded). Reloading workspace...`);
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to restore backup file';
+      setErrorMsg(msg);
+    } finally {
+      setIsRestoring(false);
+      e.target.value = '';
     }
   };
 
@@ -613,6 +661,74 @@ export const SettingsView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Free Off-Site Clinic Backup & Data Persistence Card */}
+      {!isReceptionist && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                <Database className="w-4 h-4 text-teal-700" />
+                Data Persistence &amp; Off-Site Clinic Backup (100% Free)
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Protect your clinic records without paying for cloud storage. Download an encrypted snapshot of all patient files, visits, and timelines to your local drive or USB backup.
+              </p>
+            </div>
+            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 shrink-0">
+              Zero Cloud Fees
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            {/* Download Backup */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between space-y-3">
+              <div>
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                  <Download className="w-4 h-4 text-teal-700" />
+                  Export Clinic Database
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Downloads a complete JSON snapshot containing all patients, consultations, appointments, and medical histories.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDownloadBackup}
+                disabled={isBackingUp}
+                className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold shadow-xs disabled:opacity-50 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {isBackingUp ? 'Exporting Snapshot...' : 'Download Full Backup (.json)'}
+              </button>
+            </div>
+
+            {/* Restore Backup */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between space-y-3">
+              <div>
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                  <Upload className="w-4 h-4 text-amber-700" />
+                  Restore Clinic Database
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Restore from a previously saved JSON backup file. A timestamped safety backup of your existing data is preserved automatically.
+                </p>
+              </div>
+              <label className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold cursor-pointer shadow-2xs transition-colors">
+                <Upload className="w-3.5 h-3.5 text-slate-500" />
+                <span>{isRestoring ? 'Restoring Data...' : 'Upload & Restore Backup'}</span>
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleRestoreFile}
+                  disabled={isRestoring}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

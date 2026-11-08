@@ -19,14 +19,39 @@ import { ConsultationModal } from './components/ConsultationModal';
 import { AIModal } from './components/AIModal';
 import { Patient, Consultation } from './types';
 import { api } from './lib/api';
-import { CheckCircle2, X } from 'lucide-react';
+import { CheckCircle2, X, Lock, ShieldCheck, LogOut } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MobileImageUploadView } from './components/MobileImageUploadView';
 import { MobileWalkInView } from './components/MobileWalkInView';
 
 function MainApp() {
-  const { doctor, switchRoleSession } = useAuth();
+  const { doctor, switchRoleSession, logout } = useAuth();
   const isReceptionist = doctor?.role === 'receptionist';
+
+  // Workstation Auto-Lock (15-minute inactivity guard for clinical privacy compliance)
+  const [isWorkstationLocked, setIsWorkstationLocked] = useState(false);
+
+  useEffect(() => {
+    if (!doctor) return;
+    const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+    let timer: any;
+
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        setIsWorkstationLocked(true);
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    activityEvents.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      clearTimeout(timer);
+      activityEvents.forEach(evt => window.removeEventListener(evt, resetTimer));
+    };
+  }, [doctor?.id]);
 
   // Navigation & Active views
   const [currentRoute, setCurrentRoute] = useState<NavRoute>('dashboard');
@@ -417,6 +442,59 @@ function MainApp() {
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* 15-Minute Inactivity Workstation Auto-Lock Modal */}
+      {isWorkstationLocked && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#11201e] border border-slate-200 dark:border-teal-900/50 rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl text-center space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-2xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 flex items-center justify-center mx-auto text-teal-700 dark:text-teal-400">
+              <Lock className="w-7 h-7" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                Clinic Workstation Locked
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Paused due to 15 minutes of inactivity to protect patient privacy (HIPAA / DPDP). Your active clinical notes and patient timelines are safely preserved.
+              </p>
+            </div>
+            <div className="p-3 bg-slate-50 dark:bg-[#162926] rounded-xl border border-slate-200 dark:border-teal-900/40 text-left flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-teal-700 text-white font-bold flex items-center justify-center text-xs shrink-0">
+                {doctor?.name ? doctor.name.charAt(0) : 'D'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">
+                  {doctor?.name}
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  {doctor?.clinicName || 'Clinical OS Practice'}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsWorkstationLocked(false)}
+                className="w-full py-2.5 px-4 bg-teal-700 hover:bg-teal-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                Resume Clinical Session
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsWorkstationLocked(false);
+                  logout();
+                }}
+                className="w-full py-2 px-4 text-slate-500 dark:text-slate-400 hover:text-red-600 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Sign Out from Workstation
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

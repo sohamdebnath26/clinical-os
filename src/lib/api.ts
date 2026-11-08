@@ -1251,4 +1251,31 @@ export const api = {
   audit: {
     list: () => fetchWithAuth<{ logs: AuditLog[] }>('/api/audit'),
   },
+
+  clinic: {
+    downloadBackup: async () => {
+      const token = authStorage.getToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api/clinic/backup', { headers });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        throw new Error(errJson?.error || `Backup failed: ${res.statusText}`);
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `clinical_os_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    },
+    restoreBackup: (backupData: unknown) =>
+      fetchWithAuth<{ success: boolean; message: string; count?: number }>('/api/clinic/restore', {
+        method: 'POST',
+        body: JSON.stringify(backupData),
+      }),
+  },
 };
