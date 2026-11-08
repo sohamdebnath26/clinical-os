@@ -807,17 +807,20 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
                     </div>
                   </div>
                 )}
-                {/* Compare Previous vs. Current Image Quick Action */}
-                <button
-                  type="button"
-                  onClick={() => setShowComparePrevCurrModal(true)}
-                  className="w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-950 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Compare Previous Image vs. Current Image</span>
-                </button>
               </div>
             )}
+
+            {/* Compare Previous vs. Current Image Quick Action (Always accessible) */}
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowComparePrevCurrModal(true)}
+                className="w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-950 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Compare Previous Image vs. Current Image</span>
+              </button>
+            </div>
           </div>
 
           {/* 2. Image Capture / Upload Area */}
@@ -1814,15 +1817,26 @@ export const ImageAnalyzerView: React.FC<ImageAnalyzerViewProps> = ({
       )}
 
       {/* Compare Stored Past Medical Image vs. Current Uploaded Image Modal */}
-      {showComparePrevCurrModal && selectedPatient && (
+      {showComparePrevCurrModal && (
         <LesionProgressionModal
-          patient={selectedPatient}
+          patient={
+            selectedPatient ||
+            patients[0] || {
+              id: 'unlinked_specimen_patient',
+              patientCode: 'WALK-IN',
+              fullName: 'Walk-In / Unlinked Presentation',
+              age: 34,
+              gender: 'Other',
+              mobile: '',
+              createdAt: new Date().toISOString()
+            }
+          }
           images={patientImages}
           currentImageOverride={
             imageSrc
               ? {
                   id: 'analyzer_current_image',
-                  patientId: selectedPatient.id,
+                  patientId: selectedPatient?.id || 'unlinked_specimen_patient',
                   url: imageSrc,
                   dataUrl: imageSrc,
                   filename: 'current_specimen.jpg',

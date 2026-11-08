@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Patient, Consultation, ClinicalImage, VisitComparisonResult, ProgressionAnalysisResult } from '../types';
 import { api } from '../lib/api';
+import { analyzeImageVisualFeatures, compareImagePairVisuals } from '../utils/visualImageAnalyzer';
 import { VoiceDictationButton } from './VoiceDictationButton';
 import { FullScreenSideBySideModal, ImageAreaAnnotation } from './FullScreenSideBySideModal';
 import {
@@ -29,7 +30,8 @@ import {
   ZoomIn,
   Pencil,
   Save,
-  RotateCcw
+  RotateCcw,
+  Layers
 } from 'lucide-react';
 
 interface VisitComparisonSectionProps {
@@ -84,6 +86,7 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
   const [copied, setCopied] = useState(false);
   const [imageSliderPos, setImageSliderPos] = useState<number>(50);
   const [showImageSlider, setShowImageSlider] = useState(false);
+  const [showDiffHeatmap, setShowDiffHeatmap] = useState(false);
   const [isCreatingDemoVisit, setIsCreatingDemoVisit] = useState(false);
   const [zoomImage, setZoomImage] = useState<ClinicalImage | null>(null);
 
@@ -116,7 +119,7 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
 
     const visitDateStr = consultation.consultationDate.split('T')[0];
     const matchingGlobalImages = images.filter(img => {
-      const imgDateStr = img.createdAt.split('T')[0];
+      const imgDateStr = (img.examDate || img.createdAt).split('T')[0];
       return (
         imgDateStr === visitDateStr &&
         !directImages.some(di => di.id === img.id) &&
@@ -127,15 +130,19 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
     const combined = [...directImages, ...byConsultationId, ...matchingGlobalImages];
     if (combined.length > 0) return combined;
 
-    // Fallback: if patient has global clinical images not explicitly linked by date, provide first/latest image for comparison
+    // Fallback: if patient has global clinical images not explicitly linked by date, provide first/latest distinct image for comparison
     if (images.length > 0) {
       const chronologicalImgs = [...images].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        (a, b) =>
+          new Date(a.examDate || a.createdAt).getTime() -
+          new Date(b.examDate || b.createdAt).getTime()
       );
       if (isBaselineVisit) {
         return [chronologicalImgs[0]];
       }
-      return [chronologicalImgs[chronologicalImgs.length - 1]];
+      if (chronologicalImgs.length >= 2) {
+        return [chronologicalImgs[chronologicalImgs.length - 1]];
+      }
     }
 
     return [];
@@ -162,6 +169,7 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
     setComparisonResult(null);
     setEditableSummaryText('');
     setSeverityOverride(null);
+    setShowDiffHeatmap(false);
   }, [visitAId, visitBId, images.length]);
 
   // Interval calculation
@@ -182,24 +190,60 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
     if (!selectedImgA || !selectedImgB) return;
     setIsComparingProgression(true);
     try {
+      const srcA = selectedImgA.dataUrl || selectedImgA.url;
+      const srcB = selectedImgB.dataUrl || selectedImgB.url;
+
+      let pairVisuals: Awaited<ReturnType<typeof compareImagePairVisuals>> | null = null;
+      try {
+        pairVisuals = await compareImagePairVisuals(srcA, srcB, annotations);
+      } catch {
+        // Fallback to single-image extraction
+      }
+
+      const metricsA =
+        selectedImgA.visualMetrics ||
+        pairVisuals?.metricsA ||
+        (await analyzeImageVisualFeatures(srcA).catch(() => undefined));
+      const metricsB =
+        selectedImgB.visualMetrics ||
+        pairVisuals?.metricsB ||
+        (await analyzeImageVisualFeatures(srcB).catch(() => undefined));
+
       const markedLabels = annotations.map(a => `Visit ${a.side}: ${a.label}`).join('; ');
       const res = await api.ai.compareProgression({
         imageA: {
-          base64: selectedImgA.url,
+          id: selectedImgA.id,
+          base64: srcA,
           mimeType: selectedImgA.mimeType,
           label: selectedImgA.caption || `Visit ${formatDate(visitA.consultationDate)}`,
-          date: formatDate(visitA.consultationDate)
+          date: selectedImgA.examDate || formatDate(visitA.consultationDate),
+          modality: selectedImgA.modality || 'Clinical Photo',
+          bodyArea: selectedImgA.bodyArea || selectedImgA.caption,
+          extractedFindings: selectedImgA.extractedFindings,
+          visualMetrics: metricsA
         },
         imageB: {
-          base64: selectedImgB.url,
+          id: selectedImgB.id,
+          base64: srcB,
           mimeType: selectedImgB.mimeType,
           label: selectedImgB.caption || `Visit ${formatDate(visitB.consultationDate)}`,
-          date: formatDate(visitB.consultationDate)
+          date: selectedImgB.examDate || formatDate(visitB.consultationDate),
+          modality: selectedImgB.modality || 'Clinical Photo',
+          bodyArea: selectedImgB.bodyArea || selectedImgB.caption,
+          extractedFindings: selectedImgB.extractedFindings,
+          visualMetrics: metricsB
         },
         patientId: patient.id,
         clinicalContext: `Comparing lesion progression between visit on ${formatDate(visitA.consultationDate)} and ${formatDate(visitB.consultationDate)}. Diagnoses: ${visitB.diagnoses.join(', ') || visitA.diagnoses.join(', ')}. ${comparisonClinicalNotes ? `Doctor Notes: ${comparisonClinicalNotes}.` : ''} ${markedLabels ? `Marked Areas: ${markedLabels}` : ''}`
       });
-      setProgressionResult(res.progression);
+      setProgressionResult({
+        ...res.progression,
+        diffHeatmapDataUrl: pairVisuals?.diffHeatmapDataUrl || res.progression.diffHeatmapDataUrl,
+        roiComparisons:
+          pairVisuals?.roiComparisons && pairVisuals.roiComparisons.length > 0
+            ? pairVisuals.roiComparisons
+            : res.progression.roiComparisons
+      });
     } catch (err) {
       console.error('Image progression comparison error:', err);
     } finally {
@@ -211,6 +255,9 @@ export const VisitComparisonSection: React.FC<VisitComparisonSectionProps> = ({
     if (!visitA || !visitB) return;
     setIsGeneratingAIReport(true);
     try {
+      if (selectedImgA && selectedImgB && selectedImgA.id !== selectedImgB.id && !progressionResult) {
+        handleCompareImagesWithAI().catch(() => {});
+      }
       const markedAreasList = annotations.map(
         (a, idx) => `#${idx + 1} [Visit ${a.side}] ${a.label}`
       );
@@ -765,7 +812,10 @@ ${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClin
                 <>
                   <button
                     type="button"
-                    onClick={() => setShowImageSlider(!showImageSlider)}
+                    onClick={() => {
+                      setShowImageSlider(!showImageSlider);
+                      setShowDiffHeatmap(false);
+                    }}
                     className={`px-2.5 py-1.5 rounded-lg border font-medium flex items-center gap-1 transition ${
                       showImageSlider ? 'bg-teal-50 border-teal-300 text-teal-800' : 'bg-white border-slate-200 text-slate-600'
                     }`}
@@ -773,6 +823,24 @@ ${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClin
                     <SlidersHorizontal className="w-3 h-3" />
                     <span>{showImageSlider ? 'Dual Screen Mode' : 'Overlay Slider Mode'}</span>
                   </button>
+
+                  {progressionResult?.diffHeatmapDataUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDiffHeatmap(!showDiffHeatmap);
+                        setShowImageSlider(false);
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg border font-medium flex items-center gap-1 transition ${
+                        showDiffHeatmap
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                          : 'bg-white border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <Layers className="w-3 h-3 text-emerald-600" />
+                      <span>{showDiffHeatmap ? 'Hide Heatmap' : 'Pixel Diff Heatmap'}</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -791,6 +859,35 @@ ${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClin
               )}
             </div>
           </div>
+
+          {/* CIE-LAB Pixel Difference Heatmap View */}
+          {showDiffHeatmap && progressionResult?.diffHeatmapDataUrl && (
+            <div className="bg-slate-900 p-4 rounded-2xl text-white space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-teal-300 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" />
+                  CIE-LAB Colorimetric Difference Heatmap (Visit A → Visit B)
+                </span>
+                <div className="flex items-center gap-3 text-[11px]">
+                  <span className="flex items-center gap-1 text-emerald-300">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />
+                    Cleared / Reduced Erythema &amp; Pigment
+                  </span>
+                  <span className="flex items-center gap-1 text-rose-300">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+                    Active Flare / Increased Erythema
+                  </span>
+                </div>
+              </div>
+              <div className="relative h-72 w-full rounded-xl overflow-hidden bg-black flex items-center justify-center border border-slate-700">
+                <img
+                  src={progressionResult.diffHeatmapDataUrl}
+                  alt="CIE-LAB Pixel Difference Heatmap"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Interactive Overlay Slider Mode */}
           {showImageSlider && selectedImgA && selectedImgB ? (
@@ -1135,6 +1232,40 @@ ${comparisonClinicalNotes.trim() ? `\nDOCTOR COMPARISON NOTES:\n${comparisonClin
                       <p className="text-[10px] text-slate-500">{m.clinicalInterpretation}</p>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {progressionResult.roiComparisons && progressionResult.roiComparisons.length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-teal-950 block">
+                    Marked Region-of-Interest (ROI) Colorimetric Deltas:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {progressionResult.roiComparisons.map(roi => (
+                      <div
+                        key={roi.id}
+                        className="p-2.5 rounded-xl bg-white border border-teal-200 text-xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between font-bold text-slate-800">
+                          <span>{roi.label}</span>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full ${
+                              roi.status === 'improved'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : roi.status === 'worsened'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {roi.deltaSummary}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600">
+                          Erythema: <strong>{roi.pastErythema}/100</strong> → <strong>{roi.currentErythema}/100</strong> · Pigment: <strong>{roi.pastPigmentation}/100</strong> → <strong>{roi.currentPigmentation}/100</strong>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

@@ -8,7 +8,7 @@ import {
 } from '../types';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { analyzeImageVisualFeatures } from '../utils/visualImageAnalyzer';
+import { analyzeImageVisualFeatures, compareImagePairVisuals } from '../utils/visualImageAnalyzer';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import { VoiceDictationButton } from './VoiceDictationButton';
 import { FullScreenSideBySideModal, ImageAreaAnnotation } from './FullScreenSideBySideModal';
@@ -36,7 +36,9 @@ import {
   Database,
   Clock,
   Stethoscope,
-  CheckCircle2
+  CheckCircle2,
+  SlidersHorizontal,
+  Layers
 } from 'lucide-react';
 
 const MEDICAL_MODALITIES: MedicalImageModality[] = [
@@ -48,6 +50,112 @@ const MEDICAL_MODALITIES: MedicalImageModality[] = [
   'Ultrasound',
   'Histopathology / Slide',
   'Other Medical Image'
+];
+
+interface SampleProgressionPair {
+  id: string;
+  title: string;
+  subtitle: string;
+  clinicalContext: string;
+  pastImage: Omit<ClinicalImage, 'patientId'>;
+  currentImage: Omit<ClinicalImage, 'patientId'>;
+}
+
+function makeSampleSvgDataUrl(svgString: string): string {
+  return `data:image/svg+xml;base64,${btoa(svgString)}`;
+}
+
+const SAMPLE_PROGRESSION_PAIRS: SampleProgressionPair[] = [
+  {
+    id: 'sample_acne_improvement',
+    title: 'Acne Vulgaris (Baseline Flare → Day 21 Post-Regimen)',
+    subtitle: 'Tests Marked Improvement (+68% recovery)',
+    clinicalContext:
+      'Patient on topical Adapalene 0.1% + Clindamycin 1% gel nightly and barrier-restoring moisturizer for 21 days.',
+    pastImage: {
+      id: 'sample_past_acne_baseline',
+      url: makeSampleSvgDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240"><rect width="360" height="240" fill="#f7e2d5"/><circle cx="145" cy="110" r="24" fill="#d9383a" opacity="0.82"/><circle cx="145" cy="110" r="7" fill="#fef08a"/><circle cx="205" cy="130" r="28" fill="#c81e32" opacity="0.85"/><circle cx="205" cy="130" r="8" fill="#fde047"/><circle cx="172" cy="152" r="19" fill="#e11d48" opacity="0.78"/></svg>`
+      ),
+      dataUrl: makeSampleSvgDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240"><rect width="360" height="240" fill="#f7e2d5"/><circle cx="145" cy="110" r="24" fill="#d9383a" opacity="0.82"/><circle cx="145" cy="110" r="7" fill="#fef08a"/><circle cx="205" cy="130" r="28" fill="#c81e32" opacity="0.85"/><circle cx="205" cy="130" r="8" fill="#fde047"/><circle cx="172" cy="152" r="19" fill="#e11d48" opacity="0.78"/></svg>`
+      ),
+      filename: 'acne_baseline_day1.svg',
+      mimeType: 'image/svg+xml',
+      caption: 'Day 1 Baseline — Papulopustular Acne Flare (Right Cheek)',
+      bodyArea: 'Right Malar Cheek',
+      modality: 'Clinical Photo',
+      imageRole: 'past',
+      examDate: '2025-04-01',
+      extractedFindings:
+        'Clustered erythematous papules and central pustules with pronounced perilesional erythema (Erythema 74/100, Diameter 10.5mm).',
+      createdAt: '2025-04-01T09:00:00.000Z'
+    },
+    currentImage: {
+      id: 'sample_curr_acne_day21',
+      url: makeSampleSvgDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240"><rect width="360" height="240" fill="#f7e2d5"/><circle cx="145" cy="110" r="9" fill="#e6a296" opacity="0.45"/><circle cx="205" cy="130" r="11" fill="#e29b8f" opacity="0.48"/><circle cx="172" cy="152" r="7" fill="#ebb0a5" opacity="0.4"/></svg>`
+      ),
+      dataUrl: makeSampleSvgDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240"><rect width="360" height="240" fill="#f7e2d5"/><circle cx="145" cy="110" r="9" fill="#e6a296" opacity="0.45"/><circle cx="205" cy="130" r="11" fill="#e29b8f" opacity="0.48"/><circle cx="172" cy="152" r="7" fill="#ebb0a5" opacity="0.4"/></svg>`
+      ),
+      filename: 'acne_followup_day21.svg',
+      mimeType: 'image/svg+xml',
+      caption: 'Day 21 Follow-up — Post-Regimen Clearance (Right Cheek)',
+      bodyArea: 'Right Malar Cheek',
+      modality: 'Clinical Photo',
+      imageRole: 'current',
+      examDate: '2025-04-22',
+      extractedFindings:
+        'Complete resolution of pustules with >65% reduction in erythema and lesion diameter; faint residual post-inflammatory macules.',
+      createdAt: '2025-04-22T09:00:00.000Z'
+    }
+  },
+  {
+    id: 'sample_eczema_ flare',
+    title: 'Eczematous Dermatitis (Prior Mild Plaque → Acute Flare)',
+    subtitle: 'Tests Worsening / Active Flare Detection',
+    clinicalContext:
+      'Patient discontinued topical corticosteroid early and used harsh fragranced soap; reports increased pruritus.',
+    pastImage: {
+      id: 'sample_past_eczema_mild',
+      url: makeSampleSvgDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240"><rect width="360" height="240" fill="#f5dec9"/><ellipse cx="180" cy="120" rx="28" ry="20" fill="#e09889" opacity="0.55"/></svg>`
+      ),
+      dataUrl: makeSampleSvgDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240"><rect width="360" height="240" fill="#f5dec9"/><ellipse cx="180" cy="120" rx="28" ry="20" fill="#e09889" opacity="0.55"/></svg>`
+      ),
+      filename: 'eczema_prior_mild.svg',
+      mimeType: 'image/svg+xml',
+      caption: 'Prior Visit — Mild Subacute Eczematous Patch (Flexural Forearm)',
+      bodyArea: 'Left Volar Forearm',
+      modality: 'Clinical Photo',
+      imageRole: 'past',
+      examDate: '2025-04-05',
+      extractedFindings:
+        'Small, faintly erythematous patch with minimal scaling on the left volar forearm.',
+      createdAt: '2025-04-05T10:00:00.000Z'
+    },
+    currentImage: {
+      id: 'sample_curr_eczema_flare',
+      url: makeSampleSvgDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240"><rect width="360" height="240" fill="#f5dec9"/><ellipse cx="180" cy="120" rx="74" ry="52" fill="#c81e32" opacity="0.82" stroke="#881337" stroke-width="3" stroke-dasharray="6,3"/><circle cx="155" cy="108" r="14" fill="#9f1239" opacity="0.7"/><circle cx="205" cy="132" r="16" fill="#9f1239" opacity="0.7"/></svg>`
+      ),
+      dataUrl: makeSampleSvgDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240"><rect width="360" height="240" fill="#f5dec9"/><ellipse cx="180" cy="120" rx="74" ry="52" fill="#c81e32" opacity="0.82" stroke="#881337" stroke-width="3" stroke-dasharray="6,3"/><circle cx="155" cy="108" r="14" fill="#9f1239" opacity="0.7"/><circle cx="205" cy="132" r="16" fill="#9f1239" opacity="0.7"/></svg>`
+      ),
+      filename: 'eczema_acute_flare.svg',
+      mimeType: 'image/svg+xml',
+      caption: 'Current Visit — Acute Erythematous Flare & Border Expansion',
+      bodyArea: 'Left Volar Forearm',
+      modality: 'Clinical Photo',
+      imageRole: 'current',
+      examDate: '2025-04-24',
+      extractedFindings:
+        'Expanded, intensely erythematous plaque with irregular scalloped borders and excoriated papules.',
+      createdAt: '2025-04-24T10:00:00.000Z'
+    }
+  }
 ];
 
 interface LesionProgressionModalProps {
@@ -173,6 +281,8 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
 
   const [isComparing, setIsComparing] = useState(false);
   const [result, setResult] = useState<ProgressionAnalysisResult | null>(null);
+  const [viewMode, setViewMode] = useState<'side-by-side' | 'slider' | 'heatmap'>('side-by-side');
+  const [sliderPos, setSliderPos] = useState<number>(50);
   const [editableSummary, setEditableSummary] = useState<string>('');
   const [isEditingSummary, setIsEditingSummary] = useState<boolean>(true);
   const [severityStatus, setSeverityStatus] = useState<
@@ -183,6 +293,20 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
 
   const imageA = localImages.find(img => img.id === imageAId) || null;
   const imageB = localImages.find(img => img.id === imageBId) || null;
+
+  const handleLoadSamplePair = (sample: SampleProgressionPair) => {
+    const pastImg: ClinicalImage = { ...sample.pastImage, patientId: patient.id };
+    const currImg: ClinicalImage = { ...sample.currentImage, patientId: patient.id };
+    setLocalImages(prev => {
+      const filtered = prev.filter(i => i.id !== pastImg.id && i.id !== currImg.id);
+      return [...filtered, pastImg, currImg];
+    });
+    setImageAId(pastImg.id);
+    setImageBId(currImg.id);
+    setClinicalContext(sample.clinicalContext);
+    setErrorMsg(null);
+    setResult(null);
+  };
 
   const handleUploadImageForSlot = (slot: 'A' | 'B', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -297,26 +421,39 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
 
     if (imageA.id === imageB.id) {
       setErrorMsg('Please select two distinct medical images (Past Image vs. Current Image).');
+      return;
     }
 
     setIsComparing(true);
     setErrorMsg(null);
 
     try {
-      // Ensure client-side pixel extraction runs on both Past Image and Current Image if not already cached
-      let metricsA = imageA.visualMetrics;
-      if (!metricsA && (imageA.dataUrl || imageA.url)) {
+      const srcA = imageA.dataUrl || imageA.url;
+      const srcB = imageB.dataUrl || imageB.url;
+
+      let pairVisuals: Awaited<ReturnType<typeof compareImagePairVisuals>> | null = null;
+      if (srcA && srcB) {
         try {
-          metricsA = await analyzeImageVisualFeatures(imageA.dataUrl || imageA.url);
+          pairVisuals = await compareImagePairVisuals(srcA, srcB, annotations);
+        } catch {
+          // Fallback to individual extraction below
+        }
+      }
+
+      // Ensure client-side pixel extraction runs on both Past Image and Current Image if not already cached
+      let metricsA = imageA.visualMetrics || pairVisuals?.metricsA;
+      if (!metricsA && srcA) {
+        try {
+          metricsA = await analyzeImageVisualFeatures(srcA);
         } catch {
           // Server will compute fallback metrics
         }
       }
 
-      let metricsB = imageB.visualMetrics;
-      if (!metricsB && (imageB.dataUrl || imageB.url)) {
+      let metricsB = imageB.visualMetrics || pairVisuals?.metricsB;
+      if (!metricsB && srcB) {
         try {
-          metricsB = await analyzeImageVisualFeatures(imageB.dataUrl || imageB.url);
+          metricsB = await analyzeImageVisualFeatures(srcB);
         } catch {
           // Server will compute fallback metrics
         }
@@ -335,7 +472,7 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
       const res = await api.ai.compareProgression({
         imageA: {
           id: imageA.id,
-          base64: imageA.dataUrl || imageA.url,
+          base64: srcA,
           mimeType: imageA.mimeType,
           label: imageA.caption || 'Past Medical Image (Baseline)',
           date: formatImageDisplayDate(imageA),
@@ -346,7 +483,7 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
         },
         imageB: {
           id: imageB.id,
-          base64: imageB.dataUrl || imageB.url,
+          base64: srcB,
           mimeType: imageB.mimeType,
           label: imageB.caption || 'Current Uploaded Image (Follow-up)',
           date: formatImageDisplayDate(imageB),
@@ -359,7 +496,16 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
         clinicalContext: combinedContext
       });
 
-      setResult(res.progression);
+      const enrichedProgression: ProgressionAnalysisResult = {
+        ...res.progression,
+        diffHeatmapDataUrl: pairVisuals?.diffHeatmapDataUrl || res.progression.diffHeatmapDataUrl,
+        roiComparisons:
+          pairVisuals?.roiComparisons && pairVisuals.roiComparisons.length > 0
+            ? pairVisuals.roiComparisons
+            : res.progression.roiComparisons
+      };
+
+      setResult(enrichedProgression);
       const isWorse =
         res.progression.progressionScore < -5 ||
         res.progression.overallProgression.toLowerCase().includes('worsen') ||
@@ -556,26 +702,156 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-5">
-          {/* Quick Instruction Bar + Swap Button */}
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-xs">
-            <div className="flex items-center gap-2 text-slate-600">
-              <Database className="w-4 h-4 text-teal-700 shrink-0" />
-              <span>
-                <strong>Medical Image Archive &amp; Dual Extraction:</strong> Select a stored{' '}
-                <strong>Past Medical Image</strong> (or upload a historical image with its past date &amp; modality) on the left, and upload or select the <strong>Current Image</strong> on the right. Both images are automatically extracted and compared.
-              </span>
+          {/* Quick Instruction Bar + 1-Click Test Pairs + Swap Button */}
+          <div className="bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-xs space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-slate-600">
+                <Database className="w-4 h-4 text-teal-700 shrink-0" />
+                <span>
+                  <strong>Medical Image Archive &amp; Dual CIE-LAB Extraction:</strong> Select a stored{' '}
+                  <strong>Past Medical Image</strong> on the left and a <strong>Current Image</strong> on the right, or click a sample pair below to test Old vs. New progression.
+                </span>
+              </div>
+              {imageA && imageB && (
+                <button
+                  type="button"
+                  onClick={handleSwapImages}
+                  className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 flex items-center gap-1 transition shrink-0"
+                >
+                  <ArrowLeftRight className="w-3 h-3 text-teal-700" />
+                  <span>Swap Past ⇄ Current</span>
+                </button>
+              )}
             </div>
-            {imageA && imageB && (
-              <button
-                type="button"
-                onClick={handleSwapImages}
-                className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 flex items-center gap-1 transition shrink-0"
-              >
-                <ArrowLeftRight className="w-3 h-3 text-teal-700" />
-                <span>Swap Past ⇄ Current</span>
-              </button>
-            )}
+
+            {/* 1-Click Sample Old vs. New Progression Pairs + View Mode Switcher */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">
+                  Quick Test Pairs:
+                </span>
+                {SAMPLE_PROGRESSION_PAIRS.map(pair => (
+                  <button
+                    key={pair.id}
+                    type="button"
+                    onClick={() => handleLoadSamplePair(pair)}
+                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-300 text-[11px] font-semibold text-slate-700 hover:text-teal-900 transition flex items-center gap-1"
+                    title={pair.subtitle}
+                  >
+                    <Sparkles className="w-3 h-3 text-teal-600" />
+                    <span>{pair.title}</span>
+                  </button>
+                ))}
+              </div>
+
+              {imageA && imageB && (
+                <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('side-by-side')}
+                    className={`px-2 py-1 rounded text-[11px] font-semibold transition ${
+                      viewMode === 'side-by-side'
+                        ? 'bg-teal-800 text-white'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Side-by-Side
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('slider')}
+                    className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition ${
+                      viewMode === 'slider'
+                        ? 'bg-teal-800 text-white'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <SlidersHorizontal className="w-3 h-3" />
+                    <span>Overlay Slider</span>
+                  </button>
+                  {result?.diffHeatmapDataUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('heatmap')}
+                      className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition ${
+                        viewMode === 'heatmap'
+                          ? 'bg-emerald-700 text-white'
+                          : 'text-emerald-800 hover:bg-emerald-50'
+                      }`}
+                    >
+                      <Layers className="w-3 h-3" />
+                      <span>Pixel Diff Heatmap</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Interactive Overlay Slider or CIE-LAB Pixel Difference Heatmap */}
+          {viewMode === 'slider' && imageA && imageB && (
+            <div className="bg-slate-900 p-4 rounded-xl text-white space-y-2.5">
+              <div className="flex items-center justify-between text-xs text-slate-300">
+                <span>◀ Past ({formatImageDisplayDate(imageA)})</span>
+                <span className="font-mono font-bold text-teal-300">{sliderPos}% Blend</span>
+                <span>Current ({formatImageDisplayDate(imageB)}) ▶</span>
+              </div>
+              <div className="relative h-72 w-full rounded-lg overflow-hidden bg-black flex items-center justify-center border border-slate-700">
+                <img
+                  src={imageA.dataUrl || imageA.url}
+                  alt="Past baseline"
+                  className="absolute inset-0 w-full h-full object-contain"
+                />
+                <div
+                  className="absolute inset-0 overflow-hidden"
+                  style={{ width: `${sliderPos}%`, borderRight: '2px solid #2dd4bf' }}
+                >
+                  <img
+                    src={imageB.dataUrl || imageB.url}
+                    alt="Current follow-up"
+                    className="absolute inset-0 w-full h-full object-contain"
+                    style={{ width: '100%', maxWidth: 'none' }}
+                  />
+                </div>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={sliderPos}
+                onChange={e => setSliderPos(Number(e.target.value))}
+                className="w-full accent-teal-400 cursor-pointer"
+              />
+            </div>
+          )}
+
+          {viewMode === 'heatmap' && result?.diffHeatmapDataUrl && (
+            <div className="bg-slate-900 p-4 rounded-xl text-white space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-teal-300 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" />
+                  CIE-LAB Colorimetric Difference Heatmap (Past Image → Current Image)
+                </span>
+                <div className="flex items-center gap-3 text-[11px]">
+                  <span className="flex items-center gap-1 text-emerald-300">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />
+                    Cleared / Reduced Erythema &amp; Pigment
+                  </span>
+                  <span className="flex items-center gap-1 text-rose-300">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+                    Active Flare / Increased Erythema
+                  </span>
+                </div>
+              </div>
+              <div className="relative h-72 w-full rounded-lg overflow-hidden bg-black flex items-center justify-center border border-slate-700">
+                <img
+                  src={result.diffHeatmapDataUrl}
+                  alt="CIE-LAB Pixel Difference Heatmap"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            </div>
+          )}
 
           {/* 1. Past Medical Image (Left) vs. Current Medical Image (Right) Side-by-Side */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1212,6 +1488,41 @@ export const LesionProgressionModal: React.FC<LesionProgressionModalProps> = ({
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Doctor Marked ROI Colorimetric Comparison Cards */}
+                {result.roiComparisons && result.roiComparisons.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-teal-900">
+                      Marked Region-of-Interest (ROI) Colorimetric Deltas:
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {result.roiComparisons.map(roi => (
+                        <div
+                          key={roi.id}
+                          className="p-2.5 rounded-xl bg-slate-50 border border-teal-200 text-[11px] space-y-1"
+                        >
+                          <div className="flex items-center justify-between font-bold text-slate-800">
+                            <span>{roi.label}</span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                roi.status === 'improved'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : roi.status === 'worsened'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-slate-200 text-slate-700'
+                              }`}
+                            >
+                              {roi.deltaSummary}
+                            </span>
+                          </div>
+                          <div className="text-slate-600">
+                            Erythema: <strong>{roi.pastErythema}/100</strong> → <strong>{roi.currentErythema}/100</strong> · Pigment: <strong>{roi.pastPigmentation}/100</strong> → <strong>{roi.currentPigmentation}/100</strong>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

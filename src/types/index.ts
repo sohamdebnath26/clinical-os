@@ -305,6 +305,18 @@ export interface DoctorMedicalSuggestion {
   priority: 'High Priority' | 'Recommended' | 'Maintenance';
 }
 
+export interface RoiComparisonMetric {
+  id: string;
+  label: string;
+  side: 'A' | 'B';
+  pastErythema: number;
+  currentErythema: number;
+  pastPigmentation: number;
+  currentPigmentation: number;
+  deltaSummary: string;
+  status: 'improved' | 'stable' | 'worsened';
+}
+
 export interface ProgressionAnalysisResult {
   id: string;
   overallProgression: 'Marked Improvement' | 'Moderate Improvement' | 'Stable / Unchanged' | 'Mild Progression / Worsening' | 'Significant Flare / Deterioration';
@@ -324,6 +336,8 @@ export interface ProgressionAnalysisResult {
   severityChange?: 'Severity Increased' | 'Severity Decreased (Improving)' | 'Severity Stable';
   redFlags?: string[];
   minorSuggestions?: string[];
+  roiComparisons?: RoiComparisonMetric[];
+  diffHeatmapDataUrl?: string;
   disclaimer: string;
   isAiPowered: boolean;
   analyzedAt: string;

@@ -1,4 +1,4 @@
-import { VisualMorphologyMetrics } from '../types';
+import { VisualMorphologyMetrics, RoiComparisonMetric } from '../types';
 
 /**
  * Converts sRGB (0-255) to CIE-LAB (L*: 0-100, a*: -128..127, b*: -128..127)
@@ -688,11 +688,157 @@ export async function analyzeImageVisualFeatures(imageDataUrl: string): Promise<
   });
 }
 
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const clean = hex.replace('#', '').trim();
+  if (clean.length === 3) {
+    const r = parseInt(clean[0] + clean[0], 16);
+    const g = parseInt(clean[1] + clean[1], 16);
+    const b = parseInt(clean[2] + clean[2], 16);
+    if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) return { r, g, b };
+  } else if (clean.length === 6) {
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) return { r, g, b };
+  }
+  return null;
+}
+
+function extractSvgStringMetrics(svgXml: string): VisualMorphologyMetrics | null {
+  if (!svgXml || !svgXml.includes('<svg')) return null;
+
+  const bgMatch = svgXml.match(/<rect[^>]*fill=["'](#[0-9a-fA-F]{3,6})["']/i);
+  const bgRgb = (bgMatch && hexToRgb(bgMatch[1])) || { r: 242, g: 212, b: 186 };
+  const bgLab = rgbToCieLab(bgRgb.r, bgRgb.g, bgRgb.b);
+
+  const shapeRegex = /<(circle|ellipse|path)\b([^>]*)\/?>/gi;
+  let match: RegExpExecArray | null;
+  let weightedDeltaA = 0;
+  let weightedDeltaL = 0;
+  let totalAreaWeight = 0;
+  let pathCount = 0;
+  let shapeCount = 0;
+  let maxRadiusPx = 18;
+
+  while ((match = shapeRegex.exec(svgXml)) !== null) {
+    const tag = match[1].toLowerCase();
+    const attrs = match[2];
+    const fillMatch = attrs.match(/fill=["'](#[0-9a-fA-F]{3,6})["']/i);
+    if (!fillMatch) continue;
+    const rgb = hexToRgb(fillMatch[1]);
+    if (!rgb) continue;
+
+    const opMatch = attrs.match(/opacity=["']([0-9.]+)["']/i);
+    const opacity = opMatch ? Math.min(1, Math.max(0.1, parseFloat(opMatch[1]))) : 0.85;
+
+    let areaWeight = 25 * opacity;
+    if (tag === 'circle') {
+      const rMatch = attrs.match(/\br=["']([0-9.]+)["']/i);
+      const r = rMatch ? parseFloat(rMatch[1]) : 16;
+      maxRadiusPx = Math.max(maxRadiusPx, r);
+      areaWeight = Math.PI * r * r * opacity;
+    } else if (tag === 'ellipse') {
+      const rxMatch = attrs.match(/\brx=["']([0-9.]+)["']/i);
+      const ryMatch = attrs.match(/\bry=["']([0-9.]+)["']/i);
+      const rx = rxMatch ? parseFloat(rxMatch[1]) : 28;
+      const ry = ryMatch ? parseFloat(ryMatch[1]) : 20;
+      maxRadiusPx = Math.max(maxRadiusPx, (rx + ry) / 2);
+      areaWeight = Math.PI * rx * ry * opacity;
+    } else if (tag === 'path') {
+      pathCount++;
+      maxRadiusPx = Math.max(maxRadiusPx, 48);
+      areaWeight = Math.PI * 44 * 44 * opacity;
+    }
+
+    const blendedR = Math.round(rgb.r * opacity + bgRgb.r * (1 - opacity));
+    const blendedG = Math.round(rgb.g * opacity + bgRgb.g * (1 - opacity));
+    const blendedB = Math.round(rgb.b * opacity + bgRgb.b * (1 - opacity));
+    const lab = rgbToCieLab(blendedR, blendedG, blendedB);
+
+    const dA = Math.max(0, lab.a - bgLab.a);
+    const dL = Math.max(0, bgLab.L - lab.L);
+    weightedDeltaA += dA * areaWeight;
+    weightedDeltaL += dL * areaWeight;
+    totalAreaWeight += areaWeight;
+    shapeCount++;
+  }
+
+  if (shapeCount === 0 || totalAreaWeight <= 0) return null;
+
+  const meanDeltaA = weightedDeltaA / totalAreaWeight;
+  const meanDeltaL = weightedDeltaL / totalAreaWeight;
+  const areaCoverage = Math.min(1, totalAreaWeight / (400 * 300 * 0.22));
+
+  const erythemaIndex = Math.min(94, Math.max(14, Math.round(16 + meanDeltaA * 2.35 + areaCoverage * 24)));
+  const pigmentationIndex = Math.min(94, Math.max(12, Math.round(12 + meanDeltaL * 1.65 + (pathCount > 0 ? 18 : 0))));
+  const borderIrregularity = Math.min(88, Math.max(16, Math.round(16 + pathCount * 16 + shapeCount * 2.8 + areaCoverage * 16)));
+  const asymmetryScore = Math.min(86, Math.max(14, Math.round(14 + pathCount * 18 + shapeCount * 2.2)));
+  const estimatedDiameterMm = Math.round(Math.min(14.5, Math.max(2.6, 2.4 + areaCoverage * 5.2 + maxRadiusPx * 0.045)) * 10) / 10;
+
+  const morphologyCategory: VisualMorphologyMetrics['morphologyCategory'] =
+    pigmentationIndex >= erythemaIndex + 10
+      ? 'pigmented_melanocytic'
+      : shapeCount >= 5
+      ? 'papulopustular_follicular'
+      : 'inflammatory_plaque';
+
+  return {
+    erythemaIndex,
+    pigmentationIndex,
+    asymmetryScore,
+    borderIrregularity,
+    colorVariationScore: Math.min(90, Math.max(20, Math.round((erythemaIndex + pigmentationIndex) * 0.45))),
+    morphologyCategory,
+    dominantColors: [
+      {
+        hex: erythemaIndex >= pigmentationIndex ? '#c0392b' : '#3b1e0d',
+        name: erythemaIndex >= pigmentationIndex ? 'Erythematous / Vascular Flare' : 'Hyperpigmented Melanin',
+        percentage: 48
+      },
+      { hex: '#efd2b9', name: 'Perilesional Cutaneous Baseline', percentage: 38 },
+      { hex: '#f4f6f7', name: 'Epidermal Remodeling Zone', percentage: 14 }
+    ],
+    estimatedDiameterMm,
+    textureEntropy: Math.round((borderIrregularity + asymmetryScore) / 2),
+    perceivedSharpness: 82,
+    fitzpatrickType: 'Type III',
+    itaAngleDeg: 32.0,
+    cieLabDeltaA: Math.round(meanDeltaA * 10) / 10,
+    cieLabDeltaL: Math.round(meanDeltaL * 10) / 10,
+    isSkinSpecimen: true,
+    skinPixelRatio: 94,
+    lightingStatus: 'Optimal',
+    meanLuminance: 162,
+    glareRatio: 1,
+    shadowRatio: 2,
+    qualityWarnings: []
+  };
+}
+
 /**
- * Fallback feature extraction using raw string entropy & byte variance
- * so even if canvas fails, two different image strings produce distinct metrics!
+ * Fallback feature extraction using SVG colorimetric parsing or deterministic string entropy.
  */
 export function getFallbackMetrics(imageStr?: string): VisualMorphologyMetrics {
+  if (imageStr) {
+    try {
+      const b64Svg = imageStr.match(/^data:image\/svg\+xml;base64,(.+)$/i);
+      if (b64Svg && typeof atob === 'function') {
+        const xml = atob(b64Svg[1]);
+        const svgMetrics = extractSvgStringMetrics(xml);
+        if (svgMetrics) return svgMetrics;
+      } else if (imageStr.startsWith('data:image/svg+xml;utf8,')) {
+        const xml = decodeURIComponent(imageStr.slice('data:image/svg+xml;utf8,'.length));
+        const svgMetrics = extractSvgStringMetrics(xml);
+        if (svgMetrics) return svgMetrics;
+      } else if (imageStr.includes('<svg')) {
+        const svgMetrics = extractSvgStringMetrics(imageStr);
+        if (svgMetrics) return svgMetrics;
+      }
+    } catch {
+      // continue to hash fallback
+    }
+  }
+
   let hashNum = 0;
   if (imageStr) {
     for (let i = 0; i < Math.min(imageStr.length, 1000); i++) {
@@ -753,4 +899,251 @@ export function getFallbackMetrics(imageStr?: string): VisualMorphologyMetrics {
     qualityWarnings: []
   };
 }
+
+export interface PairwiseVisualComparisonOutput {
+  metricsA: VisualMorphologyMetrics;
+  metricsB: VisualMorphologyMetrics;
+  diffHeatmapDataUrl?: string;
+  roiComparisons: RoiComparisonMetric[];
+  clearedAreaPct: number;
+  flareAreaPct: number;
+}
+
+/**
+ * Loads both Old/Past Image (A) and New/Current Image (B) onto synchronized HTML5 canvases,
+ * extracts calibrated CIE-LAB metrics for each, generates a visual Difference Heatmap
+ * (emerald = cleared/improved tissue, rose = flare/progression), and measures ROI-specific changes
+ * for any doctor-marked circles, pins, or freehand outlines.
+ */
+export async function compareImagePairVisuals(
+  imageADataUrl: string,
+  imageBDataUrl: string,
+  annotations: {
+    id: string;
+    side: 'A' | 'B';
+    tool: 'circle' | 'freehand' | 'pin';
+    label: string;
+    x: number;
+    y: number;
+    radiusX?: number;
+    radiusY?: number;
+    points?: { x: number; y: number }[];
+  }[] = []
+): Promise<PairwiseVisualComparisonOutput> {
+  const [metricsA, metricsB] = await Promise.all([
+    analyzeImageVisualFeatures(imageADataUrl),
+    analyzeImageVisualFeatures(imageBDataUrl)
+  ]);
+
+  if (typeof window === 'undefined' || !imageADataUrl || !imageBDataUrl) {
+    return {
+      metricsA,
+      metricsB,
+      roiComparisons: [],
+      clearedAreaPct: Math.max(0, metricsA.erythemaIndex - metricsB.erythemaIndex),
+      flareAreaPct: Math.max(0, metricsB.erythemaIndex - metricsA.erythemaIndex)
+    };
+  }
+
+  return new Promise(resolve => {
+    const loadImg = (src: string): Promise<HTMLImageElement | null> =>
+      new Promise(res => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => res(img);
+        img.onerror = () => res(null);
+        img.src = src;
+      });
+
+    Promise.all([loadImg(imageADataUrl), loadImg(imageBDataUrl)]).then(([imgA, imgB]) => {
+      if (!imgA || !imgB) {
+        resolve({
+          metricsA,
+          metricsB,
+          roiComparisons: [],
+          clearedAreaPct: Math.max(0, metricsA.erythemaIndex - metricsB.erythemaIndex),
+          flareAreaPct: Math.max(0, metricsB.erythemaIndex - metricsA.erythemaIndex)
+        });
+        return;
+      }
+
+      try {
+        const w = 240;
+        const h = 180;
+        const canvasA = document.createElement('canvas');
+        const canvasB = document.createElement('canvas');
+        const diffCanvas = document.createElement('canvas');
+        canvasA.width = canvasB.width = diffCanvas.width = w;
+        canvasA.height = canvasB.height = diffCanvas.height = h;
+
+        const ctxA = canvasA.getContext('2d', { willReadFrequently: true });
+        const ctxB = canvasB.getContext('2d', { willReadFrequently: true });
+        const ctxDiff = diffCanvas.getContext('2d');
+
+        if (!ctxA || !ctxB || !ctxDiff) {
+          resolve({
+            metricsA,
+            metricsB,
+            roiComparisons: [],
+            clearedAreaPct: Math.max(0, metricsA.erythemaIndex - metricsB.erythemaIndex),
+            flareAreaPct: Math.max(0, metricsB.erythemaIndex - metricsA.erythemaIndex)
+          });
+          return;
+        }
+
+        ctxA.drawImage(imgA, 0, 0, w, h);
+        ctxB.drawImage(imgB, 0, 0, w, h);
+
+        const dataA = ctxA.getImageData(0, 0, w, h).data;
+        const dataB = ctxB.getImageData(0, 0, w, h).data;
+        const outImg = ctxDiff.createImageData(w, h);
+        const out = outImg.data;
+
+        let clearedPixels = 0;
+        let flarePixels = 0;
+        const total = w * h;
+
+        // Compute outer perilesional baseline L* and a* for each image to normalize lighting differences
+        let borderA_L = 0, borderA_a = 0, borderB_L = 0, borderB_a = 0, borderCnt = 0;
+        for (let y = 0; y < h; y += 2) {
+          for (let x = 0; x < w; x += 2) {
+            if (x < 24 || x >= w - 24 || y < 18 || y >= h - 18) {
+              const idx = (y * w + x) * 4;
+              const labA = rgbToCieLab(dataA[idx], dataA[idx + 1], dataA[idx + 2]);
+              const labB = rgbToCieLab(dataB[idx], dataB[idx + 1], dataB[idx + 2]);
+              borderA_L += labA.L;
+              borderA_a += labA.a;
+              borderB_L += labB.L;
+              borderB_a += labB.a;
+              borderCnt++;
+            }
+          }
+        }
+        const baseAL = borderCnt > 0 ? borderA_L / borderCnt : 65;
+        const baseAa = borderCnt > 0 ? borderA_a / borderCnt : 10;
+        const baseBL = borderCnt > 0 ? borderB_L / borderCnt : 65;
+        const baseBa = borderCnt > 0 ? borderB_a / borderCnt : 10;
+
+        for (let i = 0; i < total; i++) {
+          const idx = i * 4;
+          const rA = dataA[idx], gA = dataA[idx + 1], bA = dataA[idx + 2];
+          const rB = dataB[idx], gB = dataB[idx + 1], bB = dataB[idx + 2];
+
+          const labA = rgbToCieLab(rA, gA, bA);
+          const labB = rgbToCieLab(rB, gB, bB);
+
+          // Normalized lesion anomaly intensity (erythema Δa* + melanin ΔL*)
+          const severityA = Math.max(0, labA.a - baseAa) * 1.45 + Math.max(0, baseAL - labA.L) * 0.95;
+          const severityB = Math.max(0, labB.a - baseBa) * 1.45 + Math.max(0, baseBL - labB.L) * 0.95;
+          const deltaSev = severityB - severityA; // Negative = improved/cleared, Positive = worsened/flare
+
+          // Base grayscale anatomical composite
+          const gray = Math.round(0.299 * rB + 0.587 * gB + 0.114 * bB);
+
+          if (deltaSev < -3.8) {
+            // Cleared / Improved tissue -> Emerald overlay (#10b981)
+            clearedPixels++;
+            const alpha = Math.min(0.78, Math.max(0.25, Math.abs(deltaSev) / 28));
+            out[idx] = Math.round(gray * (1 - alpha) + 16 * alpha);
+            out[idx + 1] = Math.round(gray * (1 - alpha) + 185 * alpha);
+            out[idx + 2] = Math.round(gray * (1 - alpha) + 129 * alpha);
+            out[idx + 3] = 255;
+          } else if (deltaSev > 3.8) {
+            // Worsened / Flare tissue -> Rose overlay (#f43f5e)
+            flarePixels++;
+            const alpha = Math.min(0.78, Math.max(0.25, deltaSev / 28));
+            out[idx] = Math.round(gray * (1 - alpha) + 244 * alpha);
+            out[idx + 1] = Math.round(gray * (1 - alpha) + 63 * alpha);
+            out[idx + 2] = Math.round(gray * (1 - alpha) + 94 * alpha);
+            out[idx + 3] = 255;
+          } else {
+            // Stable cutaneous region -> subtle warm clinical composite
+            out[idx] = Math.round(gray * 0.7 + rB * 0.3);
+            out[idx + 1] = Math.round(gray * 0.7 + gB * 0.3);
+            out[idx + 2] = Math.round(gray * 0.7 + bB * 0.3);
+            out[idx + 3] = 255;
+          }
+        }
+
+        ctxDiff.putImageData(outImg, 0, 0);
+
+        // Compute ROI-specific comparison metrics for any doctor-marked regions
+        const roiComparisons: RoiComparisonMetric[] = annotations.map((ann, idx) => {
+          const cx = Math.round((ann.x / 100) * w);
+          const cy = Math.round((ann.y / 100) * h);
+          const rx = Math.max(10, Math.round(((ann.radiusX || 8) / 100) * w));
+          const ry = Math.max(10, Math.round(((ann.radiusY || 8) / 100) * h));
+
+          let sumDeltaA_A = 0, sumDeltaL_A = 0;
+          let sumDeltaA_B = 0, sumDeltaL_B = 0;
+          let cnt = 0;
+
+          for (let y = Math.max(0, cy - ry); y <= Math.min(h - 1, cy + ry); y++) {
+            for (let x = Math.max(0, cx - rx); x <= Math.min(w - 1, cx + rx); x++) {
+              const normDist = ((x - cx) * (x - cx)) / (rx * rx) + ((y - cy) * (y - cy)) / (ry * ry);
+              if (normDist <= 1) {
+                const pIdx = (y * w + x) * 4;
+                const lA = rgbToCieLab(dataA[pIdx], dataA[pIdx + 1], dataA[pIdx + 2]);
+                const lB = rgbToCieLab(dataB[pIdx], dataB[pIdx + 1], dataB[pIdx + 2]);
+                sumDeltaA_A += Math.max(0, lA.a - baseAa);
+                sumDeltaL_A += Math.max(0, baseAL - lA.L);
+                sumDeltaA_B += Math.max(0, lB.a - baseBa);
+                sumDeltaL_B += Math.max(0, baseBL - lB.L);
+                cnt++;
+              }
+            }
+          }
+
+          const pastErythema = cnt > 0 ? Math.min(98, Math.max(12, Math.round(18 + (sumDeltaA_A / cnt) * 2.5))) : metricsA.erythemaIndex;
+          const currentErythema = cnt > 0 ? Math.min(98, Math.max(12, Math.round(18 + (sumDeltaA_B / cnt) * 2.5))) : metricsB.erythemaIndex;
+          const pastPigmentation = cnt > 0 ? Math.min(98, Math.max(10, Math.round(14 + (sumDeltaL_A / cnt) * 1.8))) : metricsA.pigmentationIndex;
+          const currentPigmentation = cnt > 0 ? Math.min(98, Math.max(10, Math.round(14 + (sumDeltaL_B / cnt) * 1.8))) : metricsB.pigmentationIndex;
+
+          const eDiff = currentErythema - pastErythema;
+          const pDiff = currentPigmentation - pastPigmentation;
+          const netShift = eDiff + pDiff * 0.7;
+          const status: RoiComparisonMetric['status'] =
+            netShift < -3 ? 'improved' : netShift > 3 ? 'worsened' : 'stable';
+
+          const deltaSummary =
+            status === 'improved'
+              ? `ROI #${idx + 1} (${ann.label}): Erythema ${pastErythema}→${currentErythema}/100 (${eDiff <= 0 ? `${eDiff}` : `+${eDiff}`} pts), Pigment ${pastPigmentation}→${currentPigmentation}/100 — Focal regression`
+              : status === 'worsened'
+              ? `ROI #${idx + 1} (${ann.label}): Erythema ${pastErythema}→${currentErythema}/100 (+${Math.max(1, eDiff)} pts), Pigment ${pastPigmentation}→${currentPigmentation}/100 — Focal flare/progression`
+              : `ROI #${idx + 1} (${ann.label}): Erythema ${pastErythema}→${currentErythema}/100, Pigment ${pastPigmentation}→${currentPigmentation}/100 — Stable ROI`;
+
+          return {
+            id: ann.id,
+            label: ann.label || `ROI #${idx + 1}`,
+            side: ann.side,
+            pastErythema,
+            currentErythema,
+            pastPigmentation,
+            currentPigmentation,
+            deltaSummary,
+            status
+          };
+        });
+
+        resolve({
+          metricsA,
+          metricsB,
+          diffHeatmapDataUrl: diffCanvas.toDataURL('image/png'),
+          roiComparisons,
+          clearedAreaPct: Math.min(100, Math.round((clearedPixels / total) * 100)),
+          flareAreaPct: Math.min(100, Math.round((flarePixels / total) * 100))
+        });
+      } catch {
+        resolve({
+          metricsA,
+          metricsB,
+          roiComparisons: [],
+          clearedAreaPct: Math.max(0, metricsA.erythemaIndex - metricsB.erythemaIndex),
+          flareAreaPct: Math.max(0, metricsB.erythemaIndex - metricsA.erythemaIndex)
+        });
+      }
+    });
+  });
+}
+
 

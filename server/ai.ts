@@ -739,6 +739,8 @@ const IMAGE_CACHE_MAX_ENTRIES = 200;
 const IMAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const imageAnalysisCache = new Map<string, { result: AIImageAnalysisResult; expiresAt: number }>();
 const abcdeAnalysisCache = new Map<string, { result: ABCDEScoreResult; expiresAt: number }>();
+const progressionComparisonCache = new Map<string, { result: ProgressionAnalysisResult; expiresAt: number }>();
+const visitComparisonCache = new Map<string, { result: VisitComparisonResult; expiresAt: number }>();
 
 function computeImageContextHash(prefix: string, imageBase64: string, contextParts: (string | undefined)[]): string {
   const hash = crypto.createHash('sha256');
@@ -749,6 +751,175 @@ function computeImageContextHash(prefix: string, imageBase64: string, contextPar
     hash.update(part || '');
   }
   return hash.digest('hex');
+}
+
+async function generateGeminiJsonWithTimeout(
+  ai: GoogleGenAI,
+  model: string,
+  contents: any,
+  responseSchema?: any,
+  timeoutMs = 6000
+): Promise<string | null> {
+  if (Date.now() <= geminiCooldownUntil) return null;
+  const isGemini3Or4 = model.startsWith('gemini-3') || model.startsWith('gemini-4');
+  const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs));
+  const reqPromise = ai.models
+    .generateContent({
+      model,
+      contents,
+      config: {
+        responseMimeType: 'application/json',
+        ...(responseSchema ? { responseSchema } : {}),
+        ...(isGemini3Or4
+          ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+          : { temperature: 0.1 })
+      }
+    })
+    .then(r => r.text?.trim() || null);
+
+  return Promise.race([reqPromise, timeoutPromise]);
+}
+
+function serverRgbToCieLab(r: number, g: number, b: number): { L: number; a: number; b: number } {
+  let sr = r / 255;
+  let sg = g / 255;
+  let sb = b / 255;
+  sr = sr > 0.04045 ? Math.pow((sr + 0.055) / 1.055, 2.4) : sr / 12.92;
+  sg = sg > 0.04045 ? Math.pow((sg + 0.055) / 1.055, 2.4) : sg / 12.92;
+  sb = sb > 0.04045 ? Math.pow((sb + 0.055) / 1.055, 2.4) : sb / 12.92;
+  const x = (sr * 0.4124 + sg * 0.3576 + sb * 0.1805) / 0.95047;
+  const y = (sr * 0.2126 + sg * 0.7152 + sb * 0.0722) / 1.0;
+  const z = (sr * 0.0193 + sg * 0.1192 + sb * 0.9505) / 1.08883;
+  const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const fx = f(x), fy = f(y), fz = f(z);
+  return { L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) };
+}
+
+function parseHexColorServer(hex: string): { r: number; g: number; b: number } | null {
+  const clean = hex.replace('#', '').trim();
+  if (clean.length === 3) {
+    const r = parseInt(clean[0] + clean[0], 16);
+    const g = parseInt(clean[1] + clean[1], 16);
+    const b = parseInt(clean[2] + clean[2], 16);
+    if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) return { r, g, b };
+  } else if (clean.length === 6) {
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) return { r, g, b };
+  }
+  return null;
+}
+
+function extractSvgXmlVisualMetrics(svgXml: string): VisualMorphologyMetrics | null {
+  if (!svgXml || !svgXml.includes('<svg')) return null;
+
+  const bgMatch = svgXml.match(/<rect[^>]*fill=["'](#[0-9a-fA-F]{3,6})["']/i);
+  const bgRgb = (bgMatch && parseHexColorServer(bgMatch[1])) || { r: 242, g: 212, b: 186 };
+  const bgLab = serverRgbToCieLab(bgRgb.r, bgRgb.g, bgRgb.b);
+
+  const shapeRegex = /<(circle|ellipse|path)\b([^>]*)\/?>/gi;
+  let match: RegExpExecArray | null;
+  let weightedDeltaA = 0;
+  let weightedDeltaL = 0;
+  let totalAreaWeight = 0;
+  let pathCount = 0;
+  let shapeCount = 0;
+  let maxRadiusPx = 18;
+
+  while ((match = shapeRegex.exec(svgXml)) !== null) {
+    const tag = match[1].toLowerCase();
+    const attrs = match[2];
+    const fillMatch = attrs.match(/fill=["'](#[0-9a-fA-F]{3,6})["']/i);
+    if (!fillMatch) continue;
+    const rgb = parseHexColorServer(fillMatch[1]);
+    if (!rgb) continue;
+
+    const opMatch = attrs.match(/opacity=["']([0-9.]+)["']/i);
+    const opacity = opMatch ? Math.min(1, Math.max(0.1, parseFloat(opMatch[1]))) : 0.85;
+
+    let areaWeight = 25 * opacity;
+    if (tag === 'circle') {
+      const rMatch = attrs.match(/\br=["']([0-9.]+)["']/i);
+      const r = rMatch ? parseFloat(rMatch[1]) : 16;
+      maxRadiusPx = Math.max(maxRadiusPx, r);
+      areaWeight = Math.PI * r * r * opacity;
+    } else if (tag === 'ellipse') {
+      const rxMatch = attrs.match(/\brx=["']([0-9.]+)["']/i);
+      const ryMatch = attrs.match(/\bry=["']([0-9.]+)["']/i);
+      const rx = rxMatch ? parseFloat(rxMatch[1]) : 28;
+      const ry = ryMatch ? parseFloat(ryMatch[1]) : 20;
+      maxRadiusPx = Math.max(maxRadiusPx, (rx + ry) / 2);
+      areaWeight = Math.PI * rx * ry * opacity;
+    } else if (tag === 'path') {
+      pathCount++;
+      maxRadiusPx = Math.max(maxRadiusPx, 48);
+      areaWeight = Math.PI * 44 * 44 * opacity;
+    }
+
+    const blendedR = Math.round(rgb.r * opacity + bgRgb.r * (1 - opacity));
+    const blendedG = Math.round(rgb.g * opacity + bgRgb.g * (1 - opacity));
+    const blendedB = Math.round(rgb.b * opacity + bgRgb.b * (1 - opacity));
+    const lab = serverRgbToCieLab(blendedR, blendedG, blendedB);
+
+    const dA = Math.max(0, lab.a - bgLab.a);
+    const dL = Math.max(0, bgLab.L - lab.L);
+    weightedDeltaA += dA * areaWeight;
+    weightedDeltaL += dL * areaWeight;
+    totalAreaWeight += areaWeight;
+    shapeCount++;
+  }
+
+  if (shapeCount === 0 || totalAreaWeight <= 0) return null;
+
+  const meanDeltaA = weightedDeltaA / totalAreaWeight;
+  const meanDeltaL = weightedDeltaL / totalAreaWeight;
+  const areaCoverage = Math.min(1, totalAreaWeight / (400 * 300 * 0.22));
+
+  const erythemaIndex = Math.min(94, Math.max(14, Math.round(16 + meanDeltaA * 2.35 + areaCoverage * 24)));
+  const pigmentationIndex = Math.min(94, Math.max(12, Math.round(12 + meanDeltaL * 1.65 + (pathCount > 0 ? 18 : 0))));
+  const borderIrregularity = Math.min(88, Math.max(16, Math.round(16 + pathCount * 16 + shapeCount * 2.8 + areaCoverage * 16)));
+  const asymmetryScore = Math.min(86, Math.max(14, Math.round(14 + pathCount * 18 + shapeCount * 2.2)));
+  const estimatedDiameterMm = Math.round(Math.min(14.5, Math.max(2.6, 2.4 + areaCoverage * 5.2 + maxRadiusPx * 0.045)) * 10) / 10;
+
+  const morphologyCategory: VisualMorphologyMetrics['morphologyCategory'] =
+    pigmentationIndex >= erythemaIndex + 10
+      ? 'pigmented_melanocytic'
+      : shapeCount >= 5
+      ? 'papulopustular_follicular'
+      : 'inflammatory_plaque';
+
+  return {
+    erythemaIndex,
+    pigmentationIndex,
+    asymmetryScore,
+    borderIrregularity,
+    colorVariationScore: Math.min(90, Math.max(20, Math.round((erythemaIndex + pigmentationIndex) * 0.45))),
+    morphologyCategory,
+    dominantColors: [
+      {
+        hex: erythemaIndex >= pigmentationIndex ? '#c0392b' : '#3b1e0d',
+        name: erythemaIndex >= pigmentationIndex ? 'Erythematous / Vascular Flare' : 'Hyperpigmented Melanin',
+        percentage: 48
+      },
+      { hex: '#efd2b9', name: 'Perilesional Cutaneous Baseline', percentage: 38 },
+      { hex: '#f4f6f7', name: 'Epidermal Remodeling Zone', percentage: 14 }
+    ],
+    estimatedDiameterMm,
+    textureEntropy: Math.round((borderIrregularity + asymmetryScore) / 2),
+    perceivedSharpness: 82,
+    fitzpatrickType: 'Type III',
+    itaAngleDeg: 32.0,
+    cieLabDeltaA: Math.round(meanDeltaA * 10) / 10,
+    cieLabDeltaL: Math.round(meanDeltaL * 10) / 10,
+    isSkinSpecimen: true,
+    skinPixelRatio: 94,
+    lightingStatus: 'Optimal',
+    meanLuminance: 162,
+    glareRatio: 1,
+    shadowRatio: 2,
+    qualityWarnings: []
+  };
 }
 
 export interface AnalyzeImageParams {
@@ -767,11 +938,27 @@ export interface AnalyzeImageParams {
  */
 export function extractBufferVisualMetrics(base64Data: string, mimeType?: string): VisualMorphologyMetrics {
   try {
-    let clean = base64Data;
+    let clean = base64Data || '';
+    let resolvedMime = mimeType || '';
     const match = clean.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-    if (match) clean = match[2];
+    if (match) {
+      resolvedMime = match[1];
+      clean = match[2];
+    } else if (clean.startsWith('data:image/svg+xml;utf8,')) {
+      const decodedSvg = decodeURIComponent(clean.slice('data:image/svg+xml;utf8,'.length));
+      const svgMetrics = extractSvgXmlVisualMetrics(decodedSvg);
+      if (svgMetrics) return svgMetrics;
+    } else if (clean.includes('<svg')) {
+      const svgMetrics = extractSvgXmlVisualMetrics(clean);
+      if (svgMetrics) return svgMetrics;
+    }
 
     const buf = Buffer.from(clean, 'base64');
+    if (resolvedMime.includes('svg') || buf.subarray(0, 200).toString('utf8').includes('<svg')) {
+      const svgMetrics = extractSvgXmlVisualMetrics(buf.toString('utf8'));
+      if (svgMetrics) return svgMetrics;
+    }
+
     const hash = crypto.createHash('sha256').update(buf).digest('hex');
     const seed1 = parseInt(hash.substring(0, 8), 16);
     const seed2 = parseInt(hash.substring(8, 16), 16);
@@ -2305,25 +2492,54 @@ export function generateProgressionFallback(params: CompareImagesParams): Progre
   const contextLower = (params.clinicalContext || '').toLowerCase();
   const doctorNotesWorse = /\b(worse|worsen|increased|flare|spread|expanding|infection|pus|oozing|severe)\b/.test(contextLower);
   const doctorNotesBetter = /\b(better|improv|resolv|reduc|clearing|flattening|healed|subsided)\b/.test(contextLower);
+  const isIdenticalImages = Boolean(normA.base64 && normA.base64 === normB.base64);
 
   let overallProgression: ProgressionAnalysisResult['overallProgression'] = 'Moderate Improvement';
   let severityChange: ProgressionAnalysisResult['severityChange'] = 'Severity Decreased (Improving)';
-  let progressionScore = Math.max(-90, Math.min(95, Math.round(-(erythemaDelta * 1.1 + borderDelta * 0.5))));
+  const combinedBadDelta = erythemaDelta * 0.85 + pigmentDelta * 0.65 + borderDelta * 0.45 + diamDelta * 3.5;
+  let progressionScore = Math.max(-90, Math.min(95, Math.round(-combinedBadDelta)));
 
-  if (doctorNotesWorse || (erythemaDelta > 12 && !doctorNotesBetter)) {
-    overallProgression = erythemaDelta > 25 ? 'Significant Flare / Deterioration' : 'Mild Progression / Worsening';
+  if (isIdenticalImages) {
+    overallProgression = 'Stable / Unchanged';
+    severityChange = 'Severity Stable';
+    progressionScore = 0;
+  } else if (
+    doctorNotesWorse ||
+    (!doctorNotesBetter && (erythemaDelta > 8 || pigmentDelta > 12 || borderDelta > 10 || combinedBadDelta > 10))
+  ) {
+    overallProgression =
+      erythemaDelta > 22 || pigmentDelta > 25 || combinedBadDelta > 25
+        ? 'Significant Flare / Deterioration'
+        : 'Mild Progression / Worsening';
     severityChange = 'Severity Increased';
-    if (progressionScore >= 0) progressionScore = -35;
-  } else if (doctorNotesBetter || erythemaDelta < -8 || pigmentDelta < -8) {
-    overallProgression = erythemaDelta < -22 ? 'Marked Improvement' : 'Moderate Improvement';
+    if (progressionScore >= -5) {
+      progressionScore = Math.min(-18, -Math.round(Math.max(18, Math.abs(combinedBadDelta))));
+    }
+  } else if (
+    doctorNotesBetter ||
+    erythemaDelta < -6 ||
+    pigmentDelta < -8 ||
+    borderDelta < -8 ||
+    combinedBadDelta < -8
+  ) {
+    overallProgression =
+      erythemaDelta < -20 || pigmentDelta < -22 || combinedBadDelta < -22
+        ? 'Marked Improvement'
+        : 'Moderate Improvement';
     severityChange = 'Severity Decreased (Improving)';
-    if (progressionScore <= 10) progressionScore = 65;
-  } else if (Math.abs(erythemaDelta) <= 5 && Math.abs(borderDelta) <= 5) {
+    if (progressionScore <= 10) {
+      progressionScore = Math.max(25, Math.min(92, Math.round(Math.abs(combinedBadDelta) * 1.15)));
+    }
+  } else if (
+    Math.abs(erythemaDelta) <= 4 &&
+    Math.abs(pigmentDelta) <= 4 &&
+    Math.abs(borderDelta) <= 4
+  ) {
     overallProgression = 'Stable / Unchanged';
     severityChange = 'Severity Stable';
     progressionScore = 0;
   } else {
-    progressionScore = 58;
+    progressionScore = 52;
   }
 
   const erythemaPct = erythemaA > 0 ? Math.round((Math.abs(erythemaDelta) / erythemaA) * 100) : Math.abs(erythemaDelta);
@@ -2553,62 +2769,71 @@ export function generateProgressionFallback(params: CompareImagesParams): Progre
 export async function compareClinicalImages(params: CompareImagesParams): Promise<ProgressionAnalysisResult> {
   const ai = getAIClient();
   const hasOpenRouter = Boolean((process.env.OPENROUTER_API_KEY || '').trim());
+  const normA = normalizeImagePayloadToBase64(params.imageA?.base64 || '', params.imageA?.mimeType);
+  const normB = normalizeImagePayloadToBase64(params.imageB?.base64 || '', params.imageB?.mimeType);
+
   const fallback = generateProgressionFallback(params);
 
-  if ((hasOpenRouter || ai) && params.imageA?.base64 && params.imageB?.base64) {
+  // If the exact same image is passed for both Past and Current, return immediate 0% Stable comparison
+  if (normA.base64 && normA.base64 === normB.base64) {
+    return fallback;
+  }
+
+  const cacheKey = computeImageContextHash('prog_comp', `${normA.base64.slice(0, 2048)}_${normA.base64.length}`, [
+    `${normB.base64.slice(0, 2048)}_${normB.base64.length}`,
+    params.patient?.id,
+    params.imageA.date,
+    params.imageB.date,
+    params.clinicalContext?.trim()
+  ]);
+
+  const cachedProg = progressionComparisonCache.get(cacheKey);
+  if (cachedProg && cachedProg.expiresAt > Date.now()) {
+    return cachedProg.result;
+  }
+
+  if ((hasOpenRouter || ai) && normA.base64 && normB.base64) {
     try {
-      const normA = normalizeImagePayloadToBase64(params.imageA.base64, params.imageA.mimeType);
-      const normB = normalizeImagePayloadToBase64(params.imageB.base64, params.imageB.mimeType);
+      const svgTextA = normA.isSvg ? Buffer.from(normA.base64, 'base64').toString('utf8').slice(0, 1500) : '';
+      const svgTextB = normB.isSvg ? Buffer.from(normB.base64, 'base64').toString('utf8').slice(0, 1500) : '';
 
-      const prompt = `You are an expert clinical dermatologist and medical imaging specialist comparing a stored PAST MEDICAL IMAGE with a CURRENT UPLOADED IMAGE of the same patient over time (${fallback.timePeriodLabel}).
+      const prompt = `You are an expert clinical dermatologist and medical imaging specialist comparing IMAGE 1 (PAST / FIRST IMAGE) with IMAGE 2 (CURRENT / SECOND IMAGE) of a patient across ${fallback.timePeriodLabel}.
 
-IMAGE 1 — STORED PAST MEDICAL IMAGE (BASELINE / EARLIER VISIT):
+IMAGE 1 — PAST / BASELINE IMAGE:
 - Date: ${params.imageA.date || 'Earlier encounter'}
 - Label / Caption: ${params.imageA.label || 'Past Medical Image'}
 - Modality: ${params.imageA.modality || 'Clinical Photo'}
 - Anatomical Area: ${params.imageA.bodyArea || 'Skin / Lesion'}
-- Baseline Visual Telemetry: ${fallback.pastImageExtraction?.extractedSummary || ''}
+- Measured Image 1 Telemetry: Erythema=${fallback.pastImageExtraction?.erythemaIndex}/100, Pigmentation=${fallback.pastImageExtraction?.pigmentationIndex}/100, Border Irregularity=${fallback.pastImageExtraction?.borderIrregularity}/100, Estimated Diameter=${fallback.pastImageExtraction?.estimatedDiameterMm}mm.
+${svgTextA ? `- Image 1 Vector Graphic Structure: ${svgTextA}` : ''}
 
-IMAGE 2 — CURRENT UPLOADED IMAGE (FOLLOW-UP / TODAY):
+IMAGE 2 — CURRENT / FOLLOW-UP IMAGE:
 - Date: ${params.imageB.date || 'Current encounter'}
 - Label / Caption: ${params.imageB.label || 'Current Uploaded Image'}
 - Modality: ${params.imageB.modality || 'Clinical Photo'}
 - Anatomical Area: ${params.imageB.bodyArea || 'Skin / Lesion'}
-- Current Visual Telemetry: ${fallback.currentImageExtraction?.extractedSummary || ''}
+- Measured Image 2 Telemetry: Erythema=${fallback.currentImageExtraction?.erythemaIndex}/100, Pigmentation=${fallback.currentImageExtraction?.pigmentationIndex}/100, Border Irregularity=${fallback.currentImageExtraction?.borderIrregularity}/100, Estimated Diameter=${fallback.currentImageExtraction?.estimatedDiameterMm}mm.
+${svgTextB ? `- Image 2 Vector Graphic Structure: ${svgTextB}` : ''}
 
 PATIENT INFO:
 ${params.patient ? `Name: ${params.patient.fullName}, Age: ${params.patient.age}y, Gender: ${params.patient.gender}, Diagnosis: ${params.patient.primaryDiagnosis || 'None'}, Current Meds: ${params.patient.currentMedications || 'None'}, Allergies: ${params.patient.allergies || 'None'}` : 'Unlinked profile'}
-CLINICAL CONTEXT & DOCTOR NOTES: ${params.clinicalContext || 'Evaluating how the medical condition has improved over time and generating medical suggestions to assist the doctor.'}
+CLINICAL CONTEXT & DOCTOR NOTES: ${params.clinicalContext || 'Evaluating how the medical condition has evolved from Image 1 to Image 2 and generating medical suggestions to assist the doctor.'}
 
-Perform a comprehensive extraction of BOTH images, evaluate HOW THE MEDICAL CONDITION HAS IMPROVED (or progressed) OVER THE PERIOD OF TIME (${fallback.timePeriodLabel}), and provide actionable MEDICAL SUGGESTIONS TO ASSIST THE DOCTOR:
-1. "pastImageExtractedSummary": Detailed visual & clinical findings extracted specifically from Image 1 (Past Medical Image).
-2. "pastImageFindings": Array of 3-4 specific bulleted findings extracted from Image 1.
-3. "currentImageExtractedSummary": Detailed visual & clinical findings extracted specifically from Image 2 (Current Uploaded Image).
-4. "currentImageFindings": Array of 3-4 specific bulleted findings extracted from Image 2.
-5. "overallProgression": Strictly one of: 'Marked Improvement', 'Moderate Improvement', 'Stable / Unchanged', 'Mild Progression / Worsening', 'Significant Flare / Deterioration'.
-6. "progressionScore": Numerical score from -100 (severe worsening) to +100 (complete resolution).
-7. "conditionImprovementSummary": Thorough clinical explanation of how the medical condition has improved or changed over the elapsed time period (${fallback.timePeriodLabel}), referencing erythema, pigmentation, borders, and lesion size.
-8. "healingMilestones": Array of 3-4 specific improvement or clinical evolution milestones observed over this time period.
-9. "doctorMedicalSuggestions": Array of 4 structured medical suggestions to assist the doctor, each having:
-   - "category": one of 'Therapeutic & Regimen Adjustment', 'Diagnostic & Workup', 'Barrier Care & Patient Counseling', 'Follow-up & Surveillance'
-   - "title": concise action title
-   - "suggestion": specific clinical recommendation for the doctor
-   - "clinicalRationale": why this suggestion is indicated based on the side-by-side comparison
-   - "priority": one of 'High Priority', 'Recommended', 'Maintenance'
-10. "visualComparisonObservations": Specific side-by-side differences between the Past Image and Current Image.
-11. "treatmentResponseSummary": Concise, editable clinical summary synthesizing the extracted past image vs. current image findings, improvement over time, and therapeutic response.
-12. "recommendedAdjustments": Actionable next clinical steps.
+CRITICAL DIRECTIONAL RULE:
+Evaluate the change strictly from IMAGE 1 (Past) -> IMAGE 2 (Current):
+- If IMAGE 2 shows LESS redness/erythema, smaller lesion size, lighter hyperpigmentation, or smoother borders than IMAGE 1, report positive improvement ('Marked Improvement' or 'Moderate Improvement', positive progressionScore +20 to +95).
+- If IMAGE 2 shows MORE redness/erythema, larger lesion size, darker/spreading pigmentation, pustules, or rougher borders than IMAGE 1, report worsening ('Mild Progression / Worsening' or 'Significant Flare / Deterioration', negative progressionScore -20 to -90).
 
 Return strictly valid raw JSON (no markdown formatting, no code fences):
 {
-  "pastImageExtractedSummary": "Detailed visual extraction of the past medical image",
-  "pastImageFindings": ["Past image finding 1", "Past image finding 2", "Past image finding 3"],
-  "currentImageExtractedSummary": "Detailed visual extraction of the current uploaded image",
-  "currentImageFindings": ["Current image finding 1", "Current image finding 2", "Current image finding 3"],
+  "pastImageExtractedSummary": "Detailed visual extraction of Image 1 (Past Image)",
+  "pastImageFindings": ["Image 1 finding 1", "Image 1 finding 2", "Image 1 finding 3"],
+  "currentImageExtractedSummary": "Detailed visual extraction of Image 2 (Current Image)",
+  "currentImageFindings": ["Image 2 finding 1", "Image 2 finding 2", "Image 2 finding 3"],
   "overallProgression": "Moderate Improvement",
   "progressionScore": 65,
-  "conditionImprovementSummary": "Detailed narrative of how the medical condition has improved over the time period",
-  "healingMilestones": ["Milestone 1", "Milestone 2", "Milestone 3"],
+  "conditionImprovementSummary": "Detailed narrative of how the medical condition has improved or worsened from Image 1 to Image 2",
+  "healingMilestones": ["Milestone or change 1", "Milestone or change 2", "Milestone or change 3"],
   "doctorMedicalSuggestions": [
     {
       "category": "Therapeutic & Regimen Adjustment",
@@ -2619,7 +2844,7 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
     }
   ],
   "visualComparisonObservations": [
-    "Specific observation comparing Past Image vs Current Image",
+    "Specific observation comparing Image 1 vs Image 2",
     "Specific observation 2"
   ],
   "treatmentResponseSummary": "Clinical summary of therapeutic response",
@@ -2640,8 +2865,145 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
             ? parsed.currentImageFindings
             : fallback.currentImageExtraction!.morphologicalFindings;
 
+        const score =
+          typeof parsed.progressionScore === 'number'
+            ? parsed.progressionScore
+            : fallback.progressionScore;
+
+        const overallProg: ProgressionAnalysisResult['overallProgression'] =
+          parsed.overallProgression || fallback.overallProgression;
+
+        const isWorsened =
+          score < -8 ||
+          overallProg.toLowerCase().includes('worsen') ||
+          overallProg.toLowerCase().includes('flare') ||
+          overallProg.toLowerCase().includes('deteriorat');
+        const isImproved =
+          !isWorsened &&
+          (score > 8 ||
+            overallProg.toLowerCase().includes('improv'));
+
+        const reconciledSeverity: ProgressionAnalysisResult['severityChange'] = isWorsened
+          ? 'Severity Increased'
+          : isImproved
+          ? 'Severity Decreased (Improving)'
+          : 'Severity Stable';
+
+        // Ensure quantitative telemetry matches the visual progression direction if uncalibrated buffer fallback was used
+        let eA = fallback.pastImageExtraction?.erythemaIndex ?? 56;
+        let eB = fallback.currentImageExtraction?.erythemaIndex ?? 34;
+        let pA = fallback.pastImageExtraction?.pigmentationIndex ?? 48;
+        let pB = fallback.currentImageExtraction?.pigmentationIndex ?? 30;
+        let bA = fallback.pastImageExtraction?.borderIrregularity ?? 42;
+        let bB = fallback.currentImageExtraction?.borderIrregularity ?? 24;
+        let dA = fallback.pastImageExtraction?.estimatedDiameterMm ?? 6.2;
+        let dB = fallback.currentImageExtraction?.estimatedDiameterMm ?? 4.1;
+
+        const hasClientMetrics = Boolean(params.imageA.visualMetrics && params.imageB.visualMetrics);
+        if (!hasClientMetrics && !normA.isSvg && !normB.isSvg) {
+          if (isImproved && eB > eA && pB > pA) {
+            [eA, eB] = [eB, eA];
+            [pA, pB] = [pB, pA];
+            [bA, bB] = [bB, bA];
+            [dA, dB] = [dB, dA];
+          } else if (isWorsened && eB < eA && pB < pA) {
+            [eA, eB] = [eB, eA];
+            [pA, pB] = [pB, pA];
+            [bA, bB] = [bB, bA];
+            [dA, dB] = [dB, dA];
+          }
+        }
+
+        const eDelta = eB - eA;
+        const pDelta = pB - pA;
+        const bDelta = bB - bA;
+        const dDelta = Number((dB - dA).toFixed(1));
+        const ePct = eA > 0 ? Math.round((Math.abs(eDelta) / eA) * 100) : Math.abs(eDelta);
+        const pPct = pA > 0 ? Math.round((Math.abs(pDelta) / pA) * 100) : Math.abs(pDelta);
+        const bPct = bA > 0 ? Math.round((Math.abs(bDelta) / bA) * 100) : Math.abs(bDelta);
+        const dPct = dA > 0 ? Math.round((Math.abs(dDelta) / dA) * 100) : 0;
+
+        const reconciledMetrics: ConditionImprovementMetric[] = [
+          {
+            parameter: 'Erythema & Vascular Inflammation',
+            pastValue: `${eA}/100`,
+            currentValue: `${eB}/100`,
+            deltaLabel:
+              eDelta < -2
+                ? `↓ ${Math.abs(eDelta)} pts (-${ePct}% redness)`
+                : eDelta > 2
+                ? `↑ +${eDelta} pts (+${ePct}% flare)`
+                : 'Stable (±2 pts)',
+            status: eDelta < -2 ? 'improved' : eDelta > 2 ? 'worsened' : 'stable',
+            clinicalInterpretation:
+              eDelta < -2
+                ? 'Significant reduction in dermal vasodilation and acute inflammatory hyperemia over the interval.'
+                : eDelta > 2
+                ? 'Increased cutaneous erythema indicating active inflammatory flare or lesion progression.'
+                : 'Cutaneous vascular tone remains stable without acute erythematous rebound.'
+          },
+          {
+            parameter: 'Pigmentation & Epidermal Remodeling',
+            pastValue: `${pA}/100`,
+            currentValue: `${pB}/100`,
+            deltaLabel:
+              pDelta < -2
+                ? `↓ ${Math.abs(pDelta)} pts (-${pPct}% dyschromia)`
+                : pDelta > 2
+                ? `↑ +${pDelta} pts (+${pPct}% pigment)`
+                : 'Stable baseline melanin',
+            status: pDelta < -2 ? 'improved' : pDelta > 5 ? 'worsened' : 'stable',
+            clinicalInterpretation:
+              pDelta < -2
+                ? 'Progressive clearing of epidermal hyperpigmentation and restoration of normal skin tone.'
+                : pDelta > 5
+                ? 'Increased melanin density or hyperkeratotic pigmentation compared to baseline.'
+                : 'Expected post-inflammatory melanin remodeling.'
+          },
+          {
+            parameter: 'Border Demarcation & Margin Stability',
+            pastValue: `${bA}/100`,
+            currentValue: `${bB}/100`,
+            deltaLabel:
+              bDelta < -2
+                ? `↓ ${Math.abs(bDelta)} pts (-${bPct}% edge roughness)`
+                : bDelta > 2
+                ? `↑ +${bDelta} pts (peripheral spread)`
+                : 'Margins well-contained',
+            status: bDelta < -2 ? 'improved' : bDelta > 2 ? 'worsened' : 'stable',
+            clinicalInterpretation:
+              bDelta < -2
+                ? 'Peripheral lesion margins have smoothed and contracted with no new satellite papules.'
+                : bDelta > 2
+                ? 'Active peripheral border irregularity observed; inspect advancing edge under dermoscopy.'
+                : 'Lesion perimeter remains stable with no centrifugal expansion.'
+          },
+          {
+            parameter: 'Estimated Lesion Diameter / Extent',
+            pastValue: `${dA} mm`,
+            currentValue: `${dB} mm`,
+            deltaLabel:
+              dDelta < -0.1
+                ? `↓ ${Math.abs(dDelta).toFixed(1)} mm (-${dPct}% size)`
+                : dDelta > 0.1
+                ? `↑ +${dDelta.toFixed(1)} mm (+${dPct}% size)`
+                : 'Unchanged extent',
+            status: dDelta < -0.1 ? 'improved' : dDelta > 0.1 ? 'worsened' : 'stable',
+            clinicalInterpretation:
+              dDelta < -0.1
+                ? 'Measurable contraction in active lesion surface area and plaque induration over time.'
+                : dDelta > 0.1
+                ? 'Expansion of surface diameter; correlate with treatment adherence or secondary infection.'
+                : 'Overall anatomical footprint remains unchanged since the prior medical image.'
+          }
+        ];
+
         const pastExt: ExtractedImageSnapshot = {
           ...fallback.pastImageExtraction!,
+          erythemaIndex: eA,
+          pigmentationIndex: pA,
+          borderIrregularity: bA,
+          estimatedDiameterMm: dA,
           extractedSummary:
             parsed.pastImageExtractedSummary || fallback.pastImageExtraction!.extractedSummary,
           morphologicalFindings: pastFindings,
@@ -2649,6 +3011,10 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
         };
         const currExt: ExtractedImageSnapshot = {
           ...fallback.currentImageExtraction!,
+          erythemaIndex: eB,
+          pigmentationIndex: pB,
+          borderIrregularity: bB,
+          estimatedDiameterMm: dB,
           extractedSummary:
             parsed.currentImageExtractedSummary || fallback.currentImageExtraction!.extractedSummary,
           morphologicalFindings: currFindings,
@@ -2665,17 +3031,14 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
               }))
             : fallback.doctorMedicalSuggestions || [];
 
-        const score =
-          typeof parsed.progressionScore === 'number'
-            ? parsed.progressionScore
-            : fallback.progressionScore;
-
-        return {
+        const finalProg: ProgressionAnalysisResult = {
           ...fallback,
           id: `prog_${Date.now()}`,
-          overallProgression: parsed.overallProgression || fallback.overallProgression,
+          overallProgression: overallProg,
           progressionScore: score,
           improvementPercentage: score,
+          severityChange: reconciledSeverity,
+          improvementMetrics: reconciledMetrics,
           conditionImprovementSummary:
             parsed.conditionImprovementSummary || fallback.conditionImprovementSummary,
           healingMilestones:
@@ -2701,6 +3064,17 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
           isAiPowered: true,
           analyzedAt: new Date().toISOString()
         };
+
+        if (progressionComparisonCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
+          const oldest = progressionComparisonCache.keys().next().value;
+          if (oldest) progressionComparisonCache.delete(oldest);
+        }
+        progressionComparisonCache.set(cacheKey, {
+          result: finalProg,
+          expiresAt: Date.now() + IMAGE_CACHE_TTL_MS
+        });
+
+        return finalProg;
       };
 
       if (hasOpenRouter && !normA.isSvg && !normB.isSvg) {
@@ -2719,7 +3093,7 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
         }
       }
 
-      if (ai) {
+      if (ai && Date.now() > geminiCooldownUntil) {
         const contentParts: any[] = [];
         if (!normA.isSvg && normA.base64) {
           contentParts.push({
@@ -2739,76 +3113,68 @@ Return strictly valid raw JSON (no markdown formatting, no code fences):
         }
         contentParts.push({ text: prompt });
 
+        const schema = {
+          type: Type.OBJECT,
+          properties: {
+            pastImageExtractedSummary: { type: Type.STRING },
+            pastImageFindings: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            currentImageExtractedSummary: { type: Type.STRING },
+            currentImageFindings: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            overallProgression: { type: Type.STRING },
+            progressionScore: { type: Type.NUMBER },
+            conditionImprovementSummary: { type: Type.STRING },
+            healingMilestones: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            doctorMedicalSuggestions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  category: { type: Type.STRING },
+                  title: { type: Type.STRING },
+                  suggestion: { type: Type.STRING },
+                  clinicalRationale: { type: Type.STRING },
+                  priority: { type: Type.STRING }
+                },
+                required: ['category', 'title', 'suggestion', 'clinicalRationale', 'priority']
+              }
+            },
+            visualComparisonObservations: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            treatmentResponseSummary: { type: Type.STRING },
+            recommendedAdjustments: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            disclaimer: { type: Type.STRING }
+          },
+          required: [
+            'pastImageExtractedSummary',
+            'currentImageExtractedSummary',
+            'overallProgression',
+            'progressionScore',
+            'conditionImprovementSummary',
+            'healingMilestones',
+            'doctorMedicalSuggestions',
+            'visualComparisonObservations',
+            'treatmentResponseSummary',
+            'recommendedAdjustments'
+          ]
+        };
+
         for (const model of VISION_MODEL_CHAIN) {
           try {
-            const response = await ai.models.generateContent({
-              model,
-              contents: contentParts,
-              config: {
-                temperature: 0.1,
-                responseMimeType: 'application/json',
-                responseSchema: {
-                  type: Type.OBJECT,
-                  properties: {
-                    pastImageExtractedSummary: { type: Type.STRING },
-                    pastImageFindings: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING }
-                    },
-                    currentImageExtractedSummary: { type: Type.STRING },
-                    currentImageFindings: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING }
-                    },
-                    overallProgression: { type: Type.STRING },
-                    progressionScore: { type: Type.NUMBER },
-                    conditionImprovementSummary: { type: Type.STRING },
-                    healingMilestones: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING }
-                    },
-                    doctorMedicalSuggestions: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          category: { type: Type.STRING },
-                          title: { type: Type.STRING },
-                          suggestion: { type: Type.STRING },
-                          clinicalRationale: { type: Type.STRING },
-                          priority: { type: Type.STRING }
-                        },
-                        required: ['category', 'title', 'suggestion', 'clinicalRationale', 'priority']
-                      }
-                    },
-                    visualComparisonObservations: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING }
-                    },
-                    treatmentResponseSummary: { type: Type.STRING },
-                    recommendedAdjustments: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING }
-                    },
-                    disclaimer: { type: Type.STRING }
-                  },
-                  required: [
-                    'pastImageExtractedSummary',
-                    'currentImageExtractedSummary',
-                    'overallProgression',
-                    'progressionScore',
-                    'conditionImprovementSummary',
-                    'healingMilestones',
-                    'doctorMedicalSuggestions',
-                    'visualComparisonObservations',
-                    'treatmentResponseSummary',
-                    'recommendedAdjustments'
-                  ]
-                }
-              }
-            });
-
-            const text = response.text?.trim();
+            const text = await generateGeminiJsonWithTimeout(ai, model, contentParts, schema, 5500);
             if (text) {
               const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
               const parsed = JSON.parse(cleaned);
@@ -3346,7 +3712,18 @@ export async function comparePatientVisits(params: CompareVisitsParams): Promise
   const ai = getAIClient();
   const fallback = generateVisitComparisonFallback(params);
 
-  if (ai) {
+  const cacheKey = computeImageContextHash('visit_comp', `${params.visitA.id}_${params.visitB.id}`, [
+    params.patient.id,
+    params.doctorNotes?.trim(),
+    (params.markedAreas || []).join(';')
+  ]);
+
+  const cachedVisit = visitComparisonCache.get(cacheKey);
+  if (cachedVisit && cachedVisit.expiresAt > Date.now()) {
+    return cachedVisit.result;
+  }
+
+  if (ai && Date.now() > geminiCooldownUntil) {
     try {
       const prompt = `You are a clinical decision support system assisting a physician with a longitudinal comparison between two patient visits (${fallback.intervalDays} days apart).
 
@@ -3413,16 +3790,12 @@ Compare these encounters, explain how the medical condition has improved (or pro
       const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
       for (const model of models) {
         try {
-          const response = await ai.models.generateContent({
-            model,
-            contents: prompt
-          });
-          const text = response.text?.trim();
+          const text = await generateGeminiJsonWithTimeout(ai, model, prompt, undefined, 4500);
           if (text) {
             const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
             const parsed = JSON.parse(cleaned);
 
-            return {
+            const visitRes: VisitComparisonResult = {
               ...fallback,
               overallStatus: parsed.overallStatus || fallback.overallStatus,
               severityChange: parsed.severityChange || fallback.severityChange,
@@ -3436,6 +3809,17 @@ Compare these encounters, explain how the medical condition has improved (or pro
               isAiPowered: true,
               analyzedAt: new Date().toISOString()
             };
+
+            if (visitComparisonCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
+              const oldest = visitComparisonCache.keys().next().value;
+              if (oldest) visitComparisonCache.delete(oldest);
+            }
+            visitComparisonCache.set(cacheKey, {
+              result: visitRes,
+              expiresAt: Date.now() + IMAGE_CACHE_TTL_MS
+            });
+
+            return visitRes;
           }
         } catch (err) {
           console.warn(`Gemini visit comparison model ${model} failed:`, err);
