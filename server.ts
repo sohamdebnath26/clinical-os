@@ -528,6 +528,26 @@ app.put('/api/staff/:id/role', authMiddleware, (req: AuthenticatedRequest, res) 
   res.json({ account: updated, staff });
 });
 
+// Set or reset dedicated password for staff member (receptionist or assistant doctor)
+app.put('/api/staff/:id/password', authMiddleware, (req: AuthenticatedRequest, res) => {
+  if (!req.doctor) return res.status(401).json({ error: 'Unauthorized' });
+  if (req.doctor.role === 'receptionist') {
+    return res.status(403).json({ error: 'Only doctors can set or reset staff passwords.' });
+  }
+
+  const { password } = req.body || {};
+  if (!password || String(password).length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+  }
+
+  const success = db.setStaffPassword(req.params.id, String(password), req.doctor.id);
+  if (!success) {
+    return res.status(404).json({ error: 'Staff account not found or cannot be modified.' });
+  }
+
+  res.json({ success: true, message: 'Password updated successfully.' });
+});
+
 app.delete('/api/staff/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
   if (!req.doctor) return res.status(401).json({ error: 'Unauthorized' });
   if (req.doctor.role === 'receptionist') {
@@ -659,43 +679,69 @@ app.post('/api/patients', authMiddleware, (req: AuthenticatedRequest, res) => {
   }
 
   const doctor = req.doctor!;
-  const newPatient = db.createPatient(
-    {
-      id: typeof id === 'string' && id.trim() ? id.trim() : undefined,
-      patientCode: typeof patientCode === 'string' && patientCode.trim() ? patientCode.trim() : undefined,
-      fullName: String(fullName).trim(),
-      age: age !== undefined && age !== '' && !Number.isNaN(Number(age)) ? Number(age) : 0,
-      gender: gender || 'Prefer not to say',
-      mobile: cleanMobile,
-      countryCode: countryCode || '+91',
-      weight: weight !== undefined && weight !== '' && !Number.isNaN(Number(weight)) ? Number(weight) : undefined,
-      notes: notes || '',
-      discountPanel: discountPanel || '',
-      primaryDiagnosis: primaryDiagnosis || 'General Consultation',
-      dateOfBirth: dateOfBirth || '',
-      bloodGroup: bloodGroup || '',
-      address: address || '',
-      emergencyContact: emergencyContact || '',
-      allergies: allergies || notes || '',
-      currentMedications: currentMedications || '',
-      medicalHistory: medicalHistory || '',
-      createdById: doctor.id,
-      createdByEmail: doctor.email.toLowerCase()
-    },
-    { id: doctor.id, name: doctor.name, email: doctor.email }
-  );
+  try {
+    const newPatient = await db.runTransaction(() => {
+      // Re-verify mobile uniqueness inside the lock queue to prevent concurrent duplicate inserts
+      if (cleanMobile.length === 10 && !req.query.force && !forceCreate) {
+        const existingInside = db.findPatientByMobile(cleanMobile, req.doctor?.id);
+        if (existingInside) {
+          const err: any = new Error('An existing patient was found with this mobile number.');
+          err.statusCode = 409;
+          err.existingPatient = existingInside;
+          throw err;
+        }
+      }
 
-  res.status(201).json({ patient: newPatient });
+      return db.createPatient(
+        {
+          id: typeof id === 'string' && id.trim() ? id.trim() : undefined,
+          patientCode: typeof patientCode === 'string' && patientCode.trim() ? patientCode.trim() : undefined,
+          fullName: String(fullName).trim(),
+          age: age !== undefined && age !== '' && !Number.isNaN(Number(age)) ? Number(age) : 0,
+          gender: gender || 'Prefer not to say',
+          mobile: cleanMobile,
+          countryCode: countryCode || '+91',
+          weight: weight !== undefined && weight !== '' && !Number.isNaN(Number(weight)) ? Number(weight) : undefined,
+          notes: notes || '',
+          discountPanel: discountPanel || '',
+          primaryDiagnosis: primaryDiagnosis || 'General Consultation',
+          dateOfBirth: dateOfBirth || '',
+          bloodGroup: bloodGroup || '',
+          address: address || '',
+          emergencyContact: emergencyContact || '',
+          allergies: allergies || notes || '',
+          currentMedications: currentMedications || '',
+          medicalHistory: medicalHistory || '',
+          createdById: doctor.id,
+          createdByEmail: doctor.email.toLowerCase()
+        },
+        { id: doctor.id, name: doctor.name, email: doctor.email }
+      );
+    });
+
+    res.status(201).json({ patient: newPatient });
+  } catch (err: any) {
+    if (err && err.statusCode === 409) {
+      return res.status(409).json({
+        error: err.message,
+        existingPatient: err.existingPatient
+      });
+    }
+    const message = err instanceof Error ? err.message : 'Error creating patient';
+    res.status(500).json({ error: message });
+  }
 });
 
-app.put('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.put('/api/patients/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
   const updates = { ...req.body };
   if (updates.mobile !== undefined) {
     const rawDigits = String(updates.mobile).replace(/\D/g, '');
     updates.mobile = rawDigits.length > 10 ? rawDigits.slice(-10) : rawDigits;
   }
-  const updated = db.updatePatient(req.params.id, updates, { id: doctor.id, name: doctor.name });
+  const updated = await db.runTransaction(() =>
+    db.updatePatient(req.params.id, updates, { id: doctor.id, name: doctor.name })
+  );
   if (!updated) return res.status(404).json({ error: 'Patient not found' });
   res.json({ patient: updated });
 });
@@ -1079,15 +1125,17 @@ app.get('/api/consultations/:id', authMiddleware, (req, res) => {
 });
 
 // Sign & Finish Consultation
-app.put('/api/consultations/:id/sign', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.put('/api/consultations/:id/sign', authMiddleware, async (req: AuthenticatedRequest, res) => {
   if (req.doctor?.role === 'receptionist') {
     return res.status(403).json({ error: 'Only doctors can sign clinical consultations.' });
   }
   const doctor = req.doctor!;
-  const signed = db.saveAndSignConsultation(req.params.id, req.body, {
-    id: doctor.id,
-    name: doctor.name
-  });
+  const signed = await db.runTransaction(() =>
+    db.saveAndSignConsultation(req.params.id, req.body, {
+      id: doctor.id,
+      name: doctor.name
+    })
+  );
 
   if (!signed) return res.status(404).json({ error: 'Consultation not found' });
   res.json({ consultation: signed });
@@ -1102,7 +1150,7 @@ app.get('/api/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) =
   res.json({ prescriptions });
 });
 
-app.post('/api/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.post('/api/prescriptions', authMiddleware, async (req: AuthenticatedRequest, res) => {
   if (req.doctor?.role === 'receptionist') {
     return res.status(403).json({ error: 'Only doctors can issue medical prescriptions.' });
   }
@@ -1112,18 +1160,19 @@ app.post('/api/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) 
   }
 
   const doctor = req.doctor!;
-  const rx = db.addPrescription(
-    {
-      patientId,
-      consultationId,
-      medicineName,
-      dosage: dosage || '',
-      frequency: frequency || '',
-      duration: duration || '',
-      instructions: instructions || '',
-      date: new Date().toISOString()
-    },
-    { id: doctor.id, name: doctor.name }
+  const rx = await db.runTransaction(() =>
+    db.addPrescription(
+      {
+        patientId,
+        consultationId,
+        medicineName,
+        dosage: dosage || '',
+        frequency: frequency || 'Once Daily (OD)',
+        duration: duration || '5 days',
+        instructions: instructions || 'After meals'
+      },
+      { id: doctor.id, name: doctor.name }
+    )
   );
 
   res.status(201).json({ prescription: rx });

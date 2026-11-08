@@ -20,7 +20,8 @@ import {
   UserCog,
   Mail,
   Trash2,
-  ArrowRightLeft
+  ArrowRightLeft,
+  KeyRound
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
@@ -375,6 +376,30 @@ export const SettingsView: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const newPass = window.prompt(`Enter new password for ${member.name} (${member.email}) (minimum 6 characters):`);
+                        if (!newPass) return;
+                        if (newPass.length < 6) {
+                          alert('Password must be at least 6 characters long.');
+                          return;
+                        }
+                        try {
+                          await api.staff.setPassword(member.id, newPass);
+                          setSuccessMsg(`Password successfully updated for ${member.email}.`);
+                          setTimeout(() => setSuccessMsg(null), 3500);
+                        } catch (err: unknown) {
+                          setErrorMsg(err instanceof Error ? err.message : 'Failed to update password');
+                        }
+                      }}
+                      className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                      title="Set or reset dedicated login password"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Set Password</span>
+                    </button>
+
                     {!isCurrentUser && (
                       <button
                         type="button"

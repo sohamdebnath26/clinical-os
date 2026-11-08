@@ -51,6 +51,20 @@ class DatabaseService {
   private data: DatabaseSchema;
   private isSaving = false;
   private pendingSave = false;
+  private writeQueue: Promise<unknown> = Promise.resolve();
+
+  /**
+   * Serializes write operations so concurrent clicks from doctors and receptionists
+   * are executed strictly one after another, eliminating race conditions.
+   */
+  public async runTransaction<T>(action: () => T | Promise<T>): Promise<T> {
+    const execute = async () => {
+      return await action();
+    };
+    const queuedPromise = this.writeQueue.then(execute, execute);
+    this.writeQueue = queuedPromise.then(() => {}, () => {});
+    return queuedPromise;
+  }
 
   constructor() {
     this.data = this.loadDatabase();
@@ -902,6 +916,30 @@ class DatabaseService {
     });
 
     return created;
+  }
+
+  public setStaffPassword(targetId: string, newPassword: string, actorId: string): boolean {
+    const actor = this.findDoctorById(actorId);
+    if (!actor || actor.role === 'receptionist') {
+      return false;
+    }
+    const target = this.findDoctorById(targetId);
+    if (!target) return false;
+
+    const salt = bcrypt.genSaltSync(10);
+    this.data.doctorPasswords[targetId] = bcrypt.hashSync(newPassword, salt);
+    this.persist();
+
+    this.logAudit({
+      actorId,
+      actorName: actor.name,
+      action: 'staff_password_updated',
+      resourceType: 'staff_credential',
+      resourceId: targetId,
+      metadata: { targetEmail: target.email }
+    });
+
+    return true;
   }
 
   public removeStaffAccount(targetId: string, actorId: string): boolean {

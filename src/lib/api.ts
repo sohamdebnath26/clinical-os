@@ -303,6 +303,11 @@ export const api = {
       fetchWithAuth<{ success: boolean; staff: Doctor[] }>(`/api/staff/${id}`, {
         method: 'DELETE',
       }),
+    setPassword: (id: string, password: string) =>
+      fetchWithAuth<{ success: boolean; message: string }>(`/api/staff/${id}/password`, {
+        method: 'PUT',
+        body: JSON.stringify({ password }),
+      }),
     switchSession: (params: { targetId?: string; targetRole?: 'doctor' | 'receptionist' }) =>
       fetchWithAuth<{ token: string; doctor: Doctor }>('/api/staff/switch-session', {
         method: 'POST',
