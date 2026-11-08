@@ -2,8 +2,9 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
-import { db } from './server/db.js';
-import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI, askImageReportAssistant, extractBufferVisualMetrics } from './server/ai.js';
+import { db } from './server/db';
+import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI, askImageReportAssistant, extractBufferVisualMetrics } from './server/ai';
+import type { MedicalImageModality, ClinicalImage, ImageVisualMetrics } from './src/types/index';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -781,15 +782,15 @@ function storePatientClinicalImage(params: {
   mimeType?: string;
   caption?: string;
   bodyArea?: string;
-  modality?: import('./src/types/index.js').MedicalImageModality;
+  modality?: MedicalImageModality;
   imageRole?: 'past' | 'current' | 'followup';
   examDate?: string;
   extractedFindings?: string;
-  visualMetrics?: import('./src/types/index.js').ImageVisualMetrics;
+  visualMetrics?: ImageVisualMetrics;
   tags?: string[];
   bodyMarkerId?: string;
   actor?: { id: string; name: string };
-}): import('./src/types/index.js').ClinicalImage {
+}): ClinicalImage {
   const {
     patientId,
     consultationId,
@@ -857,7 +858,7 @@ function storePatientClinicalImage(params: {
   const computedMetrics = visualMetrics || extractBufferVisualMetrics(base64Data, mimeType);
   const resolvedRole: 'past' | 'current' | 'followup' =
     imageRole || (examDate && new Date(examDate).getTime() < Date.now() - 36 * 3600 * 1000 ? 'past' : 'current');
-  const resolvedModality: import('./src/types/index.js').MedicalImageModality =
+  const resolvedModality: MedicalImageModality =
     modality || 'Clinical Photo';
   const resolvedExamDate = examDate || new Date().toISOString().split('T')[0];
 
@@ -1913,7 +1914,7 @@ interface MobileImageUploadSession {
   clinicName: string;
   createdAt: number;
   expiresAt: number;
-  uploadedImages: import('./src/types/index.js').ClinicalImage[];
+  uploadedImages: ClinicalImage[];
 }
 
 const mobileUploadSessions = new Map<string, MobileImageUploadSession>();
@@ -2636,7 +2637,7 @@ app.post('/api/ai/compare-progression', authMiddleware, async (req: Authenticate
     modality?: string;
     bodyArea?: string;
     extractedFindings?: string;
-    visualMetrics?: import('./src/types/index.js').ImageVisualMetrics;
+    visualMetrics?: ImageVisualMetrics;
   }) => {
     const stored = input.id ? db.getClinicalImageById(input.id) : undefined;
     let resolvedBase64 = input.base64 || stored?.dataUrl || stored?.url || '';
@@ -3814,6 +3815,9 @@ async function startServer() {
 }
 
 startServer().catch(err => {
-  console.error('Fatal startup error:', err);
-  process.exit(1);
+  console.error('[Clinical OS] Server startup warning or failure:', err);
+  // Log full diagnostic details without killing process if running in an interactive supervisor/watcher
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
 });
