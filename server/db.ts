@@ -364,6 +364,19 @@ class DatabaseService {
       }
     }
 
+    // If DB_PATH does not exist in persistent volume, seed from repo data/clinical_os_db.json if available
+    const repoSeedPath = path.resolve(process.cwd(), 'data', 'clinical_os_db.json');
+    if (fs.existsSync(repoSeedPath)) {
+      try {
+        const seedRaw = fs.readFileSync(repoSeedPath, 'utf-8');
+        const seedParsed = JSON.parse(seedRaw);
+        fs.writeFileSync(DB_PATH, JSON.stringify(seedParsed, null, 2), 'utf-8');
+        return seedParsed;
+      } catch (e) {
+        console.error('Failed to copy initial seed data to persistent volume:', e);
+      }
+    }
+
     const initialDb: DatabaseSchema = {
       doctors: [],
       doctorPasswords: {},
