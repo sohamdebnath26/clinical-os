@@ -19,6 +19,7 @@ import {
   formatWhatsAppPatientSummary
 } from '../lib/whatsappUtils';
 import { WhatsAppMessageRenderer } from './WhatsAppMessageRenderer';
+import { generatePatientMedicalReportPdf } from '../utils/generatePatientAiReportPdf';
 import {
   X,
   Send,
@@ -32,7 +33,8 @@ import {
   ShieldCheck,
   CheckCircle2,
   Eye,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react';
 
 export type WhatsAppReportType =
@@ -55,6 +57,7 @@ interface WhatsAppShareModalProps {
     progression?: ProgressionAnalysisResult;
     anatomicalSite?: string;
     activePrescriptions?: PrescriptionItem[];
+    defaultSendAsPdf?: boolean;
   };
   onSentSuccess?: () => void;
 }
@@ -103,6 +106,12 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   const [customNote, setCustomNote] = useState('');
   const [updatePatientMobile, setUpdatePatientMobile] = useState(false);
 
+  // Option to send Medical Report as PDF
+  const [sendAsPdf, setSendAsPdf] = useState<boolean>(
+    data?.defaultSendAsPdf !== undefined ? data.defaultSendAsPdf : true
+  );
+  const [autoDownloadPdfOnSend, setAutoDownloadPdfOnSend] = useState<boolean>(true);
+
   // Formatting options — default preferWeb to true so clicking "Send on WhatsApp" works immediately across all browsers
   const [includeClinicHeader, setIncludeClinicHeader] = useState(true);
   const [includeDoctorContact, setIncludeDoctorContact] = useState(true);
@@ -125,6 +134,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
     recipient: string;
     whatsappUrl: string;
     sentAt: string;
+    pdfFilename?: string;
   } | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
@@ -155,73 +165,15 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
       } else if (!phoneNumber || phoneNumber.length < 10) {
         setPhoneNumber(digits || '9876543210');
       }
+      if (data?.defaultSendAsPdf !== undefined) {
+        setSendAsPdf(data.defaultSendAsPdf);
+      }
     }
-  }, [isOpen, patient]);
+  }, [isOpen, patient, data?.defaultSendAsPdf]);
 
   // Compute clean normalized phone number
   const fullRawPhone = `${countryCode}${phoneNumber}`;
   const cleanedRecipient = cleanPhoneNumber(fullRawPhone, countryCode);
-
-  // Format message text based on report type
-  const messageText = useMemo(() => {
-    const opts = {
-      includeHeader: includeClinicHeader,
-      includeDoctorContact,
-      customNote
-    };
-
-    switch (reportType) {
-      case 'clinical_image_report':
-        if (!data.analysis) return '';
-        return formatWhatsAppClinicalReport({
-          doctor,
-          patient,
-          analysis: data.analysis,
-          anatomicalSite: data.anatomicalSite,
-          options: opts
-        });
-
-      case 'prescription':
-        if (!patient || !doctor) return '';
-        return formatWhatsAppPrescription({
-          doctor,
-          patient,
-          prescriptions: data.prescriptions || [],
-          options: opts
-        });
-
-      case 'consultation_summary':
-        if (!patient || !data.consultation) return '';
-        return formatWhatsAppConsultationSummary({
-          doctor,
-          patient,
-          consultation: data.consultation,
-          options: opts
-        });
-
-      case 'progression_report':
-        if (!patient || !data.progression) return '';
-        return formatWhatsAppProgressionReport({
-          doctor,
-          patient,
-          progression: data.progression,
-          options: opts
-        });
-
-      case 'patient_summary':
-      default:
-        if (!patient) return '';
-        return formatWhatsAppPatientSummary({
-          doctor,
-          patient,
-          activePrescriptions: data.activePrescriptions || data.prescriptions || [],
-          recentConsultation: data.consultation,
-          options: opts
-        });
-    }
-  }, [reportType, data, doctor, patient, includeClinicHeader, includeDoctorContact, customNote]);
-
-  if (!isOpen) return null;
 
   const getReportTitle = () => {
     switch (reportType) {
@@ -239,6 +191,117 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
     }
   };
 
+  // Build Official Medical Report PDF when patient is available
+  const generatedPdfReport = useMemo(() => {
+    if (!patient) return null;
+    try {
+      return generatePatientMedicalReportPdf({
+        patient,
+        doctor,
+        consultation: data.consultation || null,
+        prescriptions:
+          data.activePrescriptions ||
+          data.prescriptions ||
+          data.consultation?.prescriptions ||
+          [],
+        customNote,
+        reportTitle: getReportTitle()
+      });
+    } catch (err) {
+      console.warn('PDF generation fallback:', err);
+      return null;
+    }
+  }, [patient, doctor, data, customNote, reportType]);
+
+  // Format message text based on report type
+  const messageText = useMemo(() => {
+    const opts = {
+      includeHeader: includeClinicHeader,
+      includeDoctorContact,
+      customNote
+    };
+
+    let baseText = '';
+    switch (reportType) {
+      case 'clinical_image_report':
+        if (!data.analysis) return '';
+        baseText = formatWhatsAppClinicalReport({
+          doctor,
+          patient,
+          analysis: data.analysis,
+          anatomicalSite: data.anatomicalSite,
+          options: opts
+        });
+        break;
+
+      case 'prescription':
+        if (!patient || !doctor) return '';
+        baseText = formatWhatsAppPrescription({
+          doctor,
+          patient,
+          prescriptions: data.prescriptions || [],
+          options: opts
+        });
+        break;
+
+      case 'consultation_summary':
+        if (!patient || !data.consultation) return '';
+        baseText = formatWhatsAppConsultationSummary({
+          doctor,
+          patient,
+          consultation: data.consultation,
+          options: opts
+        });
+        break;
+
+      case 'progression_report':
+        if (!patient || !data.progression) return '';
+        baseText = formatWhatsAppProgressionReport({
+          doctor,
+          patient,
+          progression: data.progression,
+          options: opts
+        });
+        break;
+
+      case 'patient_summary':
+      default:
+        if (!patient) return '';
+        baseText = formatWhatsAppPatientSummary({
+          doctor,
+          patient,
+          activePrescriptions: data.activePrescriptions || data.prescriptions || [],
+          recentConsultation: data.consultation,
+          options: opts
+        });
+        break;
+    }
+
+    if (sendAsPdf && generatedPdfReport) {
+      return [
+        baseText,
+        ``,
+        `📄 *ATTACHED MEDICAL REPORT (PDF):*`,
+        `• *Document:* ${generatedPdfReport.filename} (${generatedPdfReport.sizeLabel})`,
+        `• *Report Ref:* #${generatedPdfReport.reportId} · Digitally Signed Medical Record`
+      ].join('\n');
+    }
+
+    return baseText;
+  }, [
+    reportType,
+    data,
+    doctor,
+    patient,
+    includeClinicHeader,
+    includeDoctorContact,
+    customNote,
+    sendAsPdf,
+    generatedPdfReport
+  ]);
+
+  if (!isOpen) return null;
+
   const handleCopyText = async () => {
     try {
       await navigator.clipboard.writeText(messageText);
@@ -249,12 +312,25 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
     }
   };
 
+  const handleDownloadPdfOnly = () => {
+    if (!generatedPdfReport) return;
+    generatedPdfReport.triggerDownload();
+    setStatusMessage(
+      `Downloaded Medical Report PDF: ${generatedPdfReport.filename} (${generatedPdfReport.sizeLabel})`
+    );
+  };
+
   /**
-   * Dispatches WhatsApp report in the background via Clinic Gateway & logs it directly into the
+   * Dispatches WhatsApp report (and optional Medical Report PDF) in the background via Clinic Gateway & logs it directly into the
    * native Clinical OS Inbox thread so the doctor never leaves the Clinical OS application.
    */
-  const handleSendWhatsApp = async (openUnfocusedTab = false) => {
+  const handleSendWhatsApp = async (openUnfocusedTab = false, forcePdfMode?: boolean) => {
     setErrorMessage(null);
+
+    const includePdf = forcePdfMode !== undefined ? forcePdfMode : sendAsPdf;
+    if (forcePdfMode === true && !sendAsPdf) {
+      setSendAsPdf(true);
+    }
 
     const cleanTenDigits = phoneNumber.replace(/\D/g, '').slice(0, 10);
     if (cleanTenDigits.length < 10) {
@@ -268,6 +344,11 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
     }
 
     const targetWhatsAppUrl = getWhatsAppWebUrl(cleanedRecipient, messageText);
+
+    // If sending as PDF and autoDownloadPdfOnSend is checked (or forced PDF action), trigger local PDF download
+    if (includePdf && generatedPdfReport && (autoDownloadPdfOnSend || forcePdfMode)) {
+      generatedPdfReport.triggerDownload();
+    }
 
     // Only open an unfocused background tab if explicitly requested; default is 100% background API dispatch
     if (openUnfocusedTab) {
@@ -294,9 +375,20 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
           patientName: patient?.fullName || 'Patient',
           recipientMobile: cleanedRecipient,
           clinicPhone: doctor?.phone || '+91 98765 00001',
-          reportType,
+          reportType: includePdf ? `${reportType}_pdf` : reportType,
           messageText,
-          note: customNote.trim() || undefined
+          note: customNote.trim() || undefined,
+          pdfAttachment:
+            includePdf && generatedPdfReport
+              ? {
+                  filename: generatedPdfReport.filename,
+                  reportId: generatedPdfReport.reportId,
+                  sizeLabel: generatedPdfReport.sizeLabel,
+                  generatedAt: generatedPdfReport.generatedAt,
+                  summaryPoints: generatedPdfReport.summaryPoints,
+                  pdfDataUrl: generatedPdfReport.pdfDataUrl
+                }
+              : undefined
         });
         if (sendRes?.dispatch?.id) {
           receiptId = sendRes.dispatch.id.toUpperCase();
@@ -309,12 +401,15 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
         id: receiptId,
         recipient: `+${cleanedRecipient}`,
         whatsappUrl: targetWhatsAppUrl,
-        sentAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        sentAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        pdfFilename: includePdf && generatedPdfReport ? generatedPdfReport.filename : undefined
       });
 
       setShowAppLaunchPrompt(false);
       setStatusMessage(
-        `Dispatched in background to +${cleanedRecipient} & routed to Clinical OS Inbox (${receiptId}).`
+        includePdf && generatedPdfReport
+          ? `Medical Report PDF (${generatedPdfReport.filename}) & Summary dispatched to +${cleanedRecipient} & routed to Clinical OS Inbox (${receiptId}).`
+          : `Dispatched in background to +${cleanedRecipient} & routed to Clinical OS Inbox (${receiptId}).`
       );
 
       if (onSentSuccess) {
@@ -454,6 +549,81 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               </label>
             )}
           </div>
+
+          {/* Medical Report as PDF Option Card */}
+          {patient && generatedPdfReport && (
+            <div
+              className={`p-4 rounded-xl border transition-all space-y-3 ${
+                sendAsPdf
+                  ? 'bg-emerald-50/70 border-emerald-300 shadow-2xs'
+                  : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <label className="flex items-start sm:items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={sendAsPdf}
+                    onChange={e => setSendAsPdf(e.target.checked)}
+                    className="mt-0.5 sm:mt-0 w-4 h-4 rounded text-[#128C7E] focus:ring-[#128C7E]"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-[#128C7E]" />
+                        <span>Send Medical Report as PDF</span>
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-800 text-white">
+                        {generatedPdfReport.sizeLabel}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      Generates &amp; attaches official A4 PDF medical report (<strong>{generatedPdfReport.filename}</strong> · Ref #{generatedPdfReport.reportId})
+                    </p>
+                  </div>
+                </label>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdfOnly}
+                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                    title="Download a local copy of the Medical Report PDF"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#128C7E]" />
+                    <span>Download PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSendWhatsApp(false, true)}
+                    disabled={isLogging || !cleanedRecipient}
+                    className="px-3 py-1.5 rounded-lg bg-[#128C7E] hover:bg-[#075E54] text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs disabled:opacity-50"
+                    title="Generate and send Medical Report as PDF on WhatsApp"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Send PDF Report</span>
+                  </button>
+                </div>
+              </div>
+
+              {sendAsPdf && (
+                <div className="pt-2 border-t border-emerald-200/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-emerald-900">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoDownloadPdfOnSend}
+                      onChange={e => setAutoDownloadPdfOnSend(e.target.checked)}
+                      className="rounded text-[#128C7E] focus:ring-[#128C7E]"
+                    />
+                    <span>Also download PDF file to device when sending</span>
+                  </label>
+                  <span className="font-mono text-[10.5px] text-teal-800 font-semibold">
+                    ✓ Attached to Clinical OS WhatsApp Dispatch
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Prompt banner: Directly opens WhatsApp Desktop or Prompts WhatsApp Web */}
           {showAppLaunchPrompt && (
@@ -620,7 +790,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap justify-end">
             <button
               type="button"
               onClick={handleCopyText}
@@ -651,7 +821,13 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               title="Dispatch report in background without leaving Clinical OS"
             >
               <WhatsAppIcon className="w-4 h-4 fill-white" />
-              <span>{isLogging ? 'Dispatching...' : 'Send to Patient (In-App)'}</span>
+              <span>
+                {isLogging
+                  ? 'Dispatching...'
+                  : sendAsPdf
+                  ? 'Send Medical Report as PDF'
+                  : 'Send to Patient (In-App)'}
+              </span>
               <Send className="w-3.5 h-3.5" />
             </button>
           </div>

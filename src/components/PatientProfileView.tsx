@@ -629,12 +629,13 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
                     reportType: 'patient_summary',
                     data: {
                       activePrescriptions: prescriptions,
-                      consultation: consultations[0] || null
+                      consultation: unifiedChronologicalEntries[0]?.rawConsultation || consultations[0] || null,
+                      defaultSendAsPdf: true
                     }
                   })
                 }
                 className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                title="Send Medical Summary to patient"
+                title="Send WhatsApp Summary & Medical Report PDF to patient"
               >
                 <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
                 <span>WhatsApp Summary</span>

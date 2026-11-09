@@ -409,7 +409,7 @@ function MainApp() {
         <ConsultationModal
           consultation={activeConsultation.consultation}
           patient={activeConsultation.patient}
-          initialTab="notes"
+          initialTab="diagnosis"
           onClose={() => setActiveConsultation(null)}
           onSuccess={handleConsultationSuccess}
         />
