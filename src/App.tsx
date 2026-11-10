@@ -200,6 +200,10 @@ function MainApp() {
 
   // Toast banner
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isSwitchingRole, setIsSwitchingRole] = useState(false);
+  const [showDoctorElevationPrompt, setShowDoctorElevationPrompt] = useState(false);
+  const [elevationPassword, setElevationPassword] = useState('');
+  const [roleSwitchError, setRoleSwitchError] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -341,7 +345,7 @@ function MainApp() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        {/* Front-Desk Receptionist Mode Banner (No role-settings or doctor-switch buttons shown to receptionist) */}
+        {/* Front-Desk Receptionist Mode Banner with Return to Doctor View support */}
         {isReceptionist && (
           <div className="shrink-0 bg-emerald-900 text-emerald-50 border-b border-emerald-700/60 px-4 sm:px-8 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-20">
             <div className="flex items-center gap-2 min-w-0">
@@ -351,6 +355,85 @@ function MainApp() {
               <span className="truncate text-emerald-100">
                 Signed in as <strong>{doctor.name}</strong> ({doctor.email}) · Front-desk patient registration &amp; appointment booking only.
               </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {showDoctorElevationPrompt ? (
+                <form
+                  onSubmit={async e => {
+                    e.preventDefault();
+                    if (isSwitchingRole) return;
+                    setIsSwitchingRole(true);
+                    setRoleSwitchError(null);
+                    try {
+                      await switchRoleSession({
+                        targetRole: 'doctor',
+                        password: elevationPassword
+                      });
+                      setShowDoctorElevationPrompt(false);
+                      setElevationPassword('');
+                      showToast('Switched to Doctor Workspace.');
+                    } catch (err: any) {
+                      setRoleSwitchError(err?.message || 'Invalid doctor password.');
+                    } finally {
+                      setIsSwitchingRole(false);
+                    }
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <input
+                    type="password"
+                    value={elevationPassword}
+                    onChange={e => setElevationPassword(e.target.value)}
+                    placeholder="Doctor password..."
+                    className="px-2 py-1 rounded-md bg-emerald-950/80 border border-emerald-600/60 text-white placeholder-emerald-300/60 text-[11px] focus:outline-hidden focus:border-emerald-400"
+                    autoFocus
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSwitchingRole || !elevationPassword}
+                    className="px-2.5 py-1 rounded-md bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold text-[11px] transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSwitchingRole ? 'Verifying...' : 'Unlock'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDoctorElevationPrompt(false);
+                      setElevationPassword('');
+                      setRoleSwitchError(null);
+                    }}
+                    className="p-1 text-emerald-200 hover:text-white cursor-pointer"
+                    title="Cancel"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                  {roleSwitchError && (
+                    <span className="text-amber-300 font-semibold text-[11px]">{roleSwitchError}</span>
+                  )}
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isSwitchingRole}
+                  onClick={async () => {
+                    setIsSwitchingRole(true);
+                    setRoleSwitchError(null);
+                    try {
+                      await switchRoleSession({ targetRole: 'doctor' });
+                      showToast('Returned to Doctor Workspace.');
+                    } catch {
+                      // Standalone receptionist account requires the clinic Doctor's password to elevate
+                      setShowDoctorElevationPrompt(true);
+                    } finally {
+                      setIsSwitchingRole(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-800 hover:bg-emerald-700 border border-emerald-500/40 text-emerald-100 font-semibold text-[11px] transition-colors cursor-pointer"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>{isSwitchingRole ? 'Switching...' : 'Switch to Doctor View'}</span>
+                </button>
+              )}
             </div>
           </div>
         )}

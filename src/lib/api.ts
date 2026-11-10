@@ -71,7 +71,12 @@ export const authStorage = {
     return null;
   },
   setDoctor: (doctor: Doctor) => {
+    const prevId = inMemoryDoctor?.id;
+    const prevRole = inMemoryDoctor?.role;
     inMemoryDoctor = doctor;
+    if (prevId !== doctor.id || prevRole !== doctor.role) {
+      MEMORY_CACHE.clear();
+    }
     try {
       if (typeof window !== 'undefined') {
         const serialized = JSON.stringify(doctor);
@@ -85,6 +90,7 @@ export const authStorage = {
   clearToken: () => {
     inMemoryToken = null;
     inMemoryDoctor = null;
+    MEMORY_CACHE.clear();
     try {
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(TOKEN_KEY);
@@ -199,21 +205,28 @@ export const patientVaultStorage = {
 const MEMORY_CACHE = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes sliding freshness
 
+function resolveCacheScopeKey(rawKey: string): string {
+  const doc = authStorage.getDoctor();
+  const scope = doc ? `${doc.id}_${doc.role || 'doctor'}_` : 'anon_';
+  return `${scope}${rawKey}`;
+}
+
 export const fastCache = {
   get: <T>(key: string): T | null => {
+    const scopedKey = resolveCacheScopeKey(key);
     // 1. In-memory check
-    const mem = MEMORY_CACHE.get(key);
+    const mem = MEMORY_CACHE.get(scopedKey);
     if (mem && Date.now() - mem.timestamp < CACHE_TTL_MS) {
       return mem.data as T;
     }
     // 2. Storage fallback
     try {
       if (typeof window !== 'undefined') {
-        const raw = window.sessionStorage.getItem(key) || window.localStorage.getItem(key);
+        const raw = window.sessionStorage.getItem(scopedKey) || window.localStorage.getItem(scopedKey);
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && parsed.data !== undefined) {
-            MEMORY_CACHE.set(key, { data: parsed.data, timestamp: parsed.timestamp || Date.now() });
+            MEMORY_CACHE.set(scopedKey, { data: parsed.data, timestamp: parsed.timestamp || Date.now() });
             return parsed.data as T;
           }
         }
@@ -224,11 +237,12 @@ export const fastCache = {
     return null;
   },
   set: <T>(key: string, data: T) => {
+    const scopedKey = resolveCacheScopeKey(key);
     const entry = { data, timestamp: Date.now() };
-    MEMORY_CACHE.set(key, entry);
+    MEMORY_CACHE.set(scopedKey, entry);
     try {
       if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(key, JSON.stringify(entry));
+        window.sessionStorage.setItem(scopedKey, JSON.stringify(entry));
       }
     } catch {
       // ignore storage quota errors
@@ -239,8 +253,9 @@ export const fastCache = {
       MEMORY_CACHE.clear();
       return;
     }
+    const scopedPrefix = resolveCacheScopeKey(keyPrefix);
     for (const k of Array.from(MEMORY_CACHE.keys())) {
-      if (k.startsWith(keyPrefix)) MEMORY_CACHE.delete(k);
+      if (k.startsWith(scopedPrefix) || k.includes(keyPrefix)) MEMORY_CACHE.delete(k);
     }
   }
 };
@@ -422,7 +437,7 @@ export const api = {
       fetchWithAuth<{ success: boolean; staff: Doctor[] }>(`/api/staff/${id}`, {
         method: 'DELETE',
       }),
-    switchSession: (params: { targetId?: string; targetRole?: 'doctor' | 'receptionist' }) =>
+    switchSession: (params: { targetId?: string; targetRole?: 'doctor' | 'receptionist'; password?: string }) =>
       fetchWithAuth<{ token: string; doctor: Doctor }>('/api/staff/switch-session', {
         method: 'POST',
         body: JSON.stringify(params),

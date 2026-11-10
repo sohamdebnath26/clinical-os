@@ -1028,10 +1028,16 @@ class DatabaseService {
     email: string;
     name?: string;
     role: 'doctor' | 'receptionist';
+    password?: string;
     assignedByDoctor: Doctor;
   }): Doctor {
     const cleanEmail = params.email.trim().toLowerCase();
     const existing = this.findDoctorByEmail(cleanEmail);
+    const clinicStaff = this.getClinicStaffAccounts(params.assignedByDoctor.id);
+    const allowedStaffIds = new Set(clinicStaff.map(s => s.id));
+    const effectiveOwnerId =
+      this.resolveEffectiveClinicDoctorId(params.assignedByDoctor.id) || params.assignedByDoctor.id;
+
     const emailPrefix = cleanEmail.split('@')[0].replace(/[._-]+/g, ' ');
     const defaultFormattedName = emailPrefix
       .split(' ')
@@ -1052,6 +1058,9 @@ class DatabaseService {
         : `Dr. ${defaultFormattedName}`);
 
     if (existing) {
+      if (!allowedStaffIds.has(existing.id)) {
+        throw new Error('This email belongs to another independent clinic account and cannot be reassigned.');
+      }
       existing.role = params.role;
       existing.name = resolvedName;
       existing.clinicName = params.assignedByDoctor.clinicName || existing.clinicName;
@@ -1061,9 +1070,13 @@ class DatabaseService {
           : existing.speciality === 'Front Desk & Patient Access'
           ? 'Dermatologist & Cosmetologist'
           : existing.speciality;
-      if (existing.id !== params.assignedByDoctor.id) {
-        existing.assignedByDoctorId = params.assignedByDoctor.id;
+      if (existing.id !== effectiveOwnerId) {
+        existing.assignedByDoctorId = effectiveOwnerId;
         existing.assignedByEmail = params.assignedByDoctor.email.toLowerCase();
+      }
+      if (params.password && params.password.trim().length >= 6) {
+        const salt = bcrypt.genSaltSync(10);
+        this.data.doctorPasswords[existing.id] = bcrypt.hashSync(params.password.trim(), salt);
       }
       this.persist();
 
@@ -1082,14 +1095,14 @@ class DatabaseService {
     const created = this.createDoctor({
       name: resolvedName,
       email: cleanEmail,
-      password: 'Demo@1234',
+      password: params.password && params.password.trim().length >= 6 ? params.password.trim() : 'Demo@1234',
       role: params.role,
       clinicName: params.assignedByDoctor.clinicName || 'Cliniq Dermatology Center',
       speciality:
         params.role === 'receptionist'
           ? 'Front Desk & Patient Access'
           : 'Dermatologist & Cosmetologist',
-      assignedByDoctorId: params.assignedByDoctor.id,
+      assignedByDoctorId: effectiveOwnerId,
       assignedByEmail: params.assignedByDoctor.email.toLowerCase()
     });
 
@@ -1106,7 +1119,16 @@ class DatabaseService {
   }
 
   public removeStaffAccount(targetId: string, actorId: string): boolean {
-    if (targetId === actorId || DatabaseService.DEMO_DOCTOR_IDS.has(targetId)) {
+    const effectiveOwnerId = this.resolveEffectiveClinicDoctorId(actorId) || actorId;
+    if (
+      targetId === actorId ||
+      targetId === effectiveOwnerId ||
+      DatabaseService.DEMO_DOCTOR_IDS.has(targetId)
+    ) {
+      return false;
+    }
+    const allowedStaffIds = new Set(this.getClinicStaffAccounts(actorId).map(s => s.id));
+    if (!allowedStaffIds.has(targetId)) {
       return false;
     }
     const idx = this.data.doctors.findIndex(d => d.id === targetId);
@@ -1195,11 +1217,6 @@ class DatabaseService {
     },
     actor: { id: string; name: string; email?: string }
   ): Patient {
-    const id =
-      patientData.id ||
-      `pat-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
-    const patientCode = patientData.patientCode || this.generatePatientCode();
-    const now = new Date().toISOString();
     const effectiveOwnerId = this.resolveEffectiveClinicDoctorId(actor.id) || actor.id;
     const effectiveOwnerDoc = this.findDoctorById(effectiveOwnerId);
     const actorEmail =
@@ -1209,11 +1226,24 @@ class DatabaseService {
       this.findDoctorById(actor.id)?.email ||
       undefined;
 
-    const existingIdx = this.data.patients.findIndex(p => p.id === id);
+    let id =
+      patientData.id ||
+      `pat-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+    let existingIdx = this.data.patients.findIndex(p => p.id === id);
+
+    // Prevent cross-tenant ID collision / IDOR overwrite if a supplied ID belongs to another doctor's patient
+    if (existingIdx >= 0 && !this.canDoctorAccessPatient(this.data.patients[existingIdx], actor.id)) {
+      id = `pat-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+      existingIdx = -1;
+    }
+
+    const patientCode = patientData.patientCode || this.generatePatientCode();
+    const now = new Date().toISOString();
+
     const newPatient: Patient = {
       ...patientData,
       mobile: String(patientData.mobile || '').replace(/\D/g, '').slice(-10),
-      createdById: patientData.createdById || effectiveOwnerId,
+      createdById: effectiveOwnerId,
       createdByEmail: actorEmail ? actorEmail.toLowerCase().trim() : undefined,
       id,
       patientCode,
@@ -1250,13 +1280,24 @@ class DatabaseService {
 
     let changed = false;
     const now = new Date().toISOString();
-    const cleanDoctorEmail = doctor.email.toLowerCase().trim();
+    const effectiveOwnerId = this.resolveEffectiveClinicDoctorId(doctor.id) || doctor.id;
+    const effectiveOwnerDoc = this.findDoctorById(effectiveOwnerId) || doctor;
+    const cleanDoctorEmail = effectiveOwnerDoc.email.toLowerCase().trim();
+    const isCallerDemo = this.isDemoAccount(effectiveOwnerId);
 
     for (const raw of incomingPatients) {
       if (!raw || !raw.fullName) continue;
       const existingById = raw.id ? this.data.patients.find(p => p.id === raw.id) : undefined;
       if (existingById) {
-        if (!existingById.createdById) existingById.createdById = doctor.id;
+        // Never allow a non-demo doctor to claim a seeded demo patient or another clinic's patient
+        if (!this.canDoctorAccessPatient(existingById, doctor.id)) {
+          continue;
+        }
+        if (isCallerDemo && !existingById.createdById) {
+          // Keep seeded demo patients shared across demo accounts
+          continue;
+        }
+        if (!existingById.createdById) existingById.createdById = effectiveOwnerId;
         if (!existingById.createdByEmail) existingById.createdByEmail = cleanDoctorEmail;
         changed = true;
         continue;
@@ -1286,7 +1327,7 @@ class DatabaseService {
         allergies: raw.allergies || '',
         currentMedications: raw.currentMedications || '',
         medicalHistory: raw.medicalHistory || '',
-        createdById: doctor.id,
+        createdById: effectiveOwnerId,
         createdByEmail: cleanDoctorEmail,
         createdAt: raw.createdAt || now,
         updatedAt: raw.updatedAt || now,

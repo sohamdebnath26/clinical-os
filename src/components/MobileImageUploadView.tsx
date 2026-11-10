@@ -334,7 +334,12 @@ export const MobileImageUploadView: React.FC<MobileImageUploadViewProps> = ({ to
                 >
                   <div className="aspect-square bg-slate-100 overflow-hidden">
                     <img
-                      src={img.url}
+                      src={
+                        img.dataUrl ||
+                        (img.url.startsWith('/uploads/')
+                          ? `${img.url}?mobToken=${encodeURIComponent(token)}`
+                          : img.url)
+                      }
                       alt={img.caption || img.filename}
                       className="w-full h-full object-cover"
                     />

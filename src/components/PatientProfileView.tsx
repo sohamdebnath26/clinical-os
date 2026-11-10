@@ -176,6 +176,22 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
     setIsLoading(true);
     setError(null);
     try {
+      if (isReceptionist) {
+        const [patRes, apptRes] = await Promise.all([
+          api.patients.get(patientId),
+          api.appointments.list({ patientId })
+        ]);
+        setPatient(patRes.patient);
+        setAppointments(apptRes.appointments);
+        setConsultations([]);
+        setTimelineEvents([]);
+        setPrescriptions([]);
+        setMarkers([]);
+        setImages([]);
+        setTestReports([]);
+        return;
+      }
+
       const [patRes, conRes, timeRes, rxRes, markRes, imgRes, apptRes, repRes] = await Promise.all([
         api.patients.get(patientId),
         api.patients.getConsultations(patientId),
@@ -205,7 +221,7 @@ export const PatientProfileView: React.FC<PatientProfileViewProps> = ({
 
   useEffect(() => {
     loadPatientData();
-  }, [patientId]);
+  }, [patientId, isReceptionist]);
 
   // Merge consultations and timelineEvents into a single unified chronological model
   const unifiedChronologicalEntries = React.useMemo(() => {

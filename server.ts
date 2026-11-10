@@ -917,11 +917,15 @@ app.get('/api/auth/me', authMiddleware, (req: AuthenticatedRequest, res) => {
   res.json({ doctor: req.doctor });
 });
 
-app.post('/api/auth/logout', authMiddleware, (req: AuthenticatedRequest, res) => {
-  const token = req.sessionToken || req.headers.authorization?.split(' ')[1];
-  if (token) {
-    activeSessions.delete(token);
-    revokedTokens.add(token);
+app.post('/api/auth/logout', (req: AuthenticatedRequest, res) => {
+  const authHeader = req.headers.authorization;
+  const bearerToken =
+    authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1]?.trim() : '';
+  const cookies = parseCookies(req);
+  const cookieToken = cookies[SESSION_COOKIE_NAME] || '';
+  for (const tok of [bearerToken, cookieToken].filter(Boolean)) {
+    activeSessions.delete(tok);
+    revokedTokens.add(tok);
   }
   clearSessionCookie(res);
   res.json({ message: 'Logged out successfully' });
@@ -957,7 +961,7 @@ app.post('/api/staff/assign', authMiddleware, (req: AuthenticatedRequest, res) =
     return res.status(403).json({ error: 'Only doctors can assign or modify clinic email roles.' });
   }
 
-  const { email, name, role } = req.body || {};
+  const { email, name, role, password } = req.body || {};
   const cleanEmail = String(email || '').trim().toLowerCase();
   if (!cleanEmail || !cleanEmail.includes('@')) {
     return res.status(400).json({ error: 'Please provide a valid email address.' });
@@ -966,15 +970,21 @@ app.post('/api/staff/assign', authMiddleware, (req: AuthenticatedRequest, res) =
     return res.status(400).json({ error: 'Role must be either "doctor" or "receptionist".' });
   }
 
-  const account = db.assignEmailRole({
-    email: cleanEmail,
-    name: name ? String(name).trim() : undefined,
-    role,
-    assignedByDoctor: req.doctor
-  });
+  try {
+    const account = db.assignEmailRole({
+      email: cleanEmail,
+      name: name ? String(name).trim() : undefined,
+      role,
+      password: typeof password === 'string' ? password : undefined,
+      assignedByDoctor: req.doctor
+    });
 
-  const staff = db.getClinicStaffAccounts(req.doctor.id);
-  res.json({ account, staff });
+    const staff = db.getClinicStaffAccounts(req.doctor.id);
+    res.json({ account, staff });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unable to assign role to this email.';
+    return res.status(403).json({ error: msg });
+  }
 });
 
 app.put('/api/staff/:id/role', authMiddleware, (req: AuthenticatedRequest, res) => {
@@ -988,20 +998,30 @@ app.put('/api/staff/:id/role', authMiddleware, (req: AuthenticatedRequest, res) 
     return res.status(400).json({ error: 'Role must be either "doctor" or "receptionist".' });
   }
 
+  const allowedStaffIds = new Set(db.getClinicStaffAccounts(req.doctor.id).map(s => s.id));
+  if (!allowedStaffIds.has(req.params.id)) {
+    return res.status(403).json({ error: 'Forbidden: Account does not belong to your clinic.' });
+  }
+
   const target = db.findDoctorById(req.params.id);
   if (!target) {
     return res.status(404).json({ error: 'Account not found.' });
   }
 
-  const updated = db.assignEmailRole({
-    email: target.email,
-    name: target.name,
-    role,
-    assignedByDoctor: req.doctor
-  });
+  try {
+    const updated = db.assignEmailRole({
+      email: target.email,
+      name: target.name,
+      role,
+      assignedByDoctor: req.doctor
+    });
 
-  const staff = db.getClinicStaffAccounts(req.doctor.id);
-  res.json({ account: updated, staff });
+    const staff = db.getClinicStaffAccounts(req.doctor.id);
+    res.json({ account: updated, staff });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unable to update role.';
+    return res.status(403).json({ error: msg });
+  }
 });
 
 app.delete('/api/staff/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
@@ -1255,7 +1275,7 @@ app.put('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res) =>
 });
 
 // Patient Historical Consultations
-app.get('/api/patients/:id/consultations', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.get('/api/patients/:id/consultations', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const patient = db.findPatientById(req.params.id, req.doctor?.id);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const consultations = db.getConsultationsByPatient(req.params.id);
@@ -1263,7 +1283,7 @@ app.get('/api/patients/:id/consultations', authMiddleware, (req: AuthenticatedRe
 });
 
 // Clinical Timeline (Sanitized for Privacy: Never reveals address/mobile in timeline)
-app.get('/api/patients/:id/timeline', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.get('/api/patients/:id/timeline', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const patient = db.findPatientById(req.params.id, req.doctor?.id);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const consultations = db.getConsultationsByPatient(req.params.id);
@@ -1291,14 +1311,14 @@ app.get('/api/patients/:id/timeline', authMiddleware, (req: AuthenticatedRequest
 });
 
 // Patient body markers
-app.get('/api/patients/:id/markers', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.get('/api/patients/:id/markers', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const patient = db.findPatientById(req.params.id, req.doctor?.id);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const markers = db.getPatientBodyMarkers(req.params.id);
   res.json({ markers });
 });
 
-app.post('/api/patients/:id/markers', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.post('/api/patients/:id/markers', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const patient = db.findPatientById(req.params.id, req.doctor?.id);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const { view, x, y, type, notes, anatomicalPart, bodyPart, color, consultationId } = req.body;
@@ -1476,14 +1496,14 @@ function storePatientClinicalImage(params: {
 }
 
 // Patient clinical images
-app.get('/api/patients/:id/images', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.get('/api/patients/:id/images', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const patient = db.findPatientById(req.params.id, req.doctor?.id);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const images = db.getPatientImages(req.params.id);
   res.json({ images });
 });
 
-app.post('/api/patients/:id/images', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.post('/api/patients/:id/images', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   try {
     const patient = db.findPatientById(req.params.id, req.doctor?.id);
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
@@ -1517,7 +1537,7 @@ app.post('/api/patients/:id/images', authMiddleware, (req: AuthenticatedRequest,
   }
 });
 
-app.delete('/api/patients/:id/images/:imageId', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.delete('/api/patients/:id/images/:imageId', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const patient = db.findPatientById(req.params.id, req.doctor?.id);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const success = db.deleteClinicalImage(req.params.imageId);
@@ -1526,7 +1546,7 @@ app.delete('/api/patients/:id/images/:imageId', authMiddleware, (req: Authentica
 });
 
 // Patient prescriptions
-app.get('/api/patients/:id/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.get('/api/patients/:id/prescriptions', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const patient = db.findPatientById(req.params.id, req.doctor?.id);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const prescriptions = db.getPrescriptions(req.params.id, req.doctor?.id);
@@ -1534,7 +1554,7 @@ app.get('/api/patients/:id/prescriptions', authMiddleware, (req: AuthenticatedRe
 });
 
 // Patient test & diagnostic report results
-app.get('/api/patients/:id/reports', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.get('/api/patients/:id/reports', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const patient = db.findPatientById(req.params.id, req.doctor?.id);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const reports = db.getTestReportsByPatient(req.params.id);
@@ -1660,7 +1680,7 @@ app.post('/api/consultations', authMiddleware, (req: AuthenticatedRequest, res) 
   }
 });
 
-app.get('/api/consultations/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.get('/api/consultations/:id', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const consultation = db.getConsultationById(req.params.id);
   if (!consultation || !db.findPatientById(consultation.patientId, req.doctor?.id)) {
     return res.status(404).json({ error: 'Consultation not found' });
@@ -2642,7 +2662,7 @@ app.post('/api/images/upload', authMiddleware, (req: AuthenticatedRequest, res) 
   }
 });
 
-app.delete('/api/images/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+app.delete('/api/images/:id', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const existingImg = db.getClinicalImageById(req.params.id);
   if (!existingImg || !db.findPatientById(existingImg.patientId, req.doctor?.id)) {
     return res.status(404).json({ error: 'Image not found' });
@@ -2855,55 +2875,17 @@ app.post('/api/images/mobile-session/:token/upload', (req, res) => {
   }
 
   try {
-    const matches = dataUrl.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) {
-      return res.status(400).json({ error: 'Invalid base64 image data' });
-    }
-
-    const mimeType = matches[1];
-    const base64Data = matches[2];
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    if (buffer.length > 8 * 1024 * 1024) {
-      return res.status(413).json({ error: 'Image exceeds maximum allowed size of 8MB' });
-    }
-
-    const ext = mimeType.includes('png') ? 'png' : 'jpg';
-    const imageId = `img-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
-    const savedFilename = `${imageId}.${ext}`;
-    const filePath = path.join(UPLOADS_DIR, savedFilename);
-
-    fs.writeFileSync(filePath, buffer);
-
-    const publicUrl = `/uploads/${savedFilename}`;
-    const clinicalImage = db.addClinicalImage({
-      id: imageId,
+    const clinicalImage = storePatientClinicalImage({
       patientId: session.patientId,
       consultationId: session.consultationId,
-      url: publicUrl,
-      dataUrl,
-      filename: filename || `mobile_${savedFilename}`,
-      mimeType,
-      sizeBytes: buffer.length,
+      rawDataUrl: dataUrl,
+      filename: filename || `mobile_${Date.now().toString(36)}.jpg`,
       caption: caption || 'Uploaded via Mobile QR Scan',
-      tags: tags || ['mobile-qr'],
-      createdAt: new Date().toISOString()
+      tags: Array.isArray(tags) && tags.length > 0 ? tags : ['mobile-qr'],
+      actor: { id: session.doctorId, name: session.doctorName }
     });
 
     session.uploadedImages.push(clinicalImage);
-
-    db.logAudit({
-      actorId: session.doctorId,
-      actorName: session.doctorName,
-      action: 'image_uploaded_via_mobile_qr',
-      resourceType: 'clinical_image',
-      resourceId: imageId,
-      metadata: {
-        patientId: session.patientId,
-        consultationId: session.consultationId,
-        sizeBytes: buffer.length
-      }
-    });
 
     // Real-time push to desktop modal & clinic workstation
     broadcastMobileSessionEvent(session.token, 'mobile_qr:image_uploaded', {
@@ -4858,10 +4840,14 @@ app.post('/api/reports/log-whatsapp', authMiddleware, (req: AuthenticatedRequest
 // ==========================================
 app.get('/api/dashboard/stats', authMiddleware, (req: AuthenticatedRequest, res) => {
   const doctorId = req.doctor?.id;
-  const stats = db.getStats(doctorId);
+  const isReceptionist = req.doctor?.role === 'receptionist';
+  const rawStats = db.getStats(doctorId);
+  const stats = isReceptionist
+    ? { ...rawStats, totalRevenue: 0, todayRevenue: 0 }
+    : rawStats;
   const recentVisits = db.getRecentVisits(8, doctorId);
   const recentPatients = db.getRecentPatients(8, doctorId);
-  const revenue = db.getPracticeRevenueAnalytics(doctorId);
+  const revenue = isReceptionist ? undefined : db.getPracticeRevenueAnalytics(doctorId);
   res.json({ stats, recentVisits, recentPatients, revenue });
 });
 

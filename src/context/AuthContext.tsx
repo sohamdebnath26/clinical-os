@@ -23,6 +23,7 @@ interface AuthContextType {
     targetId?: string;
     targetRole?: 'doctor' | 'receptionist';
     role?: 'doctor' | 'receptionist';
+    password?: string;
   }) => Promise<Doctor>;
 }
 
@@ -102,10 +103,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     targetId?: string;
     targetRole?: 'doctor' | 'receptionist';
     role?: 'doctor' | 'receptionist';
+    password?: string;
   }) => {
     const res = await api.staff.switchSession({
       targetId: params.targetId,
-      targetRole: params.targetRole || params.role
+      targetRole: params.targetRole || params.role,
+      password: params.password
     });
     authStorage.setToken(res.token);
     authStorage.setDoctor(res.doctor);
