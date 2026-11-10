@@ -1080,6 +1080,31 @@ export const api = {
           body: JSON.stringify(data),
         }
       ),
+    parseLabReport: (data: {
+      attachmentDataUrl?: string;
+      reportText?: string;
+      testName?: string;
+      category?: string;
+      patientId?: string;
+    }) =>
+      fetchWithAuth<{
+        parsed: {
+          testName: string;
+          category: import('../types').TestReportCategory;
+          specimenType: string;
+          resultValue: string;
+          unit: string;
+          referenceRange: string;
+          resultFlag: import('../types').TestResultFlag;
+          labName: string;
+          clinicalNotes: string;
+          safetyAlerts: string[];
+          isAiPowered: boolean;
+        };
+      }>('/api/ai/parse-lab-report', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
     chat: (data: {
       question: string;
       patientId?: string;

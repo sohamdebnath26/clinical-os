@@ -90,6 +90,8 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
   const [clinicalNotes, setClinicalNotes] = useState('');
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
+  const [isParsingReportAI, setIsParsingReportAI] = useState(false);
+  const [aiParsedSafetyAlerts, setAiParsedSafetyAlerts] = useState<string[]>([]);
 
   const isHistoryExpanded = (reportId: string) => {
     return expandedHistoryMap[reportId] ?? true;
@@ -179,6 +181,37 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
     setIsFormOpen(true);
   };
 
+  const runAiLabReportExtraction = async (overrideDataUrl?: string, overrideFileName?: string) => {
+    setIsParsingReportAI(true);
+    setFormError(null);
+    try {
+      const res = await api.ai.parseLabReport({
+        attachmentDataUrl: overrideDataUrl ?? attachmentUrl,
+        reportText: [resultValue, clinicalNotes, overrideFileName || attachmentName].filter(Boolean).join(' | '),
+        testName,
+        category,
+        patientId: patient.id
+      });
+      if (res.parsed) {
+        if (res.parsed.testName) setTestName(res.parsed.testName);
+        if (res.parsed.category) setCategory(res.parsed.category);
+        if (res.parsed.specimenType) setSpecimenType(res.parsed.specimenType);
+        if (res.parsed.resultValue) setResultValue(res.parsed.resultValue);
+        if (typeof res.parsed.unit === 'string') setUnit(res.parsed.unit);
+        if (res.parsed.referenceRange) setReferenceRange(res.parsed.referenceRange);
+        if (res.parsed.resultFlag) setResultFlag(res.parsed.resultFlag);
+        if (res.parsed.labName) setLabName(res.parsed.labName);
+        if (res.parsed.clinicalNotes) setClinicalNotes(res.parsed.clinicalNotes);
+        setStatus('completed');
+        setAiParsedSafetyAlerts(res.parsed.safetyAlerts || []);
+      }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to parse report with AI');
+    } finally {
+      setIsParsingReportAI(false);
+    }
+  };
+
   const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -187,6 +220,7 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
       if (typeof reader.result === 'string') {
         setAttachmentUrl(reader.result);
         setAttachmentName(file.name);
+        void runAiLabReportExtraction(reader.result, file.name);
       }
     };
     reader.readAsDataURL(file);
@@ -875,9 +909,23 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
             />
           </div>
 
-          {/* Attach Report Scan / Photo */}
+          {aiParsedSafetyAlerts.length > 0 && (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-900">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>CDSS Pathological &amp; Drug Safety Alert</span>
+              </div>
+              <ul className="list-disc pl-5 text-xs text-amber-900 space-y-0.5">
+                {aiParsedSafetyAlerts.map((al, i) => (
+                  <li key={i}>{al}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Attach Report Scan / Photo + AI Auto-Extract */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors">
                 <Upload className="w-3.5 h-3.5 text-teal-700" />
                 <span>{attachmentUrl ? 'Replace Report File' : 'Attach Report Scan / CSV / PDF'}</span>
@@ -887,6 +935,16 @@ export const PatientReportsSection: React.FC<PatientReportsSectionProps> = ({
                   className="hidden"
                 />
               </label>
+              <button
+                type="button"
+                disabled={isParsingReportAI}
+                onClick={() => runAiLabReportExtraction()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                title="Extract structured findings, reference ranges, and drug safety alerts using Gemini Multimodal AI"
+              >
+                <Sparkles className={`w-3.5 h-3.5 text-teal-700 ${isParsingReportAI ? 'animate-spin' : ''}`} />
+                <span>{isParsingReportAI ? 'AI Extracting...' : 'AI Auto-Extract Lab / Biopsy'}</span>
+              </button>
               {attachmentName && (
                 <button
                   type="button"

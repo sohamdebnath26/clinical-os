@@ -7,7 +7,7 @@ import fs from 'fs';
 import zlib from 'zlib';
 import crypto from 'crypto';
 import { db } from './server/db.js';
-import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI, askImageReportAssistant, extractBufferVisualMetrics } from './server/ai.js';
+import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI, askImageReportAssistant, extractBufferVisualMetrics, parseLabOrBiopsyReportWithAI } from './server/ai.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -3196,6 +3196,35 @@ app.post('/api/ai/parse-clinical-note', authMiddleware, requireDoctorRole, async
   } catch (err: unknown) {
     console.error('AI parse clinical note error:', err);
     res.status(500).json({ error: 'Failed to parse clinical note' });
+  }
+});
+
+app.post('/api/ai/parse-lab-report', authMiddleware, requireDoctorRole, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { attachmentDataUrl, reportText, testName, category, patientId } = req.body || {};
+    let patientObj: { name?: string; age?: number; gender?: string; allergies?: string } | undefined;
+    if (patientId) {
+      const p = db.findPatientById(patientId, req.doctor?.id);
+      if (p) {
+        patientObj = {
+          name: p.fullName,
+          age: p.age,
+          gender: p.gender,
+          allergies: p.allergies
+        };
+      }
+    }
+    const parsed = await parseLabOrBiopsyReportWithAI({
+      attachmentDataUrl,
+      reportText,
+      testName,
+      category,
+      patient: patientObj
+    });
+    res.json({ parsed });
+  } catch (err: unknown) {
+    console.error('AI parse lab report error:', err);
+    res.status(500).json({ error: 'Failed to parse lab/biopsy report' });
   }
 });
 

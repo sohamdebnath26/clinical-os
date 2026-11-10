@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Consultation, Patient, ProcedureItem, BodyMarker, ClinicalImage, PrescriptionItem, AIImageAnalysisResult, DoctorFormularyItem } from '../types';
-import { PREDEFINED_DIAGNOSES, PREDEFINED_TESTS, PREDEFINED_PROCEDURES, COMMON_MEDICATIONS } from '../data/clinicalCatalogues';
+import { PREDEFINED_DIAGNOSES, PREDEFINED_TESTS, PREDEFINED_PROCEDURES, COMMON_MEDICATIONS, evaluatePrescriptionSafety } from '../data/clinicalCatalogues';
 import { ClinicalImageUploader } from './ClinicalImageUploader';
+import { ClinicalCalculatorsModal, ClinicalScoreEntry } from './ClinicalCalculatorsModal';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { analyzeImageVisualFeatures } from '../utils/visualImageAnalyzer';
@@ -35,7 +36,9 @@ import {
   Search,
   Upload,
   BookOpen,
-  Printer
+  Printer,
+  Calculator,
+  AlertTriangle
 } from 'lucide-react';
 
 interface ConsultationModalProps {
@@ -125,6 +128,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   });
   const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>(consultation.prescriptions || []);
   const [aiSummary, setAiSummary] = useState<string>(consultation.aiSummary || '');
+  const [isCalculatorsOpen, setIsCalculatorsOpen] = useState(false);
+  const [calculatorInitialTab, setCalculatorInitialTab] = useState<'PASI' | 'SCORAD' | 'DLQI'>('PASI');
+  const [appliedClinicalScores, setAppliedClinicalScores] = useState<ClinicalScoreEntry[]>([]);
 
   // Draft Auto-Save & Recovery State
   const draftKey = `clinical_os_consultation_draft_${consultation.id || patient.id}`;
@@ -2056,7 +2062,66 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                   Primary &amp; Differential Diagnosis
                 </h4>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">
+                    Clinical Severity Calculators:
+                  </span>
+                  {(['PASI', 'SCORAD', 'DLQI'] as const).map(calc => {
+                    const existing = appliedClinicalScores.find(s => s.calculator === calc);
+                    return (
+                      <button
+                        key={calc}
+                        type="button"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => {
+                          setCalculatorInitialTab(calc);
+                          setIsCalculatorsOpen(true);
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                          existing
+                            ? 'bg-teal-800 text-white border-teal-800 shadow-2xs'
+                            : 'bg-white text-teal-900 border-teal-200 hover:bg-teal-50'
+                        }`}
+                        title={`Open ${calc} Standardized Clinical Severity Calculator`}
+                      >
+                        <Calculator className="w-3.5 h-3.5" />
+                        <span>{existing ? `${calc}: ${existing.score}/${existing.maxScore}` : calc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              {appliedClinicalScores.length > 0 && (
+                <div className="p-3 bg-teal-50/80 border border-teal-200 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-teal-900">
+                      Recorded Indices:
+                    </span>
+                    {appliedClinicalScores.map(sc => (
+                      <span
+                        key={sc.calculator}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-teal-200 text-teal-950 font-semibold shadow-2xs"
+                      >
+                        <span className="font-mono font-bold text-teal-800">
+                          {sc.calculator} {sc.score}/{sc.maxScore}
+                        </span>
+                        <span className="text-slate-600">· {sc.severityLabel}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAppliedClinicalScores(prev => prev.filter(x => x.calculator !== sc.calculator))
+                          }
+                          className="text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer"
+                          title="Remove score"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Selected Diagnoses Box */}
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl min-h-[56px] flex flex-wrap items-center gap-2">
@@ -3607,6 +3672,85 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     </div>
                   </div>
 
+                  {/* Automated CDSS Drug-Drug Interaction (DDI) & Patient Allergy Contraindication Banner */}
+                  {(() => {
+                    const safetyAlerts = evaluatePrescriptionSafety(
+                      prescriptions,
+                      patient.allergies,
+                      medName
+                    );
+                    if (safetyAlerts.length === 0) return null;
+                    return (
+                      <div className="space-y-2">
+                        {safetyAlerts.map(alert => {
+                          const isSevere = alert.severity === 'severe';
+                          return (
+                            <div
+                              key={alert.id}
+                              className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-start justify-between gap-3 text-xs ${
+                                isSevere
+                                  ? 'bg-rose-50 border-rose-300 text-rose-950'
+                                  : 'bg-amber-50 border-amber-300 text-amber-950'
+                              }`}
+                            >
+                              <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                <AlertTriangle
+                                  className={`w-4 h-4 shrink-0 mt-0.5 ${
+                                    isSevere ? 'text-rose-600' : 'text-amber-600'
+                                  }`}
+                                />
+                                <div className="space-y-1 min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                                        isSevere
+                                          ? 'bg-rose-600 text-white'
+                                          : 'bg-amber-500 text-slate-950'
+                                      }`}
+                                    >
+                                      {alert.type === 'allergy' ? 'ALLERGY CONTRAINDICATION' : `DDI · ${alert.severity}`}
+                                    </span>
+                                    <span className="font-extrabold">{alert.title}</span>
+                                  </div>
+                                  <p className="text-[11px] opacity-90">
+                                    <span className="font-bold">Mechanism:</span> {alert.mechanism}
+                                  </p>
+                                  <p className="text-[11px] font-semibold">
+                                    <span className="font-bold">Clinical Action:</span> {alert.clinicalAdvice}
+                                  </p>
+                                </div>
+                              </div>
+                              {prescriptions.some(p =>
+                                alert.drugsInvolved.some(
+                                  d => d.toLowerCase() === p.medicineName.toLowerCase()
+                                )
+                              ) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const targetDrug = alert.drugsInvolved[alert.drugsInvolved.length - 1];
+                                    setPrescriptions(prev =>
+                                      prev.filter(
+                                        p => p.medicineName.toLowerCase() !== targetDrug.toLowerCase()
+                                      )
+                                    );
+                                  }}
+                                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold shrink-0 cursor-pointer ${
+                                    isSevere
+                                      ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                                      : 'bg-amber-600 hover:bg-amber-700 text-white'
+                                  }`}
+                                >
+                                  Remove {alert.drugsInvolved[alert.drugsInvolved.length - 1]}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
                   {/* Prescribed Items List or Empty State */}
                   {prescriptions.length === 0 ? (
                     <div className="py-5 text-center text-xs text-slate-400 font-medium border border-dashed border-slate-200 rounded-xl bg-slate-50/40">
@@ -4645,6 +4789,36 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   </span>
                 </div>
 
+                {/* CDSS Drug Safety Summary Check before Sign-Off */}
+                {(() => {
+                  const summarySafetyAlerts = evaluatePrescriptionSafety(prescriptions, patient.allergies);
+                  if (summarySafetyAlerts.length === 0) return null;
+                  return (
+                    <div className="mb-3 space-y-2">
+                      {summarySafetyAlerts.map(alert => (
+                        <div
+                          key={alert.id}
+                          className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                            alert.severity === 'severe'
+                              ? 'bg-rose-50 border-rose-300 text-rose-950'
+                              : 'bg-amber-50 border-amber-300 text-amber-950'
+                          }`}
+                        >
+                          <ShieldAlert
+                            className={`w-4 h-4 shrink-0 mt-0.5 ${
+                              alert.severity === 'severe' ? 'text-rose-600' : 'text-amber-600'
+                            }`}
+                          />
+                          <div>
+                            <div className="font-bold">{alert.title}</div>
+                            <div className="text-[11px] mt-0.5">{alert.clinicalAdvice}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-3">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#6c857f] mb-1.5 block">
@@ -5110,6 +5284,32 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             setLibrarySavedToast(msg);
             setTimeout(() => setLibrarySavedToast(null), 5000);
           }
+        }}
+      />
+
+      {/* Standardized Clinical Severity Calculators (PASI / SCORAD / DLQI) */}
+      <ClinicalCalculatorsModal
+        isOpen={isCalculatorsOpen}
+        onClose={() => setIsCalculatorsOpen(false)}
+        initialTab={calculatorInitialTab}
+        onApplyScore={entry => {
+          setAppliedClinicalScores(prev => {
+            const filtered = prev.filter(x => x.calculator !== entry.calculator);
+            return [...filtered, entry];
+          });
+          markDoctorEdited('notes.examination');
+          setClinicalNotes(prev => {
+            const existingExam = prev.examination.trim();
+            const prefix = `${entry.calculator} Score:`;
+            const cleanedLines = existingExam
+              .split('\n')
+              .filter(line => !line.trim().startsWith(prefix));
+            cleanedLines.push(entry.detailedBreakdown);
+            return {
+              ...prev,
+              examination: cleanedLines.filter(Boolean).join('\n')
+            };
+          });
         }}
       />
     </div>

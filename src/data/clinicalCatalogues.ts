@@ -396,3 +396,334 @@ export const COMMON_ALLERGIES = [
   'Neomycin / Bacitracin',
   'Codeine / Opioids'
 ];
+
+export interface DrugInteractionRule {
+  id: string;
+  groupAKeywords: string[];
+  groupALabel: string;
+  groupBKeywords: string[];
+  groupBLabel: string;
+  severity: 'severe' | 'moderate';
+  mechanism: string;
+  clinicalAdvice: string;
+}
+
+export interface AllergyCrossReactivityRule {
+  id: string;
+  allergyKeywords: string[];
+  allergyLabel: string;
+  drugKeywords: string[];
+  severity: 'severe' | 'moderate';
+  mechanism: string;
+  clinicalAdvice: string;
+}
+
+export interface DrugSafetyAlert {
+  id: string;
+  type: 'allergy' | 'interaction';
+  severity: 'severe' | 'moderate';
+  title: string;
+  mechanism: string;
+  clinicalAdvice: string;
+  drugsInvolved: string[];
+}
+
+export const DRUG_INTERACTION_RULES: DrugInteractionRule[] = [
+  {
+    id: 'ddi-retinoid-tetracycline',
+    groupAKeywords: ['isotretinoin', 'acitretin', 'alitretinoin', 'oral retinoid'],
+    groupALabel: 'Oral Retinoids (Isotretinoin / Acitretin)',
+    groupBKeywords: ['doxycycline', 'minocycline', 'tetracycline', 'tigecycline', 'lymecycline'],
+    groupBLabel: 'Tetracycline Antibiotics',
+    severity: 'severe',
+    mechanism: 'Additive intracranial hypertension (Pseudotumor Cerebri / Benign Intracranial Hypertension).',
+    clinicalAdvice: 'CONTRAINDICATED: Do not co-prescribe oral retinoids with tetracyclines. Allow a 7-day washout or switch to a macrolide/topical agent.'
+  },
+  {
+    id: 'ddi-methotrexate-trimethoprim',
+    groupAKeywords: ['methotrexate'],
+    groupALabel: 'Methotrexate',
+    groupBKeywords: ['trimethoprim', 'co-trimoxazole', 'sulfamethoxazole', 'bactrim', 'septran', 'sulfadoxine', 'dapsone'],
+    groupBLabel: 'Trimethoprim / Sulfonamides',
+    severity: 'severe',
+    mechanism: 'Synergistic dihydrofolate reductase inhibition and reduced renal tubular clearance of methotrexate.',
+    clinicalAdvice: 'CONTRAINDICATED: High risk of fatal pancytopenia, megaloblastic anemia, and severe mucositis. Choose an alternative antimicrobial.'
+  },
+  {
+    id: 'ddi-methotrexate-nsaid-retinoid',
+    groupAKeywords: ['methotrexate'],
+    groupALabel: 'Methotrexate',
+    groupBKeywords: ['acitretin', 'isotretinoin', 'ibuprofen', 'diclofenac', 'naproxen', 'aspirin', 'indomethacin', 'aceclofenac'],
+    groupBLabel: 'Oral Retinoids / Systemic NSAIDs',
+    severity: 'severe',
+    mechanism: 'Additive hepatotoxicity (with retinoids) or reduced glomerular filtration and renal clearance of methotrexate (with NSAIDs).',
+    clinicalAdvice: 'Avoid combination or monitor CBC, LFTs (ALT/AST), and serum creatinine closely.'
+  },
+  {
+    id: 'ddi-azole-macrolide-qt',
+    groupAKeywords: ['itraconazole', 'ketoconazole', 'voriconazole', 'posaconazole', 'fluconazole'],
+    groupALabel: 'Systemic Azole Antifungals',
+    groupBKeywords: ['clarithromycin', 'erythromycin', 'azithromycin', 'bedaquiline', 'delamanid', 'moxifloxacin', 'levofloxacin', 'ciprofloxacin', 'quinine'],
+    groupBLabel: 'Macrolides / Fluoroquinolones / QT-Prolonging Agents',
+    severity: 'severe',
+    mechanism: 'Potent CYP3A4 inhibition plus additive cardiac QTc interval prolongation (Torsades de Pointes risk).',
+    clinicalAdvice: 'Avoid co-administration or switch to topical antifungal / Terbinafine if clinically appropriate; obtain baseline ECG if required.'
+  },
+  {
+    id: 'ddi-azole-statin',
+    groupAKeywords: ['itraconazole', 'ketoconazole', 'voriconazole', 'posaconazole', 'clarithromycin', 'ritonavir'],
+    groupALabel: 'Strong CYP3A4 Inhibitors (Azoles / Clarithromycin / Ritonavir)',
+    groupBKeywords: ['simvastatin', 'atorvastatin', 'lovastatin'],
+    groupBLabel: 'HMG-CoA Reductase Inhibitors (Statins)',
+    severity: 'severe',
+    mechanism: 'Markedly elevated plasma statin concentrations via CYP3A4 inhibition, predisposing to severe myopathy and rhabdomyolysis.',
+    clinicalAdvice: 'Temporarily hold Simvastatin/Atorvastatin during systemic azole/macrolide therapy, or switch antifungal to Terbinafine.'
+  },
+  {
+    id: 'ddi-linezolid-serotonergic',
+    groupAKeywords: ['linezolid'],
+    groupALabel: 'Linezolid (Reversible MAO Inhibitor)',
+    groupBKeywords: ['fluoxetine', 'sertraline', 'escitalopram', 'paroxetine', 'amitriptyline', 'tramadol', 'dextromethorphan'],
+    groupBLabel: 'Serotonergic Agents / SSRIs / TCAs / Tramadol',
+    severity: 'severe',
+    mechanism: 'Monoamine oxidase inhibition by Linezolid precipitates acute Serotonin Syndrome (hyperthermia, clonus, autonomic instability).',
+    clinicalAdvice: 'CONTRAINDICATED: Discontinue serotonergic agent or substitute Linezolid with Vancomycin / Clindamycin / Daptomycin.'
+  },
+  {
+    id: 'ddi-rifampicin-azole-antiviral',
+    groupAKeywords: ['rifampicin', 'rifampin', 'rifapentine'],
+    groupALabel: 'Rifamycins (Potent CYP450 Inducers)',
+    groupBKeywords: ['itraconazole', 'voriconazole', 'fluconazole', 'ketoconazole', 'doxycycline', 'clarithromycin', 'dolutegravir', 'lopinavir', 'atazanavir', 'darunavir', 'cyclosporine', 'tacrolimus'],
+    groupBLabel: 'Azoles / Calcineurin Inhibitors / Protease Inhibitors / Doxycycline',
+    severity: 'severe',
+    mechanism: 'Potent hepatic CYP3A4/2C9 induction markedly reduces serum drug levels, causing therapeutic failure.',
+    clinicalAdvice: 'Avoid co-administration or adjust dosing regimen per infectious disease specialist protocol.'
+  },
+  {
+    id: 'ddi-fluoroquinolone-steroid',
+    groupAKeywords: ['ciprofloxacin', 'levofloxacin', 'moxifloxacin', 'ofloxacin'],
+    groupALabel: 'Systemic Fluoroquinolones',
+    groupBKeywords: ['prednisolone', 'prednisone', 'methylprednisolone', 'dexamethasone', 'betamethasone', 'deflazacort'],
+    groupBLabel: 'Systemic Corticosteroids',
+    severity: 'moderate',
+    mechanism: 'Synergistic extracellular matrix degradation in tendons, significantly increasing risk of Achilles tendonitis and tendon rupture.',
+    clinicalAdvice: 'Counsel patient to stop fluoroquinolone immediately if heel/tendon pain develops; consider beta-lactam or macrolide alternative.'
+  },
+  {
+    id: 'ddi-cyclosporine-nephrotoxic',
+    groupAKeywords: ['cyclosporine', 'ciclosporin', 'tacrolimus'],
+    groupALabel: 'Systemic Calcineurin Inhibitors',
+    groupBKeywords: ['gentamicin', 'amikacin', 'tobramycin', 'vancomycin', 'amphotericin', 'co-trimoxazole', 'ibuprofen', 'diclofenac'],
+    groupBLabel: 'Nephrotoxic Agents (Aminoglycosides / Amphotericin / NSAIDs)',
+    severity: 'severe',
+    mechanism: 'Synergistic renal afferent arteriolar vasoconstriction and tubular nephrotoxicity.',
+    clinicalAdvice: 'Avoid combination or closely monitor serum creatinine, eGFR, and trough drug levels.'
+  },
+  {
+    id: 'ddi-spironolactone-trimethoprim',
+    groupAKeywords: ['spironolactone'],
+    groupALabel: 'Spironolactone (Potassium-Sparing Diuretic / Anti-Androgen)',
+    groupBKeywords: ['trimethoprim', 'co-trimoxazole', 'enalapril', 'lisinopril', 'ramipril', 'losartan', 'telmisartan'],
+    groupBLabel: 'Trimethoprim / ACE Inhibitors / ARBs',
+    severity: 'moderate',
+    mechanism: 'Trimethoprim blocks epithelial sodium channels in the distal nephron (amiloride-like effect), compounding hyperkalemia risk.',
+    clinicalAdvice: 'Monitor serum electrolytes (K+) within 5–7 days or select an alternative antibiotic.'
+  }
+];
+
+export const ALLERGY_CROSS_REACTIVITY_RULES: AllergyCrossReactivityRule[] = [
+  {
+    id: 'allergy-penicillin',
+    allergyKeywords: ['penicillin', 'amoxicillin', 'ampicillin', 'augmentin', 'co-amoxiclav', 'piperacillin', 'beta-lactam'],
+    allergyLabel: 'Penicillin / Beta-Lactam Allergy',
+    drugKeywords: ['penicillin', 'amoxicillin', 'ampicillin', 'flucloxacillin', 'cloxacillin', 'piperacillin', 'co-amoxiclav', 'augmentin', 'tazobactam'],
+    severity: 'severe',
+    mechanism: 'Direct IgE-mediated or T-cell-mediated hypersensitivity to the beta-lactam / thiazolidine ring.',
+    clinicalAdvice: 'CONTRAINDICATED: High risk of anaphylaxis, angioedema, or severe drug exanthem. Use a Macrolide (Azithromycin), Tetracycline (Doxycycline), or Clindamycin.'
+  },
+  {
+    id: 'allergy-penicillin-cephalosporin-cross',
+    allergyKeywords: ['penicillin', 'amoxicillin', 'ampicillin'],
+    allergyLabel: 'Penicillin Allergy (Cephalosporin Cross-Reactivity)',
+    drugKeywords: ['cefalexin', 'cephalexin', 'cefadroxil', 'cefazolin', 'cefuroxime', 'cefixime', 'ceftriaxone', 'cefotaxime', 'ceftazidime', 'cefepime'],
+    severity: 'moderate',
+    mechanism: 'R1 side-chain structural similarity between aminopenicillins and cephalosporins (~2–8% cross-reactivity; higher in 1st-gen cephalosporins).',
+    clinicalAdvice: 'CAUTION: Verify whether prior penicillin reaction was IgE-mediated (anaphylaxis/urticaria). Avoid aminocephalosporins (Cefalexin) if severe history.'
+  },
+  {
+    id: 'allergy-cephalosporin',
+    allergyKeywords: ['cephalosporin', 'cefixime', 'ceftriaxone', 'cefalexin', 'cefuroxime'],
+    allergyLabel: 'Cephalosporin Allergy',
+    drugKeywords: ['cefalexin', 'cephalexin', 'cefadroxil', 'cefazolin', 'cefuroxime', 'cefixime', 'ceftriaxone', 'cefotaxime', 'ceftazidime', 'cefepime', 'ceftaroline'],
+    severity: 'severe',
+    mechanism: 'Direct hypersensitivity to cephalosporin beta-lactam nucleus or side chains.',
+    clinicalAdvice: 'CONTRAINDICATED: Select a non-beta-lactam antimicrobial (e.g., Doxycycline, Azithromycin, or Fluoroquinolone).'
+  },
+  {
+    id: 'allergy-sulfa',
+    allergyKeywords: ['sulfa', 'sulfonamide', 'co-trimoxazole', 'sulfamethoxazole', 'bactrim', 'septran', 'dapsone'],
+    allergyLabel: 'Sulfonamide (Sulfa) Drug Allergy',
+    drugKeywords: ['co-trimoxazole', 'sulfamethoxazole', 'trimethoprim + sulfamethoxazole', 'sulfadoxine', 'sulfadiazine', 'sulfasalazine', 'dapsone', 'darunavir'],
+    severity: 'severe',
+    mechanism: 'Aryl-amine sulfonamide metabolite hypersensitivity (risk of Stevens-Johnson Syndrome / TEN / DRESS).',
+    clinicalAdvice: 'CONTRAINDICATED: Strictly avoid sulfonamide antimicrobials and dapsone.'
+  },
+  {
+    id: 'allergy-tetracycline',
+    allergyKeywords: ['tetracycline', 'doxycycline', 'minocycline', 'lymecycline'],
+    allergyLabel: 'Tetracycline Class Allergy',
+    drugKeywords: ['doxycycline', 'minocycline', 'tetracycline', 'lymecycline', 'tigecycline'],
+    severity: 'severe',
+    mechanism: 'Class-wide cross-reactivity across tetracycline naphthacene carboxamide derivatives.',
+    clinicalAdvice: 'CONTRAINDICATED: Switch to a Macrolide (Azithromycin) or topical therapy.'
+  },
+  {
+    id: 'allergy-fluoroquinolone',
+    allergyKeywords: ['fluoroquinolone', 'ciprofloxacin', 'levofloxacin', 'moxifloxacin', 'ofloxacin'],
+    allergyLabel: 'Fluoroquinolone Class Allergy',
+    drugKeywords: ['ciprofloxacin', 'levofloxacin', 'moxifloxacin', 'ofloxacin', 'norfloxacin', 'gemifloxacin'],
+    severity: 'severe',
+    mechanism: 'High class-wide IgE and T-cell cross-reactivity among bicyclic fluoroquinolone derivatives.',
+    clinicalAdvice: 'CONTRAINDICATED: Avoid all fluoroquinolones.'
+  },
+  {
+    id: 'allergy-macrolide',
+    allergyKeywords: ['macrolide', 'azithromycin', 'erythromycin', 'clarithromycin'],
+    allergyLabel: 'Macrolide Class Allergy',
+    drugKeywords: ['azithromycin', 'clarithromycin', 'erythromycin', 'roxithromycin'],
+    severity: 'severe',
+    mechanism: 'Macrocyclic lactone ring hypersensitivity.',
+    clinicalAdvice: 'CONTRAINDICATED: Switch to Doxycycline or Clindamycin.'
+  },
+  {
+    id: 'allergy-nsaid',
+    allergyKeywords: ['nsaid', 'aspirin', 'ibuprofen', 'diclofenac', 'naproxen', 'aceclofenac'],
+    allergyLabel: 'NSAID / Aspirin Hypersensitivity',
+    drugKeywords: ['aspirin', 'ibuprofen', 'diclofenac', 'naproxen', 'aceclofenac', 'indomethacin', 'ketorolac', 'piroxicam', 'salicylic acid'],
+    severity: 'severe',
+    mechanism: 'COX-1 inhibition shifting arachidonic acid metabolism toward leukotriene overproduction (urticaria, angioedema, bronchospasm).',
+    clinicalAdvice: 'Avoid systemic NSAIDs; use caution with high-concentration topical salicylates over large body surface areas.'
+  },
+  {
+    id: 'allergy-neomycin',
+    allergyKeywords: ['neomycin', 'bacitracin', 'aminoglycoside'],
+    allergyLabel: 'Neomycin / Bacitracin / Aminoglycoside Allergy',
+    drugKeywords: ['neomycin', 'bacitracin', 'gentamicin', 'amikacin', 'tobramycin', 'framycetin', 'soframycin'],
+    severity: 'moderate',
+    mechanism: 'Allergic contact dermatitis and cross-sensitization with deoxystreptamine aminoglycosides.',
+    clinicalAdvice: 'Use Mupirocin 2% Ointment or Fusidic Acid 2% Cream instead.'
+  }
+];
+
+export function evaluatePrescriptionSafety(
+  prescriptions: { medicineName: string; dosage?: string }[],
+  patientAllergies?: string,
+  candidateDrugName?: string
+): DrugSafetyAlert[] {
+  const alerts: DrugSafetyAlert[] = [];
+  const seenIds = new Set<string>();
+
+  const activeMeds = prescriptions
+    .map(p => (p.medicineName || '').trim())
+    .filter(Boolean);
+
+  if (candidateDrugName && candidateDrugName.trim()) {
+    const cleanCandidate = candidateDrugName.trim();
+    if (!activeMeds.some(m => m.toLowerCase() === cleanCandidate.toLowerCase())) {
+      activeMeds.push(cleanCandidate);
+    }
+  }
+
+  if (activeMeds.length === 0) return alerts;
+
+  // 1. Check Patient Allergies
+  const rawAllergy = (patientAllergies || '').trim().toLowerCase();
+  if (rawAllergy && !rawAllergy.includes('nkda') && !rawAllergy.includes('no known') && rawAllergy !== 'none') {
+    for (const med of activeMeds) {
+      const medLower = med.toLowerCase();
+
+      // Check structured cross-reactivity rules
+      for (const rule of ALLERGY_CROSS_REACTIVITY_RULES) {
+        const hasAllergyMatch = rule.allergyKeywords.some(k => rawAllergy.includes(k));
+        const hasDrugMatch = rule.drugKeywords.some(k => medLower.includes(k));
+        if (hasAllergyMatch && hasDrugMatch) {
+          const alertKey = `${rule.id}:${medLower}`;
+          if (!seenIds.has(alertKey)) {
+            seenIds.add(alertKey);
+            alerts.push({
+              id: alertKey,
+              type: 'allergy',
+              severity: rule.severity,
+              title: `${rule.allergyLabel} Contraindication: ${med}`,
+              mechanism: rule.mechanism,
+              clinicalAdvice: rule.clinicalAdvice,
+              drugsInvolved: [med]
+            });
+          }
+        }
+      }
+
+      // Also check direct substring match between documented allergy tokens and drug name
+      const tokens = rawAllergy
+        .split(/[,;/()]+/)
+        .map(t => t.trim())
+        .filter(t => t.length >= 4 && !['drug', 'drugs', 'allergy', 'allergies', 'mild', 'severe', 'contact'].includes(t));
+      for (const tok of tokens) {
+        if (medLower.includes(tok)) {
+          const directKey = `allergy-direct:${tok}:${medLower}`;
+          const alreadyCovered = alerts.some(
+            a => a.type === 'allergy' && a.drugsInvolved.some(d => d.toLowerCase() === medLower)
+          );
+          if (!alreadyCovered && !seenIds.has(directKey)) {
+            seenIds.add(directKey);
+            alerts.push({
+              id: directKey,
+              type: 'allergy',
+              severity: 'severe',
+              title: `Documented Patient Allergy Match: ${med}`,
+              mechanism: `Patient chart lists allergy to "${patientAllergies}", which matches "${med}".`,
+              clinicalAdvice: 'CONTRAINDICATED: Do not prescribe this agent. Select a non-cross-reactive alternative.',
+              drugsInvolved: [med]
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Check Pairwise Drug-Drug Interactions (DDI)
+  for (let i = 0; i < activeMeds.length; i++) {
+    for (let j = i + 1; j < activeMeds.length; j++) {
+      const med1 = activeMeds[i];
+      const med2 = activeMeds[j];
+      const m1 = med1.toLowerCase();
+      const m2 = med2.toLowerCase();
+
+      for (const rule of DRUG_INTERACTION_RULES) {
+        const m1InA = rule.groupAKeywords.some(k => m1.includes(k));
+        const m2InB = rule.groupBKeywords.some(k => m2.includes(k));
+        const m2InA = rule.groupAKeywords.some(k => m2.includes(k));
+        const m1InB = rule.groupBKeywords.some(k => m1.includes(k));
+
+        if ((m1InA && m2InB) || (m2InA && m1InB)) {
+          const ddiKey = `${rule.id}:${[m1, m2].sort().join('+')}`;
+          if (!seenIds.has(ddiKey)) {
+            seenIds.add(ddiKey);
+            alerts.push({
+              id: ddiKey,
+              type: 'interaction',
+              severity: rule.severity,
+              title: `Drug–Drug Interaction (${rule.severity.toUpperCase()}): ${med1} + ${med2}`,
+              mechanism: `${rule.groupALabel} × ${rule.groupBLabel} — ${rule.mechanism}`,
+              clinicalAdvice: rule.clinicalAdvice,
+              drugsInvolved: [med1, med2]
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Sort severe alerts first
+  return alerts.sort((a, b) => (a.severity === 'severe' && b.severity !== 'severe' ? -1 : 1));
+}
