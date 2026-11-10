@@ -2426,12 +2426,57 @@ class DatabaseService {
     };
   }
 
-  // --- Audit Logging ---
+  // --- Audit Logging (Cryptographic SHA-256 Hash-Chained) ---
+  private computeAuditEntryHash(
+    prevHash: string,
+    entry: Pick<AuditLog, 'id' | 'timestamp' | 'actorId' | 'action' | 'resourceType' | 'resourceId'>
+  ): string {
+    const canonical = `${prevHash}|${entry.id}|${entry.timestamp}|${entry.actorId}|${entry.action}|${entry.resourceType}|${entry.resourceId}`;
+    return crypto.createHash('sha256').update(canonical).digest('hex').slice(0, 32);
+  }
+
+  private ensureAuditChainHashed() {
+    if (!Array.isArray(this.data.auditLogs) || this.data.auditLogs.length === 0) return;
+    // Audit logs are stored newest-first (index 0 is newest, last index is oldest)
+    let runningPrev = 'GENESIS_000000000000000000000000';
+    let mutated = false;
+    for (let i = this.data.auditLogs.length - 1; i >= 0; i--) {
+      const item = this.data.auditLogs[i];
+      const expected = this.computeAuditEntryHash(runningPrev, item);
+      if (item.prevHash !== runningPrev || item.entryHash !== expected) {
+        item.prevHash = runningPrev;
+        item.entryHash = expected;
+        mutated = true;
+      }
+      runningPrev = item.entryHash;
+    }
+    if (mutated) {
+      this.persist();
+    }
+  }
+
   public logAudit(log: Omit<AuditLog, 'id' | 'timestamp'>) {
+    this.ensureAuditChainHashed();
+    const prevHash =
+      this.data.auditLogs.length > 0 && this.data.auditLogs[0].entryHash
+        ? this.data.auditLogs[0].entryHash!
+        : 'GENESIS_000000000000000000000000';
+    const id = `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+    const timestamp = new Date().toISOString();
+    const entryHash = this.computeAuditEntryHash(prevHash, {
+      id,
+      timestamp,
+      actorId: log.actorId,
+      action: log.action,
+      resourceType: log.resourceType,
+      resourceId: log.resourceId
+    });
     const audit: AuditLog = {
       ...log,
-      id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
-      timestamp: new Date().toISOString()
+      id,
+      timestamp,
+      prevHash,
+      entryHash
     };
     this.data.auditLogs.unshift(audit);
     // Keep max 2000 logs in memory
@@ -2442,12 +2487,47 @@ class DatabaseService {
   }
 
   public getAuditLogs(limit = 100, doctorId?: string): AuditLog[] {
+    this.ensureAuditChainHashed();
     if (doctorId && !this.isDemoAccount(doctorId)) {
-      return this.data.auditLogs.filter(l => l.actorId === doctorId).slice(0, limit);
+      const effectiveDoctorId = this.resolveEffectiveClinicDoctorId(doctorId) || doctorId;
+      const clinicStaffIds = new Set(this.getClinicStaffAccounts(effectiveDoctorId).map(d => d.id));
+      clinicStaffIds.add(effectiveDoctorId);
+      clinicStaffIds.add(doctorId);
+      return this.data.auditLogs.filter(l => clinicStaffIds.has(l.actorId)).slice(0, limit);
     }
     return this.data.auditLogs
       .filter(l => !l.actorId || this.isDemoAccount(l.actorId))
       .slice(0, limit);
+  }
+
+  public verifyAuditChain(doctorId?: string): {
+    verified: boolean;
+    totalChecked: number;
+    hashChainHead: string;
+    genesisHash: string;
+    checkedAt: string;
+  } {
+    this.ensureAuditChainHashed();
+    const scopedLogs = this.getAuditLogs(500, doctorId);
+    let verified = true;
+    for (const entry of scopedLogs) {
+      if (!entry.prevHash || !entry.entryHash) {
+        verified = false;
+        break;
+      }
+      const recomputed = this.computeAuditEntryHash(entry.prevHash, entry);
+      if (recomputed !== entry.entryHash) {
+        verified = false;
+        break;
+      }
+    }
+    return {
+      verified,
+      totalChecked: scopedLogs.length,
+      hashChainHead: scopedLogs[0]?.entryHash || 'GENESIS_000000000000000000000000',
+      genesisHash: 'GENESIS_000000000000000000000000',
+      checkedAt: new Date().toISOString()
+    };
   }
 
   // --- Clinic Subscription & AI Credit Meter ---

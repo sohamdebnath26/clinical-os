@@ -1376,6 +1376,14 @@ export const api = {
 
   audit: {
     list: () => fetchWithAuth<{ logs: AuditLog[] }>('/api/audit'),
+    verify: () =>
+      fetchWithAuth<{
+        verified: boolean;
+        totalChecked: number;
+        hashChainHead: string;
+        genesisHash: string;
+        checkedAt: string;
+      }>('/api/audit/verify'),
   },
 
   clinic: {

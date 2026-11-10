@@ -4875,6 +4875,11 @@ app.get('/api/audit', authMiddleware, requireDoctorRole, (req: AuthenticatedRequ
   res.json({ logs });
 });
 
+app.get('/api/audit/verify', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
+  const verification = db.verifyAuditChain(req.doctor?.id);
+  res.json(verification);
+});
+
 // Clinic Database Export & Backup (100% Free off-site backup tool, scoped to current doctor/clinic)
 app.get('/api/clinic/backup', authMiddleware, (req: AuthenticatedRequest, res) => {
   if (req.doctor?.role === 'receptionist') {

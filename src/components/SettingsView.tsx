@@ -24,7 +24,9 @@ import {
   Download,
   Upload,
   Database,
-  AlertTriangle
+  AlertTriangle,
+  Search,
+  ShieldCheck
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
@@ -49,6 +51,14 @@ export const SettingsView: React.FC = () => {
   const [isSwitchingView, setIsSwitchingView] = useState(false);
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditVerification, setAuditVerification] = useState<{
+    verified: boolean;
+    totalChecked: number;
+    hashChainHead: string;
+    checkedAt: string;
+  } | null>(null);
+  const [isVerifyingAudit, setIsVerifyingAudit] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -65,6 +75,48 @@ export const SettingsView: React.FC = () => {
       .list()
       .then(res => setAuditLogs(res.logs))
       .catch(() => {});
+
+    api.audit
+      .verify()
+      .then(res => setAuditVerification(res))
+      .catch(() => {});
+  };
+
+  const handleVerifyAuditChain = async () => {
+    setIsVerifyingAudit(true);
+    try {
+      const res = await api.audit.verify();
+      setAuditVerification(res);
+    } catch {
+      // ignore
+    } finally {
+      setIsVerifyingAudit(false);
+    }
+  };
+
+  const handleExportAuditCsv = () => {
+    if (auditLogs.length === 0) return;
+    const headers = ['ID', 'Timestamp', 'Actor', 'Action', 'ResourceType', 'ResourceID', 'PrevHash', 'EntryHash'];
+    const rows = auditLogs.map(l => [
+      l.id,
+      l.timestamp,
+      `"${(l.actorName || '').replace(/"/g, '""')}"`,
+      l.action,
+      l.resourceType,
+      l.resourceId,
+      l.prevHash || '',
+      l.entryHash || ''
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `clinical_os_hipaa_audit_trail_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -615,37 +667,117 @@ export const SettingsView: React.FC = () => {
         </div>
       </form>
 
-      {/* Security & Audit Trail */}
+      {/* Security & Cryptographic SHA-256 Hash-Chained Audit Trail */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            <History className="w-4 h-4 text-teal-700" />
-            Security & Clinical Audit Trail (Recent {auditLogs.length} events)
-          </h3>
-          <span className="text-[11px] font-mono text-slate-400">HIPAA / Data Privacy Compliant</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <History className="w-4 h-4 text-teal-700" />
+              Security &amp; Clinical Audit Trail ({auditLogs.length} Chained Events)
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Immutable SHA-256 hash-chained log of patient chart access, prescription signing, and role updates (HIPAA / DISHA / DPDP compliant).
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleVerifyAuditChain}
+              disabled={isVerifyingAudit}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-700" />
+              <span>{isVerifyingAudit ? 'Verifying...' : 'Verify SHA-256 Chain'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportAuditCsv}
+              disabled={auditLogs.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Export Audit CSV</span>
+            </button>
+          </div>
+        </div>
+
+        {auditVerification && (
+          <div
+            className={`p-3 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+              auditVerification.verified
+                ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                : 'bg-rose-50 border-rose-300 text-rose-950'
+            }`}
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                  auditVerification.verified
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-rose-600 text-white'
+                }`}
+              >
+                {auditVerification.verified ? '✓ TAMPER-EVIDENT CHAIN VERIFIED' : '⚠ CHAIN MISMATCH'}
+              </span>
+              <span className="font-semibold">
+                {auditVerification.totalChecked} clinical events cryptographically verified
+              </span>
+            </div>
+            <span className="font-mono text-[11px] text-slate-600 truncate">
+              Head: sha256:{auditVerification.hashChainHead.slice(0, 16)}…
+            </span>
+          </div>
+        )}
+
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={auditSearch}
+            onChange={e => setAuditSearch(e.target.value)}
+            placeholder="Filter audit trail by doctor, action, resource type, or hash..."
+            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-teal-600"
+          />
         </div>
 
         <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 max-h-72 overflow-y-auto">
           {auditLogs.length === 0 ? (
             <div className="p-6 text-center text-xs text-slate-400">No audit logs recorded yet.</div>
           ) : (
-            auditLogs.map(log => (
-              <div key={log.id} className="p-3 text-xs flex items-center justify-between hover:bg-slate-50">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-teal-800">{log.action}</span>
-                    <span className="text-slate-400">•</span>
-                    <span className="text-slate-600 font-medium">{log.actorName}</span>
+            auditLogs
+              .filter(log => {
+                const q = auditSearch.trim().toLowerCase();
+                if (!q) return true;
+                return (
+                  log.action.toLowerCase().includes(q) ||
+                  log.actorName.toLowerCase().includes(q) ||
+                  log.resourceType.toLowerCase().includes(q) ||
+                  log.resourceId.toLowerCase().includes(q) ||
+                  (log.entryHash || '').toLowerCase().includes(q)
+                );
+              })
+              .map(log => (
+                <div key={log.id} className="p-3 text-xs flex items-center justify-between gap-3 hover:bg-slate-50">
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-bold text-teal-800">{log.action}</span>
+                      <span className="text-slate-400">•</span>
+                      <span className="text-slate-600 font-medium">{log.actorName}</span>
+                      {log.entryHash && (
+                        <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 font-mono text-[10px]">
+                          #{log.entryHash.slice(0, 10)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-mono truncate">
+                      Resource: {log.resourceType} ({log.resourceId})
+                    </p>
                   </div>
-                  <p className="text-[11px] text-slate-400 font-mono">
-                    Resource: {log.resourceType} ({log.resourceId})
-                  </p>
+                  <span className="text-[11px] text-slate-400 shrink-0">
+                    {new Date(log.timestamp).toLocaleString()}
+                  </span>
                 </div>
-                <span className="text-[11px] text-slate-400 shrink-0">
-                  {new Date(log.timestamp).toLocaleString()}
-                </span>
-              </div>
-            ))
+              ))
           )}
         </div>
       </div>

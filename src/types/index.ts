@@ -191,6 +191,8 @@ export interface AuditLog {
   resourceType: string;
   resourceId: string;
   metadata?: Record<string, unknown>;
+  prevHash?: string;
+  entryHash?: string;
 }
 
 export interface DifferentialDiagnosis {
