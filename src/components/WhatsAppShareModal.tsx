@@ -124,8 +124,8 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
     }
   });
 
-  // Preview display toggle: formatted chat vs raw text
-  const [previewMode, setPreviewMode] = useState<'rendered' | 'raw'>('rendered');
+  // Preview display toggle: formatted chat vs send as PDF
+  const [previewMode, setPreviewMode] = useState<'rendered' | 'pdf'>('pdf');
 
   // Launch & dispatch state
   const [showAppLaunchPrompt, setShowAppLaunchPrompt] = useState(false);
@@ -715,14 +715,17 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                 WhatsApp Message Preview
               </span>
 
-              {/* View Switcher: Formatted Chat vs Raw Text */}
+              {/* View Switcher: Formatted Chat vs Send as PDF */}
               <div className="flex items-center gap-2">
                 <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
                   <button
                     type="button"
-                    onClick={() => setPreviewMode('rendered')}
-                    className={`px-2.5 py-1 rounded-md font-semibold text-[11px] flex items-center gap-1 transition ${
-                      previewMode === 'rendered'
+                    onClick={() => {
+                      setPreviewMode('rendered');
+                      setSendAsPdf(false);
+                    }}
+                    className={`px-2.5 py-1 rounded-md font-semibold text-[11px] flex items-center gap-1 transition cursor-pointer ${
+                      !sendAsPdf && previewMode === 'rendered'
                         ? 'bg-white text-slate-900 shadow-2xs'
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
@@ -732,15 +735,18 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPreviewMode('raw')}
-                    className={`px-2.5 py-1 rounded-md font-semibold text-[11px] flex items-center gap-1 transition ${
-                      previewMode === 'raw'
-                        ? 'bg-white text-slate-900 shadow-2xs'
+                    onClick={() => {
+                      setSendAsPdf(true);
+                      setPreviewMode('pdf');
+                    }}
+                    className={`px-2.5 py-1 rounded-md font-semibold text-[11px] flex items-center gap-1 transition cursor-pointer ${
+                      sendAsPdf || previewMode === 'pdf'
+                        ? 'bg-[#128C7E] text-white shadow-2xs'
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    <FileText className="w-3 h-3 text-slate-500" />
-                    <span>Raw Markdown</span>
+                    <FileText className="w-3 h-3" />
+                    <span>Send as PDF</span>
                   </button>
                 </div>
 
@@ -755,16 +761,46 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               </div>
             </div>
 
-            {/* Authentic WhatsApp Chat Bubble Container */}
+            {/* Authentic WhatsApp Chat Bubble & PDF Attachment Preview Container */}
             <div className="bg-[#efeae2] p-4 sm:p-5 rounded-2xl border border-slate-300/80 shadow-inner">
-              <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 max-w-xl mx-auto space-y-2 max-h-72 overflow-y-auto relative">
-                {previewMode === 'rendered' ? (
-                  <WhatsAppMessageRenderer text={messageText} />
-                ) : (
-                  <div className="text-xs font-mono whitespace-pre-wrap text-slate-800 leading-relaxed">
-                    {messageText}
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 max-w-xl mx-auto space-y-3 max-h-80 overflow-y-auto relative">
+                {sendAsPdf && generatedPdfReport && (
+                  <div className="p-3 rounded-xl bg-emerald-50/90 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-lg bg-[#128C7E] text-white flex items-center justify-center shrink-0 font-bold text-[10px]">
+                        PDF
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">
+                          {generatedPdfReport.filename}
+                        </p>
+                        <p className="text-[11px] text-slate-600">
+                          {generatedPdfReport.sizeLabel} · Ref #{generatedPdfReport.reportId} · Official Medical Report
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleDownloadPdfOnly}
+                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <Download className="w-3 h-3 text-[#128C7E]" />
+                        <span>Download</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSendWhatsApp(false, true)}
+                        disabled={isLogging || !cleanedRecipient}
+                        className="px-2.5 py-1 rounded-lg bg-[#128C7E] hover:bg-[#075E54] text-white text-[11px] font-bold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
+                      >
+                        <Send className="w-3 h-3" />
+                        <span>Send PDF</span>
+                      </button>
+                    </div>
                   </div>
                 )}
+                <WhatsAppMessageRenderer text={messageText} />
               </div>
 
               <div className="text-center mt-2.5 flex items-center justify-center gap-3">
@@ -774,7 +810,9 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                 </span>
                 <span className="text-[10px] text-slate-400">·</span>
                 <span className="text-[10px] text-slate-500">
-                  Bold <strong className="font-bold text-slate-700">*text*</strong>, Italics <em className="italic text-slate-700">_text_</em> & Emojis fully rendered
+                  {sendAsPdf
+                    ? 'Official A4 Medical Report PDF attached to WhatsApp dispatch'
+                    : 'Formatted WhatsApp clinical message'}
                 </span>
               </div>
             </div>
