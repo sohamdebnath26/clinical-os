@@ -2479,15 +2479,16 @@ class DatabaseService {
 
   private ensureAuditChainHashed() {
     if (!Array.isArray(this.data.auditLogs) || this.data.auditLogs.length === 0) return;
-    // Audit logs are stored newest-first (index 0 is newest, last index is oldest)
+    // Audit logs are stored newest-first (index 0 is newest, last index is oldest).
+    // IMPORTANT: Only backfill legacy entries that are missing prevHash or entryHash.
+    // Never overwrite existing hashes, otherwise tampered entries would be silently re-signed.
     let runningPrev = 'GENESIS_000000000000000000000000';
     let mutated = false;
     for (let i = this.data.auditLogs.length - 1; i >= 0; i--) {
       const item = this.data.auditLogs[i];
-      const expected = this.computeAuditEntryHash(runningPrev, item);
-      if (item.prevHash !== runningPrev || item.entryHash !== expected) {
+      if (!item.prevHash || !item.entryHash) {
         item.prevHash = runningPrev;
-        item.entryHash = expected;
+        item.entryHash = this.computeAuditEntryHash(runningPrev, item);
         mutated = true;
       }
       runningPrev = item.entryHash;
@@ -2548,27 +2549,61 @@ class DatabaseService {
     hashChainHead: string;
     genesisHash: string;
     checkedAt: string;
+    tamperedEntryId?: string;
   } {
     this.ensureAuditChainHashed();
     const scopedLogs = this.getAuditLogs(500, doctorId);
     let verified = true;
+    let tamperedEntryId: string | undefined;
+
+    // 1. Verify each scoped entry's cryptographic SHA-256 digest
     for (const entry of scopedLogs) {
       if (!entry.prevHash || !entry.entryHash) {
         verified = false;
+        tamperedEntryId = entry.id;
         break;
       }
       const recomputed = this.computeAuditEntryHash(entry.prevHash, entry);
       if (recomputed !== entry.entryHash) {
         verified = false;
+        tamperedEntryId = entry.id;
         break;
       }
     }
+
+    // 2. Verify chronological prevHash -> entryHash linkage across the underlying ledger
+    if (verified && this.data.auditLogs.length > 0) {
+      const scopedIds = new Set(scopedLogs.map(l => l.id));
+      for (let i = 0; i < this.data.auditLogs.length; i++) {
+        const current = this.data.auditLogs[i];
+        const older = this.data.auditLogs[i + 1];
+        const recomputed = current.prevHash
+          ? this.computeAuditEntryHash(current.prevHash, current)
+          : '';
+        if (!current.prevHash || !current.entryHash || recomputed !== current.entryHash) {
+          if (scopedIds.has(current.id)) {
+            verified = false;
+            tamperedEntryId = current.id;
+            break;
+          }
+        }
+        if (older && current.prevHash !== older.entryHash) {
+          if (scopedIds.has(current.id) || scopedIds.has(older.id)) {
+            verified = false;
+            tamperedEntryId = current.id;
+            break;
+          }
+        }
+      }
+    }
+
     return {
       verified,
       totalChecked: scopedLogs.length,
       hashChainHead: scopedLogs[0]?.entryHash || 'GENESIS_000000000000000000000000',
       genesisHash: 'GENESIS_000000000000000000000000',
-      checkedAt: new Date().toISOString()
+      checkedAt: new Date().toISOString(),
+      ...(tamperedEntryId ? { tamperedEntryId } : {})
     };
   }
 

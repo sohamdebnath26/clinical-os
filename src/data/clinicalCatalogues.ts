@@ -420,12 +420,20 @@ export interface AllergyCrossReactivityRule {
 
 export interface DrugSafetyAlert {
   id: string;
-  type: 'allergy' | 'interaction';
+  type: 'allergy' | 'interaction' | 'teratogenic' | 'pediatric' | 'duplicate';
   severity: 'severe' | 'moderate';
   title: string;
   mechanism: string;
   clinicalAdvice: string;
   drugsInvolved: string[];
+}
+
+export interface PatientSafetyContext {
+  age?: number;
+  gender?: string;
+  currentMedications?: string;
+  medicalHistory?: string;
+  notes?: string;
 }
 
 export const DRUG_INTERACTION_RULES: DrugInteractionRule[] = [
@@ -615,10 +623,106 @@ export const ALLERGY_CROSS_REACTIVITY_RULES: AllergyCrossReactivityRule[] = [
   }
 ];
 
+const TERATOGENIC_RULES: Array<{
+  id: string;
+  keywords: string[];
+  label: string;
+  severity: 'severe' | 'moderate';
+  mechanism: string;
+  clinicalAdvice: string;
+}> = [
+  {
+    id: 'teratogen-retinoid',
+    keywords: ['isotretinoin', 'acitretin', 'alitretinoin', 'tazarotene'],
+    label: 'Retinoid Teratogenicity (FDA Category X)',
+    severity: 'severe',
+    mechanism: 'High risk of severe craniofacial, cardiovascular, central nervous system, and thymic embryopathy even with short-term exposure.',
+    clinicalAdvice: 'STRICT TERATOGENIC PRECAUTION: Confirm two negative pregnancy tests (β-hCG), enforce dual contraception 1 month before, during, and after therapy (3 years post-Acitretin; 1 month post-Isotretinoin).'
+  },
+  {
+    id: 'teratogen-antimetabolite',
+    keywords: ['methotrexate', 'mycophenolate', 'ribavirin', 'thalidomide', 'lenalidomide'],
+    label: 'Antimetabolite / Immunomodulator Teratogenicity (Category X)',
+    severity: 'severe',
+    mechanism: 'Direct inhibition of DNA synthesis and fetal organogenesis causing fetal death or severe congenital anomalies.',
+    clinicalAdvice: 'CONTRAINDICATED IN PREGNANCY: Rule out pregnancy before initiation and counsel on reliable contraception during treatment and post-therapy washout.'
+  },
+  {
+    id: 'teratogen-antiandrogen-antifungal',
+    keywords: ['finasteride', 'dutasteride', 'griseofulvin', 'spironolactone'],
+    label: 'Reproductive / Fetal Feminization Risk',
+    severity: 'moderate',
+    mechanism: '5-alpha-reductase / anti-androgen inhibition or mitotic spindle disruption can impair external genitalia development in a male fetus.',
+    clinicalAdvice: 'Verify non-pregnant status in females of childbearing potential and advise effective contraception while on therapy.'
+  }
+];
+
+const PEDIATRIC_CONTRAINDICATION_RULES: Array<{
+  id: string;
+  maxAgeExclusive: number;
+  keywords: string[];
+  label: string;
+  severity: 'severe' | 'moderate';
+  mechanism: string;
+  clinicalAdvice: string;
+}> = [
+  {
+    id: 'peds-tetracycline',
+    maxAgeExclusive: 8,
+    keywords: ['doxycycline', 'minocycline', 'tetracycline', 'lymecycline', 'tigecycline'],
+    label: 'Pediatric Tetracycline Contraindication (< 8 Years)',
+    severity: 'severe',
+    mechanism: 'Chelates calcium orthophosphate in developing teeth and long bones, causing permanent dental enamel hypoplasia/discoloration and reversible bone growth suppression.',
+    clinicalAdvice: 'AVOID IN CHILDREN < 8 YEARS: Substitute with weight-adjusted Azithromycin, Amoxicillin-Clavulanate, or Cefixime unless treating life-threatening rickettsial infection.'
+  },
+  {
+    id: 'peds-fluoroquinolone',
+    maxAgeExclusive: 18,
+    keywords: ['ciprofloxacin', 'levofloxacin', 'moxifloxacin', 'ofloxacin', 'norfloxacin', 'gemifloxacin'],
+    label: 'Pediatric Fluoroquinolone Caution (< 18 Years)',
+    severity: 'moderate',
+    mechanism: 'Chondrotoxicity in weight-bearing articular cartilage and increased pediatric musculoskeletal / tendon adverse events.',
+    clinicalAdvice: 'Use a first-line pediatric beta-lactam or macrolide alternative unless no other oral option is susceptible.'
+  }
+];
+
+const DUPLICATE_THERAPY_CLASSES: Array<{
+  id: string;
+  label: string;
+  keywords: string[];
+}> = [
+  {
+    id: 'dup-oral-retinoid',
+    label: 'Systemic Retinoids',
+    keywords: ['isotretinoin', 'acitretin', 'alitretinoin']
+  },
+  {
+    id: 'dup-tetracycline',
+    label: 'Tetracycline Antibiotics',
+    keywords: ['doxycycline', 'minocycline', 'tetracycline', 'lymecycline']
+  },
+  {
+    id: 'dup-systemic-azole',
+    label: 'Systemic Azole Antifungals',
+    keywords: ['itraconazole', 'fluconazole', 'voriconazole', 'posaconazole', 'ketoconazole']
+  },
+  {
+    id: 'dup-systemic-nsaid',
+    label: 'Systemic NSAIDs',
+    keywords: ['ibuprofen', 'diclofenac', 'naproxen', 'aceclofenac', 'indomethacin', 'ketorolac']
+  },
+  {
+    id: 'dup-antihistamine',
+    label: 'Oral H1 Antihistamines',
+    keywords: ['cetirizine', 'levocetirizine', 'fexofenadine', 'loratadine', 'desloratadine', 'bilastine', 'hydroxyzine']
+  }
+];
+
 export function evaluatePrescriptionSafety(
   prescriptions: { medicineName: string; dosage?: string }[],
   patientAllergies?: string,
-  candidateDrugName?: string
+  candidateDrugName?: string,
+  patientContext?: PatientSafetyContext
 ): DrugSafetyAlert[] {
   const alerts: DrugSafetyAlert[] = [];
   const seenIds = new Set<string>();
@@ -635,6 +739,17 @@ export function evaluatePrescriptionSafety(
   }
 
   if (activeMeds.length === 0) return alerts;
+
+  // Include chronic/home medications from patient chart for DDI evaluation
+  const chronicMedsRaw = (patientContext?.currentMedications || '').trim();
+  const chronicMeds: string[] =
+    chronicMedsRaw &&
+    !['none', 'nil', 'n/a', 'no current medications'].includes(chronicMedsRaw.toLowerCase())
+      ? chronicMedsRaw
+          .split(/[,;\n]+/)
+          .map(s => s.trim())
+          .filter(s => s.length >= 3)
+      : [];
 
   // 1. Check Patient Allergies
   const rawAllergy = (patientAllergies || '').trim().toLowerCase();
@@ -691,11 +806,21 @@ export function evaluatePrescriptionSafety(
     }
   }
 
-  // 2. Check Pairwise Drug-Drug Interactions (DDI)
-  for (let i = 0; i < activeMeds.length; i++) {
-    for (let j = i + 1; j < activeMeds.length; j++) {
-      const med1 = activeMeds[i];
-      const med2 = activeMeds[j];
+  // 2. Check Pairwise Drug-Drug Interactions (DDI) across active prescriptions + patient's chronic medications
+  const combinedForDdi = [
+    ...activeMeds.map(name => ({ name, isChronic: false })),
+    ...chronicMeds
+      .filter(cm => !activeMeds.some(am => am.toLowerCase() === cm.toLowerCase()))
+      .map(name => ({ name, isChronic: true }))
+  ];
+
+  for (let i = 0; i < combinedForDdi.length; i++) {
+    for (let j = i + 1; j < combinedForDdi.length; j++) {
+      // Only trigger if at least one of the two drugs is being prescribed in this session
+      if (combinedForDdi[i].isChronic && combinedForDdi[j].isChronic) continue;
+
+      const med1 = combinedForDdi[i].name;
+      const med2 = combinedForDdi[j].name;
       const m1 = med1.toLowerCase();
       const m2 = med2.toLowerCase();
 
@@ -709,14 +834,109 @@ export function evaluatePrescriptionSafety(
           const ddiKey = `${rule.id}:${[m1, m2].sort().join('+')}`;
           if (!seenIds.has(ddiKey)) {
             seenIds.add(ddiKey);
+            const chronicSuffix =
+              combinedForDdi[i].isChronic || combinedForDdi[j].isChronic
+                ? ' (with Chart Medication)'
+                : '';
             alerts.push({
               id: ddiKey,
               type: 'interaction',
               severity: rule.severity,
-              title: `Drug–Drug Interaction (${rule.severity.toUpperCase()}): ${med1} + ${med2}`,
+              title: `Drug–Drug Interaction (${rule.severity.toUpperCase()})${chronicSuffix}: ${med1} + ${med2}`,
               mechanism: `${rule.groupALabel} × ${rule.groupBLabel} — ${rule.mechanism}`,
               clinicalAdvice: rule.clinicalAdvice,
               drugsInvolved: [med1, med2]
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Check Duplicate Pharmacological Class Therapy
+  for (let i = 0; i < activeMeds.length; i++) {
+    for (let j = i + 1; j < activeMeds.length; j++) {
+      const med1 = activeMeds[i];
+      const med2 = activeMeds[j];
+      const m1 = med1.toLowerCase();
+      const m2 = med2.toLowerCase();
+      if (m1 === m2) continue;
+
+      for (const dupClass of DUPLICATE_THERAPY_CLASSES) {
+        const match1 = dupClass.keywords.some(k => m1.includes(k));
+        const match2 = dupClass.keywords.some(k => m2.includes(k));
+        if (match1 && match2) {
+          const dupKey = `${dupClass.id}:${[m1, m2].sort().join('+')}`;
+          if (!seenIds.has(dupKey)) {
+            seenIds.add(dupKey);
+            alerts.push({
+              id: dupKey,
+              type: 'duplicate',
+              severity: 'moderate',
+              title: `Duplicate Class Therapy (${dupClass.label}): ${med1} + ${med2}`,
+              mechanism: `Both agents belong to ${dupClass.label}, increasing cumulative toxicity without additive clinical efficacy.`,
+              clinicalAdvice: 'Retain a single agent from this pharmacological class unless specifically step-dosing.',
+              drugsInvolved: [med1, med2]
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 4. Check Teratogenicity / Pregnancy Contraindications
+  const genderNorm = (patientContext?.gender || '').trim().toLowerCase();
+  const ageVal = typeof patientContext?.age === 'number' ? patientContext.age : undefined;
+  const historyText = `${patientContext?.medicalHistory || ''} ${patientContext?.notes || ''}`.toLowerCase();
+  const hasPregnancyMention =
+    historyText.includes('pregnan') ||
+    historyText.includes('trimester') ||
+    historyText.includes('antenatal') ||
+    historyText.includes('lactat') ||
+    historyText.includes('breastfeed');
+  const isChildbearingFemale =
+    genderNorm === 'female' && (ageVal === undefined || (ageVal >= 12 && ageVal <= 50));
+
+  if (isChildbearingFemale || hasPregnancyMention) {
+    for (const med of activeMeds) {
+      const medLower = med.toLowerCase();
+      for (const rule of TERATOGENIC_RULES) {
+        if (rule.keywords.some(k => medLower.includes(k))) {
+          const terKey = `${rule.id}:${medLower}`;
+          if (!seenIds.has(terKey)) {
+            seenIds.add(terKey);
+            alerts.push({
+              id: terKey,
+              type: 'teratogenic',
+              severity: hasPregnancyMention ? 'severe' : rule.severity,
+              title: `${rule.label}: ${med}`,
+              mechanism: rule.mechanism,
+              clinicalAdvice: rule.clinicalAdvice,
+              drugsInvolved: [med]
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 5. Check Pediatric Age Safety Contraindications
+  if (typeof ageVal === 'number' && ageVal > 0 && ageVal < 18) {
+    for (const med of activeMeds) {
+      const medLower = med.toLowerCase();
+      for (const rule of PEDIATRIC_CONTRAINDICATION_RULES) {
+        if (ageVal < rule.maxAgeExclusive && rule.keywords.some(k => medLower.includes(k))) {
+          const pedsKey = `${rule.id}:${medLower}`;
+          if (!seenIds.has(pedsKey)) {
+            seenIds.add(pedsKey);
+            alerts.push({
+              id: pedsKey,
+              type: 'pediatric',
+              severity: rule.severity,
+              title: `${rule.label}: ${med} (Patient Age: ${ageVal}y)`,
+              mechanism: rule.mechanism,
+              clinicalAdvice: rule.clinicalAdvice,
+              drugsInvolved: [med]
             });
           }
         }

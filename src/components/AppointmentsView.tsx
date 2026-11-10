@@ -62,13 +62,30 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
   useEffect(() => {
     loadAppointments();
     const unsubscribe = subscribeToClinicRealtimeEvents((evt) => {
-      if (evt.type === 'appointment:status_updated' && evt.appointment) {
+      if (evt.type === 'appointment:created' && evt.appointment) {
+        const created = evt.appointment as Appointment;
+        setAppointments(prev =>
+          prev.some(a => a.id === created.id) ? prev : [created, ...prev]
+        );
+      } else if (
+        (evt.type === 'appointment:updated' || evt.type === 'appointment:status_updated') &&
+        evt.appointment
+      ) {
         const updated = evt.appointment as Appointment;
         setAppointments(prev => prev.map(a => (a.id === updated.id ? updated : a)));
-        setNotificationMessage(
-          `Patient ${updated.patientName} ${evt.patientAction || 'updated'} their appointment via WhatsApp.`
+        if (evt.type === 'appointment:status_updated') {
+          setNotificationMessage(
+            `Patient ${updated.patientName} ${evt.patientAction || 'updated'} their appointment via WhatsApp.`
+          );
+          setTimeout(() => setNotificationMessage(null), 5000);
+        }
+      } else if (evt.type === 'appointment:deleted' && evt.appointmentId) {
+        setAppointments(prev => prev.filter(a => a.id !== evt.appointmentId));
+      } else if (evt.type === 'walkin:patient_registered' && evt.appointment) {
+        const created = evt.appointment as Appointment;
+        setAppointments(prev =>
+          prev.some(a => a.id === created.id) ? prev : [created, ...prev]
         );
-        setTimeout(() => setNotificationMessage(null), 5000);
       }
     });
     return () => unsubscribe();

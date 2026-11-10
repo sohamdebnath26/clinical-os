@@ -34,7 +34,14 @@ export const PrintRxModal: React.FC<PrintRxModalProps> = ({
       .signVerificationToken({
         patientId: patient.id,
         consultationId,
-        prescriptionIds: rxIds
+        prescriptionIds: rxIds,
+        prescriptions: prescriptions.map(r => ({
+          medicineName: r.medicineName,
+          dosage: r.dosage,
+          frequency: r.frequency,
+          duration: r.duration,
+          instructions: r.instructions
+        }))
       })
       .then(async (res) => {
         if (!isMounted) return;

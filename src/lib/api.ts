@@ -40,11 +40,15 @@ export const authStorage = {
     return null;
   },
   setToken: (token: string) => {
+    const changed = inMemoryToken !== token;
     inMemoryToken = token;
     try {
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem(TOKEN_KEY, token);
         window.localStorage.setItem(TOKEN_KEY, token);
+        if (changed) {
+          window.dispatchEvent(new Event('clinical_os_auth_token_changed'));
+        }
       }
     } catch {
       // ignore storage errors
@@ -97,6 +101,7 @@ export const authStorage = {
         window.sessionStorage.removeItem(TOKEN_KEY);
         window.localStorage.removeItem(DOCTOR_KEY);
         window.sessionStorage.removeItem(DOCTOR_KEY);
+        window.dispatchEvent(new Event('clinical_os_auth_token_changed'));
       }
     } catch {
       // ignore
@@ -715,6 +720,13 @@ export const api = {
       patientId: string;
       consultationId?: string;
       prescriptionIds?: string[];
+      prescriptions?: Array<{
+        medicineName: string;
+        dosage: string;
+        frequency: string;
+        duration: string;
+        instructions?: string;
+      }>;
     }) =>
       fetchWithAuth<{
         token: string;
@@ -1448,6 +1460,14 @@ export function subscribeToClinicRealtimeEvents(
 
   const connect = () => {
     if (isDisposed) return;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (es) {
+      es.close();
+      es = null;
+    }
     const token = authStorage.getToken();
     const url = token
       ? `/api/realtime/events?token=${encodeURIComponent(token)}`
@@ -1480,10 +1500,18 @@ export function subscribeToClinicRealtimeEvents(
     }
   };
 
+  const handleTokenChanged = () => {
+    if (!isDisposed) {
+      connect();
+    }
+  };
+
+  window.addEventListener('clinical_os_auth_token_changed', handleTokenChanged);
   connect();
 
   return () => {
     isDisposed = true;
+    window.removeEventListener('clinical_os_auth_token_changed', handleTokenChanged);
     if (reconnectTimer) clearTimeout(reconnectTimer);
     if (es) {
       es.close();

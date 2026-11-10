@@ -9,7 +9,7 @@ import { DashboardView } from './components/DashboardView';
 import { PatientsListView } from './components/PatientsListView';
 import type { TabType } from './components/PatientProfileView';
 import { Patient, Consultation } from './types';
-import { api } from './lib/api';
+import { api, fastCache, subscribeToClinicRealtimeEvents } from './lib/api';
 import { CheckCircle2, X, Lock, ShieldCheck, LogOut, Loader2 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -69,6 +69,15 @@ function MainApp() {
 
   // Workstation Auto-Lock (15-minute inactivity guard for clinical privacy compliance)
   const [isWorkstationLocked, setIsWorkstationLocked] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [isUnlockingWorkstation, setIsUnlockingWorkstation] = useState(false);
+
+  const isPresetDemoUser =
+    doctor?.email === 'demo@clinicalos.med' ||
+    doctor?.email === 'receptionist@clinicalos.med' ||
+    doctor?.id?.startsWith('doc-default') ||
+    doctor?.id?.startsWith('rec-default');
 
   useEffect(() => {
     if (!doctor) return;
@@ -76,8 +85,11 @@ function MainApp() {
     let timer: any;
 
     const resetTimer = () => {
+      if (isWorkstationLocked) return;
       clearTimeout(timer);
       timer = setTimeout(() => {
+        setUnlockPassword('');
+        setUnlockError(null);
         setIsWorkstationLocked(true);
       }, INACTIVITY_TIMEOUT_MS);
     };
@@ -90,7 +102,30 @@ function MainApp() {
       clearTimeout(timer);
       activityEvents.forEach(evt => window.removeEventListener(evt, resetTimer));
     };
-  }, [doctor?.id]);
+  }, [doctor?.id, isWorkstationLocked]);
+
+  // Global Real-Time SSE Synchronization across Receptionist & Doctor Workstations
+  useEffect(() => {
+    if (!doctor) return;
+    const unsubscribe = subscribeToClinicRealtimeEvents(evt => {
+      if (
+        evt.type === 'patient:created' ||
+        evt.type === 'patient:updated' ||
+        evt.type === 'patient:deleted' ||
+        evt.type === 'appointment:created' ||
+        evt.type === 'appointment:updated' ||
+        evt.type === 'appointment:deleted' ||
+        evt.type === 'walkin:patient_registered' ||
+        evt.type === 'consultation:signed'
+      ) {
+        fastCache.invalidate('appointments');
+        fastCache.invalidate('dashboard_stats');
+        fastCache.invalidate('patients_list_all');
+        window.dispatchEvent(new Event('clinical_os_patients_updated'));
+      }
+    });
+    return () => unsubscribe();
+  }, [doctor?.id, doctor?.role]);
 
   // Navigation & Active views
   const [currentRoute, setCurrentRoute] = useState<NavRoute>('dashboard');
@@ -627,31 +662,89 @@ function MainApp() {
                   {doctor?.name}
                 </div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                  {doctor?.clinicName || 'Clinical OS Practice'}
+                  {doctor?.clinicName || 'Clinical OS Practice'} · {doctor?.email}
                 </div>
               </div>
             </div>
-            <div className="flex flex-col gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setIsWorkstationLocked(false)}
-                className="w-full py-2.5 px-4 bg-teal-700 hover:bg-teal-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                Resume Clinical Session
-              </button>
-              <button
-                type="button"
-                onClick={() => {
+
+            <form
+              onSubmit={async e => {
+                e.preventDefault();
+                if (!doctor?.email) return;
+                if (!unlockPassword.trim() && !isPresetDemoUser) {
+                  setUnlockError('Please enter your account password to unlock the workstation.');
+                  return;
+                }
+                if (!unlockPassword.trim() && isPresetDemoUser) {
                   setIsWorkstationLocked(false);
-                  logout();
-                }}
-                className="w-full py-2 px-4 text-slate-500 dark:text-slate-400 hover:text-red-600 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                Sign Out from Workstation
-              </button>
-            </div>
+                  return;
+                }
+                setIsUnlockingWorkstation(true);
+                setUnlockError(null);
+                try {
+                  await api.auth.login({
+                    email: doctor.email,
+                    password: unlockPassword
+                  });
+                  setUnlockPassword('');
+                  setIsWorkstationLocked(false);
+                } catch (err: unknown) {
+                  setUnlockError(
+                    err instanceof Error ? err.message : 'Invalid password. Unable to unlock workstation.'
+                  );
+                } finally {
+                  setIsUnlockingWorkstation(false);
+                }
+              }}
+              className="space-y-3 text-left"
+            >
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                  Account Password {isPresetDemoUser ? '(Optional for Demo Account)' : '*'}
+                </label>
+                <input
+                  type="password"
+                  autoFocus
+                  value={unlockPassword}
+                  onChange={e => {
+                    setUnlockPassword(e.target.value);
+                    if (unlockError) setUnlockError(null);
+                  }}
+                  placeholder="Enter password to unlock session..."
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-teal-800 bg-white dark:bg-[#0d1817] text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+
+              {unlockError && (
+                <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                  {unlockError}
+                </p>
+              )}
+
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={isUnlockingWorkstation}
+                  className="w-full py-2.5 px-4 bg-teal-700 hover:bg-teal-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  {isUnlockingWorkstation ? 'Verifying Credentials...' : 'Resume Clinical Session'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsWorkstationLocked(false);
+                    setUnlockPassword('');
+                    setUnlockError(null);
+                    logout();
+                  }}
+                  className="w-full py-2 px-4 text-slate-500 dark:text-slate-400 hover:text-red-600 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sign Out from Workstation
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -662,9 +755,13 @@ function MainApp() {
 export default function App() {
   const searchParams =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const mobileUploadToken = searchParams ? searchParams.get('mobileUploadToken') : null;
+  const mobileUploadToken = searchParams
+    ? searchParams.get('mobileUploadToken') || searchParams.get('mobToken')
+    : null;
   const walkInToken = searchParams ? searchParams.get('walkInToken') : null;
-  const verifyRxToken = searchParams ? searchParams.get('verifyRxToken') : null;
+  const verifyRxToken = searchParams
+    ? searchParams.get('verifyRxToken') || searchParams.get('verifyRx')
+    : null;
 
   if (verifyRxToken) {
     return (

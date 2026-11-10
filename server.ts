@@ -8,6 +8,7 @@ import zlib from 'zlib';
 import crypto from 'crypto';
 import { db } from './server/db.js';
 import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI, askImageReportAssistant, extractBufferVisualMetrics, parseLabOrBiopsyReportWithAI } from './server/ai.js';
+import { evaluatePrescriptionSafety } from './src/data/clinicalCatalogues.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -1178,6 +1179,11 @@ app.delete('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res)
   if (!deleted) {
     return res.status(404).json({ error: 'Patient not found' });
   }
+  broadcastClinicEvent(
+    'patient:deleted',
+    { patientId: req.params.id },
+    req.doctor?.id
+  );
   res.json({ success: true, message: 'Patient and associated clinical records removed successfully.' });
 });
 
@@ -1256,6 +1262,12 @@ app.post('/api/patients', authMiddleware, (req: AuthenticatedRequest, res) => {
     { id: doctor.id, name: doctor.name, email: doctor.email }
   );
 
+  broadcastClinicEvent(
+    'patient:created',
+    { patient: newPatient },
+    doctor.id
+  );
+
   res.status(201).json({ patient: newPatient });
 });
 
@@ -1271,6 +1283,11 @@ app.put('/api/patients/:id', authMiddleware, (req: AuthenticatedRequest, res) =>
   }
   const updated = db.updatePatient(req.params.id, updates, { id: doctor.id, name: doctor.name });
   if (!updated) return res.status(404).json({ error: 'Patient not found' });
+  broadcastClinicEvent(
+    'patient:updated',
+    { patient: updated },
+    doctor.id
+  );
   res.json({ patient: updated });
 });
 
@@ -1704,6 +1721,15 @@ app.put('/api/consultations/:id/sign', authMiddleware, (req: AuthenticatedReques
   });
 
   if (!signed) return res.status(404).json({ error: 'Consultation not found' });
+  broadcastClinicEvent(
+    'consultation:signed',
+    {
+      consultationId: signed.id,
+      patientId: signed.patientId,
+      doctorId: doctor.id
+    },
+    doctor.id
+  );
   res.json({ consultation: signed });
 });
 
@@ -1748,10 +1774,49 @@ app.post('/api/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) 
   res.status(201).json({ prescription: rx });
 });
 
-// Generate an HMAC-signed Digital Prescription Verification QR Token
-app.post('/api/prescriptions/sign-token', authMiddleware, (req: AuthenticatedRequest, res) => {
+// Evaluate Clinical Decision Support System (CDSS) Prescription Safety (DDI, Allergies, Teratogenicity, Pediatric Dosing, Duplicate Class)
+app.post('/api/prescriptions/evaluate-safety', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
-  const { patientId, consultationId, prescriptionIds } = req.body || {};
+  const { patientId, prescriptions, candidateDrugName, patientAllergies, patientContext } = req.body || {};
+
+  let resolvedAllergies = typeof patientAllergies === 'string' ? patientAllergies : undefined;
+  let resolvedContext = patientContext && typeof patientContext === 'object' ? { ...patientContext } : {};
+
+  if (patientId) {
+    const patient = db.findPatientById(String(patientId), doctor.id);
+    if (patient) {
+      if (resolvedAllergies === undefined) resolvedAllergies = patient.allergies;
+      resolvedContext = {
+        age: patient.age,
+        gender: patient.gender,
+        currentMedications: patient.currentMedications,
+        medicalHistory: patient.medicalHistory,
+        notes: patient.notes,
+        ...resolvedContext
+      };
+    }
+  }
+
+  const rxList = Array.isArray(prescriptions) ? prescriptions : [];
+  const alerts = evaluatePrescriptionSafety(
+    rxList,
+    resolvedAllergies,
+    typeof candidateDrugName === 'string' ? candidateDrugName : undefined,
+    resolvedContext
+  );
+
+  res.json({
+    safe: alerts.length === 0,
+    severeCount: alerts.filter(a => a.severity === 'severe').length,
+    moderateCount: alerts.filter(a => a.severity === 'moderate').length,
+    alerts
+  });
+});
+
+// Generate an HMAC-signed Digital Prescription Verification QR Token
+app.post('/api/prescriptions/sign-token', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
+  const doctor = req.doctor!;
+  const { patientId, consultationId, prescriptionIds, prescriptions: inlinePrescriptions } = req.body || {};
   if (!patientId) {
     return res.status(400).json({ error: 'patientId is required' });
   }
@@ -1770,14 +1835,25 @@ app.post('/api/prescriptions/sign-token', authMiddleware, (req: AuthenticatedReq
       ? allRx.filter(r => selectedIds.includes(r.id))
       : consultationId
       ? allRx.filter(r => r.consultationId === consultationId)
-      : allRx.slice(0, 12);
+      : [];
 
-  const rxBatch = (filteredRx.length > 0 ? filteredRx : allRx.slice(0, 10)).map(r => ({
-    m: r.medicineName,
-    d: r.dosage,
-    f: r.frequency,
-    du: r.duration,
-    i: r.instructions || ''
+  const inlineList = Array.isArray(inlinePrescriptions)
+    ? inlinePrescriptions.filter(r => r && typeof r.medicineName === 'string' && r.medicineName.trim())
+    : [];
+
+  const sourceList =
+    filteredRx.length > 0
+      ? filteredRx
+      : inlineList.length > 0
+      ? inlineList
+      : allRx.slice(0, 10);
+
+  const rxBatch = sourceList.slice(0, 12).map((r: any) => ({
+    m: String(r.medicineName || '').trim(),
+    d: String(r.dosage || '').trim(),
+    f: String(r.frequency || '').trim(),
+    du: String(r.duration || '').trim(),
+    i: String(r.instructions || '').trim()
   }));
 
   const signedAt = new Date().toISOString();
@@ -1801,6 +1877,19 @@ app.post('/api/prescriptions/sign-token', authMiddleware, (req: AuthenticatedReq
   const sig = signPayloadHmac(encoded);
   const token = `rxv_${encoded}.${sig}`;
   const verificationCode = `RX-${sig.slice(0, 8).toUpperCase()}`;
+
+  db.logAudit({
+    actorId: doctor.id,
+    actorName: doctor.name,
+    action: 'prescription_qr_signed',
+    resourceType: 'prescription',
+    resourceId: consultationId || patient.id,
+    metadata: {
+      patientCode: patient.patientCode,
+      verificationCode,
+      medicationCount: rxBatch.length
+    }
+  });
 
   res.json({
     token,
@@ -2578,6 +2667,12 @@ app.post('/api/appointments', authMiddleware, (req: AuthenticatedRequest, res) =
     { id: doctor.id, name: doctor.name }
   );
 
+  broadcastClinicEvent(
+    'appointment:created',
+    { appointment: appt },
+    doctor.id
+  );
+
   res.status(201).json({ appointment: appt });
 });
 
@@ -2589,6 +2684,11 @@ app.put('/api/appointments/:id', authMiddleware, (req: AuthenticatedRequest, res
   }
   const updated = db.updateAppointment(req.params.id, req.body, { id: doctor.id, name: doctor.name });
   if (!updated) return res.status(404).json({ error: 'Appointment not found' });
+  broadcastClinicEvent(
+    'appointment:updated',
+    { appointment: updated },
+    doctor.id
+  );
   res.json({ appointment: updated });
 });
 
@@ -2600,6 +2700,11 @@ app.delete('/api/appointments/:id', authMiddleware, (req: AuthenticatedRequest, 
   }
   const success = db.deleteAppointment(req.params.id, { id: doctor.id, name: doctor.name });
   if (!success) return res.status(404).json({ error: 'Appointment not found' });
+  broadcastClinicEvent(
+    'appointment:deleted',
+    { appointmentId: req.params.id },
+    doctor.id
+  );
   res.json({ success: true, message: 'Appointment deleted' });
 });
 

@@ -3672,18 +3672,35 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Automated CDSS Drug-Drug Interaction (DDI) & Patient Allergy Contraindication Banner */}
+                  {/* Automated CDSS Drug-Drug Interaction (DDI), Allergy, Teratogenicity & Pediatric Safety Banner */}
                   {(() => {
                     const safetyAlerts = evaluatePrescriptionSafety(
                       prescriptions,
                       patient.allergies,
-                      medName
+                      medName,
+                      {
+                        age: patient.age,
+                        gender: patient.gender,
+                        currentMedications: patient.currentMedications,
+                        medicalHistory: patient.medicalHistory,
+                        notes: patient.notes
+                      }
                     );
                     if (safetyAlerts.length === 0) return null;
                     return (
                       <div className="space-y-2">
                         {safetyAlerts.map(alert => {
                           const isSevere = alert.severity === 'severe';
+                          const badgeLabel =
+                            alert.type === 'allergy'
+                              ? 'ALLERGY CONTRAINDICATION'
+                              : alert.type === 'teratogenic'
+                              ? 'PREGNANCY / TERATOGENIC GUARD'
+                              : alert.type === 'pediatric'
+                              ? 'PEDIATRIC DOSING GUARD'
+                              : alert.type === 'duplicate'
+                              ? 'DUPLICATE CLASS THERAPY'
+                              : `DDI · ${alert.severity}`;
                           return (
                             <div
                               key={alert.id}
@@ -3708,7 +3725,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                                           : 'bg-amber-500 text-slate-950'
                                       }`}
                                     >
-                                      {alert.type === 'allergy' ? 'ALLERGY CONTRAINDICATION' : `DDI · ${alert.severity}`}
+                                      {badgeLabel}
                                     </span>
                                     <span className="font-extrabold">{alert.title}</span>
                                   </div>
@@ -4791,7 +4808,18 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                 {/* CDSS Drug Safety Summary Check before Sign-Off */}
                 {(() => {
-                  const summarySafetyAlerts = evaluatePrescriptionSafety(prescriptions, patient.allergies);
+                  const summarySafetyAlerts = evaluatePrescriptionSafety(
+                    prescriptions,
+                    patient.allergies,
+                    undefined,
+                    {
+                      age: patient.age,
+                      gender: patient.gender,
+                      currentMedications: patient.currentMedications,
+                      medicalHistory: patient.medicalHistory,
+                      notes: patient.notes
+                    }
+                  );
                   if (summarySafetyAlerts.length === 0) return null;
                   return (
                     <div className="mb-3 space-y-2">
