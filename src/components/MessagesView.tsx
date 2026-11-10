@@ -60,6 +60,7 @@ interface Thread {
     receiptId?: string;
     whatsappUrl?: string;
     recipientPhone?: string;
+    imageUrl?: string;
     pdfAttachment?: {
       filename: string;
       reportId: string;
@@ -150,6 +151,8 @@ export const MessagesView: React.FC = () => {
   const [showIncomingReplyModal, setShowIncomingReplyModal] = useState(false);
   const [incomingTestText, setIncomingTestText] = useState('');
   const [isSimulatingIncoming, setIsSimulatingIncoming] = useState(false);
+  const [copiedPortalLink, setCopiedPortalLink] = useState(false);
+  const [isGeneratingPortalLink, setIsGeneratingPortalLink] = useState(false);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
@@ -971,6 +974,32 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     );
   };
 
+  // Generate & copy 1-tap secure patient reply portal link
+  const handleCopyPortalLink = async () => {
+    if (!activeThread) return;
+    try {
+      setIsGeneratingPortalLink(true);
+      const res = await api.portal.generateToken({
+        threadId: activeThread.id,
+        patientId: activeThread.patientId,
+        patientName: activeThread.name,
+        patientPhone: activeThread.phone,
+        latestDoctorMessage: activeThread.preview
+      });
+      if (res?.portalUrl) {
+        await navigator.clipboard.writeText(res.portalUrl);
+        setCopiedPortalLink(true);
+        showToast(`Secure patient reply link copied! Share it with ${activeThread.name} on WhatsApp or SMS.`);
+        setTimeout(() => setCopiedPortalLink(false), 3500);
+      }
+    } catch (err: unknown) {
+      console.error('Failed to generate portal link:', err);
+      showToast('Could not generate portal link. Please try again.');
+    } finally {
+      setIsGeneratingPortalLink(false);
+    }
+  };
+
   // Start or open thread with a patient from the clinic EHR
   const handleSelectPatientForMessaging = (patient: Patient) => {
     const patientDigits = (patient.mobile || '').replace(/\D/g, '').slice(-10);
@@ -1621,6 +1650,30 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
               <button
                 type="button"
+                onClick={handleCopyPortalLink}
+                disabled={isGeneratingPortalLink}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  copiedPortalLink
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                    : 'bg-teal-50 hover:bg-teal-100 border-teal-200 text-teal-900'
+                }`}
+                title="Copy secure 1-tap Patient Reply Portal link"
+              >
+                {copiedPortalLink ? (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Link Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="w-3.5 h-3.5 text-teal-700" />
+                    <span>Patient Reply Link</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
                 onClick={() => handleToggleThreadStage(activeThread.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeThread.stage === 'resolved'
@@ -1714,6 +1767,22 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                           <Download className="w-3 h-3" />
                           <span>PDF</span>
                         </button>
+                      </div>
+                    )}
+
+                    {/* Patient Uploaded Clinical Image */}
+                    {m.imageUrl && (
+                      <div className="mb-2.5 rounded-xl overflow-hidden border border-slate-200/50 bg-black/5">
+                        <img
+                          src={m.imageUrl}
+                          alt="Patient uploaded photo"
+                          className="w-full max-h-60 object-cover cursor-pointer hover:opacity-95 transition-opacity"
+                          onClick={() => window.open(m.imageUrl, '_blank')}
+                        />
+                        <div className="px-2 py-1 bg-slate-900/60 text-white text-[9.5px] flex items-center justify-between">
+                          <span className="font-medium">Patient Clinical Photo</span>
+                          <span className="text-teal-200">Tap to open full size</span>
+                        </div>
                       </div>
                     )}
 

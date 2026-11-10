@@ -1077,6 +1077,89 @@ export const api = {
     },
   },
 
+  portal: {
+    getSession: async (token: string) => {
+      const response = await fetch(`/api/portal/session/${encodeURIComponent(token)}`);
+      if (!response.ok) {
+        let errorMessage = 'This patient reply link has expired or is invalid.';
+        try {
+          const json = await response.json();
+          if (json.error) errorMessage = json.error;
+        } catch {
+          // ignore
+        }
+        throw new Error(errorMessage);
+      }
+      return response.json() as Promise<{
+        valid: boolean;
+        session: {
+          token: string;
+          threadId: string;
+          patientName: string;
+          patientPhone: string;
+          doctorName: string;
+          clinicName: string;
+          clinicPhone: string;
+          latestDoctorMessage?: string;
+          expiresAt: number;
+        };
+        messages: {
+          id: string;
+          sender: 'patient' | 'doctor' | 'ai';
+          text: string;
+          time: string;
+          imageUrl?: string;
+          hasAttachment?: boolean;
+          attachmentFilename?: string;
+          createdAt?: string;
+        }[];
+      }>;
+    },
+    sendReply: async (
+      token: string,
+      data: { text?: string; imageDataUrl?: string; imageCaption?: string }
+    ) => {
+      const response = await fetch(`/api/portal/session/${encodeURIComponent(token)}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        let errorMessage = 'Failed to deliver your reply to the clinic.';
+        try {
+          const json = await response.json();
+          if (json.error) errorMessage = json.error;
+        } catch {
+          // ignore
+        }
+        throw new Error(errorMessage);
+      }
+      return response.json() as Promise<{
+        success: boolean;
+        message: {
+          id: string;
+          sender: 'patient';
+          text: string;
+          time: string;
+          imageUrl?: string;
+        };
+        threadId: string;
+        timestamp: string;
+      }>;
+    },
+    generateToken: (data: {
+      threadId: string;
+      patientId?: string;
+      patientName?: string;
+      patientPhone?: string;
+      latestDoctorMessage?: string;
+    }) =>
+      fetchWithAuth<{ token: string; portalUrl: string }>('/api/portal/generate-token', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  },
+
   ai: {
     summarize: (data: {
       patient: { name: string; age: number; gender: string; code: string };

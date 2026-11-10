@@ -3020,6 +3020,126 @@ app.post('/api/images/mobile-session/:token/upload', (req, res) => {
 });
 
 // ==========================================
+// PATIENT SECURE 1-TAP REPLY PORTAL SESSIONS (Approach 1)
+// ==========================================
+interface PatientPortalSession {
+  token: string;
+  threadId: string;
+  patientId?: string;
+  patientName: string;
+  patientPhone: string;
+  doctorId: string;
+  doctorName: string;
+  clinicName: string;
+  clinicPhone: string;
+  latestDoctorMessage?: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+const patientPortalSessions = new Map<string, PatientPortalSession>();
+
+function cleanupExpiredPortalSessions() {
+  const now = Date.now();
+  for (const [token, session] of patientPortalSessions.entries()) {
+    if (session.expiresAt < now) {
+      patientPortalSessions.delete(token);
+    }
+  }
+}
+
+function generatePatientPortalToken(params: {
+  threadId: string;
+  patientId?: string;
+  patientName: string;
+  patientPhone: string;
+  doctorId: string;
+  doctorName: string;
+  clinicName: string;
+  clinicPhone: string;
+  latestDoctorMessage?: string;
+}): string {
+  const rawMeta = JSON.stringify({
+    t: params.threadId,
+    p: params.patientId || '',
+    pn: params.patientName,
+    ph: params.patientPhone,
+    d: params.doctorId,
+    dn: params.doctorName,
+    cn: params.clinicName,
+    cp: params.clinicPhone,
+    m: (params.latestDoctorMessage || '').slice(0, 100),
+    exp: Date.now() + 14 * 24 * 60 * 60 * 1000 // 14 days validity
+  });
+  const encodedMeta = Buffer.from(rawMeta, 'utf8').toString('base64url');
+  const sig = signPayloadHmac(encodedMeta);
+  const token = `rply_${encodedMeta}.${sig}`;
+
+  const session: PatientPortalSession = {
+    token,
+    threadId: params.threadId,
+    patientId: params.patientId,
+    patientName: params.patientName,
+    patientPhone: params.patientPhone,
+    doctorId: params.doctorId,
+    doctorName: params.doctorName,
+    clinicName: params.clinicName,
+    clinicPhone: params.clinicPhone,
+    latestDoctorMessage: params.latestDoctorMessage,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 14 * 24 * 60 * 60 * 1000
+  };
+
+  patientPortalSessions.set(token, session);
+  return token;
+}
+
+function getOrRestorePatientPortalSession(token: string): PatientPortalSession | undefined {
+  cleanupExpiredPortalSessions();
+  let session = patientPortalSessions.get(token);
+  if (session) {
+    session.expiresAt = Date.now() + 14 * 24 * 60 * 60 * 1000;
+    return session;
+  }
+
+  if (token && token.startsWith('rply_')) {
+    const rawTail = token.slice(5);
+    const dotIdx = rawTail.lastIndexOf('.');
+    if (dotIdx <= 0) return undefined;
+    const encodedMeta = rawTail.slice(0, dotIdx);
+    const sig = rawTail.slice(dotIdx + 1);
+    if (!verifyHmacSignature(encodedMeta, sig)) {
+      return undefined;
+    }
+
+    try {
+      const decoded = JSON.parse(Buffer.from(encodedMeta, 'base64url').toString('utf8'));
+      if (!decoded.t || !decoded.d) return undefined;
+      const restoredSession: PatientPortalSession = {
+        token,
+        threadId: decoded.t,
+        patientId: decoded.p || undefined,
+        patientName: decoded.pn || 'Patient',
+        patientPhone: decoded.ph || '',
+        doctorId: decoded.d,
+        doctorName: decoded.dn || 'Attending Physician',
+        clinicName: decoded.cn || 'Clinical OS Practice',
+        clinicPhone: decoded.cp || '+91 98765 00001',
+        latestDoctorMessage: decoded.m,
+        createdAt: Date.now(),
+        expiresAt: decoded.exp || (Date.now() + 14 * 24 * 60 * 60 * 1000)
+      };
+      patientPortalSessions.set(token, restoredSession);
+      return restoredSession;
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+// ==========================================
 // MOBILE PATIENT WALK-IN SELF-INTAKE SESSIONS
 // ==========================================
 interface MobileWalkInSession {
@@ -3782,6 +3902,7 @@ interface InboxMessageRecord {
   receiptId?: string;
   whatsappUrl?: string;
   recipientPhone?: string;
+  imageUrl?: string;
   pdfAttachment?: InboxPdfAttachment;
   createdAt?: string;
 }
@@ -4255,6 +4376,7 @@ function routeIncomingPatientMessageToInbox(params: {
   messageText: string;
   channel?: 'WhatsApp' | 'SMS';
   doctorId?: string;
+  imageUrl?: string;
 }): { thread: InboxThreadRecord; message: InboxMessageRecord } {
   const allThreads = db.getAllRawInboxThreads(defaultInboxThreads);
   const cleanDigits = String(params.senderPhone || '').replace(/\D/g, '') || '919876543210';
@@ -4267,25 +4389,32 @@ function routeIncomingPatientMessageToInbox(params: {
   });
 
   const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const rawText = params.messageText.trim();
   const incomingMsg: InboxMessageRecord = {
     id: `msg-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
     sender: 'patient',
-    text: params.messageText.trim(),
+    text: rawText || (params.imageUrl ? '📷 [Attached clinical photo]' : ''),
     time: nowTime,
     status: `Routed to Clinical OS (${params.channel || thread.channel})`,
+    imageUrl: params.imageUrl,
     createdAt: new Date().toISOString()
   };
 
-  const triage = buildSmartSuggestedRepliesForIncoming(thread.name, params.messageText.trim());
+  const triage = buildSmartSuggestedRepliesForIncoming(
+    thread.name,
+    rawText || (params.imageUrl ? 'Patient uploaded a clinical skin photo for evaluation' : '')
+  );
 
   thread.messages.push(incomingMsg);
-  thread.preview = params.messageText.trim();
+  thread.preview = params.imageUrl && !rawText ? '📷 Patient shared a clinical photo' : rawText;
   thread.timestamp = 'Just now';
   thread.unread = true;
   thread.channel = params.channel || thread.channel;
   thread.priority = triage.isUrgent ? 'urgent' : thread.priority;
   thread.stage = triage.isUrgent ? 'needs_review' : 'draft_ready';
-  thread.statusLabel = triage.isUrgent
+  thread.statusLabel = params.imageUrl
+    ? 'New patient photo & reply · AI draft ready'
+    : triage.isUrgent
     ? 'Red flag · New patient reply'
     : 'New patient reply · AI draft ready';
   thread.aiSummary = triage.aiSummary;
@@ -4439,6 +4568,140 @@ app.post('/api/whatsapp/incoming', authMiddleware, requireDoctorRole, (req: Auth
     thread: result.thread,
     incomingMessage: result.message,
     threads: db.getStoredInboxThreads(defaultInboxThreads, req.doctor?.id)
+  });
+});
+
+// ==========================================
+// PATIENT SECURE 1-TAP REPLY PORTAL ENDPOINTS (Approach 1)
+// ==========================================
+app.get('/api/portal/session/:token', (req: Request, res: Response) => {
+  const token = req.params.token;
+  const session = getOrRestorePatientPortalSession(token);
+  if (!session) {
+    return res.status(404).json({
+      error: 'This patient reply link has expired or is invalid. Please request a new link from the clinic.'
+    });
+  }
+
+  // Find the matching conversation thread
+  const allThreads = db.getAllRawInboxThreads(defaultInboxThreads);
+  let thread = allThreads.find(t => t.id === session.threadId);
+  if (!thread && session.patientPhone) {
+    const cleanDigits = session.patientPhone.replace(/\D/g, '').slice(-10);
+    thread = allThreads.find(t => t.phone.replace(/\D/g, '').endsWith(cleanDigits));
+  }
+
+  res.json({
+    valid: true,
+    session: {
+      token: session.token,
+      threadId: session.threadId,
+      patientName: session.patientName,
+      patientPhone: session.patientPhone,
+      doctorName: session.doctorName,
+      clinicName: session.clinicName,
+      clinicPhone: session.clinicPhone,
+      latestDoctorMessage: session.latestDoctorMessage,
+      expiresAt: session.expiresAt
+    },
+    messages: (thread?.messages || []).map(m => ({
+      id: m.id || `msg-${Math.random().toString(36).slice(2, 7)}`,
+      sender: m.sender,
+      text: m.text,
+      time: m.time,
+      imageUrl: m.imageUrl,
+      hasAttachment: !!m.pdfAttachment,
+      attachmentFilename: m.pdfAttachment?.filename,
+      createdAt: m.createdAt
+    }))
+  });
+});
+
+app.post('/api/portal/session/:token/reply', (req: Request, res: Response) => {
+  const token = req.params.token;
+  const session = getOrRestorePatientPortalSession(token);
+  if (!session) {
+    return res.status(404).json({
+      error: 'This patient reply link has expired or is invalid. Please request a new link from the clinic.'
+    });
+  }
+
+  const { text, imageDataUrl, imageCaption } = req.body || {};
+  const trimmedText = typeof text === 'string' ? text.trim() : '';
+
+  if (!trimmedText && !imageDataUrl) {
+    return res.status(400).json({ error: 'Please enter a message or attach a clinical photo' });
+  }
+
+  let storedImageUrl: string | undefined = undefined;
+  if (imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image/')) {
+    try {
+      if (session.patientId) {
+        const stored = storePatientClinicalImage({
+          patientId: session.patientId,
+          rawDataUrl: imageDataUrl,
+          filename: `patient-portal-${Date.now()}.jpg`,
+          caption: imageCaption || 'Uploaded by patient via Secure 1-Tap Portal',
+          imageRole: 'followup',
+          actor: { id: session.patientId, name: session.patientName }
+        });
+        storedImageUrl = stored.url || stored.dataUrl || imageDataUrl;
+      } else {
+        storedImageUrl = imageDataUrl;
+      }
+    } catch (err) {
+      console.warn('Failed to store image in clinical EHR vault:', err);
+      storedImageUrl = imageDataUrl;
+    }
+  }
+
+  const finalMsgText = trimmedText || (storedImageUrl ? '📷 [Attached clinical photo]' : '');
+
+  const result = routeIncomingPatientMessageToInbox({
+    threadId: session.threadId,
+    patientId: session.patientId,
+    patientName: session.patientName,
+    senderPhone: session.patientPhone,
+    messageText: finalMsgText,
+    channel: 'WhatsApp',
+    doctorId: session.doctorId,
+    imageUrl: storedImageUrl
+  });
+
+  res.json({
+    success: true,
+    message: result.message,
+    threadId: result.thread.id,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Doctor on-demand portal link generator for any thread/patient
+app.post('/api/portal/generate-token', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res: Response) => {
+  const doctor = req.doctor!;
+  const { threadId, patientId, patientName, patientPhone, latestDoctorMessage } = req.body || {};
+  if (!threadId) {
+    return res.status(400).json({ error: 'threadId is required' });
+  }
+
+  const token = generatePatientPortalToken({
+    threadId,
+    patientId,
+    patientName: patientName || 'Patient',
+    patientPhone: patientPhone || '',
+    doctorId: doctor.id,
+    doctorName: doctor.name,
+    clinicName: doctor.clinicName || 'Clinical OS Practice',
+    clinicPhone: doctor.phone || '+91 98765 00001',
+    latestDoctorMessage
+  });
+
+  const origin = req.get('origin') || `${req.protocol}://${req.get('host')}`;
+  const portalUrl = `${origin}?replyToken=${encodeURIComponent(token)}`;
+
+  res.json({
+    token,
+    portalUrl
   });
 });
 
@@ -4619,7 +4882,39 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
   }
 
   const resolvedClinicPhone = String(clinicPhone || doctor.phone || '+91 98765 00001').trim();
-  const whatsappUrl = `https://wa.me/${normalizedRecipient}?text=${encodeURIComponent(bodyText)}`;
+
+  // Find or create the conversation thread early so we can generate the reply token
+  const thread = findOrCreateInboxThread({
+    threadId,
+    patientId: patient?.id || patientId,
+    patientName: patient?.fullName || patientName,
+    phoneDigits: normalizedRecipient,
+    doctorId: doctor.id
+  });
+
+  // Generate zero-friction 1-Tap Secure Patient Reply Portal token & link (Approach 1)
+  const portalToken = generatePatientPortalToken({
+    threadId: thread.id,
+    patientId: patient?.id || patientId,
+    patientName: patient?.fullName || patientName || thread.name || 'Patient',
+    patientPhone: normalizedRecipient,
+    doctorId: doctor.id,
+    doctorName: doctor.name,
+    clinicName: doctor.clinicName || 'Clinical OS Practice',
+    clinicPhone: resolvedClinicPhone,
+    latestDoctorMessage: bodyText
+  });
+
+  const origin = req.get('origin') || `${req.protocol}://${req.get('host')}`;
+  const portalUrl = `${origin}?replyToken=${encodeURIComponent(portalToken)}`;
+
+  // Automatically append zero-setup secure reply link to WhatsApp body if not already present
+  let finalBodyText = bodyText;
+  if (!finalBodyText.includes('replyToken=') && !finalBodyText.includes('reply=')) {
+    finalBodyText = `${finalBodyText}\n\n💬 Reply or share skin photos securely with Dr. ${doctor.name}:\n${portalUrl}`;
+  }
+
+  const whatsappUrl = `https://wa.me/${normalizedRecipient}?text=${encodeURIComponent(finalBodyText)}`;
 
   let deliveryMode: 'cloud_api' | 'whatsapp_gateway' = 'whatsapp_gateway';
 
@@ -4677,7 +4972,7 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
     recipientMobile: normalizedRecipient,
     clinicPhone: resolvedClinicPhone,
     reportType: reportType || (sanitizedPdfAttachment ? 'ai_analysis_pdf' : 'clinical_message'),
-    messageText: bodyText,
+    messageText: finalBodyText,
     note,
     pdfAttachment: sanitizedPdfAttachment,
     deliveryMode,
@@ -4689,15 +4984,6 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
   };
 
   db.addStoredWhatsAppMessage(dispatchRecord);
-
-  // Update or create the conversation thread natively inside Clinical OS
-  const thread = findOrCreateInboxThread({
-    threadId,
-    patientId: patient?.id || patientId,
-    patientName: patient?.fullName || patientName,
-    phoneDigits: normalizedRecipient,
-    doctorId: doctor.id
-  });
 
   const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   thread.phone = formatDisplayPhone(normalizedRecipient);
@@ -4716,7 +5002,7 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
   thread.messages.push({
     id: dispatchRecord.id,
     sender: 'doctor',
-    text: bodyText,
+    text: finalBodyText,
     time: nowTime,
     status: sanitizedPdfAttachment
       ? `PDF Sent on WhatsApp (${resolvedClinicPhone} → ${thread.phone})`
@@ -4794,6 +5080,8 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
     thread,
     threads: db.getStoredInboxThreads(defaultInboxThreads, doctor.id),
     whatsappUrl,
+    portalUrl,
+    portalToken,
     message: `Message dispatched in background to +${normalizedRecipient}`,
     timestamp: dispatchRecord.sentAt
   });

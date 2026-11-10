@@ -53,6 +53,9 @@ const MobileWalkInView = lazy(() =>
 const PrescriptionVerifyView = lazy(() =>
   import('./components/PrescriptionVerifyView').then(m => ({ default: m.PrescriptionVerifyView }))
 );
+const PatientReplyPortalView = lazy(() =>
+  import('./components/PatientReplyPortalView').then(m => ({ default: m.PatientReplyPortalView }))
+);
 
 function ClinicalWorkspaceFallback({ label = 'Loading clinical module...' }: { label?: string }) {
   return (
@@ -755,6 +758,9 @@ function MainApp() {
 export default function App() {
   const searchParams =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const replyToken = searchParams
+    ? searchParams.get('replyToken') || searchParams.get('reply')
+    : null;
   const mobileUploadToken = searchParams
     ? searchParams.get('mobileUploadToken') || searchParams.get('mobToken')
     : null;
@@ -762,6 +768,18 @@ export default function App() {
   const verifyRxToken = searchParams
     ? searchParams.get('verifyRxToken') || searchParams.get('verifyRx')
     : null;
+
+  if (replyToken) {
+    return (
+      <ErrorBoundary fallbackTitle="Patient Secure Reply Portal Error">
+        <LanguageProvider>
+          <Suspense fallback={<ClinicalWorkspaceFallback label="Connecting to clinic..." />}>
+            <PatientReplyPortalView token={replyToken} />
+          </Suspense>
+        </LanguageProvider>
+      </ErrorBoundary>
+    );
+  }
 
   if (verifyRxToken) {
     return (
