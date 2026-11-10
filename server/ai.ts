@@ -6,13 +6,18 @@ import crypto from 'crypto';
 
 dotenv.config();
 
-let genAI: GoogleGenAI | null = null;
-let activeApiKey: string | null = null;
+const geminiClientsByKey = new Map<string, GoogleGenAI>();
+const geminiKeyCooldownUntil = new Map<string, number>();
+const groqKeyCooldownUntil = new Map<string, number>();
+let geminiRoundRobinIndex = 0;
+let groqRoundRobinIndex = 0;
+let lastSelectedGeminiKey: string | null = null;
 let geminiCooldownUntil = 0;
 
-// Ultra-fast in-memory LRU cache for chatbot responses (< 2ms repeat response time)
+// Ultra-fast in-memory LRU cache for chatbot & LLM prompt responses (< 2ms repeat response time, 0 API tokens)
 const chatResponseCache = new Map<string, { answer: string; isAiPowered: boolean; expiresAt: number }>();
-const CHAT_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const promptCompletionCache = new Map<string, { text: string; expiresAt: number }>();
+const CHAT_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 function getCachedChatResponse(cacheKey: string): { answer: string; isAiPowered: boolean } | null {
   const entry = chatResponseCache.get(cacheKey);
@@ -25,7 +30,7 @@ function getCachedChatResponse(cacheKey: string): { answer: string; isAiPowered:
 }
 
 function setCachedChatResponse(cacheKey: string, value: { answer: string; isAiPowered: boolean }) {
-  if (chatResponseCache.size > 300) {
+  if (chatResponseCache.size > 500) {
     const firstKey = chatResponseCache.keys().next().value;
     if (firstKey) chatResponseCache.delete(firstKey);
   }
@@ -35,33 +40,80 @@ function setCachedChatResponse(cacheKey: string, value: { answer: string; isAiPo
   });
 }
 
-function getAIClient(): GoogleGenAI | null {
-  const apiKey = (
-    process.env.CUSTOM_GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    process.env.API_KEY ||
-    process.env.GEMINI_KEY ||
-    process.env.VITE_GEMINI_API_KEY ||
-    ''
-  ).trim();
+function getGeminiKeyPool(): string[] {
+  const rawCandidates = [
+    ...(process.env.GEMINI_API_KEYS || '').split(','),
+    process.env.CUSTOM_GEMINI_API_KEY || '',
+    process.env.GOOGLE_API_KEY || '',
+    process.env.GEMINI_API_KEY || '',
+    process.env.API_KEY || '',
+    process.env.GEMINI_KEY || '',
+    process.env.VITE_GEMINI_API_KEY || ''
+  ];
+  const uniqueKeys = new Set<string>();
+  for (const raw of rawCandidates) {
+    const clean = raw.trim();
+    if (clean && clean !== 'MY_GEMINI_API_KEY' && clean !== 'YOUR_GEMINI_API_KEY') {
+      uniqueKeys.add(clean);
+    }
+  }
+  return Array.from(uniqueKeys);
+}
 
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey === 'YOUR_GEMINI_API_KEY') {
+function getGroqKeyPool(): string[] {
+  const rawCandidates = [
+    ...(process.env.GROQ_API_KEYS || '').split(','),
+    process.env.GROQ_API_KEY || ''
+  ];
+  const uniqueKeys = new Set<string>();
+  for (const raw of rawCandidates) {
+    const clean = raw.trim();
+    if (clean && clean !== 'MY_GROQ_API_KEY' && clean !== 'YOUR_GROQ_API_KEY') {
+      uniqueKeys.add(clean);
+    }
+  }
+  return Array.from(uniqueKeys);
+}
+
+function getAIClient(): GoogleGenAI | null {
+  const pool = getGeminiKeyPool();
+  if (pool.length === 0) {
     return null;
   }
-  if (!genAI || activeApiKey !== apiKey) {
-    activeApiKey = apiKey;
-    geminiCooldownUntil = 0;
-    genAI = new GoogleGenAI({
-      apiKey,
+
+  const now = Date.now();
+  let selectedKey: string | null = null;
+  for (let i = 0; i < pool.length; i++) {
+    const idx = (geminiRoundRobinIndex + i) % pool.length;
+    const candidate = pool[idx];
+    const cooldown = geminiKeyCooldownUntil.get(candidate) || 0;
+    if (now > cooldown) {
+      selectedKey = candidate;
+      geminiRoundRobinIndex = (idx + 1) % pool.length;
+      break;
+    }
+  }
+
+  // If all keys are in cooldown, pick the one whose cooldown expires soonest
+  if (!selectedKey) {
+    selectedKey = pool[geminiRoundRobinIndex % pool.length];
+    geminiRoundRobinIndex = (geminiRoundRobinIndex + 1) % pool.length;
+  }
+
+  lastSelectedGeminiKey = selectedKey;
+  let client = geminiClientsByKey.get(selectedKey);
+  if (!client) {
+    client = new GoogleGenAI({
+      apiKey: selectedKey,
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build'
         }
       }
     });
+    geminiClientsByKey.set(selectedKey, client);
   }
-  return genAI;
+  return client;
 }
 
 async function generateWithGroq(
@@ -70,40 +122,55 @@ async function generateWithGroq(
   jsonMode = false,
   timeoutMs = 4000
 ): Promise<string | null> {
-  const groqKey = (process.env.GROQ_API_KEY || '').trim();
-  if (!groqKey || groqKey === 'MY_GROQ_API_KEY') {
+  const pool = getGroqKeyPool();
+  if (pool.length === 0) {
     return null;
   }
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${groqKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        temperature,
-        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-        messages
-      }),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    if (response.ok) {
-      const data = (await response.json()) as {
-        choices?: { message?: { content?: string } }[];
-      };
-      const text = data.choices?.[0]?.message?.content?.trim();
-      if (text) return text;
-    } else {
-      const errText = await response.text();
-      console.warn(`[Groq] API returned ${response.status}: ${errText.substring(0, 120)}`);
+
+  const now = Date.now();
+  for (let attempt = 0; attempt < pool.length; attempt++) {
+    const idx = (groqRoundRobinIndex + attempt) % pool.length;
+    const groqKey = pool[idx];
+    if (now < (groqKeyCooldownUntil.get(groqKey) || 0)) {
+      continue;
     }
-  } catch (err) {
-    console.warn('[Groq] Fast completion error/fallback:', err instanceof Error ? err.message : err);
+    groqRoundRobinIndex = (idx + 1) % pool.length;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${groqKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          temperature,
+          ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+          messages
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (response.ok) {
+        const data = (await response.json()) as {
+          choices?: { message?: { content?: string } }[];
+        };
+        const text = data.choices?.[0]?.message?.content?.trim();
+        if (text) return text;
+      } else {
+        const errText = await response.text();
+        console.warn(`[Groq] API returned ${response.status}: ${errText.substring(0, 120)}`);
+        if (response.status === 429 || response.status === 401 || response.status === 403) {
+          groqKeyCooldownUntil.set(groqKey, Date.now() + 60 * 1000);
+          continue; // Try next Groq key in pool immediately
+        }
+      }
+    } catch (err) {
+      console.warn('[Groq] Fast completion error/fallback:', err instanceof Error ? err.message : err);
+    }
   }
   return null;
 }
@@ -114,7 +181,17 @@ async function generateWithGemini(
   systemInstruction?: string,
   timeoutMs = 3500
 ): Promise<string | null> {
-  // If Groq is available, try it first for ultra-low latency text inference (<250ms)
+  // 1. Check SHA-256 prompt deduplication cache first (0 API tokens for repeated queries)
+  const promptHash = crypto
+    .createHash('sha256')
+    .update(`${systemInstruction || ''}::${prompt}`)
+    .digest('hex');
+  const cached = promptCompletionCache.get(promptHash);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.text;
+  }
+
+  // 2. If Groq key pool is available, try it first for ultra-low latency text inference (<250ms)
   const groqMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
   if (systemInstruction) {
     groqMessages.push({ role: 'system', content: systemInstruction });
@@ -122,17 +199,23 @@ async function generateWithGemini(
   groqMessages.push({ role: 'user', content: prompt });
   const groqText = await generateWithGroq(groqMessages, 0.35, false, timeoutMs);
   if (groqText) {
+    if (promptCompletionCache.size > 500) {
+      const oldestKey = promptCompletionCache.keys().next().value;
+      if (oldestKey) promptCompletionCache.delete(oldestKey);
+    }
+    promptCompletionCache.set(promptHash, { text: groqText, expiresAt: Date.now() + CHAT_CACHE_TTL_MS });
     return groqText;
   }
 
-  // Fallback to Gemini with production model chain
-  if (ai && Date.now() > geminiCooldownUntil) {
+  // 3. Fallback to Gemini with multi-key rotation and model chain
+  const activeClient = ai || getAIClient();
+  if (activeClient && Date.now() > geminiCooldownUntil) {
     const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
     for (const model of models) {
       try {
         const isGemini3Or4 = model.startsWith('gemini-3') || model.startsWith('gemini-4');
         const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs));
-        const generatePromise = ai.models
+        const generatePromise = activeClient.models
           .generateContent({
             model,
             contents: prompt,
@@ -152,12 +235,27 @@ async function generateWithGemini(
           .then(res => res.text?.trim() || null);
 
         const text = await Promise.race([generatePromise, timeoutPromise]);
-        if (text) return text;
+        if (text) {
+          if (promptCompletionCache.size > 500) {
+            const oldestKey = promptCompletionCache.keys().next().value;
+            if (oldestKey) promptCompletionCache.delete(oldestKey);
+          }
+          promptCompletionCache.set(promptHash, { text, expiresAt: Date.now() + CHAT_CACHE_TTL_MS });
+          return text;
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.warn(`Fast Gemini attempt with ${model} failed:`, msg);
         if (msg.includes('API_KEY_INVALID') || msg.includes('401') || msg.includes('403') || msg.includes('429')) {
-          geminiCooldownUntil = Date.now() + 60 * 1000;
+          if (lastSelectedGeminiKey) {
+            geminiKeyCooldownUntil.set(lastSelectedGeminiKey, Date.now() + 60 * 1000);
+          }
+          // Only set global cooldown if all keys in pool are currently cooling down
+          const pool = getGeminiKeyPool();
+          const allCoolingDown = pool.every(k => (geminiKeyCooldownUntil.get(k) || 0) > Date.now());
+          if (allCoolingDown) {
+            geminiCooldownUntil = Date.now() + 60 * 1000;
+          }
           break;
         }
       }
