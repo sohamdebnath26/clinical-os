@@ -23,6 +23,7 @@ import { CheckCircle2, X, Lock, ShieldCheck, LogOut } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MobileImageUploadView } from './components/MobileImageUploadView';
 import { MobileWalkInView } from './components/MobileWalkInView';
+import { PrescriptionVerifyView } from './components/PrescriptionVerifyView';
 
 function MainApp() {
   const { doctor, switchRoleSession, logout } = useAuth();
@@ -504,6 +505,15 @@ export default function App() {
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const mobileUploadToken = searchParams ? searchParams.get('mobileUploadToken') : null;
   const walkInToken = searchParams ? searchParams.get('walkInToken') : null;
+  const verifyRxToken = searchParams ? searchParams.get('verifyRxToken') : null;
+
+  if (verifyRxToken) {
+    return (
+      <ErrorBoundary fallbackTitle="Prescription Verification Error">
+        <PrescriptionVerifyView token={verifyRxToken} />
+      </ErrorBoundary>
+    );
+  }
 
   if (mobileUploadToken) {
     return (

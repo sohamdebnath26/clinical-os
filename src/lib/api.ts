@@ -696,6 +696,50 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    signVerificationToken: (data: {
+      patientId: string;
+      consultationId?: string;
+      prescriptionIds?: string[];
+    }) =>
+      fetchWithAuth<{
+        token: string;
+        verificationCode: string;
+        signedAt: string;
+      }>('/api/prescriptions/sign-token', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    verifyToken: async (token: string) => {
+      const res = await fetch(`/api/prescriptions/verify/${encodeURIComponent(token)}`);
+      const json = await res.json().catch(() => ({ verified: false, error: 'Verification request failed' }));
+      if (!res.ok) {
+        throw new Error(json.error || 'Prescription verification failed');
+      }
+      return json as {
+        verified: boolean;
+        verificationCode: string;
+        signedAt: string;
+        clinic: {
+          name: string;
+          doctorName: string;
+          speciality: string;
+          registrationNumber: string;
+          phone: string;
+        };
+        patient: {
+          name: string;
+          patientCode: string;
+          demographics: string;
+        };
+        medications: Array<{
+          medicineName: string;
+          dosage: string;
+          frequency: string;
+          duration: string;
+          instructions: string;
+        }>;
+      };
+    },
   },
 
   formulary: {
@@ -769,6 +813,23 @@ export const api = {
     delete: (id: string) =>
       fetchWithAuth<{ success: boolean; message: string }>(`/api/appointments/${id}`, {
         method: 'DELETE',
+      }),
+    sendReminders: (data?: { date?: string; appointmentIds?: string[] }) =>
+      fetchWithAuth<{
+        success: boolean;
+        dispatchedCount: number;
+        reminders: Array<{
+          appointmentId: string;
+          patientName: string;
+          mobile: string;
+          date: string;
+          time: string;
+          deliveryMode: string;
+        }>;
+        message: string;
+      }>('/api/appointments/send-reminders', {
+        method: 'POST',
+        body: JSON.stringify(data || {}),
       }),
   },
 
@@ -1319,3 +1380,120 @@ export const api = {
       }),
   },
 };
+
+export interface RealtimeClinicEvent {
+  type: string;
+  timestamp: string;
+  [key: string]: any;
+}
+
+export function subscribeToClinicRealtimeEvents(
+  onEvent: (event: RealtimeClinicEvent) => void
+): () => void {
+  if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+    return () => {};
+  }
+
+  let es: EventSource | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let isDisposed = false;
+
+  const connect = () => {
+    if (isDisposed) return;
+    const token = authStorage.getToken();
+    const url = token
+      ? `/api/realtime/events?token=${encodeURIComponent(token)}`
+      : '/api/realtime/events';
+
+    try {
+      es = new EventSource(url, { withCredentials: true });
+      es.onmessage = (evt) => {
+        if (!evt.data) return;
+        try {
+          const parsed = JSON.parse(evt.data) as RealtimeClinicEvent;
+          onEvent(parsed);
+        } catch {
+          // ignore malformed payload
+        }
+      };
+      es.onerror = () => {
+        if (es) {
+          es.close();
+          es = null;
+        }
+        if (!isDisposed) {
+          reconnectTimer = setTimeout(connect, 4000);
+        }
+      };
+    } catch {
+      if (!isDisposed) {
+        reconnectTimer = setTimeout(connect, 5000);
+      }
+    }
+  };
+
+  connect();
+
+  return () => {
+    isDisposed = true;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (es) {
+      es.close();
+      es = null;
+    }
+  };
+}
+
+export function subscribeToMobileSessionRealtimeEvents(
+  token: string,
+  onEvent: (event: RealtimeClinicEvent) => void
+): () => void {
+  if (!token || typeof window === 'undefined' || typeof EventSource === 'undefined') {
+    return () => {};
+  }
+
+  let es: EventSource | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let isDisposed = false;
+
+  const connect = () => {
+    if (isDisposed) return;
+    try {
+      es = new EventSource(`/api/realtime/mobile-session/${encodeURIComponent(token)}`);
+      es.onmessage = (evt) => {
+        if (!evt.data) return;
+        try {
+          const parsed = JSON.parse(evt.data) as RealtimeClinicEvent;
+          onEvent(parsed);
+        } catch {
+          // ignore
+        }
+      };
+      es.onerror = () => {
+        if (es) {
+          es.close();
+          es = null;
+        }
+        if (!isDisposed) {
+          reconnectTimer = setTimeout(connect, 3500);
+        }
+      };
+    } catch {
+      if (!isDisposed) {
+        reconnectTimer = setTimeout(connect, 4000);
+      }
+    }
+  };
+
+  connect();
+
+  return () => {
+    isDisposed = true;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (es) {
+      es.close();
+      es = null;
+    }
+  };
+}
+

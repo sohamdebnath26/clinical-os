@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Patient, Gender, Consultation } from '../types';
 import { PREDEFINED_SYMPTOMS } from '../data/clinicalCatalogues';
-import { api } from '../lib/api';
+import { api, subscribeToMobileSessionRealtimeEvents } from '../lib/api';
 import {
   X,
   Search,
@@ -210,36 +210,49 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
     return () => clearTimeout(timer);
   }, [fullName, mode, step]);
 
-  // Poll mobile session when a link has been generated so patient's mobile submission auto-populates!
+  // Real-time SSE subscription + fallback poll for mobile walk-in patient intake
   useEffect(() => {
     if (!mobileSessionToken) return;
+
+    const applySubmittedSession = (s: any) => {
+      if (s && s.status === 'submitted' && s.submittedAt && s.submittedAt !== mobileSessionSubmittedAt) {
+        setMobileSessionSubmittedAt(s.submittedAt);
+        if (s.fullName) setFullName(s.fullName);
+        if (s.sex === 'Female' || s.sex === 'Male' || s.sex === 'Other' || s.sex === 'Not specified') {
+          setSex(s.sex);
+        }
+        if (s.age) setAge(s.age);
+        if (s.mobile) setMobile(s.mobile);
+        if (s.countryCode) setCountryCode(s.countryCode);
+        if (s.weight) setWeight(s.weight);
+        if (Array.isArray(s.symptoms) && s.symptoms.length > 0) {
+          setSelectedSymptoms(s.symptoms);
+        }
+        if (s.notes) setNotes(s.notes);
+        setNoKnownAllergies(Boolean(s.noKnownAllergies));
+        setPatientIntakeCompleted(true);
+      }
+    };
+
+    const unsubscribe = subscribeToMobileSessionRealtimeEvents(mobileSessionToken, (evt) => {
+      if (evt.type === 'walkin:session_submitted' && evt.session) {
+        applySubmittedSession(evt.session);
+      }
+    });
+
     const interval = setInterval(async () => {
       try {
         const res = await api.walkin.getMobileSession(mobileSessionToken);
-        const s = res.session;
-        if (s.status === 'submitted' && s.submittedAt && s.submittedAt !== mobileSessionSubmittedAt) {
-          setMobileSessionSubmittedAt(s.submittedAt);
-          if (s.fullName) setFullName(s.fullName);
-          if (s.sex === 'Female' || s.sex === 'Male' || s.sex === 'Other' || s.sex === 'Not specified') {
-            setSex(s.sex);
-          }
-          if (s.age) setAge(s.age);
-          if (s.mobile) setMobile(s.mobile);
-          if (s.countryCode) setCountryCode(s.countryCode);
-          if (s.weight) setWeight(s.weight);
-          if (Array.isArray(s.symptoms) && s.symptoms.length > 0) {
-            setSelectedSymptoms(s.symptoms);
-          }
-          if (s.notes) setNotes(s.notes);
-          setNoKnownAllergies(Boolean(s.noKnownAllergies));
-          setPatientIntakeCompleted(true);
-        }
+        applySubmittedSession(res.session);
       } catch {
         // ignore transient polling error
       }
-    }, 2500);
+    }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, [mobileSessionToken, mobileSessionSubmittedAt]);
 
   // Transition from Step 1 ("Walk-in patient" search popup) to Step 2 ("Add patient" current walk-in interface)

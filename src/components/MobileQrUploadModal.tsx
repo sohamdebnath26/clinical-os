@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
-import { api } from '../lib/api';
+import { api, subscribeToMobileSessionRealtimeEvents } from '../lib/api';
 import { ClinicalImage } from '../types';
 import {
   QrCode,
@@ -113,9 +113,20 @@ export const MobileQrUploadModal: React.FC<MobileQrUploadModalProps> = ({
     };
   }, [isOpen, patientId, consultationId]);
 
-  // Live poll mobile session every 2 seconds
+  // Real-time SSE subscription + fallback poll for mobile QR uploads
   useEffect(() => {
     if (!isOpen || !mobileSessionToken) return;
+
+    const unsubscribe = subscribeToMobileSessionRealtimeEvents(mobileSessionToken, (evt) => {
+      if (evt.type === 'mobile_qr:image_uploaded' && evt.image) {
+        const img = evt.image as ClinicalImage;
+        if (!knownImageIdsRef.current.has(img.id)) {
+          knownImageIdsRef.current.add(img.id);
+          onImageUploaded(img);
+          setSyncedImages((prev) => [img, ...prev]);
+        }
+      }
+    });
 
     const interval = setInterval(async () => {
       try {
@@ -133,9 +144,12 @@ export const MobileQrUploadModal: React.FC<MobileQrUploadModalProps> = ({
       } catch {
         // Ignore transient network errors
       }
-    }, 2000);
+    }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, [isOpen, mobileSessionToken, onImageUploaded]);
 
   const handleCopyMobileUrl = async () => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Patient } from '../types';
-import { api } from '../lib/api';
+import { api, subscribeToClinicRealtimeEvents } from '../lib/api';
 import { VoiceDictationButton } from './VoiceDictationButton';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
 import {
@@ -153,7 +153,7 @@ export const MessagesView: React.FC = () => {
   const [customReply, setCustomReply] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDispatching, setIsDispatching] = useState(false);
-  const [autoSimulatePatientReply, setAutoSimulatePatientReply] = useState(true);
+  const [autoSimulatePatientReply, setAutoSimulatePatientReply] = useState(false);
   const [showIncomingReplyModal, setShowIncomingReplyModal] = useState(false);
   const [incomingTestText, setIncomingTestText] = useState('');
   const [isSimulatingIncoming, setIsSimulatingIncoming] = useState(false);
@@ -540,7 +540,41 @@ export const MessagesView: React.FC = () => {
       })
       .catch(() => {});
 
-    // Poll every 3.5s to route incoming patient WhatsApp/SMS replies directly into the native Clinical OS Inbox UI
+    // Real-time Server-Sent Events (SSE) subscription for instant (<50ms) inbox messages & status receipts
+    const unsubscribeSse = subscribeToClinicRealtimeEvents((evt) => {
+      if (
+        (evt.type === 'inbox:message_received' ||
+          evt.type === 'inbox:message_sent' ||
+          evt.type === 'inbox:status_updated') &&
+        evt.thread
+      ) {
+        const updatedThread = evt.thread as Thread;
+        setThreads((prev) => {
+          const exists = prev.some((t) => t.id === updatedThread.id);
+          const next = exists
+            ? prev.map((t) => (t.id === updatedThread.id ? updatedThread : t))
+            : [updatedThread, ...prev];
+          return next;
+        });
+        knownMessageCountRef.current[updatedThread.id] = updatedThread.messages?.length || 0;
+
+        if (evt.type === 'inbox:message_received') {
+          showToast(
+            `Incoming patient reply from ${updatedThread.name} routed into Clinical OS Inbox.`
+          );
+          setTimeout(() => {
+            if (messagesContainerRef.current) {
+              messagesContainerRef.current.scrollTo({
+                top: messagesContainerRef.current.scrollHeight,
+                behavior: 'smooth'
+              });
+            }
+          }, 80);
+        }
+      }
+    });
+
+    // Resilient background sync every 12s as fallback if proxy drops SSE
     const pollInterval = setInterval(() => {
       api.whatsapp
         .threads()
@@ -581,9 +615,12 @@ export const MessagesView: React.FC = () => {
           }
         })
         .catch(() => {});
-    }, 3500);
+    }, 12000);
 
-    return () => clearInterval(pollInterval);
+    return () => {
+      unsubscribeSse();
+      clearInterval(pollInterval);
+    };
   }, []);
 
   const activeThread = threads.find(t => t.id === selectedThreadId) || threads[0];

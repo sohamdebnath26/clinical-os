@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Appointment, AppointmentStatus, Patient } from '../types';
-import { api } from '../lib/api';
+import { api, subscribeToClinicRealtimeEvents } from '../lib/api';
 import { useLanguage } from '../context/LanguageContext';
 import { ScheduleAppointmentModal } from './ScheduleAppointmentModal';
 import {
@@ -19,7 +19,9 @@ import {
   ArrowRight,
   Phone,
   Plus,
-  Stethoscope
+  Stethoscope,
+  Bell,
+  Loader2
 } from 'lucide-react';
 
 interface AppointmentsViewProps {
@@ -47,6 +49,7 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
   const [viewingAppointment, setViewingAppointment] = useState<Appointment | null>(null);
   const [deleteConfirmAppt, setDeleteConfirmAppt] = useState<Appointment | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSendingReminders, setIsSendingReminders] = useState(false);
 
   const loadAppointments = () => {
     setIsLoading(true);
@@ -58,7 +61,36 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
 
   useEffect(() => {
     loadAppointments();
+    const unsubscribe = subscribeToClinicRealtimeEvents((evt) => {
+      if (evt.type === 'appointment:status_updated' && evt.appointment) {
+        const updated = evt.appointment as Appointment;
+        setAppointments(prev => prev.map(a => (a.id === updated.id ? updated : a)));
+        setNotificationMessage(
+          `Patient ${updated.patientName} ${evt.patientAction || 'updated'} their appointment via WhatsApp.`
+        );
+        setTimeout(() => setNotificationMessage(null), 5000);
+      }
+    });
+    return () => unsubscribe();
   }, []);
+
+  const handleSendReminders = async () => {
+    setIsSendingReminders(true);
+    try {
+      const res = await api.appointments.sendReminders({
+        date: selectedDate || undefined
+      });
+      setNotificationMessage(res.message);
+      setTimeout(() => setNotificationMessage(null), 4500);
+    } catch (err: unknown) {
+      setNotificationMessage(
+        err instanceof Error ? err.message : 'Failed to dispatch appointment reminders'
+      );
+      setTimeout(() => setNotificationMessage(null), 4500);
+    } finally {
+      setIsSendingReminders(false);
+    }
+  };
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -244,14 +276,31 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowScheduleModal(true)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Schedule Appointment</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleSendReminders}
+            disabled={isSendingReminders}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-teal-50 text-teal-800 border border-teal-200 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer shrink-0 disabled:opacity-60"
+            title="Dispatch automated WhatsApp reminders for scheduled appointments"
+          >
+            {isSendingReminders ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-700" />
+            ) : (
+              <Bell className="w-3.5 h-3.5 text-teal-700" />
+            )}
+            <span>Send WhatsApp Reminders</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowScheduleModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Schedule Appointment</span>
+          </button>
+        </div>
       </div>
 
       {notificationMessage && (

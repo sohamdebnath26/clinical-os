@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { Patient, PrescriptionItem, Doctor } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { api } from '../lib/api';
 import { WhatsAppShareModal, WhatsAppIcon } from './WhatsAppShareModal';
-import { X, Printer, Pill, Globe } from 'lucide-react';
+import { X, Printer, Pill, ShieldCheck, ExternalLink } from 'lucide-react';
 
 interface PrintRxModalProps {
   patient: Patient;
@@ -19,6 +21,48 @@ export const PrintRxModal: React.FC<PrintRxModalProps> = ({
 }) => {
   const { t, language, setLanguage, supportedLanguages } = useLanguage();
   const [showWhatsApp, setShowWhatsApp] = useState(false);
+  const [verifyQrDataUrl, setVerifyQrDataUrl] = useState<string | null>(null);
+  const [verifyUrl, setVerifyUrl] = useState<string>('');
+  const [verificationCode, setVerificationCode] = useState<string>('');
+
+  useEffect(() => {
+    let isMounted = true;
+    const rxIds = prescriptions.map(r => r.id).filter(Boolean);
+    const consultationId = prescriptions[0]?.consultationId;
+
+    api.prescriptions
+      .signVerificationToken({
+        patientId: patient.id,
+        consultationId,
+        prescriptionIds: rxIds
+      })
+      .then(async (res) => {
+        if (!isMounted) return;
+        const link = `${window.location.origin}${window.location.pathname}?verifyRxToken=${encodeURIComponent(res.token)}`;
+        setVerifyUrl(link);
+        setVerificationCode(res.verificationCode);
+        try {
+          const qrUrl = await QRCode.toDataURL(link, {
+            width: 160,
+            margin: 1,
+            color: {
+              dark: '#0f2926',
+              light: '#ffffff'
+            }
+          });
+          if (isMounted) setVerifyQrDataUrl(qrUrl);
+        } catch {
+          // ignore QR generation error
+        }
+      })
+      .catch(() => {
+        // ignore if offline
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [patient.id, prescriptions]);
 
   const handlePrint = () => {
     window.print();
@@ -162,9 +206,9 @@ export const PrintRxModal: React.FC<PrintRxModalProps> = ({
             )}
           </div>
 
-          {/* Advice / Note & Doctor Signature */}
-          <div className="pt-8 border-t border-slate-200 flex items-end justify-between">
-            <div className="text-[11px] text-slate-500 max-w-sm space-y-1">
+          {/* Advice / Note, Digital Verification QR & Doctor Signature */}
+          <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
+            <div className="text-[11px] text-slate-500 max-w-xs space-y-1">
               <p className="font-bold text-slate-700">{t('instructions')}:</p>
               {language === 'hi' ? (
                 <>
@@ -184,7 +228,40 @@ export const PrintRxModal: React.FC<PrintRxModalProps> = ({
               )}
             </div>
 
-            <div className="text-right">
+            {verifyQrDataUrl && (
+              <div className="flex items-center gap-2.5 p-2 rounded-xl border border-teal-200 bg-teal-50/50">
+                <img
+                  src={verifyQrDataUrl}
+                  alt="Digital Rx Verification QR"
+                  className="w-16 h-16 rounded-lg border border-slate-200 bg-white p-0.5 shrink-0"
+                />
+                <div className="text-[10px] text-slate-600 space-y-0.5">
+                  <span className="font-bold text-teal-900 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-teal-700" />
+                    Digital Rx Verified
+                  </span>
+                  <span className="font-mono font-bold text-slate-800 block">
+                    {verificationCode}
+                  </span>
+                  <span className="text-[9px] text-slate-500 block">
+                    Scan QR at pharmacy to verify authenticity
+                  </span>
+                  {verifyUrl && (
+                    <a
+                      href={verifyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-teal-700 hover:underline print:hidden"
+                    >
+                      <span>Verify Portal</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="text-right self-end">
               <div className="w-40 border-b border-slate-400 pb-1 mb-1 font-serif italic text-sm text-slate-700">
                 {doctor.name}
               </div>
