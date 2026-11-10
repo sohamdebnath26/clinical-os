@@ -24,7 +24,8 @@ import {
   CheckCheck,
   Edit2,
   Sparkles,
-  Download
+  Download,
+  ExternalLink
 } from 'lucide-react';
 
 type PipelineStage = 'needs_review' | 'draft_ready' | 'resolved';
@@ -773,8 +774,8 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     }
   };
 
-  // Dispatch a message in the background & update the conversation thread
-  const handleSendMessage = async (textToSend: string, openUnfocusedBackgroundTab = false) => {
+  // Dispatch a message & launch WhatsApp to the patient's phone number
+  const handleSendMessage = async (textToSend: string, openWhatsAppTab = true) => {
     if (!textToSend.trim() || !activeThread) return;
     setIsDispatching(true);
 
@@ -782,8 +783,8 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     const cleanPhone = cleanPhoneNumber(activeThread.phone) || '919876543210';
     const whatsappUrl = getWhatsAppWebUrl(cleanPhone, messageText);
 
-    if (openUnfocusedBackgroundTab) {
-      launchWhatsAppSynchronously(cleanPhone, messageText, 'unfocused');
+    if (openWhatsAppTab) {
+      launchWhatsAppSynchronously(cleanPhone, messageText, 'web');
     }
 
     let receiptId = `wa-${Date.now().toString(36)}`;
@@ -1141,6 +1142,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
       const cleanPhone = cleanPhoneNumber(activeThread.phone) || '919876543210';
       const whatsappUrl = getWhatsAppWebUrl(cleanPhone, generated.whatsappCompanionText);
+      launchWhatsAppSynchronously(cleanPhone, generated.whatsappCompanionText, 'web');
       const pdfAttachmentPayload = {
         filename: generated.filename,
         reportId: generated.reportId,
@@ -1653,7 +1655,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                   setRefillQueue(prev =>
                     prev.map(r => (r.id === activeThreadRefill.id ? { ...r, status: 'approved' } : r))
                   );
-                  handleSendMessage(refillMsg, false);
+                  handleSendMessage(refillMsg, true);
                 }}
                 className="px-3 py-1 bg-[#0d3f3b] hover:bg-[#135650] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap"
               >
@@ -1717,8 +1719,8 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
                     <p className="leading-relaxed whitespace-pre-line">{m.text}</p>
                     <div
-                      className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] ${
-                        m.sender === 'patient' ? 'text-slate-400' : 'text-teal-200/80'
+                      className={`flex items-center justify-end gap-2 mt-1.5 text-[10px] flex-wrap ${
+                        m.sender === 'patient' ? 'text-slate-400' : 'text-teal-200/90'
                       }`}
                     >
                       <span className="font-mono tabular-nums">{m.time}</span>
@@ -1726,6 +1728,24 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                         <span className="flex items-center gap-0.5">
                           · <CheckCheck className="w-3 h-3 inline" /> {m.status}
                         </span>
+                      )}
+                      {m.sender === 'doctor' && (
+                        <a
+                          href={
+                            m.whatsappUrl ||
+                            getWhatsAppWebUrl(
+                              cleanPhoneNumber(m.recipientPhone || activeThread.phone) || '919876543210',
+                              m.text
+                            )
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/15 hover:bg-white/25 text-white font-semibold transition-colors"
+                          title="Open this message directly in WhatsApp"
+                        >
+                          <span>Open in WhatsApp</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
                       )}
                     </div>
                   </div>
@@ -1786,7 +1806,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                 onKeyDown={e => {
                   if (e.key === 'Enter' && customReply.trim()) {
                     e.preventDefault();
-                    handleSendMessage(customReply, false);
+                    handleSendMessage(customReply, true);
                   }
                 }}
                 className="flex-1 text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-600 focus:bg-white"
@@ -1814,11 +1834,12 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
               <button
                 type="button"
                 disabled={isDispatching || !(customReply.trim() || activeReplyText)}
-                onClick={() => handleSendMessage(customReply.trim() || activeReplyText, false)}
+                onClick={() => handleSendMessage(customReply.trim() || activeReplyText, true)}
                 className="px-4 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 shrink-0 whitespace-nowrap"
+                title="Send message to patient on WhatsApp"
               >
                 <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
-                <span>{customReply.trim() ? 'Send Reply' : 'Send AI Draft'}</span>
+                <span>{customReply.trim() ? 'Send on WhatsApp' : 'Send AI Draft'}</span>
                 <Send className="w-3 h-3" />
               </button>
             </div>

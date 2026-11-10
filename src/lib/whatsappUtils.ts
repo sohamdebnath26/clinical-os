@@ -79,7 +79,7 @@ export function getWhatsAppUniversalUrl(cleanPhone: string, messageText: string)
 export function launchWhatsAppSynchronously(
   cleanPhone: string,
   messageText: string,
-  mode: 'background' | 'unfocused' | 'web' | 'native' = 'background'
+  mode: 'background' | 'unfocused' | 'web' | 'native' = 'web'
 ): string {
   const targetUrl =
     mode === 'native'
@@ -90,15 +90,23 @@ export function launchWhatsAppSynchronously(
     return targetUrl;
   }
 
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     try {
-      const bgWin = window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      if (bgWin) {
-        bgWin.blur();
-      }
-      window.focus();
+      const link = document.createElement('a');
+      link.href = targetUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } catch {
-      // Ignore if sandboxed
+      // Fallback if DOM click fails
+      try {
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      } catch {
+        // Ignore if sandboxed
+      }
     }
   }
 

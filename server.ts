@@ -4705,7 +4705,9 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
   thread.unread = false;
   thread.statusLabel = sanitizedPdfAttachment
     ? 'Resolved · AI Analysis PDF sent'
-    : 'Resolved · Dispatched in background';
+    : deliveryMode === 'cloud_api'
+    ? 'Resolved · Sent via Cloud API'
+    : 'Resolved · Opened in WhatsApp';
   thread.preview = sanitizedPdfAttachment
     ? `📄 PDF Sent: ${sanitizedPdfAttachment.filename}`
     : `You: ${bodyText.slice(0, 90)}`;
@@ -4717,8 +4719,10 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
     text: bodyText,
     time: nowTime,
     status: sanitizedPdfAttachment
-      ? `PDF Delivered on WhatsApp (${resolvedClinicPhone} → ${thread.phone})`
-      : `Delivered in background (${resolvedClinicPhone} → ${thread.phone})`,
+      ? `PDF Sent on WhatsApp (${resolvedClinicPhone} → ${thread.phone})`
+      : deliveryMode === 'cloud_api'
+      ? `Sent via WhatsApp Cloud API (${resolvedClinicPhone} → ${thread.phone})`
+      : `Sent via WhatsApp (${resolvedClinicPhone} → ${thread.phone})`,
     receiptId: dispatchRecord.id,
     whatsappUrl,
     recipientPhone: thread.phone,

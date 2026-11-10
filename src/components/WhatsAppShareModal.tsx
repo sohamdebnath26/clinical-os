@@ -850,21 +850,21 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               <span>WhatsApp Web</span>
             </button>
 
-            {/* Primary Action Button: Dispatches in background via Clinic Gateway & logs in Clinical OS Inbox */}
+            {/* Primary Action Button: Launches WhatsApp & logs in Clinical OS Inbox */}
             <button
               type="button"
-              onClick={() => handleSendWhatsApp(false)}
+              onClick={() => handleSendWhatsApp(true)}
               disabled={isLogging || !cleanedRecipient}
               className="flex-1 sm:flex-none px-5 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white text-xs font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.99] cursor-pointer"
-              title="Dispatch report in background without leaving Clinical OS"
+              title="Open WhatsApp with this report & log in Clinical OS Inbox"
             >
               <WhatsAppIcon className="w-4 h-4 fill-white" />
               <span>
                 {isLogging
-                  ? 'Dispatching...'
+                  ? 'Sending...'
                   : sendAsPdf
                   ? 'Send Medical Report as PDF'
-                  : 'Send to Patient (In-App)'}
+                  : 'Send on WhatsApp'}
               </span>
               <Send className="w-3.5 h-3.5" />
             </button>
