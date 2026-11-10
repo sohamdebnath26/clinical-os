@@ -511,32 +511,72 @@ class DatabaseService {
 
     const effectiveDoctorId = this.resolveEffectiveClinicDoctorId(doctorId) || doctorId;
     const callerDoc = effectiveDoctorId ? this.findDoctorById(effectiveDoctorId) : undefined;
+    const existingAccessiblePatientIds = effectiveDoctorId
+      ? this.getAccessiblePatientIds(effectiveDoctorId)
+      : null;
 
-    const mergeById = <T extends { id: string }>(existingList: T[], incomingList: T[]): T[] => {
+    // Tenant-safe merge: never allow a restore operation to overwrite records owned by another clinic
+    const incomingPatients: Patient[] = (imported.patients as Patient[]).map(p => ({
+      ...p,
+      createdById: effectiveDoctorId || p.createdById,
+      createdByEmail: callerDoc?.email?.toLowerCase() || p.createdByEmail
+    }));
+
+    const patientMap = new Map<string, Patient>();
+    for (const p of this.data.patients) {
+      if (p && p.id) patientMap.set(p.id, p);
+    }
+    const restoredPatientIds = new Set<string>();
+    for (const incomingPat of incomingPatients) {
+      if (!incomingPat || !incomingPat.id) continue;
+      const existingPat = patientMap.get(incomingPat.id);
+      if (existingPat && existingAccessiblePatientIds && !existingAccessiblePatientIds.has(existingPat.id)) {
+        // Prevent cross-tenant ID collision overwrite
+        continue;
+      }
+      patientMap.set(incomingPat.id, incomingPat);
+      restoredPatientIds.add(incomingPat.id);
+    }
+    this.data.patients = Array.from(patientMap.values());
+
+    const allowedPatientIds = new Set<string>([
+      ...(existingAccessiblePatientIds || []),
+      ...restoredPatientIds
+    ]);
+
+    const mergeTenantScoped = <T extends { id: string; patientId?: string }>(
+      existingList: T[],
+      incomingList: T[]
+    ): T[] => {
       const map = new Map<string, T>();
       for (const item of existingList) {
         if (item && item.id) map.set(item.id, item);
       }
       for (const item of incomingList) {
-        if (item && item.id) map.set(item.id, item);
+        if (!item || !item.id) continue;
+        if (item.patientId && effectiveDoctorId && !allowedPatientIds.has(item.patientId)) {
+          continue;
+        }
+        const existingItem = map.get(item.id);
+        if (
+          existingItem &&
+          existingItem.patientId &&
+          effectiveDoctorId &&
+          !allowedPatientIds.has(existingItem.patientId)
+        ) {
+          continue;
+        }
+        map.set(item.id, item);
       }
       return Array.from(map.values());
     };
 
-    const incomingPatients: Patient[] = (imported.patients as Patient[]).map(p => ({
-      ...p,
-      createdById: p.createdById || effectiveDoctorId,
-      createdByEmail: p.createdByEmail || callerDoc?.email?.toLowerCase()
-    }));
-
-    this.data.patients = mergeById(this.data.patients, incomingPatients);
-    this.data.consultations = mergeById(this.data.consultations, imported.consultations || []);
-    this.data.prescriptions = mergeById(this.data.prescriptions, imported.prescriptions || []);
-    this.data.appointments = mergeById(this.data.appointments || [], imported.appointments || []);
-    this.data.bodyMarkers = mergeById(this.data.bodyMarkers || [], imported.bodyMarkers || []);
-    this.data.clinicalImages = mergeById(this.data.clinicalImages || [], imported.clinicalImages || []);
-    this.data.testReports = mergeById(this.data.testReports || [], imported.testReports || []);
-    this.data.formularyItems = mergeById(this.data.formularyItems || [], imported.formularyItems || []);
+    this.data.consultations = mergeTenantScoped(this.data.consultations, imported.consultations || []);
+    this.data.prescriptions = mergeTenantScoped(this.data.prescriptions, imported.prescriptions || []);
+    this.data.appointments = mergeTenantScoped(this.data.appointments || [], imported.appointments || []);
+    this.data.bodyMarkers = mergeTenantScoped(this.data.bodyMarkers || [], imported.bodyMarkers || []);
+    this.data.clinicalImages = mergeTenantScoped(this.data.clinicalImages || [], imported.clinicalImages || []);
+    this.data.testReports = mergeTenantScoped(this.data.testReports || [], imported.testReports || []);
     if (imported.meta?.lastPatientNumber && imported.meta.lastPatientNumber > this.data.meta.lastPatientNumber) {
       this.data.meta.lastPatientNumber = imported.meta.lastPatientNumber;
     }
@@ -767,14 +807,14 @@ class DatabaseService {
     if (!doctorId) return undefined;
     const callerDoc = this.findDoctorById(doctorId);
     if (!callerDoc) return doctorId;
-    if (callerDoc.role === 'receptionist' && callerDoc.assignedByDoctorId) {
+    if (callerDoc.assignedByDoctorId && callerDoc.assignedByDoctorId !== callerDoc.id) {
       return callerDoc.assignedByDoctorId;
     }
     return doctorId;
   }
 
   public canDoctorAccessPatient(patient: Patient, doctorId?: string): boolean {
-    if (!doctorId) return true;
+    if (!doctorId) return false;
     const effectiveDoctorId = this.resolveEffectiveClinicDoctorId(doctorId) || doctorId;
     const callerDoc = this.findDoctorById(effectiveDoctorId) || this.findDoctorById(doctorId);
     const callerEmail = callerDoc?.email?.trim().toLowerCase();
@@ -791,6 +831,14 @@ class DatabaseService {
     }
     if (callerEmail && patient.createdById === this.getDeterministicDoctorId(callerEmail)) {
       return true;
+    }
+
+    // Same-clinic staff membership check (e.g., co-doctor or receptionist assigned to the same clinic owner)
+    if (patient.createdById) {
+      const patientOwnerResolved = this.resolveEffectiveClinicDoctorId(patient.createdById) || patient.createdById;
+      if (patientOwnerResolved === effectiveDoctorId) {
+        return true;
+      }
     }
 
     const isCallerDemo = this.isDemoAccount(effectiveDoctorId) || this.isDemoAccount(doctorId);
@@ -1705,6 +1753,16 @@ class DatabaseService {
       ...img,
       url: img.dataUrl && (!img.url || img.url.startsWith('/uploads/')) ? img.dataUrl : img.url
     };
+  }
+
+  public getClinicalImageByFilename(filename: string): ClinicalImage | undefined {
+    const cleanBase = path.basename(filename).toLowerCase();
+    return this.data.clinicalImages.find(i => {
+      const fMatch = i.filename && path.basename(i.filename).toLowerCase() === cleanBase;
+      const uMatch = i.url && !i.url.startsWith('data:') && path.basename(i.url).toLowerCase() === cleanBase;
+      const idMatch = cleanBase.startsWith(i.id.toLowerCase() + '.');
+      return Boolean(fMatch || uMatch || idMatch);
+    });
   }
 
   public addClinicalImage(img: ClinicalImage): ClinicalImage {

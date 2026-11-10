@@ -278,6 +278,7 @@ async function fetchWithAuth<T>(
   try {
     response = await fetch(url, {
       ...options,
+      credentials: 'include',
       headers,
       signal: options.signal || controller.signal,
     });
@@ -304,12 +305,16 @@ async function fetchWithAuth<T>(
       url.includes('/api/auth/restore');
 
     // Transparently re-establish session if server restarted or token expired mid-workflow
-    if (!isRetry && !isAuthCredentialRoute && storedDoctor) {
+    if (!isRetry && !isAuthCredentialRoute && storedDoctor && token) {
       try {
         const restoreRes = await fetch('/api/auth/restore', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(storedDoctor),
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ ...storedDoctor, token }),
         });
         if (restoreRes.ok) {
           const restoredData = (await restoreRes.json()) as { token: string; doctor: Doctor };
@@ -368,12 +373,12 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(credentials),
       }),
-    sso: (params?: { organization?: string; email?: string; name?: string; department?: string }) =>
+    sso: (params?: { organization?: string; email?: string; name?: string; department?: string; password?: string; idToken?: string }) =>
       fetchWithAuth<{ token: string; doctor: Doctor }>('/api/auth/sso', {
         method: 'POST',
         body: JSON.stringify(params || {}),
       }),
-    google: (params?: { email?: string; name?: string }) =>
+    google: (params?: { email?: string; name?: string; password?: string; idToken?: string }) =>
       fetchWithAuth<{ token: string; doctor: Doctor }>('/api/auth/google', {
         method: 'POST',
         body: JSON.stringify(params || {}),

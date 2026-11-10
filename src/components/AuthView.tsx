@@ -6,13 +6,18 @@ import {
   ArrowRight,
   AlertCircle,
   Loader2,
-  Mail
+  Mail,
+  Lock,
+  User
 } from 'lucide-react';
 
 export const AuthView: React.FC = () => {
-  const { login, loginWithGoogle } = useAuth();
+  const { login, register } = useAuth();
 
-  const [email, setEmail] = useState('sohamdebnath.edu@gmail.com');
+  const [mode, setMode] = useState<'signin' | 'register'>('signin');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('demo@clinicalos.med');
+  const [password, setPassword] = useState('Demo@1234');
   const [isLoading, setIsLoading] = useState(false);
   const [activeAction, setActiveAction] = useState<'email' | 'doctor-demo' | 'receptionist-demo' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +33,7 @@ export const AuthView: React.FC = () => {
     return cleanWords || 'Clinic User';
   };
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
 
@@ -37,17 +42,28 @@ export const AuthView: React.FC = () => {
       return;
     }
 
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
     setIsLoading(true);
     setActiveAction('email');
     setError(null);
 
     try {
-      await loginWithGoogle({
-        email: cleanEmail,
-        name: getDerivedName(cleanEmail)
-      });
+      if (mode === 'register') {
+        const cleanName = name.trim() || `Dr. ${getDerivedName(cleanEmail)}`;
+        await register({
+          name: cleanName,
+          email: cleanEmail,
+          password,
+        });
+      } else {
+        await login(cleanEmail, password);
+      }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to sign in';
+      const msg = err instanceof Error ? err.message : 'Authentication failed';
       setError(msg);
     } finally {
       setIsLoading(false);
@@ -89,12 +105,45 @@ export const AuthView: React.FC = () => {
             Cliniq Clinical OS
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Sign in with your email address to continue
+            {mode === 'signin'
+              ? 'Sign in with your clinic credentials to continue'
+              : 'Create a new verified practitioner account'}
           </p>
         </div>
 
-        {/* Simple Sign In Card */}
+        {/* Sign In / Register Card */}
         <div className="bg-slate-800/95 border border-slate-700/80 rounded-2xl p-6 shadow-xl">
+          <div className="grid grid-cols-2 gap-1 p-1 bg-slate-900/90 rounded-xl mb-4 border border-slate-700/60">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signin');
+                setError(null);
+              }}
+              className={`py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                mode === 'signin'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('register');
+                setError(null);
+              }}
+              className={`py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                mode === 'register'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
+
           {error && (
             <div className="mb-4 p-3 bg-rose-500/15 border border-rose-500/30 rounded-xl flex items-start gap-2.5 text-rose-300 text-xs">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
@@ -102,7 +151,26 @@ export const AuthView: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSignIn} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'register' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Full Name
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Dr. Aditi Sharma"
+                    disabled={isLoading}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                 Email Address
@@ -121,6 +189,25 @@ export const AuthView: React.FC = () => {
               </div>
             </div>
 
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  disabled={isLoading}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
+                />
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={isLoading}
@@ -129,11 +216,11 @@ export const AuthView: React.FC = () => {
               {isLoading && activeAction === 'email' ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Signing in...</span>
+                  <span>{mode === 'signin' ? 'Signing in...' : 'Creating account...'}</span>
                 </>
               ) : (
                 <>
-                  <span>Sign In</span>
+                  <span>{mode === 'signin' ? 'Sign In' : 'Create Account'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

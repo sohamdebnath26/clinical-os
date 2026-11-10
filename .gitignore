@@ -8,3 +8,5 @@ coverage/
 !.env.example
 *.tmp
 .aistudio/
+.session_secret
+data/.session_secret

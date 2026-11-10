@@ -72,8 +72,6 @@ if (!fs.existsSync(DATA_DIR)) {
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
-app.use('/uploads', express.static(UPLOADS_DIR));
-
 // Re-hydrate any /uploads/... image files from persistent dataUrl on container boot
 function hydrateDiskFilesFromDb() {
   try {
@@ -101,20 +99,101 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Session store (token -> doctorId) with HMAC-signed stateless token verification
-const activeSessions = new Map<string, { doctorId: string; expiresAt: number }>();
+const activeSessions = new Map<
+  string,
+  { doctorId: string; expiresAt: number; delegatedFromDoctorId?: string }
+>();
 const revokedTokens = new Set<string>();
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days sliding window
-const SESSION_SECRET =
-  process.env.SESSION_SECRET ||
-  process.env.GEMINI_API_KEY ||
-  'clinical-os-hmac-session-secret-2026-v1';
+const SESSION_COOKIE_NAME = 'clinical_os_session';
+
+// Cryptographically random per-deployment secret (never falls back to a static hardcoded string)
+function resolveOrGenerateSessionSecret(): string {
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.trim().length >= 16) {
+    return process.env.SESSION_SECRET.trim();
+  }
+  const secretFilePath = path.join(DATA_DIR, '.session_secret');
+  try {
+    if (fs.existsSync(secretFilePath)) {
+      const existing = fs.readFileSync(secretFilePath, 'utf8').trim();
+      if (existing.length >= 32) {
+        return existing;
+      }
+    }
+    const generated = crypto.randomBytes(64).toString('hex');
+    fs.writeFileSync(secretFilePath, generated, { encoding: 'utf8', mode: 0o600 });
+    return generated;
+  } catch {
+    return crypto.randomBytes(64).toString('hex');
+  }
+}
+
+const SESSION_SECRET = resolveOrGenerateSessionSecret();
 
 function signPayloadHmac(encodedPayload: string): string {
   return crypto
     .createHmac('sha256', SESSION_SECRET)
     .update(encodedPayload)
     .digest('base64url')
-    .slice(0, 24);
+    .slice(0, 32);
+}
+
+function verifyHmacSignature(encodedPayload: string, candidateSig: string): boolean {
+  if (!encodedPayload || !candidateSig) return false;
+  const fullHmac = crypto
+    .createHmac('sha256', SESSION_SECRET)
+    .update(encodedPayload)
+    .digest('base64url');
+  const expected32 = fullHmac.slice(0, 32);
+  const expected24 = fullHmac.slice(0, 24);
+  if (
+    candidateSig.length === expected32.length &&
+    crypto.timingSafeEqual(Buffer.from(candidateSig), Buffer.from(expected32))
+  ) {
+    return true;
+  }
+  if (
+    candidateSig.length === expected24.length &&
+    crypto.timingSafeEqual(Buffer.from(candidateSig), Buffer.from(expected24))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function parseCookies(req: Request): Record<string, string> {
+  const header = req.headers.cookie;
+  if (!header) return {};
+  const out: Record<string, string> = {};
+  for (const part of header.split(';')) {
+    const eqIdx = part.indexOf('=');
+    if (eqIdx > 0) {
+      const key = part.slice(0, eqIdx).trim();
+      const val = part.slice(eqIdx + 1).trim();
+      try {
+        out[key] = decodeURIComponent(val);
+      } catch {
+        out[key] = val;
+      }
+    }
+  }
+  return out;
+}
+
+function setSessionCookie(res: Response, token: string) {
+  const maxAgeSec = Math.floor(SESSION_TTL_MS / 1000);
+  const secureFlag = isProduction ? '; Secure' : '';
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAgeSec}; HttpOnly; SameSite=Lax${secureFlag}`
+  );
+}
+
+function clearSessionCookie(res: Response) {
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`
+  );
 }
 
 function pruneExpiredSessions() {
@@ -132,6 +211,18 @@ function pruneExpiredSessions() {
   }
 }
 
+interface SignedTokenPayload {
+  id: string;
+  email?: string;
+  name?: string;
+  speciality?: string;
+  clinicName?: string;
+  role?: 'doctor' | 'receptionist';
+  accountType?: 'individual' | 'organisational';
+  delegatedFromDoctorId?: string;
+  iat?: number;
+}
+
 function generateToken(
   doctorOrId?:
     | string
@@ -143,38 +234,45 @@ function generateToken(
         clinicName?: string;
         role?: 'doctor' | 'receptionist';
         accountType?: 'individual' | 'organisational';
-      }
+      },
+  delegatedFromDoctorId?: string
 ): string {
   pruneExpiredSessions();
-  let payloadStr = '';
+  let payloadObj: SignedTokenPayload | null = null;
   if (typeof doctorOrId === 'string' && doctorOrId) {
     const doc = db.findDoctorById(doctorOrId);
     if (doc) {
-      payloadStr = JSON.stringify({
+      payloadObj = {
         id: doc.id,
         email: doc.email,
         name: doc.name,
         speciality: doc.speciality,
         clinicName: doc.clinicName,
         role: doc.role,
-        accountType: doc.accountType
-      });
+        accountType: doc.accountType,
+        delegatedFromDoctorId,
+        iat: Date.now()
+      };
     } else {
-      payloadStr = JSON.stringify({ id: doctorOrId });
+      payloadObj = { id: doctorOrId, delegatedFromDoctorId, iat: Date.now() };
     }
   } else if (doctorOrId && typeof doctorOrId === 'object') {
-    payloadStr = JSON.stringify({
+    payloadObj = {
       id: doctorOrId.id,
       email: doctorOrId.email,
       name: doctorOrId.name,
       speciality: doctorOrId.speciality,
       clinicName: doctorOrId.clinicName,
       role: doctorOrId.role,
-      accountType: doctorOrId.accountType
-    });
+      accountType: doctorOrId.accountType,
+      delegatedFromDoctorId,
+      iat: Date.now()
+    };
   }
 
-  const encodedDoc = payloadStr ? Buffer.from(payloadStr, 'utf8').toString('base64url') : '';
+  const encodedDoc = payloadObj
+    ? Buffer.from(JSON.stringify(payloadObj), 'utf8').toString('base64url')
+    : '';
   if (!encodedDoc) {
     const nonce = `${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
     return `sess_${nonce}_${signPayloadHmac(nonce)}`;
@@ -183,21 +281,46 @@ function generateToken(
   return `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}_${encodedDoc}.${sig}`;
 }
 
-// Authentication middleware
-interface AuthenticatedRequest extends Request {
-  doctor?: ReturnType<typeof db.findDoctorById>;
+function verifyAndDecodeSignedToken(token: string): SignedTokenPayload | null {
+  if (!token || !token.startsWith('sess_') || revokedTokens.has(token)) {
+    return null;
+  }
+  const parts = token.split('_');
+  if (parts.length < 4) return null;
+  try {
+    const rawTail = parts.slice(3).join('_');
+    const dotIdx = rawTail.lastIndexOf('.');
+    if (dotIdx <= 0) return null;
+    const candidateEncoded = rawTail.slice(0, dotIdx);
+    const candidateSig = rawTail.slice(dotIdx + 1);
+    if (!verifyHmacSignature(candidateEncoded, candidateSig)) {
+      return null;
+    }
+    const decodedRaw = Buffer.from(candidateEncoded, 'base64url').toString('utf8');
+    if (!decodedRaw.startsWith('{')) return null;
+    const parsed = JSON.parse(decodedRaw) as SignedTokenPayload;
+    if (!parsed || !parsed.id) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
-function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+function resolveAuthenticatedDoctorFromRequest(req: Request): {
+  token: string;
+  doctor: NonNullable<ReturnType<typeof db.findDoctorById>>;
+  session: { doctorId: string; expiresAt: number; delegatedFromDoctorId?: string };
+} | null {
   const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1]?.trim() : '';
+  const bearerToken =
+    authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1]?.trim() : '';
+  const cookies = parseCookies(req);
+  const cookieToken = cookies[SESSION_COOKIE_NAME] || '';
+  const queryToken = typeof req.query.token === 'string' ? req.query.token.trim() : '';
+  const token = bearerToken || cookieToken || queryToken;
 
-  if (!token) {
-    return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
-  }
-
-  if (revokedTokens.has(token)) {
-    return res.status(401).json({ error: 'Session expired or invalid' });
+  if (!token || revokedTokens.has(token)) {
+    return null;
   }
 
   let session = activeSessions.get(token);
@@ -206,62 +329,58 @@ function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunc
     session = undefined;
   }
 
-  // Restore valid signed client tokens seamlessly if the server restarted in dev/Render
   if (!session && token.startsWith('sess_')) {
-    const parts = token.split('_');
-    let restoredDoctor = undefined;
-    if (parts.length >= 4) {
-      try {
-        const rawTail = parts.slice(3).join('_');
-        const dotIdx = rawTail.lastIndexOf('.');
-        let encodedPart = '';
-        if (dotIdx > 0) {
-          const candidateEncoded = rawTail.slice(0, dotIdx);
-          const candidateSig = rawTail.slice(dotIdx + 1);
-          const expectedSig = signPayloadHmac(candidateEncoded);
-          if (
-            candidateSig.length === expectedSig.length &&
-            crypto.timingSafeEqual(Buffer.from(candidateSig), Buffer.from(expectedSig))
-          ) {
-            encodedPart = candidateEncoded;
-          }
-        }
-
-        if (encodedPart) {
-          const decodedRaw = Buffer.from(encodedPart, 'base64url').toString('utf8');
-          if (decodedRaw.startsWith('{')) {
-            const parsed = JSON.parse(decodedRaw);
-            restoredDoctor = db.restoreOrEnsureDoctor(parsed);
-          }
-        }
-      } catch {
-        // invalid encoded payload
+    const verifiedPayload = verifyAndDecodeSignedToken(token);
+    if (verifiedPayload) {
+      const restoredDoctor = db.restoreOrEnsureDoctor(verifiedPayload);
+      if (restoredDoctor) {
+        session = {
+          doctorId: restoredDoctor.id,
+          expiresAt: Date.now() + SESSION_TTL_MS,
+          delegatedFromDoctorId: verifiedPayload.delegatedFromDoctorId
+        };
+        activeSessions.set(token, session);
       }
-    }
-
-    if (restoredDoctor) {
-      session = {
-        doctorId: restoredDoctor.id,
-        expiresAt: Date.now() + SESSION_TTL_MS
-      };
-      activeSessions.set(token, session);
     }
   }
 
   if (!session) {
-    return res.status(401).json({ error: 'Session expired or invalid' });
+    return null;
   }
 
-  // Sliding window expiration refresh
   session.expiresAt = Date.now() + SESSION_TTL_MS;
-
   const doctor = db.findDoctorById(session.doctorId);
   if (!doctor) {
     activeSessions.delete(token);
-    return res.status(401).json({ error: 'Doctor account not found' });
+    return null;
   }
 
-  req.doctor = doctor;
+  return { token, doctor, session };
+}
+
+// Authentication middleware
+interface AuthenticatedRequest extends Request {
+  doctor?: ReturnType<typeof db.findDoctorById>;
+  sessionToken?: string;
+  delegatedFromDoctorId?: string;
+}
+
+function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const resolved = resolveAuthenticatedDoctorFromRequest(req);
+  if (!resolved) {
+    return res.status(401).json({ error: 'Unauthorized: Missing, expired, or invalid session token' });
+  }
+
+  req.doctor = resolved.doctor;
+  req.sessionToken = resolved.token;
+  req.delegatedFromDoctorId = resolved.session.delegatedFromDoctorId;
+
+  // Ensure HttpOnly session cookie is synchronized so browser <img> requests to /uploads/* are authenticated
+  const cookies = parseCookies(req);
+  if (cookies[SESSION_COOKIE_NAME] !== resolved.token) {
+    setSessionCookie(res, resolved.token);
+  }
+
   next();
 }
 
@@ -271,6 +390,47 @@ function requireDoctorRole(req: AuthenticatedRequest, res: Response, next: NextF
   }
   next();
 }
+
+// Protected static clinical image serving (/uploads/* requires valid clinic session or active mobile QR upload token)
+app.use(
+  '/uploads',
+  (req: Request, res: Response, next: NextFunction) => {
+    const requestedFile = path.basename(req.path);
+    const imgRecord = db.getClinicalImageByFilename(requestedFile);
+
+    // 1. Check standard authenticated doctor/staff session (via HttpOnly cookie, Bearer header, or ?token=)
+    const resolvedAuth = resolveAuthenticatedDoctorFromRequest(req);
+    if (resolvedAuth) {
+      if (imgRecord && imgRecord.patientId) {
+        const canAccess = db.findPatientById(imgRecord.patientId, resolvedAuth.doctor.id);
+        if (!canAccess) {
+          return res.status(403).json({ error: 'Forbidden: Image belongs to another clinic tenant' });
+        }
+      }
+      res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return next();
+    }
+
+    // 2. Check if request comes from an active HMAC-signed mobile QR upload session for that patient
+    const mobileToken =
+      (typeof req.query.mobToken === 'string' ? req.query.mobToken.trim() : '') ||
+      (typeof req.query.token === 'string' && req.query.token.startsWith('mob_')
+        ? req.query.token.trim()
+        : '');
+    if (mobileToken) {
+      const mobSession = getOrRestoreMobileUploadSession(mobileToken);
+      if (mobSession && (!imgRecord || imgRecord.patientId === mobSession.patientId)) {
+        res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        return next();
+      }
+    }
+
+    return res.status(401).json({ error: 'Unauthorized: Authentication required to access clinical images' });
+  },
+  express.static(UPLOADS_DIR)
+);
 
 // ==========================================
 // AUTH ROUTES
@@ -318,6 +478,7 @@ app.post('/api/auth/login', (req, res) => {
     doctorId: doctor.id,
     expiresAt: Date.now() + SESSION_TTL_MS
   });
+  setSessionCookie(res, token);
 
   db.logAudit({
     actorId: doctor.id,
@@ -330,40 +491,77 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token, doctor });
 });
 
-// Silent session restore endpoint for seamless recovery after server restarts
+// Cryptographically verified session restore endpoint (requires a valid HMAC-signed session token)
 app.post('/api/auth/restore', (req, res) => {
-  const { id, email, name, speciality, clinicName, role, accountType } = req.body || {};
-  const doctor =
-    db.restoreOrEnsureDoctor({ id, email, name, speciality, clinicName, role, accountType }) ||
-    db.findDoctorById('doc-demo-001');
+  const authHeader = req.headers.authorization;
+  const bearerToken =
+    authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1]?.trim() : '';
+  const cookies = parseCookies(req);
+  const cookieToken = cookies[SESSION_COOKIE_NAME] || '';
+  const bodyToken = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+  const candidateToken = bearerToken || bodyToken || cookieToken;
 
-  if (!doctor) {
-    return res.status(401).json({ error: 'Unable to restore session' });
+  if (!candidateToken || revokedTokens.has(candidateToken)) {
+    return res.status(401).json({ error: 'Unauthorized: Valid signed session token is required to restore session' });
   }
 
-  const token = generateToken(doctor);
-  activeSessions.set(token, {
-    doctorId: doctor.id,
-    expiresAt: Date.now() + SESSION_TTL_MS
-  });
+  const verifiedPayload = verifyAndDecodeSignedToken(candidateToken);
+  if (!verifiedPayload) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid or tampered session token signature' });
+  }
 
-  res.json({ token, doctor });
+  const doctor = db.restoreOrEnsureDoctor(verifiedPayload);
+  if (!doctor) {
+    return res.status(401).json({ error: 'Unable to restore session for unknown account' });
+  }
+
+  const newToken = generateToken(doctor, verifiedPayload.delegatedFromDoctorId);
+  activeSessions.set(newToken, {
+    doctorId: doctor.id,
+    expiresAt: Date.now() + SESSION_TTL_MS,
+    delegatedFromDoctorId: verifiedPayload.delegatedFromDoctorId
+  });
+  setSessionCookie(res, newToken);
+
+  res.json({ token: newToken, doctor });
 });
 
 // Single Sign-On (SSO) for Work/University/Hospital Organisations
 app.post('/api/auth/sso', (req, res) => {
-  const { organization, email, name, department } = req.body;
+  const { organization, email, name, department, password } = req.body || {};
   const orgName = (organization || 'Metro Health University Medical Center').trim();
   const orgEmail = (email || 'hospital@metrohealth.org').toLowerCase().trim();
   const orgDoctorName = (name || 'Dr. Sarah Chen, MD').trim();
   const orgDept = (department || 'Chief of Dermatology & Cutaneous Medicine').trim();
 
   let doctor = db.findDoctorByEmail(orgEmail);
-  if (!doctor) {
+  if (doctor) {
+    // Prevent account takeover of non-demo accounts via unverified SSO payload
+    if (!db.isKnownPresetEmail(orgEmail)) {
+      if (!password || !db.verifyPassword(doctor.id, String(password))) {
+        return res.status(401).json({
+          error: 'This clinic account requires your password or a verified organizational SSO assertion.'
+        });
+      }
+    }
+    if (!doctor.accountType) {
+      db.updateDoctor(doctor.id, {
+        accountType: 'organisational',
+        organizationName: orgName,
+        organizationDepartment: orgDept
+      });
+      doctor = db.findDoctorById(doctor.id)!;
+    }
+  } else {
+    if (!db.isKnownPresetEmail(orgEmail) && !password) {
+      return res.status(401).json({
+        error: 'Please provide a password or register a new organizational clinic account.'
+      });
+    }
     doctor = db.createDoctor({
       name: orgDoctorName,
       email: orgEmail,
-      password: 'Demo@1234_sso_managed',
+      password: password ? String(password) : 'Demo@1234_sso_managed',
       speciality: orgDept,
       registrationNumber: `SSO-${Math.floor(100000 + Math.random() * 900000)}`,
       clinicName: orgName,
@@ -375,13 +573,6 @@ app.post('/api/auth/sso', (req, res) => {
       organizationDepartment: orgDept
     });
     doctor = db.findDoctorById(doctor.id)!;
-  } else if (!doctor.accountType) {
-    db.updateDoctor(doctor.id, {
-      accountType: 'organisational',
-      organizationName: orgName,
-      organizationDepartment: orgDept
-    });
-    doctor = db.findDoctorById(doctor.id)!;
   }
 
   const token = generateToken(doctor);
@@ -389,6 +580,7 @@ app.post('/api/auth/sso', (req, res) => {
     doctorId: doctor.id,
     expiresAt: Date.now() + SESSION_TTL_MS
   });
+  setSessionCookie(res, token);
 
   db.logAudit({
     actorId: doctor.id,
@@ -402,17 +594,59 @@ app.post('/api/auth/sso', (req, res) => {
   res.json({ token, doctor });
 });
 
-// Individual Google Authentication
-app.post('/api/auth/google', (req, res) => {
-  const googleEmail = (req.body.email || 'dr.alex.mercer@gmail.com').toLowerCase().trim();
-  const doctorName = (req.body.name || 'Dr. Alex Mercer').trim();
+// Individual Google Authentication (Verifies Google ID Token when provided, or enforces password for registered accounts)
+app.post('/api/auth/google', async (req, res) => {
+  const { idToken, credential, password } = req.body || {};
+  const rawToken = idToken || credential;
+
+  let googleEmail = (req.body?.email || 'dr.alex.mercer@gmail.com').toLowerCase().trim();
+  let doctorName = (req.body?.name || 'Dr. Alex Mercer').trim();
+  let tokenVerifiedByGoogle = false;
+
+  if (rawToken && typeof rawToken === 'string') {
+    try {
+      const verifyRes = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(rawToken)}`
+      );
+      if (!verifyRes.ok) {
+        return res.status(401).json({ error: 'Invalid Google OAuth ID token' });
+      }
+      const tokenInfo = (await verifyRes.json()) as {
+        email?: string;
+        email_verified?: string | boolean;
+        name?: string;
+      };
+      if (!tokenInfo.email || String(tokenInfo.email_verified) === 'false') {
+        return res.status(401).json({ error: 'Google account email is not verified' });
+      }
+      googleEmail = tokenInfo.email.toLowerCase().trim();
+      if (tokenInfo.name) doctorName = tokenInfo.name.trim();
+      tokenVerifiedByGoogle = true;
+    } catch {
+      return res.status(401).json({ error: 'Failed to verify Google OAuth token' });
+    }
+  }
 
   let doctor = db.findDoctorByEmail(googleEmail);
-  if (!doctor) {
+  if (doctor) {
+    // If not verified by a cryptographic Google ID token and not a preset demo account, require password verification
+    if (!tokenVerifiedByGoogle && !db.isKnownPresetEmail(googleEmail)) {
+      if (!password || !db.verifyPassword(doctor.id, String(password))) {
+        return res.status(401).json({
+          error: 'Invalid password for this clinic account.'
+        });
+      }
+    }
+  } else {
+    if (!tokenVerifiedByGoogle && !db.isKnownPresetEmail(googleEmail) && !password) {
+      return res.status(401).json({
+        error: 'Please enter a password to create or sign in to your account.'
+      });
+    }
     doctor = db.createDoctor({
       name: doctorName,
       email: googleEmail,
-      password: 'Demo@1234_google_auth',
+      password: password ? String(password) : 'Demo@1234_google_auth',
       speciality: 'Dermatologist & Laser Surgeon',
       registrationNumber: `G-MD-${Math.floor(100000 + Math.random() * 900000)}`,
       clinicName: 'Mercer Dermatology Practice',
@@ -429,6 +663,7 @@ app.post('/api/auth/google', (req, res) => {
     doctorId: doctor.id,
     expiresAt: Date.now() + SESSION_TTL_MS
   });
+  setSessionCookie(res, token);
 
   db.logAudit({
     actorId: doctor.id,
@@ -436,7 +671,7 @@ app.post('/api/auth/google', (req, res) => {
     action: 'doctor_google_login',
     resourceType: 'auth',
     resourceId: doctor.id,
-    metadata: { provider: 'google' }
+    metadata: { provider: tokenVerifiedByGoogle ? 'google_oauth_verified' : 'google' }
   });
 
   res.json({ token, doctor });
@@ -473,6 +708,7 @@ app.post('/api/auth/register', (req, res) => {
       doctorId: doctor.id,
       expiresAt: Date.now() + SESSION_TTL_MS
     });
+    setSessionCookie(res, token);
 
     res.status(201).json({ token, doctor });
   } catch (err: unknown) {
@@ -485,12 +721,13 @@ app.get('/api/auth/me', authMiddleware, (req: AuthenticatedRequest, res) => {
   res.json({ doctor: req.doctor });
 });
 
-app.post('/api/auth/logout', authMiddleware, (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
+app.post('/api/auth/logout', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const token = req.sessionToken || req.headers.authorization?.split(' ')[1];
   if (token) {
     activeSessions.delete(token);
     revokedTokens.add(token);
   }
+  clearSessionCookie(res);
   res.json({ message: 'Logged out successfully' });
 });
 
@@ -585,17 +822,24 @@ app.delete('/api/staff/:id', authMiddleware, (req: AuthenticatedRequest, res) =>
   res.json({ success: true, staff });
 });
 
-// Switch session between Doctor and Receptionist account for instant POV testing
+// Switch session between Doctor and Receptionist account within the same clinic (with privilege-escalation protection)
 app.post('/api/staff/switch-session', authMiddleware, (req: AuthenticatedRequest, res) => {
   if (!req.doctor) return res.status(401).json({ error: 'Unauthorized' });
-  const { targetId, targetRole, role } = req.body || {};
+  const { targetId, targetRole, role, password } = req.body || {};
   const effectiveTargetRole = targetRole || role;
+  const clinicStaff = db.getClinicStaffAccounts(req.doctor.id);
+  const allowedStaffIds = new Set(clinicStaff.map(s => s.id));
 
   let targetAccount: ReturnType<typeof db.findDoctorById>;
   if (targetId) {
-    targetAccount = db.findDoctorById(String(targetId));
+    const candidate = db.findDoctorById(String(targetId));
+    if (candidate && !allowedStaffIds.has(candidate.id)) {
+      return res.status(403).json({
+        error: 'Forbidden: Cannot switch into an account outside your clinic.'
+      });
+    }
+    targetAccount = candidate;
   } else if (effectiveTargetRole === 'receptionist') {
-    const clinicStaff = db.getClinicStaffAccounts(req.doctor.id);
     targetAccount =
       clinicStaff.find(s => s.role === 'receptionist') ||
       db.assignEmailRole({
@@ -605,25 +849,64 @@ app.post('/api/staff/switch-session', authMiddleware, (req: AuthenticatedRequest
         assignedByDoctor: req.doctor
       });
   } else if (effectiveTargetRole === 'doctor') {
-    if (req.doctor.assignedByDoctorId) {
+    if (req.delegatedFromDoctorId) {
+      targetAccount = db.findDoctorById(req.delegatedFromDoctorId);
+    }
+    if (!targetAccount && req.doctor.assignedByDoctorId) {
       targetAccount = db.findDoctorById(req.doctor.assignedByDoctorId);
     }
     if (!targetAccount) {
-      const clinicStaff = db.getClinicStaffAccounts(req.doctor.id);
-      targetAccount =
-        clinicStaff.find(s => s.role !== 'receptionist') ||
-        db.findDoctorByEmail('demo@clinicalos.med');
+      targetAccount = clinicStaff.find(s => s.role !== 'receptionist');
     }
   }
 
   if (!targetAccount) {
-    return res.status(404).json({ error: 'Target account not found.' });
+    return res.status(404).json({ error: 'Target clinic staff account not found.' });
   }
 
-  const token = generateToken(targetAccount);
+  // Privilege escalation check: a standalone Receptionist cannot elevate to a real Doctor account without either:
+  // 1) Having originally switched from that Doctor session (`req.delegatedFromDoctorId`),
+  // 2) Providing the target Doctor's valid password, or
+  // 3) Switching between preset demo accounts.
+  const isElevatingToDoctor =
+    req.doctor.role === 'receptionist' && targetAccount.role !== 'receptionist';
+  if (isElevatingToDoctor) {
+    const isReturningToDelegatingDoctor =
+      Boolean(req.delegatedFromDoctorId) && req.delegatedFromDoctorId === targetAccount.id;
+    const isPresetDemoSwitch =
+      db.isDemoAccount(req.doctor.id) && db.isDemoAccount(targetAccount.id);
+    const hasValidDoctorPassword =
+      typeof password === 'string' &&
+      password.length > 0 &&
+      db.verifyPassword(targetAccount.id, password);
+
+    if (!isReturningToDelegatingDoctor && !isPresetDemoSwitch && !hasValidDoctorPassword) {
+      return res.status(403).json({
+        error: 'Doctor password is required to switch from a Receptionist login to a Doctor account.'
+      });
+    }
+  }
+
+  const nextDelegatedFromDoctorId =
+    req.doctor.role !== 'receptionist' && targetAccount.role === 'receptionist'
+      ? req.doctor.id
+      : undefined;
+
+  const token = generateToken(targetAccount, nextDelegatedFromDoctorId);
   activeSessions.set(token, {
     doctorId: targetAccount.id,
-    expiresAt: Date.now() + SESSION_TTL_MS
+    expiresAt: Date.now() + SESSION_TTL_MS,
+    delegatedFromDoctorId: nextDelegatedFromDoctorId
+  });
+  setSessionCookie(res, token);
+
+  db.logAudit({
+    actorId: req.doctor.id,
+    actorName: req.doctor.name,
+    action: 'staff_session_switched',
+    resourceType: 'auth',
+    resourceId: targetAccount.id,
+    metadata: { fromRole: req.doctor.role || 'doctor', toRole: targetAccount.role || 'doctor' }
   });
 
   res.json({ token, doctor: targetAccount });
@@ -2076,20 +2359,30 @@ function getOrRestoreMobileUploadSession(token: string): MobileImageUploadSessio
     const parts = token.split('_');
     let patientId = '';
     let consultationId: string | undefined = undefined;
-    let doctorId = 'doc-demo-001';
+    let doctorId = '';
     if (parts.length >= 4) {
       try {
-        const decoded = JSON.parse(Buffer.from(parts.slice(3).join('_'), 'base64url').toString('utf8'));
+        const rawTail = parts.slice(3).join('_');
+        const dotIdx = rawTail.lastIndexOf('.');
+        // Require valid HMAC signature on restored mobile QR tokens
+        if (dotIdx <= 0) return undefined;
+        const encodedMeta = rawTail.slice(0, dotIdx);
+        const sig = rawTail.slice(dotIdx + 1);
+        if (!verifyHmacSignature(encodedMeta, sig)) {
+          return undefined;
+        }
+        const decoded = JSON.parse(Buffer.from(encodedMeta, 'base64url').toString('utf8'));
         if (decoded.p) patientId = decoded.p;
         if (decoded.c) consultationId = decoded.c;
         if (decoded.d) doctorId = decoded.d;
       } catch {
-        // ignore decode error
+        return undefined;
       }
     }
 
-    const patient = (patientId && db.findPatientById(patientId)) || db.getPatients()[0];
-    const doctor = db.findDoctorById(doctorId) || db.findDoctorById('doc-demo-001');
+    if (!patientId || !doctorId) return undefined;
+    const doctor = db.findDoctorById(doctorId);
+    const patient = doctor ? db.findPatientById(patientId, doctor.id) : undefined;
     if (patient && doctor) {
       const now = Date.now();
       const existingImages = db
@@ -2117,16 +2410,16 @@ function getOrRestoreMobileUploadSession(token: string): MobileImageUploadSessio
   return undefined;
 }
 
-// Create a QR mobile upload session (authenticated doctor)
+// Create a QR mobile upload session (authenticated doctor, scoped to doctor's clinic)
 app.post('/api/images/mobile-session', authMiddleware, (req: AuthenticatedRequest, res) => {
   cleanupExpiredMobileSessions();
   const { patientId, consultationId } = req.body || {};
   const doctor = req.doctor!;
-  let patient = patientId ? db.findPatientById(patientId) : undefined;
+  let patient = patientId ? db.findPatientById(patientId, doctor.id) : undefined;
   if (!patient) {
-    const allPatients = db.getPatients();
-    if (allPatients.length > 0) {
-      patient = allPatients[0];
+    const clinicPatients = db.getPatients(undefined, doctor.id);
+    if (clinicPatients.length > 0) {
+      patient = clinicPatients[0];
     } else {
       patient = db.createPatient(
         {
@@ -2134,7 +2427,9 @@ app.post('/api/images/mobile-session', authMiddleware, (req: AuthenticatedReques
           age: 30,
           gender: 'Other',
           mobile: '9999999999',
-          medicalHistory: 'Clinical scan intake'
+          medicalHistory: 'Clinical scan intake',
+          createdById: doctor.id,
+          createdByEmail: doctor.email.toLowerCase()
         },
         doctor
       );
@@ -2144,7 +2439,8 @@ app.post('/api/images/mobile-session', authMiddleware, (req: AuthenticatedReques
     JSON.stringify({ p: patient.id, c: consultationId, d: doctor.id }),
     'utf8'
   ).toString('base64url');
-  const token = `mob_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}_${encodedMeta}`;
+  const sig = signPayloadHmac(encodedMeta);
+  const token = `mob_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}_${encodedMeta}.${sig}`;
   const now = Date.now();
   const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours validity
 
@@ -2332,7 +2628,7 @@ function getOrRestoreWalkInSession(token: string): MobileWalkInSession | undefin
 
   if (token && token.startsWith('wlk_')) {
     const parts = token.split('_');
-    let doctorId = 'doc-demo-001';
+    let doctorId = '';
     let doctorName = 'Dr. Demo';
     let clinicName = 'Cliniq Dermatology Center';
     let mobile = '';
@@ -2340,24 +2636,34 @@ function getOrRestoreWalkInSession(token: string): MobileWalkInSession | undefin
 
     if (parts.length >= 4) {
       try {
-        const decoded = JSON.parse(Buffer.from(parts.slice(3).join('_'), 'base64url').toString('utf8'));
+        const rawTail = parts.slice(3).join('_');
+        const dotIdx = rawTail.lastIndexOf('.');
+        if (dotIdx <= 0) return undefined;
+        const encodedMeta = rawTail.slice(0, dotIdx);
+        const sig = rawTail.slice(dotIdx + 1);
+        if (!verifyHmacSignature(encodedMeta, sig)) {
+          return undefined;
+        }
+        const decoded = JSON.parse(Buffer.from(encodedMeta, 'base64url').toString('utf8'));
         if (decoded.d) doctorId = decoded.d;
         if (decoded.n) doctorName = decoded.n;
         if (decoded.c) clinicName = decoded.c;
         if (decoded.m) mobile = decoded.m;
         if (decoded.cc) countryCode = decoded.cc;
       } catch {
-        // ignore decode error
+        return undefined;
       }
     }
 
-    const doc = db.findDoctorById(doctorId) || db.findDoctorById('doc-demo-001');
+    if (!doctorId) return undefined;
+    const doc = db.findDoctorById(doctorId);
+    if (!doc) return undefined;
     const now = Date.now();
     session = {
       token,
-      doctorId: doc?.id || doctorId,
-      doctorName: doc?.name || doctorName,
-      clinicName: doc?.clinicName || clinicName,
+      doctorId: doc.id,
+      doctorName: doc.name || doctorName,
+      clinicName: doc.clinicName || clinicName,
       mobile,
       countryCode,
       fullName: '',
@@ -2407,8 +2713,8 @@ app.post('/api/walkin/mobile-session', authMiddleware, (req: AuthenticatedReques
     }),
     'utf8'
   ).toString('base64url');
-
-  const token = `wlk_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}_${encodedMeta}`;
+  const sig = signPayloadHmac(encodedMeta);
+  const token = `wlk_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}_${encodedMeta}.${sig}`;
   const now = Date.now();
   const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours validity
 
