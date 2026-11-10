@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useLanguage } from '../context/LanguageContext';
 import { Patient } from '../types';
 import { api, subscribeToClinicRealtimeEvents } from '../lib/api';
 import { VoiceDictationButton } from './VoiceDictationButton';
@@ -16,21 +15,15 @@ import {
   Phone,
   Send,
   CheckCircle2,
-  User,
   Check,
   RefreshCw,
   FileText,
   MessageSquare,
   Plus,
   X,
-  ChevronRight,
   CheckCheck,
-  AlertCircle,
-  Clock,
   Edit2,
-  ArrowRight,
   Sparkles,
-  ExternalLink,
   Download
 } from 'lucide-react';
 
@@ -104,9 +97,8 @@ const CLINICAL_TEMPLATES = [
 
 export const MessagesView: React.FC = () => {
   const { doctor } = useAuth();
-  const { t } = useLanguage();
 
-  // Clinic Linked Phone Number State (Editable inline badge, persisted in localStorage)
+  // Clinic Linked Phone Number State (Editable inline, persisted in localStorage)
   const [clinicPhone, setClinicPhone] = useState<string>(() => {
     try {
       return localStorage.getItem('clinical_os_clinic_phone') || '+91 98765 00001';
@@ -117,12 +109,12 @@ export const MessagesView: React.FC = () => {
   const [isEditingClinicPhone, setIsEditingClinicPhone] = useState(false);
   const [clinicPhoneDraft, setClinicPhoneDraft] = useState(clinicPhone);
 
-  // Patient Recipient Phone Inline Edit State (allows diverting to any real phone number)
+  // Patient Recipient Phone Inline Edit State
   const [isEditingPatientPhone, setIsEditingPatientPhone] = useState(false);
   const [patientPhoneDraft, setPatientPhoneDraft] = useState('');
 
   // Filter, Search & Active Thread State
-  const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'draft_ready' | 'resolved' | 'whatsapp' | 'sms'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'draft_ready' | 'resolved'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedThreadId, setSelectedThreadId] = useState<string>('t-1');
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(0);
@@ -149,7 +141,7 @@ export const MessagesView: React.FC = () => {
   const [alsoDownloadLocalPdf, setAlsoDownloadLocalPdf] = useState(true);
   const [isSendingAiPdf, setIsSendingAiPdf] = useState(false);
 
-  // Reply & Live Diversion Receipt State
+  // Reply & Live Dispatch State
   const [customReply, setCustomReply] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDispatching, setIsDispatching] = useState(false);
@@ -157,15 +149,6 @@ export const MessagesView: React.FC = () => {
   const [showIncomingReplyModal, setShowIncomingReplyModal] = useState(false);
   const [incomingTestText, setIncomingTestText] = useState('');
   const [isSimulatingIncoming, setIsSimulatingIncoming] = useState(false);
-  const [lastDivertedReceipt, setLastDivertedReceipt] = useState<{
-    receiptId: string;
-    patientName: string;
-    clinicPhone: string;
-    recipientPhone: string;
-    messageText: string;
-    whatsappUrl: string;
-    sentAt: string;
-  } | null>(null);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
@@ -179,7 +162,7 @@ export const MessagesView: React.FC = () => {
       ' from Dermacare. Please remember to apply SPF 50+ sunscreen daily and let us know if you need to schedule your follow-up check.'
   );
 
-  // Refill queue state
+  // Refill queue state (rendered contextually inside the matching patient thread)
   const [refillQueue, setRefillQueue] = useState([
     {
       id: 'ref-1',
@@ -218,7 +201,7 @@ export const MessagesView: React.FC = () => {
       // ignore storage errors
     }
     setIsEditingClinicPhone(false);
-    showToast(`Clinic WhatsApp & SMS line updated to ${trimmed}`);
+    showToast(`Clinic WhatsApp/SMS line updated to ${trimmed}`);
   };
 
   const [threads, setThreads] = useState<Thread[]>([
@@ -231,9 +214,9 @@ export const MessagesView: React.FC = () => {
       priority: 'urgent',
       stage: 'needs_review',
       preview: 'Chest feels tight since morning with red rash',
-      timestamp: '2 min ago',
+      timestamp: '2m ago',
       unread: true,
-      statusLabel: 'Red flag · Immediate review',
+      statusLabel: 'Urgent triage',
       phone: '+91 98765 43210',
       aiSummary: 'Patient reports acute rash extension with chest tightness. Immediate clinical triage advised.',
       messages: [
@@ -275,9 +258,9 @@ export const MessagesView: React.FC = () => {
       priority: 'routine',
       stage: 'draft_ready',
       preview: 'Itching more at night, is it normal?',
-      timestamp: '40 min ago',
+      timestamp: '40m ago',
       unread: true,
-      statusLabel: 'Patient question · AI draft ready',
+      statusLabel: 'AI draft ready',
       phone: '+91 98765 11223',
       aiSummary: 'Less redness, mild night itching. Clinical photo shows barrier healing. No fever or swelling.',
       messages: [
@@ -305,13 +288,13 @@ export const MessagesView: React.FC = () => {
         },
         {
           id: 's-2b',
-          label: 'Cold Compress & Dosage Adjustment',
+          label: 'Cold Compress & Dosage',
           intent: 'Symptomatic relief',
           text: 'Hi Harman, the reduced redness is a good sign of healing. For night itching, apply a cool damp compress for 5 minutes before applying your chilled moisturizer, and take your prescribed tablet 1 hour before bed.'
         },
         {
           id: 's-2c',
-          label: 'Bilingual (English + Punjabi)',
+          label: 'Bilingual (EN + Punjabi)',
           intent: 'Patient native comfort',
           text: 'Hi Harman, ਰਾਤ ਨੂੰ ਹਲਕੀ ਖਾਰਸ਼ ਚਮੜੀ ਦੇ ਠੀਕ ਹੋਣ ਦਾ ਹਿੱਸਾ ਹੈ। ਸੌਣ ਤੋਂ ਪਹਿਲਾਂ ਆਪਣੀ ਮਾਇਸਚਰਾਈਜ਼ਰ ਕਰੀਮ ਲਗਾਓ ਅਤੇ ਖੁਰਕਣ ਤੋਂ ਬਚੋ। (Mild night itching is normal during healing; apply moisturizer before bed.)'
         }
@@ -326,9 +309,9 @@ export const MessagesView: React.FC = () => {
       priority: 'routine',
       stage: 'draft_ready',
       preview: 'Need refill for my prescribed tablets',
-      timestamp: '3 h ago',
+      timestamp: '3h ago',
       unread: false,
-      statusLabel: 'Refill verified · Safe to approve',
+      statusLabel: 'Refill verified',
       phone: '+91 91234 56789',
       aiSummary: 'Antihistamine tablet 30 days. Seen 3 weeks ago. Safe refill verified against chart.',
       messages: [
@@ -370,9 +353,9 @@ export const MessagesView: React.FC = () => {
       priority: 'routine',
       stage: 'draft_ready',
       preview: 'Can we move my visit to Friday?',
-      timestamp: '3 h ago',
+      timestamp: '3h ago',
       unread: false,
-      statusLabel: 'Schedule change · 3 open slots',
+      statusLabel: '3 open Friday slots',
       phone: '+91 99887 76655',
       aiSummary: 'Requests moving visit to Friday. Open clinic slots: 10:00 AM, 2:30 PM, 4:00 PM.',
       messages: [
@@ -387,19 +370,19 @@ export const MessagesView: React.FC = () => {
       suggestedReplies: [
         {
           id: 's-4a',
-          label: 'Offer Friday Slots (10 AM / 2:30 PM / 4 PM)',
+          label: 'Offer Friday Slots',
           intent: 'Direct slot selection',
           text: 'Hi Anita, certainly. We have open slots this Friday at 10:00 AM, 2:30 PM, or 4:00 PM. Please reply with your preferred time and we will confirm your appointment.'
         },
         {
           id: 's-4b',
-          label: 'Confirm Friday 10:00 AM Slot',
+          label: 'Confirm Friday 10:00 AM',
           intent: 'Proactive booking',
           text: 'Hi Anita, I have tentatively reserved the Friday 10:00 AM morning slot for your visit. Let us know if you prefer an afternoon time instead.'
         },
         {
           id: 's-4c',
-          label: 'Offer Tele-Consult Option',
+          label: 'Offer Tele-Consult',
           intent: 'Remote alternative',
           text: 'Hi Anita, we can move your in-clinic visit to Friday at 2:30 PM, or if it is more convenient, we can do a quick video follow-up tomorrow evening.'
         }
@@ -416,7 +399,7 @@ export const MessagesView: React.FC = () => {
       preview: 'Thank you for the prescription',
       timestamp: 'Yesterday',
       unread: false,
-      statusLabel: 'Follow-up logged',
+      statusLabel: 'Resolved',
       phone: '+91 98111 22334',
       aiSummary: 'Topical cream 2 tubes. Patient confirmed adherence. Next review in 7 days.',
       messages: [
@@ -431,19 +414,19 @@ export const MessagesView: React.FC = () => {
       suggestedReplies: [
         {
           id: 's-5a',
-          label: 'Sunscreen & Hydration Reminder',
+          label: 'Sunscreen & Hydration',
           intent: 'Adherence support',
           text: 'Hi Meera, glad to hear that. Remember to apply SPF 50+ sunscreen every morning while using the night cream, and message us if you notice any dryness.'
         },
         {
           id: 's-5b',
-          label: '1-Week Photo Check-In Request',
+          label: '1-Week Photo Check-In',
           intent: 'Visual progress tracking',
           text: 'Hi Meera, great! Please share a clear daylight photo of the treated area after 7 days so we can assess your pigmentation improvement.'
         },
         {
           id: 's-5c',
-          label: 'Confirm 7-Day Review Slot',
+          label: 'Confirm 7-Day Review',
           intent: 'Routine follow-up',
           text: 'Hi Meera, glad your skin is tolerating the cream well. We will check in with you next week for your 7-day progress review.'
         }
@@ -458,9 +441,9 @@ export const MessagesView: React.FC = () => {
       priority: 'routine',
       stage: 'needs_review',
       preview: 'Verifying prescription batch #RX-8842',
-      timestamp: '1 h ago',
+      timestamp: '1h ago',
       unread: true,
-      statusLabel: 'Pharmacy authorization',
+      statusLabel: 'Pharmacy verification',
       phone: '+91 1800 420 000',
       aiSummary: 'Partner pharmacy requesting dispensing confirmation for Harman Preet (P-24618).',
       messages: [
@@ -474,19 +457,19 @@ export const MessagesView: React.FC = () => {
       suggestedReplies: [
         {
           id: 's-6a',
-          label: 'Authorize Dispensing (#RX-8842)',
+          label: 'Authorize Dispensing',
           intent: 'Approve as written',
           text: 'Prescription batch #RX-8842 for Harman Preet (P-24618) is verified and authorized for dispensing as written.'
         },
         {
           id: 's-6b',
-          label: 'Approve Brand Substitution',
+          label: 'Approve Substitution',
           intent: 'Allow generic equivalent',
           text: 'Batch #RX-8842 is authorized. If the primary topical brand is out of stock, you may dispense the equivalent strength ceramide formulation.'
         },
         {
           id: 's-6c',
-          label: 'Request Patient Call Before Dispense',
+          label: 'Request Pharmacist Call',
           intent: 'Dosage verification',
           text: 'Please hold batch #RX-8842 briefly and have the pharmacist call our clinic desk at ' + clinicPhone + ' to confirm the strength.'
         }
@@ -507,7 +490,6 @@ export const MessagesView: React.FC = () => {
       .catch(() => {})
       .finally(() => setIsLoadingPatients(false));
 
-    // Initial load of server-backed native Clinical OS Inbox threads
     api.whatsapp
       .threads()
       .then(res => {
@@ -522,26 +504,7 @@ export const MessagesView: React.FC = () => {
       })
       .catch(() => {});
 
-    api.whatsapp
-      .list()
-      .then(res => {
-        if (res.messages && res.messages.length > 0) {
-          const latest = res.messages[0];
-          setLastDivertedReceipt({
-            receiptId: latest.id,
-            patientName: latest.patientName,
-            clinicPhone: latest.clinicPhone,
-            recipientPhone: `+${latest.recipientMobile}`,
-            messageText: latest.messageText,
-            whatsappUrl: latest.whatsappUrl,
-            sentAt: latest.sentAt
-          });
-        }
-      })
-      .catch(() => {});
-
-    // Real-time Server-Sent Events (SSE) subscription for instant (<50ms) inbox messages & status receipts
-    const unsubscribeSse = subscribeToClinicRealtimeEvents((evt) => {
+    const unsubscribeSse = subscribeToClinicRealtimeEvents(evt => {
       if (
         (evt.type === 'inbox:message_received' ||
           evt.type === 'inbox:message_sent' ||
@@ -549,19 +512,16 @@ export const MessagesView: React.FC = () => {
         evt.thread
       ) {
         const updatedThread = evt.thread as Thread;
-        setThreads((prev) => {
-          const exists = prev.some((t) => t.id === updatedThread.id);
-          const next = exists
-            ? prev.map((t) => (t.id === updatedThread.id ? updatedThread : t))
+        setThreads(prev => {
+          const exists = prev.some(t => t.id === updatedThread.id);
+          return exists
+            ? prev.map(t => (t.id === updatedThread.id ? updatedThread : t))
             : [updatedThread, ...prev];
-          return next;
         });
         knownMessageCountRef.current[updatedThread.id] = updatedThread.messages?.length || 0;
 
         if (evt.type === 'inbox:message_received') {
-          showToast(
-            `Incoming patient reply from ${updatedThread.name} routed into Clinical OS Inbox.`
-          );
+          showToast(`New reply from ${updatedThread.name}`);
           setTimeout(() => {
             if (messagesContainerRef.current) {
               messagesContainerRef.current.scrollTo({
@@ -574,7 +534,6 @@ export const MessagesView: React.FC = () => {
       }
     });
 
-    // Resilient background sync every 12s as fallback if proxy drops SSE
     const pollInterval = setInterval(() => {
       api.whatsapp
         .threads()
@@ -601,9 +560,7 @@ export const MessagesView: React.FC = () => {
           setThreads(res.threads);
 
           if (newlyArrivedPatientName) {
-            showToast(
-              `Incoming patient reply from ${newlyArrivedPatientName} routed into Clinical OS Inbox.`
-            );
+            showToast(`New reply from ${newlyArrivedPatientName}`);
             setTimeout(() => {
               if (messagesContainerRef.current) {
                 messagesContainerRef.current.scrollTo({
@@ -625,20 +582,19 @@ export const MessagesView: React.FC = () => {
 
   const activeThread = threads.find(t => t.id === selectedThreadId) || threads[0];
 
-  // Reset selected suggestion index & inline phone edit when switching threads
   useEffect(() => {
     setSelectedSuggestionIndex(0);
     setIsEditingPatientPhone(false);
     setPatientPhoneDraft(activeThread?.phone || '');
     if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = 0;
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   }, [selectedThreadId]);
 
   const handleSavePatientPhone = () => {
     const rawDigits = patientPhoneDraft.replace(/\D/g, '');
     if (rawDigits.length < 10) {
-      showToast('Please enter a valid 10-digit patient mobile number.');
+      showToast('Please enter a valid 10-digit mobile number.');
       return;
     }
     const formattedPhone =
@@ -657,10 +613,10 @@ export const MessagesView: React.FC = () => {
     }
 
     setIsEditingPatientPhone(false);
-    showToast(`Patient number for ${activeThread.name} updated to ${formattedPhone}`);
+    showToast(`Updated number for ${activeThread.name}`);
   };
 
-  // Keyboard shortcuts (1 / 2 / 3 to quickly select AI resolution strategy when not typing in an input)
+  // Keyboard shortcuts (1 / 2 / 3 to quickly select AI suggestion when not typing in an input)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -678,6 +634,7 @@ export const MessagesView: React.FC = () => {
         const idx = parseInt(e.key, 10) - 1;
         if (activeThread?.suggestedReplies && activeThread.suggestedReplies[idx]) {
           setSelectedSuggestionIndex(idx);
+          setCustomReply(activeThread.suggestedReplies[idx].text);
         }
       }
     };
@@ -688,10 +645,9 @@ export const MessagesView: React.FC = () => {
   // Pipeline counts
   const urgentCount = threads.filter(t => t.priority === 'urgent' && t.stage !== 'resolved').length;
   const draftReadyCount = threads.filter(t => t.stage === 'draft_ready').length;
-  const needsReviewCount = threads.filter(t => t.stage === 'needs_review').length;
   const resolvedCount = threads.filter(t => t.stage === 'resolved').length;
 
-  // Generate fresh AI suggested reply for the active patient's issue using backend Gemini AI
+  // Generate fresh AI suggested reply for the active patient's issue
   const handleGenerateCustomAiSuggestion = async (clinicalAngle?: string) => {
     if (!activeThread || isGeneratingAiReply) return;
     setIsGeneratingAiReply(true);
@@ -720,8 +676,8 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
 
       const newSuggestion: SuggestedResolution = {
         id: `ai-gen-${Date.now()}`,
-        label: clinicalAngle ? clinicalAngle.split(' ').slice(0, 4).join(' ') : 'AI Tailored Resolution',
-        intent: 'Live AI clinical synthesis',
+        label: clinicalAngle ? clinicalAngle.split(' ').slice(0, 3).join(' ') : 'AI Clinical Reply',
+        intent: 'Live AI synthesis',
         text: cleanedReply
       };
 
@@ -739,7 +695,8 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
         })
       );
       setSelectedSuggestionIndex(0);
-      showToast('Generated new AI clinical reply for ' + activeThread.name);
+      setCustomReply(cleanedReply);
+      showToast('Loaded new AI clinical suggestion into composer');
     } catch {
       const fallbackText =
         clinicalAngle?.toLowerCase().includes('punjabi')
@@ -750,7 +707,7 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
             )}...". Please continue your prescribed regimen and let us know if symptoms change so we can prioritize a clinic review.`;
       const fallbackSuggestion: SuggestedResolution = {
         id: `ai-fallback-${Date.now()}`,
-        label: clinicalAngle ? clinicalAngle.split(' ').slice(0, 3).join(' ') : 'Updated Clinical Reply',
+        label: clinicalAngle ? clinicalAngle.split(' ').slice(0, 3).join(' ') : 'Updated Reply',
         intent: 'Clinical guidance',
         text: fallbackText
       };
@@ -766,13 +723,14 @@ ${clinicalAngle ? `Resolution Focus: ${clinicalAngle}` : 'Resolution Focus: Prov
         )
       );
       setSelectedSuggestionIndex(0);
-      showToast('Updated clinical reply suggestion.');
+      setCustomReply(fallbackText);
+      showToast('Updated clinical reply suggestion');
     } finally {
       setIsGeneratingAiReply(false);
     }
   };
 
-  // Polish dictated or rough text in the composer using AI (supports English & Punjabi)
+  // Polish dictated or rough text in the composer using AI
   const handlePolishDictatedReply = async () => {
     if (!customReply.trim() || !activeThread || isPolishingDictation) return;
     setIsPolishingDictation(true);
@@ -799,7 +757,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         .trim();
       if (polished) {
         setCustomReply(polished);
-        showToast(isPunjabiMode ? 'Polished reply in Punjabi & English' : 'Polished dictated reply with AI');
+        showToast(isPunjabiMode ? 'Polished reply in Punjabi & English' : 'Polished reply with AI');
       }
     } catch {
       const capitalized =
@@ -809,13 +767,13 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
           doctor?.name || 'Sarah Chen'
         }`
       );
-      showToast('Formatted reply for ' + activeThread.name);
+      showToast('Formatted reply');
     } finally {
       setIsPolishingDictation(false);
     }
   };
 
-  // Dispatch a message in the background via Clinic Gateway & update the native Clinical OS conversation thread without leaving the app
+  // Dispatch a message in the background & update the conversation thread
   const handleSendMessage = async (textToSend: string, openUnfocusedBackgroundTab = false) => {
     if (!textToSend.trim() || !activeThread) return;
     setIsDispatching(true);
@@ -824,7 +782,6 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     const cleanPhone = cleanPhoneNumber(activeThread.phone) || '919876543210';
     const whatsappUrl = getWhatsAppWebUrl(cleanPhone, messageText);
 
-    // Never open a foreground WhatsApp tab that steals focus from Clinical OS.
     if (openUnfocusedBackgroundTab) {
       launchWhatsAppSynchronously(cleanPhone, messageText, 'unfocused');
     }
@@ -854,21 +811,20 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         setThreads(res.threads);
       }
     } catch {
-      // Fallback local state update if offline
       setThreads(prev =>
         prev.map(t => {
           if (t.id === activeThread.id) {
             return {
               ...t,
               stage: 'resolved',
-              statusLabel: 'Resolved · Dispatched in background',
+              statusLabel: 'Resolved',
               messages: [
                 ...t.messages,
                 {
                   sender: 'doctor',
                   text: messageText,
                   time: 'Just now',
-                  status: `Delivered in background (${clinicPhone} → ${activeThread.phone})`,
+                  status: 'Delivered',
                   receiptId,
                   whatsappUrl,
                   recipientPhone: activeThread.phone
@@ -884,16 +840,6 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
       );
     }
 
-    setLastDivertedReceipt({
-      receiptId,
-      patientName: activeThread.name,
-      clinicPhone,
-      recipientPhone: activeThread.phone,
-      messageText,
-      whatsappUrl,
-      sentAt: new Date().toISOString()
-    });
-
     setCustomReply('');
     setIsDispatching(false);
     setTimeout(() => {
@@ -904,12 +850,10 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         });
       }
     }, 80);
-    showToast(
-      `Dispatched in background to ${activeThread.name} (${activeThread.phone}) · Receipt #${receiptId}`
-    );
+    showToast(`Sent to ${activeThread.name} (${activeThread.phone})`);
   };
 
-  // Route an incoming patient WhatsApp/SMS reply directly into the native Clinical OS Inbox UI
+  // Route an incoming patient WhatsApp/SMS reply directly into the Inbox
   const handleReceiveIncomingPatientReply = async (incomingText?: string) => {
     const textToRoute =
       (incomingText ?? incomingTestText).trim() ||
@@ -947,7 +891,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
           });
         }
       }, 80);
-      showToast(`Incoming reply from ${activeThread.name} routed into Clinical OS Inbox.`);
+      showToast(`Incoming reply from ${activeThread.name} added to thread`);
     } catch {
       showToast('Failed to route incoming message.');
     } finally {
@@ -955,28 +899,12 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     }
   };
 
-  // Batch approve all safe drafts in pipeline via background API dispatch (no foreground tabs)
+  // Batch approve all safe drafts
   const handleBatchApproveDrafts = () => {
     const readyThreads = threads.filter(t => t.stage === 'draft_ready' && t.draftReply);
     if (readyThreads.length === 0) {
-      showToast('All queued drafts have already been approved and sent.');
+      showToast('All queued drafts have already been sent.');
       return;
-    }
-
-    const targetThread =
-      readyThreads.find(t => t.id === activeThread.id) || readyThreads[0];
-    if (targetThread) {
-      const cleanPhone = cleanPhoneNumber(targetThread.phone) || '919876543210';
-      const url = getWhatsAppWebUrl(cleanPhone, targetThread.draftReply);
-      setLastDivertedReceipt({
-        receiptId: `wa-batch-${Date.now().toString(36)}`,
-        patientName: targetThread.name,
-        clinicPhone,
-        recipientPhone: targetThread.phone,
-        messageText: targetThread.draftReply,
-        whatsappUrl: url,
-        sentAt: new Date().toISOString()
-      });
     }
 
     for (const rt of readyThreads) {
@@ -1001,14 +929,14 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
           return {
             ...t,
             stage: 'resolved',
-            statusLabel: 'Resolved · Batch dispatched in background',
+            statusLabel: 'Resolved',
             messages: [
               ...t.messages,
               {
                 sender: 'doctor',
                 text: t.draftReply,
                 time: 'Just now',
-                status: `Delivered in background (${clinicPhone} → ${t.phone})`,
+                status: 'Delivered',
                 whatsappUrl: getWhatsAppWebUrl(cleanPhone, t.draftReply),
                 recipientPhone: t.phone
               }
@@ -1021,7 +949,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         return t;
       })
     );
-    showToast(`Approved & dispatched ${readyThreads.length} drafts in background.`);
+    showToast(`Approved & sent ${readyThreads.length} drafts`);
   };
 
   // Mark thread resolved or reopen
@@ -1034,7 +962,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
             ...t,
             stage: nextStage,
             unread: false,
-            statusLabel: nextStage === 'resolved' ? 'Resolved' : 'Reopened for review'
+            statusLabel: nextStage === 'resolved' ? 'Resolved' : 'Needs review'
           };
         }
         return t;
@@ -1077,7 +1005,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
       preview: patient.notes ? `Notes: ${patient.notes.slice(0, 45)}` : 'Direct patient follow-up',
       timestamp: 'Just now',
       unread: false,
-      statusLabel: 'EHR Patient · Draft ready',
+      statusLabel: 'Draft ready',
       phone: cleanNumber,
       patientId: patient.id,
       aiSummary: `EHR Profile: ${patient.age}y ${patient.gender}. Allergies: ${
@@ -1100,7 +1028,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         },
         {
           id: `s-${patient.id}-2`,
-          label: 'Request Daylight Lesion Photo',
+          label: 'Request Daylight Photo',
           intent: 'Visual assessment',
           text: `Hello ${patient.fullName}, please reply with a clear daylight photo of the treated skin area so Dr. ${
             doctor?.name || 'Sarah Chen'
@@ -1155,7 +1083,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
       (activeThread.suggestedReplies || [])[selectedSuggestionIndex] ||
       (activeThread.suggestedReplies || [])[0] ||
       null;
-    const planText = currentSug ? currentSug.text : activeThread.draftReply;
+    const planText = customReply.trim() || (currentSug ? currentSug.text : activeThread.draftReply);
 
     setAiPdfAssessmentDraft(
       activeThread.aiSummary ||
@@ -1194,15 +1122,13 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     });
   };
 
-  // Preview / Download the AI Analysis Report PDF locally
   const handleDownloadOrPreviewAiReportPdf = () => {
     if (!activeThread) return;
     const generated = buildCurrentPatientAiPdf();
     generated.triggerDownload();
-    showToast(`Downloaded ${generated.filename} (${generated.sizeLabel})`);
+    showToast(`Downloaded ${generated.filename}`);
   };
 
-  // Generate & Dispatch the AI Analysis Report PDF over WhatsApp in-app (and optionally download locally)
   const handleSendAiReportPdf = async () => {
     if (!activeThread || isSendingAiPdf) return;
     setIsSendingAiPdf(true);
@@ -1257,21 +1183,21 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
               return {
                 ...t,
                 stage: 'resolved',
-                statusLabel: 'Resolved · AI Report PDF Sent',
+                statusLabel: 'PDF Sent',
                 messages: [
                   ...t.messages,
                   {
                     sender: 'doctor',
                     text: generated.whatsappCompanionText,
                     time: 'Just now',
-                    status: `PDF Report Dispatched (${clinicPhone} → ${activeThread.phone})`,
+                    status: 'PDF Delivered',
                     receiptId,
                     whatsappUrl,
                     recipientPhone: activeThread.phone,
                     pdfAttachment: pdfAttachmentPayload
                   }
                 ],
-                preview: `📄 PDF Sent: ${generated.filename}`,
+                preview: `PDF Sent: ${generated.filename}`,
                 timestamp: 'Just now',
                 unread: false
               };
@@ -1280,16 +1206,6 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
           })
         );
       }
-
-      setLastDivertedReceipt({
-        receiptId,
-        patientName: activeThread.name,
-        clinicPhone,
-        recipientPhone: activeThread.phone,
-        messageText: `[PDF: ${generated.filename}] ${generated.whatsappCompanionText}`,
-        whatsappUrl,
-        sentAt: new Date().toISOString()
-      });
 
       setShowAiPdfModal(false);
       setTimeout(() => {
@@ -1300,9 +1216,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
           });
         }
       }, 90);
-      showToast(
-        `AI Analysis Report PDF (${generated.filename}) sent on WhatsApp to ${activeThread.name}!`
-      );
+      showToast(`Sent PDF report (${generated.filename}) to ${activeThread.name}`);
     } finally {
       setIsSendingAiPdf(false);
     }
@@ -1324,7 +1238,6 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
       return;
     }
 
-    // Regenerate on the fly if dataUrl was omitted
     const regenerated = generatePatientAiReportPdf({
       patientName: activeThread.name,
       patientSubtitle: activeThread.subtitle,
@@ -1354,8 +1267,6 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     if (activeFilter === 'urgent') return t.priority === 'urgent' && t.stage !== 'resolved';
     if (activeFilter === 'draft_ready') return t.stage === 'draft_ready';
     if (activeFilter === 'resolved') return t.stage === 'resolved';
-    if (activeFilter === 'whatsapp') return t.channel === 'WhatsApp';
-    if (activeFilter === 'sms') return t.channel === 'SMS';
     return true;
   });
 
@@ -1364,246 +1275,138 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     activeSuggestions[selectedSuggestionIndex] || activeSuggestions[0] || null;
   const activeReplyText = currentSuggestion ? currentSuggestion.text : activeThread.draftReply;
 
+  // Check if the active thread has a pending refill request
+  const activeThreadRefill = refillQueue.find(
+    r => r.threadId === activeThread.id && r.status === 'pending'
+  );
+
   return (
-    <div className="space-y-4 animate-in fade-in duration-150 pb-12">
+    <div className="space-y-4 animate-in fade-in duration-150">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-[#0d3f3b] text-white px-4 py-3 rounded-xl shadow-lg border border-teal-500/30 flex items-center gap-2.5 animate-in slide-in-from-top-2 duration-150">
+        <div className="fixed top-5 right-5 z-50 bg-[#0d3f3b] text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 animate-in fade-in duration-150">
           <CheckCircle2 className="w-4 h-4 text-teal-300 shrink-0" />
           <span className="text-xs font-medium">{toastMessage}</span>
         </div>
       )}
 
-      {/* Top Header with Editable Clinic Phone Badge & Primary Actions */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-              Patient Inbox &amp; AI Triage
-            </h1>
-
-            {/* Simple Clinic Phone Badge with Manual Number Edit */}
-            <div className="inline-flex items-center gap-2 bg-emerald-50/90 border border-emerald-200 px-3 py-1 rounded-lg">
-              <span className="text-[11px] font-semibold text-emerald-900">
-                Clinic WhatsApp/SMS Line:
-              </span>
-              {isEditingClinicPhone ? (
-                <div className="inline-flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={clinicPhoneDraft}
-                    onChange={e => setClinicPhoneDraft(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleSaveClinicPhone();
-                      if (e.key === 'Escape') {
-                        setClinicPhoneDraft(clinicPhone);
-                        setIsEditingClinicPhone(false);
-                      }
-                    }}
-                    autoFocus
-                    className="text-xs font-mono font-bold text-slate-900 bg-white border border-emerald-400 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    placeholder="+91 98765 00001"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSaveClinicPhone}
-                    className="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold rounded cursor-pointer"
-                  >
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
+      {/* Clean Minimal Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Patient Inbox
+          </h1>
+          <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 flex-wrap">
+            <span>Clinic Line:</span>
+            {isEditingClinicPhone ? (
+              <span className="inline-flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={clinicPhoneDraft}
+                  onChange={e => setClinicPhoneDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleSaveClinicPhone();
+                    if (e.key === 'Escape') {
                       setClinicPhoneDraft(clinicPhone);
                       setIsEditingClinicPhone(false);
-                    }}
-                    className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <div className="inline-flex items-center gap-1.5">
-                  <span className="text-xs font-mono font-bold text-emerald-950 tabular-nums">
-                    {clinicPhone}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setClinicPhoneDraft(clinicPhone);
-                      setIsEditingClinicPhone(true);
-                    }}
-                    className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700 hover:text-emerald-950 underline decoration-emerald-400/70 underline-offset-2 ml-1 cursor-pointer"
-                    title="Edit clinic WhatsApp/SMS phone number"
-                  >
-                    <Edit2 className="w-2.5 h-2.5" />
-                    <span>Edit</span>
-                  </button>
-                </div>
-              )}
-            </div>
+                    }
+                  }}
+                  autoFocus
+                  className="text-xs font-mono font-semibold text-slate-900 bg-white border border-slate-300 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-1 focus:ring-teal-600"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveClinicPhone}
+                  className="text-xs font-semibold text-teal-700 hover:text-teal-900 cursor-pointer"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClinicPhoneDraft(clinicPhone);
+                    setIsEditingClinicPhone(false);
+                  }}
+                  className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="font-mono font-semibold text-slate-700 tabular-nums">
+                  {clinicPhone}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClinicPhoneDraft(clinicPhone);
+                    setIsEditingClinicPhone(true);
+                  }}
+                  className="text-teal-700 hover:text-teal-900 underline underline-offset-2 cursor-pointer"
+                >
+                  Change
+                </button>
+              </span>
+            )}
+            <span aria-hidden="true">·</span>
+            <span className="tabular-nums">{urgentCount} urgent</span>
+            <span aria-hidden="true">·</span>
+            <span className="tabular-nums">{draftReadyCount} drafts ready</span>
           </div>
-
-          <p className="text-xs text-slate-500">
-            All outgoing messages dispatch in the background and all incoming patient WhatsApp/SMS replies route directly into this native Clinical OS Inbox—you never leave the app.
-          </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap shrink-0">
           <button
             type="button"
             onClick={() => setShowIncomingReplyModal(true)}
-            className="px-3.5 py-2 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl text-xs font-semibold text-teal-900 transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="Test routing an incoming patient WhatsApp/SMS reply directly into the native Clinical OS Inbox"
+            className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors cursor-pointer whitespace-nowrap"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-teal-700" />
-            <span>Simulate Patient Reply</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowNewMessageModal(true)}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5 text-teal-700" />
-            <span>Message Patient</span>
+            Simulate Reply
           </button>
           <button
             type="button"
             onClick={() => setBroadcastModalOpen(true)}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
           >
-            <MessageSquare className="w-3.5 h-3.5 text-teal-700" />
+            <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
             <span>Broadcast</span>
           </button>
           <button
             type="button"
-            onClick={handleBatchApproveDrafts}
-            disabled={draftReadyCount === 0}
-            className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] disabled:opacity-40 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+            onClick={() => setShowNewMessageModal(true)}
+            className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
           >
-            <CheckCircle2 className="w-3.5 h-3.5 text-teal-300" />
-            <span>Approve Ready Drafts ({draftReadyCount})</span>
+            <Plus className="w-3.5 h-3.5 text-teal-700" />
+            <span>New Message</span>
           </button>
+          {draftReadyCount > 0 && (
+            <button
+              type="button"
+              onClick={handleBatchApproveDrafts}
+              className="px-3.5 py-1.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-teal-300" />
+              <span className="tabular-nums">Approve All Drafts ({draftReadyCount})</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Interactive 4-Step Triage Pipeline Bar */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            setActiveFilter('urgent');
-            const firstUrgent = threads.find(t => t.priority === 'urgent' && t.stage !== 'resolved');
-            if (firstUrgent) setSelectedThreadId(firstUrgent.id);
-          }}
-          className={`text-left p-3.5 rounded-2xl border transition-all cursor-pointer ${
-            activeFilter === 'urgent'
-              ? 'bg-rose-50/90 border-rose-300 ring-2 ring-rose-500/20'
-              : 'bg-white border-slate-200 hover:border-rose-200'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-rose-700">
-              01. Urgent Triage
-            </span>
-            <AlertCircle className="w-4 h-4 text-rose-600" />
-          </div>
-          <div className="mt-1.5 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
-              {urgentCount}
-            </span>
-            <span className="text-xs text-slate-500">red flag cases</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setActiveFilter('draft_ready');
-            const firstDraft = threads.find(t => t.stage === 'draft_ready');
-            if (firstDraft) setSelectedThreadId(firstDraft.id);
-          }}
-          className={`text-left p-3.5 rounded-2xl border transition-all cursor-pointer ${
-            activeFilter === 'draft_ready'
-              ? 'bg-amber-50/90 border-amber-300 ring-2 ring-amber-500/20'
-              : 'bg-white border-slate-200 hover:border-amber-200'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">
-              02. AI Drafts Ready
-            </span>
-            <Clock className="w-4 h-4 text-amber-600" />
-          </div>
-          <div className="mt-1.5 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
-              {draftReadyCount}
-            </span>
-            <span className="text-xs text-slate-500">awaiting 1-click send</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveFilter('all')}
-          className={`text-left p-3.5 rounded-2xl border transition-all cursor-pointer ${
-            activeFilter === 'all'
-              ? 'bg-teal-50/70 border-teal-300 ring-2 ring-teal-500/20'
-              : 'bg-white border-slate-200 hover:border-teal-200'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-teal-800">
-              03. Open Queue
-            </span>
-            <MessageSquare className="w-4 h-4 text-teal-700" />
-          </div>
-          <div className="mt-1.5 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
-              {needsReviewCount + draftReadyCount}
-            </span>
-            <span className="text-xs text-slate-500">active conversations</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveFilter('resolved')}
-          className={`text-left p-3.5 rounded-2xl border transition-all cursor-pointer ${
-            activeFilter === 'resolved'
-              ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-500/20'
-              : 'bg-white border-slate-200 hover:border-emerald-200'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-800">
-              04. Dispatched &amp; Resolved
-            </span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="mt-1.5 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900 font-mono tabular-nums">
-              {resolvedCount}
-            </span>
-            <span className="text-xs text-slate-500">completed today</span>
-          </div>
-        </button>
-      </div>
-
       {/* Main Split-Pane Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* LEFT COLUMN: Clean Queue List (4 Cols) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[760px]">
-          {/* Search & Segmented Filter Controls */}
-          <div className="p-3.5 border-b border-slate-200 space-y-2.5 bg-slate-50/50">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+        {/* LEFT COLUMN: Clean Conversation Queue (4 Cols) */}
+        <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-[calc(100vh-180px)] min-h-[620px] max-h-[780px]">
+          {/* Search & Segmented Filter Tabs */}
+          <div className="p-3 border-b border-slate-200 space-y-2.5">
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Filter by patient name or phone..."
+                placeholder="Search patient or phone..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full text-xs pl-8 pr-7 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                className="w-full text-xs pl-8 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-1 focus:ring-teal-600 focus:outline-none"
               />
               {searchQuery && (
                 <button
@@ -1616,23 +1419,21 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
               )}
             </div>
 
-            {/* Clean Segmented Filter Bar */}
-            <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg overflow-x-auto">
+            {/* Clean Segmented Filter Tabs with Live Counts */}
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-lg">
               {[
-                { id: 'all', label: 'All' },
-                { id: 'urgent', label: 'Urgent' },
-                { id: 'draft_ready', label: 'Drafts' },
-                { id: 'whatsapp', label: 'WhatsApp' },
-                { id: 'sms', label: 'SMS' },
-                { id: 'resolved', label: 'Resolved' }
+                { id: 'all', label: `All (${threads.length})` },
+                { id: 'urgent', label: `Urgent (${urgentCount})` },
+                { id: 'draft_ready', label: `Drafts (${draftReadyCount})` },
+                { id: 'resolved', label: `Done (${resolvedCount})` }
               ].map(tab => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveFilter(tab.id as any)}
-                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors shrink-0 cursor-pointer ${
+                  className={`py-1.5 text-[11px] font-medium rounded-md transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
                     activeFilter === tab.id
-                      ? 'bg-white text-slate-900 shadow-2xs'
+                      ? 'bg-white text-slate-900 font-semibold shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -1642,36 +1443,17 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
             </div>
           </div>
 
-          {/* Direct EHR Patient Selector Bar */}
-          <div className="px-4 py-2 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between text-xs">
-            <span className="text-[11px] font-medium text-slate-600 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-teal-700" />
-              <span>{realPatients.length} patients in EHR</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowNewMessageModal(true)}
-              className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 flex items-center gap-0.5 cursor-pointer"
-            >
-              <span>Select patient</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Thread Queue Items */}
+          {/* Thread Queue List */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
             {filteredThreads.length === 0 ? (
-              <div className="p-8 text-center space-y-2.5">
-                <p className="text-xs font-semibold text-slate-700">No conversations in this filter</p>
-                <p className="text-[11px] text-slate-400">
-                  Switch filters above or start a new message with a registered patient.
-                </p>
+              <div className="p-8 text-center space-y-2">
+                <p className="text-xs font-semibold text-slate-700">No conversations match this filter</p>
                 <button
                   type="button"
                   onClick={() => setActiveFilter('all')}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                  className="text-xs font-semibold text-teal-700 hover:underline cursor-pointer"
                 >
-                  Show All Conversations
+                  View all conversations
                 </button>
               </div>
             ) : (
@@ -1689,19 +1471,17 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                         prev.map(item => (item.id === th.id ? { ...item, unread: false } : item))
                       );
                     }}
-                    className={`w-full text-left p-3.5 transition-colors flex items-start gap-3 cursor-pointer ${
-                      isSelected
-                        ? 'bg-teal-50/70'
-                        : 'hover:bg-slate-50'
+                    className={`w-full text-left px-4 py-3 transition-colors flex items-start gap-3 cursor-pointer ${
+                      isSelected ? 'bg-teal-50/60' : 'hover:bg-slate-50'
                     }`}
                   >
                     <div
-                      className={`w-9 h-9 rounded-full text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 ${
+                      className={`w-8 h-8 rounded-full text-white font-semibold text-xs flex items-center justify-center shrink-0 mt-0.5 ${
                         isUrgent
                           ? 'bg-rose-600'
-                          : th.channel === 'WhatsApp'
-                          ? 'bg-[#0d3f3b]'
-                          : 'bg-slate-700'
+                          : th.stage === 'resolved'
+                          ? 'bg-slate-400'
+                          : 'bg-[#0d3f3b]'
                       }`}
                     >
                       {th.name.charAt(0)}
@@ -1709,25 +1489,22 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span
-                            className={`text-xs truncate ${
-                              th.unread ? 'font-bold text-slate-950' : 'font-semibold text-slate-800'
-                            }`}
-                          >
-                            {th.name}
-                          </span>
-                          {th.unread && (
-                            <span className="w-2 h-2 rounded-full bg-teal-600 shrink-0" />
-                          )}
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0">
+                        <span
+                          className={`text-xs truncate ${
+                            th.unread ? 'font-bold text-slate-950' : 'font-semibold text-slate-800'
+                          }`}
+                        >
+                          {th.name}
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-mono tabular-nums shrink-0">
                           {th.timestamp}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5 truncate">
-                        <span className="font-mono text-[10.5px] text-slate-500">{th.phone}</span>
+                      <p className="text-xs text-slate-600 truncate mt-0.5">{th.preview}</p>
+
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-1 truncate">
+                        <span>{th.channel}</span>
                         <span aria-hidden="true">·</span>
                         <span
                           className={
@@ -1736,15 +1513,13 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                               : th.stage === 'draft_ready'
                               ? 'text-amber-700 font-medium'
                               : th.stage === 'resolved'
-                              ? 'text-emerald-700 font-medium'
+                              ? 'text-emerald-700'
                               : 'text-slate-500'
                           }
                         >
                           {th.statusLabel}
                         </span>
                       </div>
-
-                      <p className="text-xs text-slate-600 truncate mt-1">{th.preview}</p>
                     </div>
                   </button>
                 );
@@ -1753,710 +1528,409 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Focused Conversation & AI Resolution Workspace (8 Cols) */}
-        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-[760px]">
-          {/* Active Patient Top Bar + Editable Clinic ↔ Patient Phone Diversion Bar */}
-          <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap bg-white">
-            <div className="min-w-0 space-y-1">
+        {/* RIGHT COLUMN: Focused Conversation & Pinned Bottom Composer (8 Cols) */}
+        <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-[calc(100vh-180px)] min-h-[620px] max-h-[780px]">
+          {/* 1. Compact Thread Header */}
+          <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm font-bold text-slate-900 truncate">{activeThread.name}</h2>
-                <span className="text-xs text-slate-300" aria-hidden="true">
-                  |
+                <span className="text-xs text-slate-400" aria-hidden="true">
+                  ·
                 </span>
-                {/* Explicit Clinic Number ↔ Patient Number Routing Relationship with Inline Edit */}
-                <div className="inline-flex items-center gap-1.5 text-[11px] font-mono bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200/80">
-                  <span className="text-teal-800 font-semibold">Clinic {clinicPhone}</span>
-                  <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
-                  {isEditingPatientPhone ? (
-                    <span className="inline-flex items-center gap-1">
-                      <input
-                        type="tel"
-                        value={patientPhoneDraft}
-                        onChange={e => setPatientPhoneDraft(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') handleSavePatientPhone();
-                          if (e.key === 'Escape') {
-                            setPatientPhoneDraft(activeThread.phone);
-                            setIsEditingPatientPhone(false);
-                          }
-                        }}
-                        autoFocus
-                        placeholder="+91 98765 43210"
-                        className="text-[11px] font-mono font-bold text-slate-900 bg-white border border-teal-500 rounded px-1.5 py-0.5 w-36 focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleSavePatientPhone}
-                        className="px-1.5 py-0.5 bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-sans font-bold rounded cursor-pointer"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
+                <span className="text-xs text-slate-500">{activeThread.subtitle}</span>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
+                {isEditingPatientPhone ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <input
+                      type="tel"
+                      value={patientPhoneDraft}
+                      onChange={e => setPatientPhoneDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleSavePatientPhone();
+                        if (e.key === 'Escape') {
                           setPatientPhoneDraft(activeThread.phone);
                           setIsEditingPatientPhone(false);
-                        }}
-                        className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                        }
+                      }}
+                      autoFocus
+                      className="text-xs font-mono font-semibold text-slate-900 bg-white border border-slate-300 rounded px-1.5 py-0.5 w-36 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSavePatientPhone}
+                      className="text-xs font-semibold text-teal-700 cursor-pointer"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPatientPhoneDraft(activeThread.phone);
+                        setIsEditingPatientPhone(false);
+                      }}
+                      className="text-xs text-slate-400 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="font-mono text-[11px] text-slate-600 tabular-nums">
+                      {activeThread.phone}
                     </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="font-bold text-slate-900">Patient {activeThread.phone}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPatientPhoneDraft(activeThread.phone);
-                          setIsEditingPatientPhone(true);
-                        }}
-                        className="text-[10px] font-sans font-semibold text-teal-700 hover:text-teal-950 underline cursor-pointer"
-                        title="Edit patient recipient mobile number"
-                      >
-                        Edit
-                      </button>
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                <span>{activeThread.subtitle}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPatientPhoneDraft(activeThread.phone);
+                        setIsEditingPatientPhone(true);
+                      }}
+                      className="text-[11px] text-teal-700 hover:underline cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                  </span>
+                )}
                 <span aria-hidden="true">·</span>
-                <span>Channel: {activeThread.channel}</span>
+                <span className="text-[11px] text-slate-500 truncate">{activeThread.aiSummary}</span>
               </div>
             </div>
 
-            {/* Clean Action Bar */}
-            <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              <button
-                type="button"
-                onClick={() => handleToggleThreadStage(activeThread.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 cursor-pointer ${
-                  activeThread.stage === 'resolved'
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>{activeThread.stage === 'resolved' ? 'Resolved' : 'Mark Resolved'}</span>
-              </button>
-
+            {/* Focused Header Actions */}
+            <div className="flex items-center gap-2 shrink-0">
               <a
                 href={`tel:${activeThread.phone.replace(/\s+/g, '')}`}
-                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 flex items-center gap-1.5 transition-colors"
-                title="Call patient directly"
+                className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 flex items-center gap-1.5 transition-colors whitespace-nowrap"
               >
-                <Phone className="w-3.5 h-3.5 text-slate-600" />
+                <Phone className="w-3.5 h-3.5 text-slate-500" />
                 <span>Call</span>
               </a>
 
               <button
                 type="button"
-                onClick={handleOpenAiPdfModal}
-                className="px-3 py-1.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-                title="Generate AI Clinical Analysis Report as PDF and send to patient on WhatsApp"
+                onClick={handleOpenWhatsAppShareModal}
+                className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
               >
-                <FileText className="w-3.5 h-3.5 text-teal-200" />
-                <span>Send AI Report PDF</span>
+                <FileText className="w-3.5 h-3.5 text-teal-700" />
+                <span>Send Report / Rx</span>
               </button>
 
               <button
                 type="button"
-                onClick={handleOpenWhatsAppShareModal}
-                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="Format & send full Rx or clinical summary on WhatsApp"
+                onClick={() => handleToggleThreadStage(activeThread.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  activeThread.stage === 'resolved'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
               >
-                <FileText className="w-3.5 h-3.5 text-teal-700" />
-                <span>Send Rx / Report</span>
+                <Check className="w-3.5 h-3.5" />
+                <span>{activeThread.stage === 'resolved' ? 'Resolved' : 'Resolve'}</span>
               </button>
             </div>
           </div>
 
-          {/* Clinical Context Strip */}
-          <div className="px-5 py-2 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="font-semibold text-slate-700 shrink-0">Clinical Context:</span>
-              <span className="text-slate-600 truncate">{activeThread.aiSummary}</span>
-            </div>
-            <span className="text-[11px] font-medium text-slate-400 shrink-0">
-              Stage:{' '}
-              <strong className="text-slate-700">
-                {activeThread.stage === 'needs_review'
-                  ? 'Needs Doctor'
-                  : activeThread.stage === 'draft_ready'
-                  ? 'Draft Ready'
-                  : 'Resolved'}
-              </strong>
-            </span>
-          </div>
-
-          {/* Live Background Dispatch Receipt Strip */}
-          {lastDivertedReceipt && (
-            <div className="px-5 py-2 bg-emerald-50/90 border-b border-emerald-200 flex items-center justify-between gap-3 flex-wrap text-xs">
+          {/* Contextual Inline Refill Banner (Only shown when this patient has a pending refill) */}
+          {activeThreadRefill && (
+            <div className="px-5 py-2.5 bg-amber-50/70 border-b border-amber-200/80 flex items-center justify-between gap-3 flex-wrap text-xs">
               <div className="flex items-center gap-2 min-w-0">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span className="text-[11px] text-emerald-950 truncate">
-                  <strong>Dispatched in background to {lastDivertedReceipt.patientName}</strong> ({lastDivertedReceipt.clinicPhone} →{' '}
-                  <span className="font-mono font-bold">{lastDivertedReceipt.recipientPhone}</span>) · Receipt{' '}
-                  <span className="font-mono">#{lastDivertedReceipt.receiptId}</span>
+                <span className="font-semibold text-amber-950">
+                  Refill Request: {activeThreadRefill.medication}
                 </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[10.5px] font-semibold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded">
-                  In-App Native Delivery Active
+                <span className="text-amber-700" aria-hidden="true">
+                  ·
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setLastDivertedReceipt(null)}
-                  className="text-emerald-700 hover:text-emerald-950 p-0.5 cursor-pointer"
-                  title="Dismiss receipt banner"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                <span className="text-amber-900 truncate">{activeThreadRefill.note}</span>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const refillMsg = `Hello ${activeThreadRefill.name}, your prescription refill for ${activeThreadRefill.medication} has been authorized by Dr. ${
+                    doctor?.name || 'Sarah Chen'
+                  }.`;
+                  setRefillQueue(prev =>
+                    prev.map(r => (r.id === activeThreadRefill.id ? { ...r, status: 'approved' } : r))
+                  );
+                  handleSendMessage(refillMsg, false);
+                }}
+                className="px-3 py-1 bg-[#0d3f3b] hover:bg-[#135650] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+              >
+                Authorize &amp; Send Refill
+              </button>
             </div>
           )}
 
-          {/* Scrollable Conversation History + AI Suggested Replies Panel */}
+          {/* 2. Scrollable Conversation History */}
           <div
             ref={messagesContainerRef}
-            className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#f9fbfa]"
+            className="flex-1 overflow-y-auto p-5 space-y-3 bg-slate-50/50"
           >
-            {/* Chat Message Bubbles */}
-            <div className="space-y-3">
-              {activeThread.messages.map((m, idx) => (
-                <div
-                  key={idx}
-                  className={`flex ${
-                    m.sender === 'patient'
-                      ? 'justify-start'
-                      : m.sender === 'ai'
-                      ? 'justify-center'
-                      : 'justify-end'
-                  }`}
-                >
-                  {m.sender === 'ai' ? (
-                    <div className="text-[11px] text-slate-500 bg-slate-100/80 px-3 py-1 rounded-md">
-                      {m.text}
-                    </div>
-                  ) : (
-                    <div
-                      className={`max-w-lg px-4 py-2.5 rounded-2xl text-xs ${
-                        m.sender === 'patient'
-                          ? 'bg-white text-slate-800 border border-slate-200 rounded-tl-xs'
-                          : 'bg-[#0d3f3b] text-white rounded-tr-xs'
-                      }`}
-                    >
-                      {/* WhatsApp PDF Document Attachment Card */}
-                      {m.pdfAttachment && (
-                        <div className="mb-2.5 p-3 rounded-xl bg-white/12 border border-teal-300/30 text-white space-y-2">
-                          <div className="flex items-start justify-between gap-2.5">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="w-9 h-9 rounded-lg bg-rose-600 text-white flex flex-col items-center justify-center shrink-0 shadow-2xs border border-rose-400/40">
-                                <FileText className="w-4 h-4" />
-                                <span className="text-[8px] font-extrabold tracking-tighter uppercase leading-none mt-0.5">
-                                  PDF
-                                </span>
-                              </div>
-                              <div className="min-w-0">
-                                <div className="font-bold text-xs text-white truncate">
-                                  {m.pdfAttachment.filename}
-                                </div>
-                                <div className="text-[10.5px] text-teal-200 flex items-center gap-1.5 flex-wrap">
-                                  <span>{m.pdfAttachment.sizeLabel}</span>
-                                  <span>·</span>
-                                  <span className="font-mono">Ref #{m.pdfAttachment.reportId}</span>
-                                  <span>·</span>
-                                  <span>AI Clinical Report</span>
-                                </div>
-                              </div>
+            {activeThread.messages.map((m, idx) => (
+              <div
+                key={idx}
+                className={`flex ${
+                  m.sender === 'patient'
+                    ? 'justify-start'
+                    : m.sender === 'ai'
+                    ? 'justify-center'
+                    : 'justify-end'
+                }`}
+              >
+                {m.sender === 'ai' ? (
+                  <div className="text-[11px] text-slate-500 bg-slate-100 px-3 py-1 rounded-md">
+                    {m.text}
+                  </div>
+                ) : (
+                  <div
+                    className={`max-w-lg px-4 py-2.5 rounded-2xl text-xs ${
+                      m.sender === 'patient'
+                        ? 'bg-white text-slate-800 border border-slate-200 rounded-tl-xs'
+                        : 'bg-[#0d3f3b] text-white rounded-tr-xs'
+                    }`}
+                  >
+                    {/* Attached PDF Card */}
+                    {m.pdfAttachment && (
+                      <div className="mb-2.5 p-2.5 rounded-xl bg-white/10 border border-white/20 text-white flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <FileText className="w-4 h-4 text-teal-200 shrink-0" />
+                          <div className="min-w-0">
+                            <div className="font-semibold text-xs text-white truncate">
+                              {m.pdfAttachment.filename}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleDownloadMessagePdfAttachment(m.pdfAttachment!, m.text)
-                              }
-                              className="px-2.5 py-1.5 bg-white text-[#0d3f3b] hover:bg-teal-50 rounded-lg text-[10.5px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer shadow-2xs"
-                              title="Download AI Clinical Analysis PDF Report"
-                            >
-                              <Download className="w-3 h-3" />
-                              <span>Download PDF</span>
-                            </button>
+                            <div className="text-[10.5px] text-teal-200">
+                              {m.pdfAttachment.sizeLabel} · Ref #{m.pdfAttachment.reportId}
+                            </div>
                           </div>
-
-                          {m.pdfAttachment.summaryPoints &&
-                            m.pdfAttachment.summaryPoints.length > 0 && (
-                              <div className="pt-1.5 border-t border-white/15 space-y-0.5 text-[10.5px] text-teal-100">
-                                {m.pdfAttachment.summaryPoints.map((pt, pIdx) => (
-                                  <div key={pIdx} className="truncate">
-                                    • {pt}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
                         </div>
-                      )}
-
-                      <p className="leading-relaxed whitespace-pre-line">{m.text}</p>
-                      <div
-                        className={`flex items-center justify-end gap-2 mt-1.5 text-[10px] flex-wrap ${
-                          m.sender === 'patient' ? 'text-slate-400' : 'text-teal-200/90'
-                        }`}
-                      >
-                        <span className="font-mono tabular-nums">{m.time}</span>
-                        {m.status && (
-                          <span className="flex items-center gap-0.5">
-                            · <CheckCheck className="w-3 h-3 inline" /> {m.status}
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadMessagePdfAttachment(m.pdfAttachment!, m.text)}
+                          className="px-2.5 py-1 bg-white text-[#0d3f3b] hover:bg-teal-50 rounded-md text-[10.5px] font-semibold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>PDF</span>
+                        </button>
                       </div>
+                    )}
+
+                    <p className="leading-relaxed whitespace-pre-line">{m.text}</p>
+                    <div
+                      className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] ${
+                        m.sender === 'patient' ? 'text-slate-400' : 'text-teal-200/80'
+                      }`}
+                    >
+                      <span className="font-mono tabular-nums">{m.time}</span>
+                      {m.status && (
+                        <span className="flex items-center gap-0.5">
+                          · <CheckCheck className="w-3 h-3 inline" /> {m.status}
+                        </span>
+                      )}
                     </div>
-                  )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* 3. Pinned Bottom Unified Composer (Text Box Above Compact AI Suggestions) */}
+          <div className="p-4 bg-white border-t border-slate-200 space-y-3">
+            {/* Quick Clinical Templates Drawer */}
+            {showTemplateDrawer && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-700">
+                    Insert Clinical Template
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplateDrawer(false)}
+                    className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              ))}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {CLINICAL_TEMPLATES.map((tpl, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setCustomReply(tpl.text);
+                        setShowTemplateDrawer(false);
+                        composerInputRef.current?.focus();
+                      }}
+                      className="text-left p-2 rounded-lg bg-white hover:bg-teal-50/60 border border-slate-200 text-xs transition-colors cursor-pointer"
+                    >
+                      <div className="font-semibold text-slate-900">{tpl.title}</div>
+                      <p className="text-[11px] text-slate-500 truncate mt-0.5">{tpl.text}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Primary Composer Input Row (Above AI Suggestions) */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={composerInputRef}
+                type="text"
+                placeholder={
+                  dictationLang === 'pa-IN'
+                    ? `${activeThread.name} ਲਈ ਪੰਜਾਬੀ ਵਿੱਚ ਬੋਲੋ ਜਾਂ ਟਾਈਪ ਕਰੋ...`
+                    : `Write a reply to ${activeThread.name} or click an AI suggestion below...`
+                }
+                value={customReply}
+                onChange={e => setCustomReply(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && customReply.trim()) {
+                    e.preventDefault();
+                    handleSendMessage(customReply, false);
+                  }
+                }}
+                className="flex-1 text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-600 focus:bg-white"
+              />
+
+              <VoiceDictationButton
+                value={customReply}
+                onChange={setCustomReply}
+                language={dictationLang}
+                variant="button"
+                label={dictationLang === 'pa-IN' ? 'ਪੰਜਾਬੀ Mic' : 'Voice'}
+              />
+
+              <button
+                type="button"
+                onClick={handleOpenAiPdfModal}
+                disabled={isDispatching || isSendingAiPdf}
+                className="px-3 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                title="Send as Official A4 PDF Report"
+              >
+                <FileText className="w-3.5 h-3.5 text-teal-700" />
+                <span>Send as PDF</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={isDispatching || !(customReply.trim() || activeReplyText)}
+                onClick={() => handleSendMessage(customReply.trim() || activeReplyText, false)}
+                className="px-4 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 shrink-0 whitespace-nowrap"
+              >
+                <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                <span>{customReply.trim() ? 'Send Reply' : 'Send AI Draft'}</span>
+                <Send className="w-3 h-3" />
+              </button>
             </div>
 
-            {/* Unified Reply Composer Text Box (Positioned Above AI Suggestions) */}
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
-              {/* Text Input, Bilingual Voice Dictation Button & Background In-App Dispatch Controls */}
-              <div className="flex items-center gap-2">
-                <input
-                  ref={composerInputRef}
-                  type="text"
-                  placeholder={
-                    dictationLang === 'pa-IN'
-                      ? `${activeThread.name} ਲਈ ਪੰਜਾਬੀ ਵਿੱਚ ਬੋਲੋ ਜਾਂ ਟਾਈਪ ਕਰੋ (Speak or type in Punjabi)...`
-                      : `Type or dictate a reply to ${activeThread.name} (Press Enter to send in-app)...`
-                  }
-                  value={customReply}
-                  onChange={e => setCustomReply(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && customReply.trim()) {
-                      e.preventDefault();
-                      handleSendMessage(customReply, false);
-                    }
-                  }}
-                  className="flex-1 text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white"
-                />
-
-                {/* Prominent Bilingual Voice Dictation Button */}
-                <VoiceDictationButton
-                  value={customReply}
-                  onChange={setCustomReply}
-                  language={dictationLang}
-                  variant="button"
-                  label={dictationLang === 'pa-IN' ? 'Speak ਪੰਜਾਬੀ' : 'Dictate EN'}
-                  title={
-                    dictationLang === 'pa-IN'
-                      ? 'Click to dictate reply in Punjabi (ਪੰਜਾਬੀ)'
-                      : 'Click to dictate reply in English'
-                  }
-                />
-
-                <button
-                  type="button"
-                  disabled={isDispatching || !customReply.trim()}
-                  onClick={() => handleSendMessage(customReply, false)}
-                  className="px-4 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 shrink-0 shadow-2xs"
-                  title="Dispatch reply in background without leaving Clinical OS"
-                >
-                  <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
-                  <span>Send Reply</span>
-                  <Send className="w-3 h-3" />
-                </button>
-              </div>
-
-              {/* Composer Quick Templates + Voice Dictation Language Switcher */}
-              <div className="flex items-center justify-between gap-2 flex-wrap text-xs pt-1 border-t border-slate-100">
+            {/* Compact AI Suggested Replies Strip (Directly Below Text Box) */}
+            <div className="bg-slate-50/90 border border-slate-200/90 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setShowTemplateDrawer(prev => !prev)}
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-semibold transition-colors cursor-pointer"
-                  >
-                    {showTemplateDrawer ? 'Hide Templates' : '+ Insert Template'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCustomReply(
-                        'Please complete your consultation fee payment securely here: https://pay.dermacare.in/rx-portal'
-                      )
-                    }
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-semibold transition-colors cursor-pointer"
-                  >
-                    + Payment Link
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCustomReply(
-                        'Please review and sign your procedure consent form prior to your visit: https://consent.dermacare.in/form'
-                      )
-                    }
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-semibold transition-colors cursor-pointer"
-                  >
-                    + Consent Link
-                  </button>
-                  {customReply.trim().length > 3 && (
-                    <button
-                      type="button"
-                      disabled={isPolishingDictation}
-                      onClick={handlePolishDictatedReply}
-                      className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 rounded-md text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                      title="Let AI refine your spoken or typed note into a polished reply"
-                    >
-                      <Sparkles className="w-3 h-3 text-teal-700" />
-                      <span>{isPolishingDictation ? 'Polishing...' : 'AI Polish Reply'}</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Bilingual Voice Dictation Language Selector (English / Punjabi) */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] text-slate-500 font-medium">Voice Mic Language:</span>
-                  <div className="inline-flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDictationLang('en-US');
-                        showToast('Voice dictation set to English');
-                      }}
-                      className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold transition-colors cursor-pointer ${
-                        dictationLang === 'en-US'
-                          ? 'bg-white text-slate-900 shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      EN (English)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDictationLang('pa-IN');
-                        showToast('Voice dictation set to Punjabi (ਪੰਜਾਬੀ)');
-                      }}
-                      className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold transition-colors cursor-pointer ${
-                        dictationLang === 'pa-IN'
-                          ? 'bg-white text-teal-900 shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      ਪੰਜਾਬੀ (Punjabi)
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Clinical Templates Drawer */}
-              {showTemplateDrawer && (
-                <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 space-y-2">
-                  <div className="flex items-center justify-between border-b border-slate-200/80 pb-1.5">
-                    <span className="text-xs font-bold text-slate-800">
-                      Select Standard Clinical Template
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowTemplateDrawer(false)}
-                      className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {CLINICAL_TEMPLATES.map((tpl, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => {
-                          setCustomReply(tpl.text);
-                          setShowTemplateDrawer(false);
-                          composerInputRef.current?.focus();
-                        }}
-                        className="text-left p-2.5 rounded-lg bg-white hover:bg-teal-50/70 border border-slate-200/80 hover:border-teal-300 transition-colors cursor-pointer"
-                      >
-                        <div className="text-xs font-semibold text-slate-900">{tpl.title}</div>
-                        <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{tpl.text}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* AI Suggested Replies Panel to Resolve Patient's Issue */}
-            <div className="bg-white border border-teal-700/25 rounded-xl p-4 shadow-2xs space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-                <div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-bold text-slate-900">
-                      AI Suggested Replies to Resolve Issue
-                    </span>
-                    <span className="text-slate-300" aria-hidden="true">
-                      ·
-                    </span>
-                    <span className="text-[11px] text-teal-800 font-medium">
-                      {currentSuggestion?.intent || 'Tailored to patient chart'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Pick an option below (or press keys 1, 2, 3) and click send to dispatch the reply in-app without leaving Clinical OS.
-                  </p>
-                </div>
-
-                {/* Live AI Generation Trigger */}
-                <button
-                  type="button"
-                  disabled={isGeneratingAiReply}
-                  onClick={() => handleGenerateCustomAiSuggestion()}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer disabled:opacity-50"
-                  title="Generate a fresh AI clinical reply using the patient's chart and message history"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isGeneratingAiReply ? 'animate-spin text-teal-700' : ''}`} />
-                  <span>{isGeneratingAiReply ? 'Synthesizing...' : 'Generate New AI Option'}</span>
-                </button>
-              </div>
-
-              {/* Selectable Resolution Strategy Cards */}
-              {activeSuggestions.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <span className="text-[11px] font-semibold text-slate-700 flex items-center gap-1 mr-1">
+                    <Sparkles className="w-3 h-3 text-teal-700" />
+                    <span>AI Suggestions:</span>
+                  </span>
                   {activeSuggestions.map((sug, idx) => {
                     const isSelected = idx === selectedSuggestionIndex;
                     return (
                       <button
                         key={sug.id}
                         type="button"
-                        onClick={() => setSelectedSuggestionIndex(idx)}
-                        className={`text-left p-2.5 rounded-lg border transition-all cursor-pointer ${
+                        onClick={() => {
+                          setSelectedSuggestionIndex(idx);
+                          setCustomReply(sug.text);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
                           isSelected
-                            ? 'bg-teal-50/80 border-teal-700 text-slate-900 shadow-2xs'
-                            : 'bg-slate-50/70 border-slate-200/90 text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
+                            ? 'bg-[#0d3f3b] text-white font-semibold'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-[11px] font-bold truncate">
-                            {idx + 1}. {sug.label}
-                          </span>
-                          {isSelected && (
-                            <Check className="w-3 h-3 text-teal-700 shrink-0" />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-500 truncate mt-0.5">{sug.intent}</p>
+                        {idx + 1}. {sug.label}
                       </button>
                     );
                   })}
                 </div>
-              )}
 
-              {/* Selected Suggested Reply Preview Box */}
-              <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200/90 space-y-2.5">
-                <p className="text-xs text-slate-800 leading-relaxed">
-                  {activeReplyText}
-                </p>
-
-                {/* Quick AI Refinement Actions */}
-                <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-slate-200/60">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mr-1">
-                      AI Tailor:
-                    </span>
-                    {[
-                      { label: 'More Reassuring', angle: 'Warm, reassuring bedside manner with clear comfort measures' },
-                      { label: 'Request Photo', angle: 'Ask patient to send a clear daylight close-up photo of the skin area' },
-                      { label: 'Advise Clinic Visit', angle: 'Recommend an in-person dermatology examination at the clinic today or tomorrow' },
-                      { label: 'Bilingual (EN + Punjabi)', angle: 'Write in both Punjabi (Gurmukhi) and English for patient comfort' }
-                    ].map(action => (
+                <div className="flex items-center gap-2 text-[11px]">
+                  <button
+                    type="button"
+                    disabled={isGeneratingAiReply}
+                    onClick={() => handleGenerateCustomAiSuggestion()}
+                    className="text-teal-700 hover:text-teal-900 font-medium flex items-center gap-1 cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isGeneratingAiReply ? 'animate-spin' : ''}`} />
+                    <span>{isGeneratingAiReply ? 'Drafting...' : 'Regenerate'}</span>
+                  </button>
+                  <span className="text-slate-300" aria-hidden="true">
+                    ·
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateCustomAiSuggestion('Write in both Punjabi (Gurmukhi) and English')}
+                    className="text-slate-600 hover:text-slate-900 font-medium cursor-pointer whitespace-nowrap"
+                  >
+                    Punjabi + EN
+                  </button>
+                  <span className="text-slate-300" aria-hidden="true">
+                    ·
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplateDrawer(prev => !prev)}
+                    className="text-slate-600 hover:text-slate-900 font-medium cursor-pointer whitespace-nowrap"
+                  >
+                    {showTemplateDrawer ? 'Hide Templates' : 'Templates'}
+                  </button>
+                  <span className="text-slate-300" aria-hidden="true">
+                    ·
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDictationLang(prev => (prev === 'en-US' ? 'pa-IN' : 'en-US'))
+                    }
+                    className="text-slate-600 hover:text-slate-900 font-medium cursor-pointer whitespace-nowrap"
+                  >
+                    Mic: {dictationLang === 'pa-IN' ? 'ਪੰਜਾਬੀ' : 'EN'}
+                  </button>
+                  {customReply.trim().length > 3 && (
+                    <>
+                      <span className="text-slate-300" aria-hidden="true">
+                        ·
+                      </span>
                       <button
-                        key={action.label}
                         type="button"
-                        disabled={isGeneratingAiReply}
-                        onClick={() => handleGenerateCustomAiSuggestion(action.angle)}
-                        className="px-2 py-0.5 bg-white hover:bg-teal-50 text-slate-600 hover:text-teal-900 border border-slate-200 rounded text-[10.5px] font-medium transition-colors cursor-pointer disabled:opacity-50"
+                        disabled={isPolishingDictation}
+                        onClick={handlePolishDictatedReply}
+                        className="text-teal-700 hover:text-teal-900 font-semibold cursor-pointer whitespace-nowrap"
                       >
-                        {action.label}
+                        {isPolishingDictation ? 'Polishing...' : 'Polish Text'}
                       </button>
-                    ))}
-                  </div>
+                    </>
+                  )}
+                </div>
+              </div>
 
+              {/* Clean 2-Line Preview of Active Suggestion when composer is empty */}
+              {!customReply.trim() && activeReplyText && (
+                <div className="flex items-start justify-between gap-3 pt-1 border-t border-slate-200/70 text-xs text-slate-600">
+                  <p className="line-clamp-2 leading-relaxed">{activeReplyText}</p>
                   <button
                     type="button"
                     onClick={() => {
                       setCustomReply(activeReplyText);
                       composerInputRef.current?.focus();
-                      showToast('Loaded suggested reply into the text box above for editing.');
                     }}
-                    className="text-[11px] font-semibold text-teal-700 hover:text-teal-950 cursor-pointer"
+                    className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 shrink-0 cursor-pointer whitespace-nowrap"
                   >
-                    Load into composer above to edit ↑
+                    Edit in box ↑
                   </button>
                 </div>
-              </div>
-
-              {/* Primary 1-Click Resolution Action (Background API Dispatch — Never Leaves Clinical OS) */}
-              <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="text-[11px] text-slate-500">
-                    Dispatches in background to <strong className="text-slate-700 font-mono">{activeThread.phone}</strong> &amp; keeps you in Clinical OS.
-                  </span>
-                  <label className="inline-flex items-center gap-1.5 text-[11px] text-teal-800 font-medium cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={autoSimulatePatientReply}
-                      onChange={e => setAutoSimulatePatientReply(e.target.checked)}
-                      className="rounded text-teal-700 focus:ring-teal-600"
-                    />
-                    <span>Auto-route patient reply (3s)</span>
-                  </label>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    disabled={isDispatching || isSendingAiPdf}
-                    onClick={handleOpenAiPdfModal}
-                    className="px-3.5 py-2 bg-teal-50 hover:bg-teal-100 text-teal-950 border border-teal-300 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-                    title="Generate a formal AI Clinical Analysis PDF Report and dispatch it on WhatsApp"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-teal-800" />
-                    <span>Send as AI Report PDF</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isDispatching || !activeReplyText}
-                    onClick={() => handleSendMessage(activeReplyText, false)}
-                    className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-2xs"
-                  >
-                    <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
-                    <span>{isDispatching ? 'Dispatching...' : 'Use Reply & Send In-App'}</span>
-                    <Send className="w-3 h-3 opacity-90" />
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Streamlined Refill & Follow-Up Action Queue */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">
-              Pending Prescription Refill Authorizations
-            </h3>
-            <p className="text-xs text-slate-500">
-              One-click verification dispatches the refill confirmation in the background and logs it directly in the Clinical OS patient thread.
-            </p>
-          </div>
-          <span className="text-xs font-semibold text-slate-500 font-mono tabular-nums">
-            {refillQueue.filter(r => r.status === 'pending').length} pending review
-          </span>
-        </div>
-
-        <div className="divide-y divide-slate-100">
-          {refillQueue.map(item => (
-            <div
-              key={item.id}
-              className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-            >
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="font-bold text-slate-900">{item.name}</span>
-                  <span className="text-slate-400" aria-hidden="true">
-                    ·
-                  </span>
-                  <span className="font-medium text-teal-800">{item.medication}</span>
-                </div>
-                <p className="text-xs text-slate-500">{item.note}</p>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setSelectedThreadId(item.threadId)}
-                  className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  View Thread
-                </button>
-                {item.status === 'approved' ? (
-                  <span className="px-3 py-1.5 text-xs font-semibold text-emerald-700 flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5" />
-                    Approved &amp; Sent In-App
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const targetThread = threads.find(t => t.id === item.threadId);
-                      const refillMsg = `Hello ${item.name}, your prescription refill for ${item.medication} has been authorized by Dr. ${
-                        doctor?.name || 'Sarah Chen'
-                      }.`;
-                      const cleanPhone = cleanPhoneNumber(targetThread?.phone || '') || '919123456789';
-                      const whatsappUrl = getWhatsAppWebUrl(cleanPhone, refillMsg);
-
-                      api.whatsapp
-                        .send({
-                          threadId: item.threadId,
-                          patientId: targetThread?.patientId || item.threadId,
-                          patientName: item.name,
-                          recipientMobile: cleanPhone,
-                          clinicPhone,
-                          reportType: 'refill_authorization',
-                          messageText: refillMsg,
-                          autoSimulateReply: autoSimulatePatientReply
-                        })
-                        .then(res => {
-                          if (res?.threads && Array.isArray(res.threads)) {
-                            setThreads(res.threads);
-                          }
-                        })
-                        .catch(() => {});
-
-                      setLastDivertedReceipt({
-                        receiptId: `wa-rx-${Date.now().toString(36)}`,
-                        patientName: item.name,
-                        clinicPhone,
-                        recipientPhone: targetThread?.phone || `+${cleanPhone}`,
-                        messageText: refillMsg,
-                        whatsappUrl,
-                        sentAt: new Date().toISOString()
-                      });
-
-                      setRefillQueue(prev =>
-                        prev.map(r => (r.id === item.id ? { ...r, status: 'approved' } : r))
-                      );
-                      setThreads(prev =>
-                        prev.map(t =>
-                          t.id === item.threadId
-                            ? {
-                                ...t,
-                                stage: 'resolved',
-                                statusLabel: 'Refill approved & dispatched',
-                                messages: [
-                                  ...t.messages,
-                                  {
-                                    sender: 'doctor',
-                                    text: refillMsg,
-                                    time: 'Just now',
-                                    status: `Delivered in background (${clinicPhone} → ${t.phone})`,
-                                    whatsappUrl,
-                                    recipientPhone: t.phone
-                                  }
-                                ]
-                              }
-                            : t
-                        )
-                      );
-                      showToast(`Refill authorized & dispatched in background to ${item.name}.`);
-                    }}
-                    className="px-3.5 py-1.5 bg-[#0d3f3b] hover:bg-[#135650] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-                  >
-                    Authorize &amp; Send In-App
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
         </div>
       </div>
 
@@ -2466,9 +1940,9 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Message a Registered Patient</h3>
+                <h3 className="text-base font-bold text-slate-900">Message a Patient</h3>
                 <p className="text-xs text-slate-500">
-                  Select any patient from your clinic EHR to open a direct thread linked to {clinicPhone}
+                  Select a patient from your clinic EHR to open a conversation
                 </p>
               </div>
               <button
@@ -2483,7 +1957,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
             <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
               {isLoadingPatients ? (
                 <div className="p-6 text-center text-xs text-slate-500">
-                  Loading patients from database...
+                  Loading patients...
                 </div>
               ) : realPatients.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-500">
@@ -2513,21 +1987,11 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                       className="px-3 py-1.5 bg-[#0d3f3b] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0"
                     >
                       <WhatsAppIcon className="w-3 h-3 fill-white" />
-                      <span>Open Thread</span>
+                      <span>Message</span>
                     </button>
                   </div>
                 ))
               )}
-            </div>
-
-            <div className="flex justify-end pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowNewMessageModal(false)}
-                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer"
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>
@@ -2539,9 +2003,9 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Patient Broadcast Campaign</h3>
+                <h3 className="text-base font-bold text-slate-900">Patient Broadcast</h3>
                 <p className="text-xs text-slate-500">
-                  Send follow-up reminders or clinic announcements from {clinicPhone}
+                  Send follow-up reminders from {clinicPhone}
                 </p>
               </div>
               <button
@@ -2555,7 +2019,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Audience Filter</label>
+                <label className="block font-bold text-slate-700 mb-1">Audience</label>
                 <select
                   value={broadcastFilter}
                   onChange={e => setBroadcastFilter(e.target.value)}
@@ -2564,17 +2028,16 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                   <option>All active patients ({realPatients.length || 18} patients)</option>
                   <option>Follow-up due this week (8 patients)</option>
                   <option>Post-procedure healing check (5 patients)</option>
-                  <option>Patients on topical therapy (12 patients)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Campaign Message</label>
+                <label className="block font-bold text-slate-700 mb-1">Message</label>
                 <textarea
                   rows={4}
                   value={broadcastText}
                   onChange={e => setBroadcastText(e.target.value)}
-                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600"
+                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-600"
                 />
               </div>
 
@@ -2591,8 +2054,6 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                   onClick={() => {
                     const personalizedMsg = broadcastText.replace(/\[name\]/gi, activeThread.name);
                     const cleanPhone = cleanPhoneNumber(activeThread.phone) || '919876543210';
-                    const whatsappUrl = getWhatsAppWebUrl(cleanPhone, personalizedMsg);
-
                     api.whatsapp
                       .send({
                         threadId: activeThread.id,
@@ -2601,8 +2062,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                         recipientMobile: cleanPhone,
                         clinicPhone,
                         reportType: 'broadcast_campaign',
-                        messageText: personalizedMsg,
-                        note: `[Broadcast: ${broadcastFilter}] ${personalizedMsg.slice(0, 80)}`
+                        messageText: personalizedMsg
                       })
                       .then(res => {
                         if (res?.threads && Array.isArray(res.threads)) {
@@ -2611,23 +2071,13 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                       })
                       .catch(() => {});
 
-                    setLastDivertedReceipt({
-                      receiptId: `wa-bcast-${Date.now().toString(36)}`,
-                      patientName: activeThread.name,
-                      clinicPhone,
-                      recipientPhone: activeThread.phone,
-                      messageText: personalizedMsg,
-                      whatsappUrl,
-                      sentAt: new Date().toISOString()
-                    });
-
                     setBroadcastModalOpen(false);
-                    showToast(`Broadcast dispatched in background from ${clinicPhone} for ${broadcastFilter}.`);
+                    showToast(`Broadcast sent for ${broadcastFilter}`);
                   }}
                   className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl font-semibold cursor-pointer flex items-center gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Send Broadcast (In-App)</span>
+                  <span>Send Broadcast</span>
                 </button>
               </div>
             </div>
@@ -2635,19 +2085,17 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         </div>
       )}
 
-      {/* Modal: Simulate / Route Incoming Patient WhatsApp/SMS Reply into Clinical OS Inbox */}
+      {/* Modal: Simulate Incoming Patient Reply */}
       {showIncomingReplyModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
-                  Route Incoming Patient Reply into Clinical OS
+                  Simulate Incoming Patient Reply
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Simulate or inject an inbound WhatsApp/SMS message from{' '}
-                  <strong>{activeThread.name}</strong> ({activeThread.phone}) to{' '}
-                  <strong>{clinicPhone}</strong>
+                  Route a test reply from <strong>{activeThread.name}</strong> ({activeThread.phone})
                 </p>
               </div>
               <button
@@ -2661,9 +2109,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
 
             <div className="space-y-3 text-xs">
               <div className="space-y-1.5">
-                <span className="font-bold text-slate-700 block">
-                  Quick Preset Patient Replies (Click to route immediately):
-                </span>
+                <span className="font-semibold text-slate-700 block">Quick Presets:</span>
                 <div className="grid grid-cols-1 gap-1.5">
                   {[
                     `Thank you Doctor! The redness has reduced today and the new cream feels soothing.`,
@@ -2675,7 +2121,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                       type="button"
                       disabled={isSimulatingIncoming}
                       onClick={() => handleReceiveIncomingPatientReply(preset)}
-                      className="text-left p-2.5 rounded-xl bg-slate-50 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 text-slate-700 transition-colors cursor-pointer"
+                      className="text-left p-2.5 rounded-xl bg-slate-50 hover:bg-teal-50 border border-slate-200 text-slate-700 transition-colors cursor-pointer"
                     >
                       &ldquo;{preset}&rdquo;
                     </button>
@@ -2684,35 +2130,46 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Or Type Custom Incoming Patient Message:
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Or Custom Patient Message:
                 </label>
                 <textarea
                   rows={3}
-                  placeholder={`Type what ${activeThread.name} replies on WhatsApp/SMS...`}
+                  placeholder={`Type what ${activeThread.name} replies...`}
                   value={incomingTestText}
                   onChange={e => setIncomingTestText(e.target.value)}
-                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-600 focus:outline-none"
                 />
               </div>
 
-              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowIncomingReplyModal(false)}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={isSimulatingIncoming}
-                  onClick={() => handleReceiveIncomingPatientReply()}
-                  className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl font-semibold cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{isSimulatingIncoming ? 'Routing...' : 'Route Reply into Inbox'}</span>
-                </button>
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoSimulatePatientReply}
+                    onChange={e => setAutoSimulatePatientReply(e.target.checked)}
+                    className="rounded text-teal-700"
+                  />
+                  <span>Auto-simulate reply 3s after sending</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowIncomingReplyModal(false)}
+                    className="px-3.5 py-2 border border-slate-300 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSimulatingIncoming}
+                    onClick={() => handleReceiveIncomingPatientReply()}
+                    className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl font-semibold cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{isSimulatingIncoming ? 'Routing...' : 'Route Reply'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -2722,27 +2179,15 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
       {/* Modal: AI Clinical Analysis Report PDF Generator & WhatsApp Dispatcher */}
       {showAiPdfModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3.5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#0d3f3b] text-white flex items-center justify-center shrink-0">
-                  <FileText className="w-5 h-5 text-teal-300" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-slate-900">
-                      Send AI Clinical Analysis Report (PDF) via WhatsApp
-                    </h3>
-                    <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold uppercase">
-                      PDF Document
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Generates an official A4 clinical analysis PDF for{' '}
-                    <strong className="text-slate-800">{activeThread.name}</strong> and dispatches it on WhatsApp ({clinicPhone} →{' '}
-                    <span className="font-mono font-semibold text-slate-700">{activeThread.phone}</span>).
-                  </p>
-                </div>
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Send Medical Report as PDF
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Generates an A4 clinical report PDF for <strong>{activeThread.name}</strong> ({activeThread.phone})
+                </p>
               </div>
               <button
                 type="button"
@@ -2753,105 +2198,74 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
               </button>
             </div>
 
-            {/* Live PDF Document Header Card Preview */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-lg bg-rose-600 text-white flex flex-col items-center justify-center shrink-0 font-bold">
-                  <FileText className="w-4 h-4" />
-                  <span className="text-[8px] tracking-tighter uppercase mt-0.5">PDF</span>
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-slate-900 truncate">
+                  AI_Clinical_Analysis_{activeThread.name.replace(/\s+/g, '_')}.pdf
                 </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-slate-900 truncate">
-                    AI_Clinical_Analysis_{activeThread.name.replace(/\s+/g, '_')}.pdf
-                  </div>
-                  <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
-                    <span>Patient: {activeThread.subtitle}</span>
-                    <span>·</span>
-                    <span
-                      className={
-                        activeThread.priority === 'urgent'
-                          ? 'text-rose-700 font-semibold'
-                          : 'text-teal-800 font-semibold'
-                      }
-                    >
-                      {activeThread.priority === 'urgent'
-                        ? 'Priority: Urgent Triage'
-                        : 'Priority: Routine Follow-Up'}
-                    </span>
-                  </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {activeThread.subtitle} · Signed by Dr. {doctor?.name || 'Sarah Chen'}
                 </div>
               </div>
-
               <button
                 type="button"
                 onClick={handleDownloadOrPreviewAiReportPdf}
-                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
-                title="Download a copy of the generated PDF to inspect locally"
+                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5 text-teal-700" />
-                <span>Download PDF Preview</span>
+                <span>Download PDF</span>
               </button>
             </div>
 
-            {/* Editable PDF Report Sections */}
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  1. AI Clinical Assessment &amp; Triage Findings (Included in PDF Section 2 &amp; 3)
+                <label className="block font-semibold text-slate-700 mb-1">
+                  1. Clinical Assessment &amp; Findings
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={aiPdfAssessmentDraft}
                   onChange={e => setAiPdfAssessmentDraft(e.target.value)}
-                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
-                  placeholder="Enter AI clinical assessment and dermatological findings..."
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-600 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  2. Doctor&apos;s Recommended Action Plan &amp; Regimen (Included in PDF Section 4)
+                <label className="block font-semibold text-slate-700 mb-1">
+                  2. Recommended Treatment Plan
                 </label>
                 <textarea
                   rows={3}
                   value={aiPdfPlanDraft}
                   onChange={e => setAiPdfPlanDraft(e.target.value)}
-                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
-                  placeholder="Enter treatment plan and medical guidance..."
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-600 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  3. Follow-Up &amp; Safety Instructions (Included in PDF Section 5)
+                <label className="block font-semibold text-slate-700 mb-1">
+                  3. Follow-Up Instructions
                 </label>
                 <textarea
                   rows={2}
                   value={aiPdfFollowUpDraft}
                   onChange={e => setAiPdfFollowUpDraft(e.target.value)}
-                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-600 focus:outline-none"
-                  placeholder="Enter follow-up schedule and red-flag instructions..."
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-xl focus:ring-1 focus:ring-teal-600 focus:outline-none"
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
-                <label className="inline-flex items-center gap-2 text-xs text-slate-700 font-medium cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={alsoDownloadLocalPdf}
-                    onChange={e => setAlsoDownloadLocalPdf(e.target.checked)}
-                    className="rounded text-teal-700 focus:ring-teal-600"
-                  />
-                  <span>Also download PDF file to my computer when sending</span>
-                </label>
-
-                <span className="text-[11px] text-slate-500">
-                  Signed by <strong>Dr. {doctor?.name || 'Sarah Chen'}</strong>
-                </span>
-              </div>
+              <label className="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={alsoDownloadLocalPdf}
+                  onChange={e => setAlsoDownloadLocalPdf(e.target.checked)}
+                  className="rounded text-teal-700"
+                />
+                <span>Also download PDF copy to computer when sending</span>
+              </label>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5 flex-wrap">
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowAiPdfModal(false)}
@@ -2863,15 +2277,11 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                 type="button"
                 disabled={isSendingAiPdf}
                 onClick={handleSendAiReportPdf}
-                className="px-4 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-sm"
+                className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                <WhatsAppIcon className="w-4 h-4 fill-white" />
-                <span>
-                  {isSendingAiPdf
-                    ? 'Generating & Sending PDF...'
-                    : `Send AI Report PDF to ${activeThread.name} (In-App)`}
-                </span>
-                <Send className="w-3.5 h-3.5" />
+                <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
+                <span>{isSendingAiPdf ? 'Sending PDF...' : 'Send PDF on WhatsApp'}</span>
+                <Send className="w-3 h-3" />
               </button>
             </div>
           </div>
@@ -2888,7 +2298,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
           reportType="patient_summary"
           data={{}}
           onSentSuccess={() => {
-            showToast(`WhatsApp report dispatched to ${selectedPatientForReport.fullName}.`);
+            showToast(`WhatsApp report sent to ${selectedPatientForReport.fullName}`);
           }}
         />
       )}
