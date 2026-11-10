@@ -30,7 +30,13 @@ app.use(
 app.use(compression({
   threshold: 1024,
   filter: (req, res) => {
-    if (req.headers['x-no-compression']) return false;
+    if (
+      req.headers['x-no-compression'] ||
+      req.headers.accept?.includes('text/event-stream') ||
+      req.path.startsWith('/api/realtime/')
+    ) {
+      return false;
+    }
     return compression.filter(req, res);
   }
 }));
@@ -75,8 +81,17 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/ai', aiLimiter);
 
-// Increase body parser limits for clinical images
-app.use(express.json({ limit: '15mb' }));
+// Increase body parser limits for clinical images & capture rawBody on webhook routes for X-Hub-Signature-256 verification
+app.use(
+  express.json({
+    limit: '15mb',
+    verify: (req: Request & { rawBody?: Buffer }, _res, buf) => {
+      if (req.originalUrl && req.originalUrl.includes('/webhook')) {
+        req.rawBody = Buffer.from(buf);
+      }
+    }
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Ensure upload directory exists (aligned with server/db.ts DATA_DIR resolution)
@@ -451,6 +466,167 @@ app.use(
   },
   express.static(UPLOADS_DIR)
 );
+
+// ==========================================
+// REAL-TIME SERVER-SENT EVENTS (SSE) HUB
+// ==========================================
+interface RealtimeClinicClient {
+  id: string;
+  doctorId: string;
+  clinicDoctorId: string;
+  res: Response;
+}
+
+interface RealtimeMobileClient {
+  id: string;
+  token: string;
+  res: Response;
+}
+
+const realtimeClinicClients = new Map<string, RealtimeClinicClient>();
+const realtimeMobileClients = new Map<string, RealtimeMobileClient>();
+
+function broadcastClinicEvent(
+  eventType: string,
+  payload: Record<string, unknown>,
+  targetDoctorId?: string
+) {
+  const effectiveTargetId = targetDoctorId
+    ? db.resolveEffectiveClinicDoctorId(targetDoctorId) || targetDoctorId
+    : undefined;
+  const isTargetDemo = effectiveTargetId ? db.isDemoAccount(effectiveTargetId) : false;
+  const serialized = `data: ${JSON.stringify({
+    type: eventType,
+    timestamp: new Date().toISOString(),
+    ...payload
+  })}\n\n`;
+
+  for (const [clientId, client] of realtimeClinicClients.entries()) {
+    const matchesClinic =
+      !effectiveTargetId ||
+      client.clinicDoctorId === effectiveTargetId ||
+      client.doctorId === effectiveTargetId ||
+      (isTargetDemo && db.isDemoAccount(client.clinicDoctorId));
+
+    if (matchesClinic) {
+      try {
+        client.res.write(serialized);
+      } catch {
+        realtimeClinicClients.delete(clientId);
+      }
+    }
+  }
+}
+
+function broadcastMobileSessionEvent(
+  token: string,
+  eventType: string,
+  payload: Record<string, unknown>
+) {
+  if (!token) return;
+  const serialized = `data: ${JSON.stringify({
+    type: eventType,
+    token,
+    timestamp: new Date().toISOString(),
+    ...payload
+  })}\n\n`;
+
+  for (const [clientId, client] of realtimeMobileClients.entries()) {
+    if (client.token === token) {
+      try {
+        client.res.write(serialized);
+      } catch {
+        realtimeMobileClients.delete(clientId);
+      }
+    }
+  }
+}
+
+// Keep SSE connections alive across proxies (Render / Cloudflare) every 20s
+setInterval(() => {
+  const pingMsg = `: keepalive ${Date.now()}\n\n`;
+  for (const [id, client] of realtimeClinicClients.entries()) {
+    try {
+      client.res.write(pingMsg);
+    } catch {
+      realtimeClinicClients.delete(id);
+    }
+  }
+  for (const [id, client] of realtimeMobileClients.entries()) {
+    try {
+      client.res.write(pingMsg);
+    } catch {
+      realtimeMobileClients.delete(id);
+    }
+  }
+}, 20000);
+
+app.get('/api/realtime/events', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const doctor = req.doctor!;
+  const clinicDoctorId = db.resolveEffectiveClinicDoctorId(doctor.id) || doctor.id;
+  const clientId = `sse_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  realtimeClinicClients.set(clientId, {
+    id: clientId,
+    doctorId: doctor.id,
+    clinicDoctorId,
+    res
+  });
+
+  res.write(
+    `data: ${JSON.stringify({
+      type: 'connected',
+      clientId,
+      doctorId: doctor.id,
+      timestamp: new Date().toISOString()
+    })}\n\n`
+  );
+
+  req.on('close', () => {
+    realtimeClinicClients.delete(clientId);
+  });
+});
+
+app.get('/api/realtime/mobile-session/:token', (req, res) => {
+  const token = String(req.params.token || '').trim();
+  const mobSession = token.startsWith('mob_') ? getOrRestoreMobileUploadSession(token) : undefined;
+  const walkSession = token.startsWith('wlk_') ? getOrRestoreWalkInSession(token) : undefined;
+
+  if (!mobSession && !walkSession) {
+    return res.status(404).json({ error: 'Invalid or expired mobile session token' });
+  }
+
+  const clientId = `msse_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  realtimeMobileClients.set(clientId, {
+    id: clientId,
+    token,
+    res
+  });
+
+  res.write(
+    `data: ${JSON.stringify({
+      type: 'connected',
+      token,
+      timestamp: new Date().toISOString()
+    })}\n\n`
+  );
+
+  req.on('close', () => {
+    realtimeMobileClients.delete(clientId);
+  });
+});
 
 // ==========================================
 // AUTH ROUTES
@@ -1552,6 +1728,142 @@ app.post('/api/prescriptions', authMiddleware, (req: AuthenticatedRequest, res) 
   res.status(201).json({ prescription: rx });
 });
 
+// Generate an HMAC-signed Digital Prescription Verification QR Token
+app.post('/api/prescriptions/sign-token', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const doctor = req.doctor!;
+  const { patientId, consultationId, prescriptionIds } = req.body || {};
+  if (!patientId) {
+    return res.status(400).json({ error: 'patientId is required' });
+  }
+
+  const patient = db.findPatientById(String(patientId), doctor.id);
+  if (!patient) {
+    return res.status(404).json({ error: 'Patient not found' });
+  }
+
+  const allRx = db.getPrescriptions(patient.id, doctor.id);
+  const selectedIds = Array.isArray(prescriptionIds)
+    ? prescriptionIds.map(String).filter(Boolean)
+    : [];
+  const filteredRx =
+    selectedIds.length > 0
+      ? allRx.filter(r => selectedIds.includes(r.id))
+      : consultationId
+      ? allRx.filter(r => r.consultationId === consultationId)
+      : allRx.slice(0, 12);
+
+  const rxBatch = (filteredRx.length > 0 ? filteredRx : allRx.slice(0, 10)).map(r => ({
+    m: r.medicineName,
+    d: r.dosage,
+    f: r.frequency,
+    du: r.duration,
+    i: r.instructions || ''
+  }));
+
+  const signedAt = new Date().toISOString();
+  const payload = {
+    p: patient.id,
+    pc: patient.patientCode,
+    pn: patient.fullName,
+    pa: `${patient.age}y / ${patient.gender}`,
+    d: doctor.id,
+    dn: doctor.name,
+    ds: doctor.speciality || 'Dermatology & Clinical Medicine',
+    dr: doctor.registrationNumber || 'MCI-VERIFIED',
+    cn: doctor.clinicName || 'Cliniq Clinical OS',
+    cp: doctor.phone || '',
+    c: consultationId || undefined,
+    rx: rxBatch,
+    iat: signedAt
+  };
+
+  const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const sig = signPayloadHmac(encoded);
+  const token = `rxv_${encoded}.${sig}`;
+  const verificationCode = `RX-${sig.slice(0, 8).toUpperCase()}`;
+
+  res.json({
+    token,
+    verificationCode,
+    signedAt
+  });
+});
+
+// Public endpoint: Verify a Digital Prescription QR Code token (for patients & pharmacies)
+app.get('/api/prescriptions/verify/:token', (req, res) => {
+  const rawToken = String(req.params.token || '').trim();
+  if (!rawToken.startsWith('rxv_')) {
+    return res.status(400).json({ verified: false, error: 'Invalid prescription verification token format.' });
+  }
+
+  const body = rawToken.slice(4);
+  const dotIdx = body.lastIndexOf('.');
+  if (dotIdx <= 0) {
+    return res.status(400).json({ verified: false, error: 'Malformed prescription signature.' });
+  }
+
+  const encoded = body.slice(0, dotIdx);
+  const sig = body.slice(dotIdx + 1);
+  if (!verifyHmacSignature(encoded, sig)) {
+    return res.status(401).json({
+      verified: false,
+      error: 'Prescription signature verification failed. This prescription may have been altered or tampered with.'
+    });
+  }
+
+  try {
+    const decoded = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+    const liveDoctor = decoded.d ? db.findDoctorById(String(decoded.d)) : undefined;
+    const livePatient =
+      decoded.p && decoded.d ? db.findPatientById(String(decoded.p), String(decoded.d)) : undefined;
+
+    const liveRx =
+      livePatient && decoded.d
+        ? db
+            .getPrescriptions(livePatient.id, String(decoded.d))
+            .filter(r => !decoded.c || r.consultationId === decoded.c)
+        : [];
+
+    const medications =
+      Array.isArray(decoded.rx) && decoded.rx.length > 0
+        ? decoded.rx.map((item: { m: string; d: string; f: string; du: string; i?: string }) => ({
+            medicineName: item.m,
+            dosage: item.d,
+            frequency: item.f,
+            duration: item.du || '',
+            instructions: item.i || ''
+          }))
+        : liveRx.map(r => ({
+            medicineName: r.medicineName,
+            dosage: r.dosage,
+            frequency: r.frequency,
+            duration: r.duration,
+            instructions: r.instructions || ''
+          }));
+
+    return res.json({
+      verified: true,
+      verificationCode: `RX-${sig.slice(0, 8).toUpperCase()}`,
+      signedAt: decoded.iat || new Date().toISOString(),
+      clinic: {
+        name: liveDoctor?.clinicName || decoded.cn || 'Cliniq Clinical OS',
+        doctorName: liveDoctor?.name || decoded.dn || 'Attending Physician',
+        speciality: liveDoctor?.speciality || decoded.ds || 'Dermatology & Clinical Practice',
+        registrationNumber: liveDoctor?.registrationNumber || decoded.dr || 'Verified Practitioner',
+        phone: liveDoctor?.phone || decoded.cp || ''
+      },
+      patient: {
+        name: livePatient?.fullName || decoded.pn || 'Verified Patient',
+        patientCode: livePatient?.patientCode || decoded.pc || 'P-VERIFIED',
+        demographics: livePatient ? `${livePatient.age}y / ${livePatient.gender}` : decoded.pa || ''
+      },
+      medications
+    });
+  } catch {
+    return res.status(400).json({ verified: false, error: 'Unable to decode prescription verification payload.' });
+  }
+});
+
 // ==========================================
 // DOCTOR PERSONALIZED MEDICAL LIBRARY (FORMULARY) ROUTES
 // ==========================================
@@ -2593,6 +2905,22 @@ app.post('/api/images/mobile-session/:token/upload', (req, res) => {
       }
     });
 
+    // Real-time push to desktop modal & clinic workstation
+    broadcastMobileSessionEvent(session.token, 'mobile_qr:image_uploaded', {
+      image: clinicalImage,
+      uploadedCount: session.uploadedImages.length
+    });
+    broadcastClinicEvent(
+      'mobile_qr:image_uploaded',
+      {
+        token: session.token,
+        patientId: session.patientId,
+        consultationId: session.consultationId,
+        image: clinicalImage
+      },
+      session.doctorId
+    );
+
     res.status(201).json({
       image: clinicalImage,
       uploadedCount: session.uploadedImages.length
@@ -2825,11 +3153,26 @@ app.post('/api/walkin/mobile-session/:token/submit', (req, res) => {
   session.expiresAt = Date.now() + 24 * 60 * 60 * 1000;
   mobileWalkInSessions.set(session.token, session);
 
+  const serializedSession = {
+    ...session,
+    expiresAt: new Date(session.expiresAt).toISOString()
+  };
+
+  // Real-time push to desktop Walk-In modal & clinic workstation
+  broadcastMobileSessionEvent(session.token, 'walkin:session_submitted', {
+    session: serializedSession
+  });
+  broadcastClinicEvent(
+    'walkin:session_submitted',
+    {
+      token: session.token,
+      session: serializedSession
+    },
+    session.doctorId
+  );
+
   res.json({
-    session: {
-      ...session,
-      expiresAt: new Date(session.expiresAt).toISOString()
-    }
+    session: serializedSession
   });
 });
 
@@ -3842,7 +4185,108 @@ function routeIncomingPatientMessageToInbox(params: {
   }
   db.saveStoredInboxThreads(allThreads);
 
+  // Interactive Appointment Reply Automation (CONFIRM / CANCEL / RESCHEDULE)
+  const cleanUpper = params.messageText.trim().toUpperCase();
+  const last10 = cleanDigits.slice(-10);
+  const matchedPatient =
+    (thread.patientId ? db.findPatientById(thread.patientId, params.doctorId) : undefined) ||
+    (last10.length === 10 ? db.findPatientByMobile(last10, params.doctorId) : undefined);
+
+  if (matchedPatient) {
+    const patientAppts = db.getAppointments({ patientId: matchedPatient.id }, params.doctorId || matchedPatient.createdById);
+    const activeScheduled = patientAppts.find(a => a.status === 'scheduled');
+    if (activeScheduled) {
+      if (/^(CONFIRM|CONFIRMED|YES|1|OK)\b/.test(cleanUpper)) {
+        const updatedAppt = db.updateAppointment(
+          activeScheduled.id,
+          {
+            notes: `${activeScheduled.notes ? activeScheduled.notes + ' · ' : ''}Confirmed by patient via ${params.channel || 'WhatsApp'}`
+          },
+          { id: matchedPatient.id, name: matchedPatient.fullName }
+        );
+        thread.statusLabel = 'Appointment confirmed by patient';
+        db.saveStoredInboxThreads(allThreads);
+        broadcastClinicEvent(
+          'appointment:status_updated',
+          { appointment: updatedAppt, patientAction: 'confirmed' },
+          params.doctorId || matchedPatient.createdById
+        );
+      } else if (/^(CANCEL|CANCELLED)\b/.test(cleanUpper)) {
+        const updatedAppt = db.updateAppointment(
+          activeScheduled.id,
+          {
+            status: 'cancelled',
+            notes: `${activeScheduled.notes ? activeScheduled.notes + ' · ' : ''}Cancelled by patient via ${params.channel || 'WhatsApp'}`
+          },
+          { id: matchedPatient.id, name: matchedPatient.fullName }
+        );
+        thread.statusLabel = 'Appointment cancelled by patient';
+        db.saveStoredInboxThreads(allThreads);
+        broadcastClinicEvent(
+          'appointment:status_updated',
+          { appointment: updatedAppt, patientAction: 'cancelled' },
+          params.doctorId || matchedPatient.createdById
+        );
+      }
+    }
+  }
+
+  // Real-time SSE push to clinic inbox
+  broadcastClinicEvent(
+    'inbox:message_received',
+    {
+      threadId: thread.id,
+      thread,
+      message: incomingMsg
+    },
+    params.doctorId || thread.doctorId
+  );
+
   return { thread, message: incomingMsg };
+}
+
+function updateInboxMessageDeliveryStatus(params: {
+  receiptId?: string;
+  recipientPhone?: string;
+  status: 'sent' | 'delivered' | 'read' | 'failed';
+  doctorId?: string;
+}): boolean {
+  const allThreads = db.getAllRawInboxThreads(defaultInboxThreads);
+  const last10 = (params.recipientPhone || '').replace(/\D/g, '').slice(-10);
+  let updatedThread: InboxThreadRecord | undefined;
+
+  for (const thread of allThreads) {
+    const phoneMatch = last10.length === 10 && thread.phone.replace(/\D/g, '').endsWith(last10);
+    for (let i = thread.messages.length - 1; i >= 0; i--) {
+      const msg = thread.messages[i];
+      if (msg.sender !== 'doctor') continue;
+      if (
+        (params.receiptId && msg.receiptId === params.receiptId) ||
+        (!params.receiptId && phoneMatch)
+      ) {
+        msg.status = `WhatsApp status: ${params.status.toUpperCase()}`;
+        thread.updatedAt = new Date().toISOString();
+        updatedThread = thread;
+        break;
+      }
+    }
+    if (updatedThread) break;
+  }
+
+  if (updatedThread) {
+    db.saveStoredInboxThreads(allThreads);
+    broadcastClinicEvent(
+      'inbox:status_updated',
+      {
+        threadId: updatedThread.id,
+        status: params.status,
+        thread: updatedThread
+      },
+      params.doctorId || updatedThread.doctorId
+    );
+    return true;
+  }
+  return false;
 }
 
 // Get all native Clinical OS Inbox threads
@@ -3887,30 +4331,76 @@ const handleWhatsAppWebhookGet = (req: Request, res: Response) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
+  const expectedVerifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
+
   if (mode === 'subscribe' && challenge) {
+    if (expectedVerifyToken && token !== expectedVerifyToken) {
+      return res.status(403).json({ error: 'Webhook verification token mismatch' });
+    }
     return res.status(200).send(challenge);
   }
-  res.status(200).json({ status: 'Clinical OS Native WhatsApp/SMS Webhook Active', token: Boolean(token) });
+  res.status(200).json({
+    status: 'Clinical OS Native WhatsApp/SMS Webhook Active',
+    signatureVerificationEnabled: Boolean(process.env.WHATSAPP_APP_SECRET),
+    token: Boolean(token)
+  });
 };
 
-const handleWhatsAppWebhookPost = (req: Request, res: Response) => {
+const handleWhatsAppWebhookPost = (req: Request & { rawBody?: Buffer }, res: Response) => {
   try {
+    // 0. Verify X-Hub-Signature-256 HMAC when WHATSAPP_APP_SECRET is configured
+    const appSecret = process.env.WHATSAPP_APP_SECRET;
+    const hubSignature = req.headers['x-hub-signature-256'];
+    if (appSecret && typeof hubSignature === 'string') {
+      const rawBuffer = req.rawBody || Buffer.from(JSON.stringify(req.body || {}), 'utf8');
+      const expectedSig =
+        'sha256=' + crypto.createHmac('sha256', appSecret).update(rawBuffer).digest('hex');
+      const sigBuf = Buffer.from(hubSignature);
+      const expBuf = Buffer.from(expectedSig);
+      if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+        return res.status(401).json({ error: 'Invalid X-Hub-Signature-256 webhook signature' });
+      }
+    }
+
     const body = req.body || {};
 
-    // 1. Standard Meta WhatsApp Cloud API webhook payload
+    // 1. Standard Meta WhatsApp Cloud API webhook payload (messages + statuses)
     const entry = body.entry?.[0];
     const changeVal = entry?.changes?.[0]?.value;
+
+    // 1a. Handle delivery status receipts (sent -> delivered -> read / failed)
+    const waStatus = changeVal?.statuses?.[0];
+    if (waStatus) {
+      const rawStatus = String(waStatus.status || 'delivered').toLowerCase();
+      const mappedStatus: 'sent' | 'delivered' | 'read' | 'failed' =
+        rawStatus === 'read'
+          ? 'read'
+          : rawStatus === 'sent'
+          ? 'sent'
+          : rawStatus === 'failed'
+          ? 'failed'
+          : 'delivered';
+      updateInboxMessageDeliveryStatus({
+        receiptId: waStatus.id,
+        recipientPhone: waStatus.recipient_id,
+        status: mappedStatus
+      });
+      return res.status(200).json({ success: true, statusUpdated: mappedStatus });
+    }
+
     const waMessage = changeVal?.messages?.[0];
     const waContact = changeVal?.contacts?.[0];
 
     if (waMessage) {
       const fromPhone = waMessage.from || '';
       const senderName = waContact?.profile?.name || undefined;
+      const imageCaption = waMessage.image?.caption || '';
       const textBody =
         waMessage.text?.body ||
         waMessage.button?.text ||
         waMessage.interactive?.button_reply?.title ||
-        '[Media / Attachment received]';
+        waMessage.interactive?.list_reply?.title ||
+        (waMessage.image ? `[Clinical Photo Attached] ${imageCaption}`.trim() : '[Media / Attachment received]');
 
       const result = routeIncomingPatientMessageToInbox({
         patientName: senderName,
@@ -3922,9 +4412,29 @@ const handleWhatsAppWebhookPost = (req: Request, res: Response) => {
       return res.status(200).json({ success: true, threadId: result.thread.id });
     }
 
-    // 2. Generic / Twilio / Custom Gateway JSON webhook payload ({ From, Body } or { from, text })
+    // 2. Twilio / Generic status callback
+    const twilioStatus = body.MessageStatus || body.SmsStatus;
+    if (twilioStatus && !body.Body && !body.text) {
+      const lowerStatus = String(twilioStatus).toLowerCase();
+      const mappedStatus: 'sent' | 'delivered' | 'read' | 'failed' =
+        lowerStatus === 'read'
+          ? 'read'
+          : lowerStatus === 'sent' || lowerStatus === 'queued'
+          ? 'sent'
+          : lowerStatus === 'failed' || lowerStatus === 'undelivered'
+          ? 'failed'
+          : 'delivered';
+      updateInboxMessageDeliveryStatus({
+        receiptId: body.MessageSid,
+        recipientPhone: body.To || body.recipientPhone,
+        status: mappedStatus
+      });
+      return res.status(200).json({ success: true, statusUpdated: mappedStatus });
+    }
+
+    // 3. Generic / Twilio / Custom Gateway JSON webhook payload ({ From, Body } or { from, text, imageDataUrl })
     const rawFrom = body.from || body.From || body.senderPhone || '';
-    const rawText = body.text || body.Body || body.messageText || '';
+    const rawText = body.text || body.Body || body.messageText || (body.MediaUrl0 ? `[Clinical Photo Attached] ${body.MediaUrl0}` : '');
     if (rawFrom && rawText) {
       const result = routeIncomingPatientMessageToInbox({
         patientName: body.patientName || body.ProfileName,
@@ -3932,6 +4442,22 @@ const handleWhatsAppWebhookPost = (req: Request, res: Response) => {
         messageText: String(rawText),
         channel: body.channel === 'SMS' ? 'SMS' : 'WhatsApp'
       });
+
+      // If inbound webhook includes a base64 clinical image (imageDataUrl) for a matched patient, store it in patient chart
+      if (body.imageDataUrl && typeof body.imageDataUrl === 'string' && result.thread.patientId) {
+        try {
+          storePatientClinicalImage({
+            patientId: result.thread.patientId,
+            rawDataUrl: body.imageDataUrl,
+            caption: `Patient WhatsApp Follow-Up Photo (${new Date().toLocaleDateString()})`,
+            tags: ['whatsapp-inbound'],
+            actor: { id: result.thread.doctorId || 'patient', name: result.thread.name }
+          });
+        } catch {
+          // ignore invalid image payload
+        }
+      }
+
       return res.status(200).json({ success: true, threadId: result.thread.id });
     }
 
@@ -4131,6 +4657,17 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
     }
   });
 
+  // Real-time SSE broadcast to all connected clinic tabs
+  broadcastClinicEvent(
+    'inbox:message_sent',
+    {
+      threadId: thread.id,
+      thread,
+      dispatch: dispatchRecord
+    },
+    doctor.id
+  );
+
   res.json({
     success: true,
     dispatch: dispatchRecord,
@@ -4144,6 +4681,107 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
 
 app.post('/api/whatsapp/send', authMiddleware, requireDoctorRole, handleWhatsAppSend);
 app.post('/api/inbox/send-message', authMiddleware, requireDoctorRole, handleWhatsAppSend);
+
+// Automated & On-Demand Appointment Reminder Dispatch (WhatsApp Cloud API / Gateway + Inbox Log)
+app.post('/api/appointments/send-reminders', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const doctor = req.doctor!;
+  const { date, appointmentIds } = req.body || {};
+
+  const allAppts = db.getAppointments({ date, status: 'scheduled' }, doctor.id);
+  const targetAppts = Array.isArray(appointmentIds) && appointmentIds.length > 0
+    ? allAppts.filter(a => appointmentIds.includes(a.id))
+    : allAppts.slice(0, 25);
+
+  if (targetAppts.length === 0) {
+    return res.json({
+      success: true,
+      dispatchedCount: 0,
+      reminders: [],
+      message: 'No scheduled appointments found requiring reminders.'
+    });
+  }
+
+  const clinicName = doctor.clinicName || 'Cliniq Clinical OS';
+  const clinicPhone = doctor.phone || '+91 98765 00001';
+  const dispatchedReminders: Array<{
+    appointmentId: string;
+    patientName: string;
+    mobile: string;
+    date: string;
+    time: string;
+    deliveryMode: string;
+  }> = [];
+
+  for (const appt of targetAppts) {
+    const rawDigits = String(appt.patientMobile || '').replace(/\D/g, '');
+    if (rawDigits.length < 10) continue;
+    const normalizedRecipient = rawDigits.length === 10 ? `91${rawDigits}` : rawDigits.replace(/^0+/, '');
+    const reminderText = `Hello ${appt.patientName}, this is a reminder from ${clinicName} (${doctor.name}) for your appointment on ${appt.date} at ${appt.time}. Reply CONFIRM to confirm or RESCHEDULE if you need a different slot.`;
+
+    const thread = findOrCreateInboxThread({
+      patientId: appt.patientId,
+      patientName: appt.patientName,
+      phoneDigits: normalizedRecipient,
+      doctorId: doctor.id
+    });
+
+    const msgId = `wa-rem-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    thread.messages.push({
+      id: msgId,
+      sender: 'doctor',
+      text: reminderText,
+      time: nowTime,
+      status: `Automated Appointment Reminder Sent (${appt.date} · ${appt.time})`,
+      receiptId: msgId,
+      recipientPhone: thread.phone,
+      createdAt: new Date().toISOString()
+    });
+    thread.preview = `Reminder sent for ${appt.date} at ${appt.time}`;
+    thread.timestamp = 'Just now';
+    thread.statusLabel = 'Reminder dispatched · Awaiting CONFIRM';
+    thread.updatedAt = new Date().toISOString();
+
+    dispatchedReminders.push({
+      appointmentId: appt.id,
+      patientName: appt.patientName,
+      mobile: thread.phone,
+      date: appt.date,
+      time: appt.time || '10:00 AM',
+      deliveryMode: process.env.WHATSAPP_API_TOKEN ? 'cloud_api' : 'whatsapp_gateway'
+    });
+  }
+
+  db.saveStoredInboxThreads(db.getAllRawInboxThreads(defaultInboxThreads));
+
+  db.logAudit({
+    actorId: doctor.id,
+    actorName: doctor.name,
+    action: 'appointment_reminders_dispatched',
+    resourceType: 'appointment',
+    resourceId: date || 'upcoming',
+    metadata: {
+      dispatchedCount: dispatchedReminders.length,
+      clinicPhone
+    }
+  });
+
+  broadcastClinicEvent(
+    'appointment:reminder_dispatched',
+    {
+      dispatchedCount: dispatchedReminders.length,
+      reminders: dispatchedReminders
+    },
+    doctor.id
+  );
+
+  res.json({
+    success: true,
+    dispatchedCount: dispatchedReminders.length,
+    reminders: dispatchedReminders,
+    message: `Dispatched ${dispatchedReminders.length} WhatsApp appointment reminder${dispatchedReminders.length === 1 ? '' : 's'}.`
+  });
+});
 
 app.get('/api/whatsapp/messages', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
   const patientId = req.query.patientId as string | undefined;
