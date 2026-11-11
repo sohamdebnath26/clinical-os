@@ -233,10 +233,54 @@ export const SettingsView: React.FC = () => {
   const [isSavingLocalVault, setIsSavingLocalVault] = useState(false);
   const [isRestoringLocalVault, setIsRestoringLocalVault] = useState(false);
 
+  const [cloudStatus, setCloudStatus] = useState<{
+    configured: boolean;
+    connected: boolean;
+    host: string;
+    lastSyncedAt: string | null;
+    error: string | null;
+    totalDoctors: number;
+    totalPatients: number;
+    totalConsultations: number;
+  } | null>(null);
+  const [cloudDbUrlInput, setCloudDbUrlInput] = useState('');
+  const [isConnectingCloud, setIsConnectingCloud] = useState(false);
+
   useEffect(() => {
     const info = api.clinic.getLocalVaultInfo();
     if (info) setLocalVaultInfo(info);
+    api.clinic
+      .getCloudStatus()
+      .then(res => setCloudStatus(res))
+      .catch(() => {});
   }, []);
+
+  const handleConnectCloudDb = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = cloudDbUrlInput.trim();
+    if (!url) {
+      setErrorMsg('Please paste your Supabase or PostgreSQL connection link first.');
+      return;
+    }
+    setIsConnectingCloud(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await api.clinic.connectCloudDatabase(url);
+      if (res.status) setCloudStatus(res.status);
+      if (res.connected) {
+        setCloudDbUrlInput('');
+        setSuccessMsg(res.message);
+        setTimeout(() => setSuccessMsg(null), 5000);
+      } else {
+        setErrorMsg(res.message);
+      }
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to connect cloud database');
+    } finally {
+      setIsConnectingCloud(false);
+    }
+  };
 
   const handleSaveLocalVault = async () => {
     setIsSavingLocalVault(true);
@@ -852,24 +896,78 @@ export const SettingsView: React.FC = () => {
             </span>
           </div>
 
-          {/* Render Free Tier / Declined Card Resolution Notice */}
-          <div className="p-4 rounded-xl bg-amber-50/80 border border-amber-200/80 text-xs text-amber-950 space-y-2">
-            <div className="flex items-center gap-2 font-bold text-amber-900">
-              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
-              <span>Fixing Render Storage / Declined Card Error</span>
+          {/* Option 1: 24/7 Multi-Doctor Cloud Safe (Supabase / PostgreSQL) */}
+          <div
+            className={`p-4 rounded-xl border space-y-3 ${
+              cloudStatus?.connected
+                ? 'bg-emerald-50/70 border-emerald-200'
+                : 'bg-slate-50 border-slate-200'
+            }`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                    cloudStatus?.connected
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-800 text-white'
+                  }`}
+                >
+                  <HardDrive className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-slate-900 text-xs flex items-center gap-2 flex-wrap">
+                    <span>24/7 Multi-Doctor Cloud Safe (Supabase)</span>
+                    {cloudStatus?.connected ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white">
+                        ✓ CONNECTED 24/7 ({cloudStatus.host})
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800">
+                        Not Connected Yet
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-600 mt-0.5">
+                    {cloudStatus?.connected ? (
+                      <span>
+                        Permanent multi-doctor sync active: <strong>{cloudStatus.totalDoctors} doctors</strong>,{' '}
+                        <strong>{cloudStatus.totalPatients} patients</strong>,{' '}
+                        <strong>{cloudStatus.totalConsultations} consultations</strong>
+                        {cloudStatus.lastSyncedAt && (
+                          <> · Last synced {new Date(cloudStatus.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>
+                        )}
+                      </span>
+                    ) : (
+                      <span>
+                        Connect a free Supabase link below (or set <code className="font-mono bg-white px-1 py-0.5 rounded border">DATABASE_URL</code> in Render) so multiple doctors never lose data.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-            <p className="text-[11.5px] text-amber-900 leading-relaxed">
-              Render requires an active credit card only if a <strong>Persistent Disk</strong> is attached to the service. Because free web services on Render do not support paid disks, your card was declined.
-            </p>
-            <div className="bg-white/80 p-3 rounded-lg border border-amber-200 text-[11px] space-y-1.5 font-medium">
-              <div className="font-bold text-amber-950">How to deploy 100% Free on Render:</div>
-              <ol className="list-decimal pl-4 space-y-1 text-slate-700">
-                <li>Open your <strong>Render Dashboard</strong> &rarr; Select your <strong>clinical-os</strong> web service.</li>
-                <li>In the left sidebar, click <strong>Disks</strong> &rarr; Click <strong>Delete Disk</strong> (or remove disk mounts).</li>
-                <li>Go to <strong>Settings</strong> &rarr; Confirm the plan is set to <strong>Free ($0/month)</strong>.</li>
-                <li>Trigger a deploy or push changes. The build will deploy cleanly without asking for a credit card.</li>
-              </ol>
-            </div>
+
+            <form onSubmit={handleConnectCloudDb} className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="password"
+                value={cloudDbUrlInput}
+                onChange={e => setCloudDbUrlInput(e.target.value)}
+                placeholder="Paste your Supabase connection link (postgresql://postgres:...)"
+                className="flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-teal-600 font-mono"
+              />
+              <button
+                type="submit"
+                disabled={isConnectingCloud}
+                className="px-4 py-2 bg-[#0d3f3b] hover:bg-[#135650] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {isConnectingCloud
+                  ? 'Connecting...'
+                  : cloudStatus?.connected
+                  ? 'Update Cloud Link'
+                  : 'Connect 24/7 Cloud Safe'}
+              </button>
+            </form>
           </div>
 
           {/* Offline Browser Vault Card */}

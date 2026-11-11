@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import pg from 'pg';
 import {
   Doctor,
   Patient,
@@ -55,6 +56,10 @@ class DatabaseService {
   private isSaving = false;
   private pendingSave = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private pgPool: pg.Pool | null = null;
+  private cloudConnected = false;
+  private cloudLastSyncedAt: string | null = null;
+  private cloudError: string | null = null;
 
   constructor() {
     this.data = this.loadDatabase();
@@ -389,6 +394,235 @@ class DatabaseService {
     return initialDb;
   }
 
+  private getSavedCloudUrl(): string {
+    if (process.env.DATABASE_URL && process.env.DATABASE_URL.trim()) {
+      return process.env.DATABASE_URL.trim();
+    }
+    try {
+      const cfgPath = path.join(DATA_DIR, 'cloud_db_config.json');
+      if (fs.existsSync(cfgPath)) {
+        const parsed = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+        if (parsed && typeof parsed.databaseUrl === 'string' && parsed.databaseUrl.trim()) {
+          return parsed.databaseUrl.trim();
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return '';
+  }
+
+  public getCloudStatus() {
+    const url = this.getSavedCloudUrl();
+    let maskedHost = '';
+    if (url) {
+      try {
+        const parsed = new URL(url);
+        maskedHost = parsed.hostname;
+      } catch {
+        maskedHost = 'configured';
+      }
+    }
+    return {
+      configured: Boolean(url),
+      connected: this.cloudConnected,
+      host: maskedHost,
+      lastSyncedAt: this.cloudLastSyncedAt,
+      error: this.cloudError,
+      totalDoctors: this.data.doctors.length,
+      totalPatients: this.data.patients.length,
+      totalConsultations: this.data.consultations.length
+    };
+  }
+
+  public async initCloudDatabase(customUrl?: string): Promise<{
+    connected: boolean;
+    message: string;
+    host?: string;
+  }> {
+    const dbUrl = (customUrl ?? this.getSavedCloudUrl()).trim();
+    if (!dbUrl) {
+      this.cloudConnected = false;
+      return {
+        connected: false,
+        message: 'No cloud database URL configured. Running in local storage mode.'
+      };
+    }
+
+    try {
+      if (this.pgPool) {
+        await this.pgPool.end().catch(() => {});
+        this.pgPool = null;
+      }
+
+      const pool = new pg.Pool({
+        connectionString: dbUrl,
+        ssl: dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1')
+          ? false
+          : { rejectUnauthorized: false },
+        max: 4,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000
+      });
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS clinical_os_cloud_vault (
+          id TEXT PRIMARY KEY,
+          payload JSONB NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+
+      const res = await pool.query(
+        `SELECT payload, updated_at FROM clinical_os_cloud_vault WHERE id = 'primary' LIMIT 1`
+      );
+
+      if (res.rows.length > 0 && res.rows[0].payload) {
+        const remoteData = res.rows[0].payload as DatabaseSchema;
+        if (remoteData && Array.isArray(remoteData.patients) && Array.isArray(remoteData.doctors)) {
+          // Merge remote cloud data with local seed/existing data so nothing is ever lost
+          this.mergeCloudState(remoteData);
+          const tempPath = `${DB_PATH}.tmp`;
+          fs.writeFileSync(tempPath, JSON.stringify(this.data, null, 2), 'utf-8');
+          fs.renameSync(tempPath, DB_PATH);
+          console.log(
+            `[Cloud DB] Hydrated ${this.data.patients.length} patients & ${this.data.doctors.length} doctors from 24/7 Cloud Vault.`
+          );
+        }
+      }
+
+      // Immediately push merged state back to cloud vault
+      await pool.query(
+        `INSERT INTO clinical_os_cloud_vault (id, payload, updated_at)
+         VALUES ('primary', $1::jsonb, NOW())
+         ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
+        [JSON.stringify(this.data)]
+      );
+
+      this.pgPool = pool;
+      this.cloudConnected = true;
+      this.cloudLastSyncedAt = new Date().toISOString();
+      this.cloudError = null;
+
+      if (customUrl && customUrl.trim()) {
+        try {
+          const cfgPath = path.join(DATA_DIR, 'cloud_db_config.json');
+          fs.writeFileSync(cfgPath, JSON.stringify({ databaseUrl: dbUrl }, null, 2), 'utf-8');
+        } catch {
+          // ignore
+        }
+      }
+
+      let host = '';
+      try {
+        host = new URL(dbUrl).hostname;
+      } catch {
+        host = 'cloud-postgres';
+      }
+
+      return {
+        connected: true,
+        message: `Connected to 24/7 Cloud Database (${host}). All doctors & patient records are permanently synced.`,
+        host
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to connect to cloud database';
+      this.cloudConnected = false;
+      this.cloudError = msg;
+      console.error('[Cloud DB] Connection error:', msg);
+      return {
+        connected: false,
+        message: `Cloud connection failed: ${msg}`
+      };
+    }
+  }
+
+  private mergeCloudState(remote: DatabaseSchema) {
+    // Merge doctors & passwords
+    const docMap = new Map<string, Doctor>();
+    for (const d of this.data.doctors) docMap.set(d.id, d);
+    for (const d of remote.doctors || []) docMap.set(d.id, d);
+    this.data.doctors = Array.from(docMap.values());
+    this.data.doctorPasswords = {
+      ...this.data.doctorPasswords,
+      ...(remote.doctorPasswords || {})
+    };
+
+    // Merge patients
+    const patMap = new Map<string, Patient>();
+    for (const p of this.data.patients) patMap.set(p.id, p);
+    for (const p of remote.patients || []) patMap.set(p.id, p);
+    this.data.patients = Array.from(patMap.values());
+
+    // Merge consultations
+    const conMap = new Map<string, Consultation>();
+    for (const c of this.data.consultations) conMap.set(c.id, c);
+    for (const c of remote.consultations || []) conMap.set(c.id, c);
+    this.data.consultations = Array.from(conMap.values());
+
+    // Merge prescriptions
+    const rxMap = new Map<string, PrescriptionItem>();
+    for (const r of this.data.prescriptions) rxMap.set(r.id, r);
+    for (const r of remote.prescriptions || []) rxMap.set(r.id, r);
+    this.data.prescriptions = Array.from(rxMap.values());
+
+    // Merge appointments
+    const aptMap = new Map<string, Appointment>();
+    for (const a of this.data.appointments || []) aptMap.set(a.id, a);
+    for (const a of remote.appointments || []) aptMap.set(a.id, a);
+    this.data.appointments = Array.from(aptMap.values());
+
+    // Merge bodyMarkers
+    const bmMap = new Map<string, BodyMarker>();
+    for (const m of this.data.bodyMarkers || []) bmMap.set(m.id, m);
+    for (const m of remote.bodyMarkers || []) bmMap.set(m.id, m);
+    this.data.bodyMarkers = Array.from(bmMap.values());
+
+    // Merge clinicalImages
+    const imgMap = new Map<string, ClinicalImage>();
+    for (const i of this.data.clinicalImages || []) imgMap.set(i.id, i);
+    for (const i of remote.clinicalImages || []) imgMap.set(i.id, i);
+    this.data.clinicalImages = Array.from(imgMap.values());
+
+    // Merge testReports
+    const repMap = new Map<string, PatientTestReport>();
+    for (const r of this.data.testReports || []) repMap.set(r.id, r);
+    for (const r of remote.testReports || []) repMap.set(r.id, r);
+    this.data.testReports = Array.from(repMap.values());
+
+    // Merge formularyItems
+    const formMap = new Map<string, DoctorFormularyItem>();
+    for (const f of this.data.formularyItems || []) formMap.set(f.id, f);
+    for (const f of remote.formularyItems || []) formMap.set(f.id, f);
+    this.data.formularyItems = Array.from(formMap.values());
+
+    // Merge inboxThreads & dispatchedWhatsAppMessages
+    if (Array.isArray(remote.inboxThreads) && remote.inboxThreads.length > 0) {
+      const threadMap = new Map<string, any>();
+      for (const t of this.data.inboxThreads || []) if (t?.id) threadMap.set(t.id, t);
+      for (const t of remote.inboxThreads) if (t?.id) threadMap.set(t.id, t);
+      this.data.inboxThreads = Array.from(threadMap.values());
+    }
+    if (Array.isArray(remote.dispatchedWhatsAppMessages) && remote.dispatchedWhatsAppMessages.length > 0) {
+      const msgMap = new Map<string, any>();
+      for (const m of this.data.dispatchedWhatsAppMessages || []) if (m?.id) msgMap.set(m.id, m);
+      for (const m of remote.dispatchedWhatsAppMessages) if (m?.id) msgMap.set(m.id, m);
+      this.data.dispatchedWhatsAppMessages = Array.from(msgMap.values());
+    }
+
+    // Merge auditLogs
+    const logMap = new Map<string, AuditLog>();
+    for (const l of this.data.auditLogs || []) logMap.set(l.id, l);
+    for (const l of remote.auditLogs || []) logMap.set(l.id, l);
+    this.data.auditLogs = Array.from(logMap.values()).sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    if (remote.meta?.lastPatientNumber && remote.meta.lastPatientNumber > this.data.meta.lastPatientNumber) {
+      this.data.meta.lastPatientNumber = remote.meta.lastPatientNumber;
+    }
+  }
+
   private persist() {
     this.data.meta.updatedAt = new Date().toISOString();
     if (this.saveTimer) {
@@ -411,8 +645,23 @@ class DatabaseService {
       const serialized = JSON.stringify(this.data, null, 2);
       await fs.promises.writeFile(tempPath, serialized, 'utf-8');
       await fs.promises.rename(tempPath, DB_PATH);
+
+      if (this.pgPool) {
+        await this.pgPool.query(
+          `INSERT INTO clinical_os_cloud_vault (id, payload, updated_at)
+           VALUES ('primary', $1::jsonb, NOW())
+           ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
+          [serialized]
+        );
+        this.cloudConnected = true;
+        this.cloudLastSyncedAt = new Date().toISOString();
+        this.cloudError = null;
+      }
     } catch (err) {
       console.error('Error persisting database:', err);
+      if (this.pgPool) {
+        this.cloudError = err instanceof Error ? err.message : 'Cloud write error';
+      }
     } finally {
       this.isSaving = false;
       if (this.pendingSave) {
@@ -429,9 +678,20 @@ class DatabaseService {
     }
     this.data.meta.updatedAt = new Date().toISOString();
     try {
+      const serialized = JSON.stringify(this.data, null, 2);
       const tempPath = `${DB_PATH}.tmp`;
-      fs.writeFileSync(tempPath, JSON.stringify(this.data, null, 2), 'utf-8');
+      fs.writeFileSync(tempPath, serialized, 'utf-8');
       fs.renameSync(tempPath, DB_PATH);
+      if (this.pgPool) {
+        void this.pgPool
+          .query(
+            `INSERT INTO clinical_os_cloud_vault (id, payload, updated_at)
+             VALUES ('primary', $1::jsonb, NOW())
+             ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
+            [serialized]
+          )
+          .catch(() => {});
+      }
       console.log('[Database] Flushed all pending database changes to disk successfully.');
     } catch (err) {
       console.error('[Database] Failed to flush database before shutdown:', err);

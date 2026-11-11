@@ -5306,10 +5306,42 @@ app.post('/api/clinic/restore', authMiddleware, (req: AuthenticatedRequest, res)
   }
 });
 
+// Cloud Database Status & Connection (Supabase / Neon / PostgreSQL 100% Free Cloud Persistence)
+app.get('/api/clinic/cloud-status', authMiddleware, (_req: AuthenticatedRequest, res) => {
+  res.json(db.getCloudStatus());
+});
+
+app.post('/api/clinic/cloud-connect', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  if (req.doctor?.role === 'receptionist') {
+    return res.status(403).json({ error: 'Only doctors or clinic administrators can configure cloud storage.' });
+  }
+  const databaseUrl = String(req.body?.databaseUrl || '').trim();
+  if (!databaseUrl) {
+    return res.status(400).json({ error: 'Please provide a valid PostgreSQL connection link (starts with postgresql:// or postgres://).' });
+  }
+  const result = await db.initCloudDatabase(databaseUrl);
+  if (result.connected) {
+    hydrateDiskFilesFromDb();
+  }
+  res.json({
+    ...result,
+    status: db.getCloudStatus()
+  });
+});
+
 // ==========================================
 // FRONTEND INTEGRATION (DEV / PROD)
 // ==========================================
 async function startServer() {
+  // Initialize 24/7 Cloud Database if DATABASE_URL or saved cloud config is present
+  await db.initCloudDatabase().then(res => {
+    if (res.connected) {
+      hydrateDiskFilesFromDb();
+    }
+  }).catch(err => {
+    console.warn('[Startup] Cloud DB init skipped or failed:', err);
+  });
+
   const distPath = path.resolve(process.cwd(), 'dist');
   const hasBuiltDist = fs.existsSync(path.join(distPath, 'index.html'));
 

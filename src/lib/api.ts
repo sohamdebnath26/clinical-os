@@ -1574,6 +1574,36 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(backupData),
       }),
+    getCloudStatus: () =>
+      fetchWithAuth<{
+        configured: boolean;
+        connected: boolean;
+        host: string;
+        lastSyncedAt: string | null;
+        error: string | null;
+        totalDoctors: number;
+        totalPatients: number;
+        totalConsultations: number;
+      }>('/api/clinic/cloud-status'),
+    connectCloudDatabase: (databaseUrl: string) =>
+      fetchWithAuth<{
+        connected: boolean;
+        message: string;
+        host?: string;
+        status: {
+          configured: boolean;
+          connected: boolean;
+          host: string;
+          lastSyncedAt: string | null;
+          error: string | null;
+          totalDoctors: number;
+          totalPatients: number;
+          totalConsultations: number;
+        };
+      }>('/api/clinic/cloud-connect', {
+        method: 'POST',
+        body: JSON.stringify({ databaseUrl }),
+      }),
   },
 };
 
