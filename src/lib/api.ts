@@ -1506,7 +1506,15 @@ export const api = {
         const errJson = await res.json().catch(() => null);
         throw new Error(errJson?.error || `Backup failed: ${res.statusText}`);
       }
-      const blob = await res.blob();
+      const data = await res.json();
+      try {
+        const doc = authStorage.getDoctor();
+        const key = `clinical_os_full_vault_${doc?.id || 'default'}`;
+        window.localStorage.setItem(key, JSON.stringify(data));
+      } catch (e) {
+        console.warn('Could not cache full backup to localStorage (storage limit):', e);
+      }
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -1515,6 +1523,51 @@ export const api = {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
+    },
+    saveToLocalVault: async () => {
+      const token = authStorage.getToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api/clinic/backup', { headers });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        throw new Error(errJson?.error || `Failed to fetch snapshot: ${res.statusText}`);
+      }
+      const data = await res.json();
+      const doc = authStorage.getDoctor();
+      const key = `clinical_os_full_vault_${doc?.id || 'default'}`;
+      window.localStorage.setItem(key, JSON.stringify(data));
+      return {
+        patientCount: Array.isArray(data.patients) ? data.patients.length : 0,
+        consultationCount: Array.isArray(data.consultations) ? data.consultations.length : 0,
+        savedAt: new Date().toISOString()
+      };
+    },
+    getLocalVaultInfo: () => {
+      try {
+        const doc = authStorage.getDoctor();
+        const key = `clinical_os_full_vault_${doc?.id || 'default'}`;
+        const raw = window.localStorage.getItem(key);
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        return {
+          patientCount: Array.isArray(data.patients) ? data.patients.length : 0,
+          consultationCount: Array.isArray(data.consultations) ? data.consultations.length : 0,
+          savedAt: data.meta?.updatedAt || data.updatedAt || new Date().toISOString()
+        };
+      } catch {
+        return null;
+      }
+    },
+    restoreFromLocalVault: async () => {
+      const doc = authStorage.getDoctor();
+      const key = `clinical_os_full_vault_${doc?.id || 'default'}`;
+      const raw = window.localStorage.getItem(key);
+      if (!raw) {
+        throw new Error('No offline browser vault snapshot found. Please upload a .json backup file.');
+      }
+      const data = JSON.parse(raw);
+      return api.clinic.restoreBackup(data);
     },
     restoreBackup: (backupData: unknown) =>
       fetchWithAuth<{ success: boolean; message: string; count?: number }>('/api/clinic/restore', {

@@ -524,6 +524,27 @@
     {
       "actorId": "doc-demo-001",
       "actorName": "Dr. Demo",
+      "action": "report_sent_whatsapp",
+      "resourceType": "medical_report",
+      "resourceId": "wa-mwbkqliv-llk0",
+      "metadata": {
+        "reportType": "chat_message",
+        "recipientMobile": "919876543210",
+        "clinicPhone": "+91 7044173140",
+        "patientId": "t-1",
+        "patientName": "Rohit Sharma",
+        "deliveryMode": "whatsapp_gateway",
+        "note": "[From Clinic +91 7044173140] Dear Rohit, please go to the nearest Emergency Room immediately, as chest tightness with a spreading",
+        "clinicName": "Cliniq Dermatology Center"
+      },
+      "id": "aud-mwbkqlj3-pi0r",
+      "timestamp": "2026-11-11T03:43:26.079Z",
+      "prevHash": "df9dcd957784774fe36a136bd196a3b3",
+      "entryHash": "758d31c3ee32ef5e7ca610505c583a05"
+    },
+    {
+      "actorId": "doc-demo-001",
+      "actorName": "Dr. Demo",
       "action": "ai_lesion_progression_compared",
       "resourceType": "clinical_progression",
       "resourceId": "prog_1794156526108",
@@ -535,7 +556,9 @@
         "progressionScore": 0
       },
       "id": "aud-mw82gzks-novg",
-      "timestamp": "2026-11-08T16:48:46.108Z"
+      "timestamp": "2026-11-08T16:48:46.108Z",
+      "prevHash": "6674ce17ca804cbdca77d86e0d452616",
+      "entryHash": "df9dcd957784774fe36a136bd196a3b3"
     },
     {
       "actorId": "doc-demo-001",
@@ -551,7 +574,9 @@
         "progressionScore": -85
       },
       "id": "aud-mw82gzkg-7ojy",
-      "timestamp": "2026-11-08T16:48:46.096Z"
+      "timestamp": "2026-11-08T16:48:46.096Z",
+      "prevHash": "879b7f385231ca83b26ae3b593397a25",
+      "entryHash": "6674ce17ca804cbdca77d86e0d452616"
     },
     {
       "actorId": "doc-demo-001",
@@ -567,7 +592,9 @@
         "progressionScore": 85
       },
       "id": "aud-mw82gueg-akaf",
-      "timestamp": "2026-11-08T16:48:39.400Z"
+      "timestamp": "2026-11-08T16:48:39.400Z",
+      "prevHash": "dda5aadad40ca20d93b3f4b8816a4721",
+      "entryHash": "879b7f385231ca83b26ae3b593397a25"
     },
     {
       "actorId": "doc-demo-001",
@@ -576,7 +603,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mw82gn5g-7sca",
-      "timestamp": "2026-11-08T16:48:30.004Z"
+      "timestamp": "2026-11-08T16:48:30.004Z",
+      "prevHash": "f621ee857841e02c9a75e10209434cef",
+      "entryHash": "dda5aadad40ca20d93b3f4b8816a4721"
     },
     {
       "actorId": "doc-demo-001",
@@ -592,7 +621,9 @@
         "progressionScore": -85
       },
       "id": "aud-mw81vmj6-s86i",
-      "timestamp": "2026-11-08T16:32:09.426Z"
+      "timestamp": "2026-11-08T16:32:09.426Z",
+      "prevHash": "03e08438480a045103d04286671167ca",
+      "entryHash": "f621ee857841e02c9a75e10209434cef"
     },
     {
       "actorId": "doc-demo-001",
@@ -608,7 +639,9 @@
         "progressionScore": 90
       },
       "id": "aud-mw81o2b7-yzai",
-      "timestamp": "2026-11-08T16:26:16.627Z"
+      "timestamp": "2026-11-08T16:26:16.627Z",
+      "prevHash": "bfee75a4d731e988a899a3e62bf2699d",
+      "entryHash": "03e08438480a045103d04286671167ca"
     },
     {
       "actorId": "doc-demo-001",
@@ -617,7 +650,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mw81nomg-ij3w",
-      "timestamp": "2026-11-08T16:25:58.888Z"
+      "timestamp": "2026-11-08T16:25:58.888Z",
+      "prevHash": "d3a252c3f248c492675a5ed3072c5407",
+      "entryHash": "bfee75a4d731e988a899a3e62bf2699d"
     },
     {
       "actorId": "doc-demo-001",
@@ -626,7 +661,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mw81nalc-w8o0",
-      "timestamp": "2026-11-08T16:25:40.704Z"
+      "timestamp": "2026-11-08T16:25:40.704Z",
+      "prevHash": "cad90250f06637087cf8ab71538a1a8c",
+      "entryHash": "d3a252c3f248c492675a5ed3072c5407"
     },
     {
       "actorId": "doc-demo-001",
@@ -635,7 +672,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mw7ylbbw-hvhv",
-      "timestamp": "2026-11-08T15:00:09.500Z"
+      "timestamp": "2026-11-08T15:00:09.500Z",
+      "prevHash": "04d60267ccb34e41348c18fe2e920f49",
+      "entryHash": "cad90250f06637087cf8ab71538a1a8c"
     },
     {
       "actorId": "doc-demo-001",
@@ -644,7 +683,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mw7xi2q8-qcr0",
-      "timestamp": "2026-11-08T14:29:38.768Z"
+      "timestamp": "2026-11-08T14:29:38.768Z",
+      "prevHash": "1f21409bb60a7a5e1822168ee5b7c677",
+      "entryHash": "04d60267ccb34e41348c18fe2e920f49"
     },
     {
       "actorId": "doc-org-001",
@@ -657,7 +698,9 @@
         "provider": "sso"
       },
       "id": "aud-mvjdwp2a-9dv4",
-      "timestamp": "2026-10-22T10:14:40.354Z"
+      "timestamp": "2026-10-22T10:14:40.354Z",
+      "prevHash": "6016e36cce33b306c2224dca03d04cb5",
+      "entryHash": "1f21409bb60a7a5e1822168ee5b7c677"
     },
     {
       "actorId": "doc-demo-001",
@@ -666,7 +709,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mvdkvdmj-mdlu",
-      "timestamp": "2026-10-18T08:42:59.131Z"
+      "timestamp": "2026-10-18T08:42:59.131Z",
+      "prevHash": "b78d8258322ba63291f1eb5e2e882065",
+      "entryHash": "6016e36cce33b306c2224dca03d04cb5"
     },
     {
       "actorId": "doc-demo-001",
@@ -675,7 +720,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mvdkohuf-a4wm",
-      "timestamp": "2026-10-18T08:37:38.007Z"
+      "timestamp": "2026-10-18T08:37:38.007Z",
+      "prevHash": "d2a2d2270608449e08478a15499821d8",
+      "entryHash": "b78d8258322ba63291f1eb5e2e882065"
     },
     {
       "actorId": "doc-demo-001",
@@ -684,7 +731,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mvdjlq1k-s06t",
-      "timestamp": "2026-10-18T08:07:29.048Z"
+      "timestamp": "2026-10-18T08:07:29.048Z",
+      "prevHash": "bdb93d21add767b0f96c0745a053cfd3",
+      "entryHash": "d2a2d2270608449e08478a15499821d8"
     },
     {
       "actorId": "doc-demo-001",
@@ -693,7 +742,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mvdjbosi-8rqb",
-      "timestamp": "2026-10-18T07:59:40.866Z"
+      "timestamp": "2026-10-18T07:59:40.866Z",
+      "prevHash": "7ccbba83bdc51113e129d9dc3bf8c932",
+      "entryHash": "bdb93d21add767b0f96c0745a053cfd3"
     },
     {
       "actorId": "doc-demo-001",
@@ -702,7 +753,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mvdgsjgn-08wy",
-      "timestamp": "2026-10-18T06:48:48.263Z"
+      "timestamp": "2026-10-18T06:48:48.263Z",
+      "prevHash": "2986596d93a3b9f0f956fde28f7b5509",
+      "entryHash": "7ccbba83bdc51113e129d9dc3bf8c932"
     },
     {
       "actorId": "doc-demo-001",
@@ -711,7 +764,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mvcrswvz-3x56",
-      "timestamp": "2026-10-17T19:09:15.263Z"
+      "timestamp": "2026-10-17T19:09:15.263Z",
+      "prevHash": "9499331dece435054a0659eaafb52585",
+      "entryHash": "2986596d93a3b9f0f956fde28f7b5509"
     },
     {
       "actorId": "doc-demo-001",
@@ -720,7 +775,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mvcrnv0h-prk5",
-      "timestamp": "2026-10-17T19:05:19.553Z"
+      "timestamp": "2026-10-17T19:05:19.553Z",
+      "prevHash": "21501d6e56e7fcc5d59e34711548f2a0",
+      "entryHash": "9499331dece435054a0659eaafb52585"
     },
     {
       "actorId": "doc-demo-001",
@@ -729,7 +786,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mvcrlpmr-wq44",
-      "timestamp": "2026-10-17T19:03:39.267Z"
+      "timestamp": "2026-10-17T19:03:39.267Z",
+      "prevHash": "6ab661b24c1eb48b81f3091363de201e",
+      "entryHash": "21501d6e56e7fcc5d59e34711548f2a0"
     },
     {
       "actorId": "doc-demo-001",
@@ -742,7 +801,9 @@
         "patientCode": "P-24618"
       },
       "id": "aud-mvcpl8tf-sl6w",
-      "timestamp": "2026-10-17T18:07:18.243Z"
+      "timestamp": "2026-10-17T18:07:18.243Z",
+      "prevHash": "58b8cf4e9c0312a77578ef040060643e",
+      "entryHash": "6ab661b24c1eb48b81f3091363de201e"
     },
     {
       "actorId": "doc-demo-001",
@@ -751,7 +812,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mvcpksdi-wmf5",
-      "timestamp": "2026-10-17T18:06:56.934Z"
+      "timestamp": "2026-10-17T18:06:56.934Z",
+      "prevHash": "1f80a4ecd26b868129a7f0641ab919bc",
+      "entryHash": "58b8cf4e9c0312a77578ef040060643e"
     },
     {
       "actorId": "doc-demo-001",
@@ -760,7 +823,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mvcp9iym-o74v",
-      "timestamp": "2026-10-17T17:58:11.518Z"
+      "timestamp": "2026-10-17T17:58:11.518Z",
+      "prevHash": "92e6d3df9c94afb2e26a7be6ef98fa02",
+      "entryHash": "1f80a4ecd26b868129a7f0641ab919bc"
     },
     {
       "actorId": "doc-demo-001",
@@ -769,7 +834,9 @@
       "resourceType": "appointment",
       "resourceId": "apt-fup-con-muy1aite-6kt4",
       "id": "aud-mv7uju79-ayu7",
-      "timestamp": "2026-10-14T08:27:19.845Z"
+      "timestamp": "2026-10-14T08:27:19.845Z",
+      "prevHash": "3e5736df603938c5463fc8307ba899c5",
+      "entryHash": "92e6d3df9c94afb2e26a7be6ef98fa02"
     },
     {
       "actorId": "doc-demo-001",
@@ -778,7 +845,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7uglsb-mo9t",
-      "timestamp": "2026-10-14T08:24:48.971Z"
+      "timestamp": "2026-10-14T08:24:48.971Z",
+      "prevHash": "9ff72400ad253d37087200273b723ece",
+      "entryHash": "3e5736df603938c5463fc8307ba899c5"
     },
     {
       "actorId": "doc-demo-001",
@@ -787,7 +856,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7ufaao-t5ra",
-      "timestamp": "2026-10-14T08:23:47.424Z"
+      "timestamp": "2026-10-14T08:23:47.424Z",
+      "prevHash": "cac6e18c4e0eab08d22a50de82963332",
+      "entryHash": "9ff72400ad253d37087200273b723ece"
     },
     {
       "actorId": "doc-demo-001",
@@ -796,7 +867,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7uf59o-odcm",
-      "timestamp": "2026-10-14T08:23:40.908Z"
+      "timestamp": "2026-10-14T08:23:40.908Z",
+      "prevHash": "87cc88a987b95e41e717cefbbd8796f6",
+      "entryHash": "cac6e18c4e0eab08d22a50de82963332"
     },
     {
       "actorId": "doc-demo-001",
@@ -805,7 +878,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7u81xv-vyto",
-      "timestamp": "2026-10-14T08:18:10.003Z"
+      "timestamp": "2026-10-14T08:18:10.003Z",
+      "prevHash": "0fba9d46f7ecc143c5f440ffa394eb6b",
+      "entryHash": "87cc88a987b95e41e717cefbbd8796f6"
     },
     {
       "actorId": "doc-demo-001",
@@ -814,7 +889,9 @@
       "resourceType": "appointment",
       "resourceId": "apt-fup-con-muy1aite-6kt4",
       "id": "aud-mv7u2vr9-c8ak",
-      "timestamp": "2026-10-14T08:14:08.710Z"
+      "timestamp": "2026-10-14T08:14:08.710Z",
+      "prevHash": "03fa14fc8ecc46d49dd163e07a8511d7",
+      "entryHash": "0fba9d46f7ecc143c5f440ffa394eb6b"
     },
     {
       "actorId": "doc-demo-001",
@@ -823,7 +900,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7ti6s4-numt",
-      "timestamp": "2026-10-14T07:58:03.220Z"
+      "timestamp": "2026-10-14T07:58:03.220Z",
+      "prevHash": "e250f02eace78cad4a7e3d55b48f78e2",
+      "entryHash": "03fa14fc8ecc46d49dd163e07a8511d7"
     },
     {
       "actorId": "doc-mv7sssl7-ww9t",
@@ -836,7 +915,9 @@
         "provider": "sso"
       },
       "id": "aud-mv7sssoq-j3pl",
-      "timestamp": "2026-10-14T07:38:18.554Z"
+      "timestamp": "2026-10-14T07:38:18.554Z",
+      "prevHash": "47b33600941d31a19c85cff1fd211ff1",
+      "entryHash": "e250f02eace78cad4a7e3d55b48f78e2"
     },
     {
       "actorId": "doc-mv7sssl7-ww9t",
@@ -845,7 +926,9 @@
       "resourceType": "doctor",
       "resourceId": "doc-mv7sssl7-ww9t",
       "id": "aud-mv7sssop-3fq6",
-      "timestamp": "2026-10-14T07:38:18.553Z"
+      "timestamp": "2026-10-14T07:38:18.553Z",
+      "prevHash": "412f913ab090dcf880c4bf420deea4be",
+      "entryHash": "47b33600941d31a19c85cff1fd211ff1"
     },
     {
       "actorId": "doc-mv7sr3d5-2nsr",
@@ -857,7 +940,9 @@
         "provider": "google"
       },
       "id": "aud-mv7sr3ge-6jad",
-      "timestamp": "2026-10-14T07:36:59.198Z"
+      "timestamp": "2026-10-14T07:36:59.198Z",
+      "prevHash": "41f70574d6d8cd1bac61fbdf397ef25a",
+      "entryHash": "412f913ab090dcf880c4bf420deea4be"
     },
     {
       "actorId": "doc-mv7sr3d5-2nsr",
@@ -866,7 +951,9 @@
       "resourceType": "doctor",
       "resourceId": "doc-mv7sr3d5-2nsr",
       "id": "aud-mv7sr3gd-j0g9",
-      "timestamp": "2026-10-14T07:36:59.197Z"
+      "timestamp": "2026-10-14T07:36:59.197Z",
+      "prevHash": "0bcc71334464c7f0fc5d36bbc6eae3e0",
+      "entryHash": "41f70574d6d8cd1bac61fbdf397ef25a"
     },
     {
       "actorId": "doc-org-001",
@@ -879,7 +966,9 @@
         "provider": "sso"
       },
       "id": "aud-mv7sr3cy-7otg",
-      "timestamp": "2026-10-14T07:36:59.074Z"
+      "timestamp": "2026-10-14T07:36:59.074Z",
+      "prevHash": "065f6242a57f74a8cbc523ce119a4ecd",
+      "entryHash": "0bcc71334464c7f0fc5d36bbc6eae3e0"
     },
     {
       "actorId": "doc-demo-001",
@@ -888,7 +977,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7sr3ch-r9q2",
-      "timestamp": "2026-10-14T07:36:59.057Z"
+      "timestamp": "2026-10-14T07:36:59.057Z",
+      "prevHash": "acaad17f32378bace4e115b8c1dc9d2f",
+      "entryHash": "065f6242a57f74a8cbc523ce119a4ecd"
     },
     {
       "actorId": "doc-demo-001",
@@ -897,7 +988,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7sqtaz-r9xi",
-      "timestamp": "2026-10-14T07:36:46.043Z"
+      "timestamp": "2026-10-14T07:36:46.043Z",
+      "prevHash": "6c6f4c8adef2002be8e04963a9ec1be4",
+      "entryHash": "acaad17f32378bace4e115b8c1dc9d2f"
     },
     {
       "actorId": "doc-demo-001",
@@ -910,7 +1003,9 @@
         "isAiPowered": false
       },
       "id": "aud-mv7o39hk-fd9m",
-      "timestamp": "2026-10-14T05:26:28.808Z"
+      "timestamp": "2026-10-14T05:26:28.808Z",
+      "prevHash": "e78fa5561c4061bfc3315a90c04f7dc4",
+      "entryHash": "6c6f4c8adef2002be8e04963a9ec1be4"
     },
     {
       "actorId": "doc-demo-001",
@@ -919,7 +1014,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7o39g1-o7pl",
-      "timestamp": "2026-10-14T05:26:28.753Z"
+      "timestamp": "2026-10-14T05:26:28.753Z",
+      "prevHash": "080191291f020b175542763d6a2bf395",
+      "entryHash": "e78fa5561c4061bfc3315a90c04f7dc4"
     },
     {
       "actorId": "doc-demo-001",
@@ -932,7 +1029,9 @@
         "isAiPowered": false
       },
       "id": "aud-mv7o34q3-fwvx",
-      "timestamp": "2026-10-14T05:26:22.635Z"
+      "timestamp": "2026-10-14T05:26:22.635Z",
+      "prevHash": "56107e982346343bd17d152fd1403bd6",
+      "entryHash": "080191291f020b175542763d6a2bf395"
     },
     {
       "actorId": "doc-demo-001",
@@ -941,7 +1040,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7o34oo-1z5v",
-      "timestamp": "2026-10-14T05:26:22.584Z"
+      "timestamp": "2026-10-14T05:26:22.584Z",
+      "prevHash": "9f0d72c2c08bade34de0fcaf834412ec",
+      "entryHash": "56107e982346343bd17d152fd1403bd6"
     },
     {
       "actorId": "doc-demo-001",
@@ -954,7 +1055,9 @@
         "isAiPowered": false
       },
       "id": "aud-mv7o2zy1-xb2j",
-      "timestamp": "2026-10-14T05:26:16.441Z"
+      "timestamp": "2026-10-14T05:26:16.441Z",
+      "prevHash": "3b61bed4ca277f6825548f7c82a4d3f3",
+      "entryHash": "9f0d72c2c08bade34de0fcaf834412ec"
     },
     {
       "actorId": "doc-demo-001",
@@ -963,7 +1066,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7o2zvf-x8rk",
-      "timestamp": "2026-10-14T05:26:16.347Z"
+      "timestamp": "2026-10-14T05:26:16.347Z",
+      "prevHash": "014a9ba62ae6de9f3a98f334ed2367e5",
+      "entryHash": "3b61bed4ca277f6825548f7c82a4d3f3"
     },
     {
       "actorId": "doc-demo-001",
@@ -976,7 +1081,9 @@
         "isAiPowered": false
       },
       "id": "aud-mv7o2scr-i5nl",
-      "timestamp": "2026-10-14T05:26:06.603Z"
+      "timestamp": "2026-10-14T05:26:06.603Z",
+      "prevHash": "947f7dc7a6051ee6efe395fce832e67b",
+      "entryHash": "014a9ba62ae6de9f3a98f334ed2367e5"
     },
     {
       "actorId": "doc-demo-001",
@@ -985,7 +1092,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7o2s49-x9hl",
-      "timestamp": "2026-10-14T05:26:06.297Z"
+      "timestamp": "2026-10-14T05:26:06.297Z",
+      "prevHash": "c4f31139c938eedd0a177bc1ec54a1d8",
+      "entryHash": "947f7dc7a6051ee6efe395fce832e67b"
     },
     {
       "actorId": "doc-demo-001",
@@ -994,7 +1103,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7o2n9q-gkr5",
-      "timestamp": "2026-10-14T05:26:00.014Z"
+      "timestamp": "2026-10-14T05:26:00.014Z",
+      "prevHash": "fef948fdb9de274654fe8884f89959f8",
+      "entryHash": "c4f31139c938eedd0a177bc1ec54a1d8"
     },
     {
       "actorId": "doc-demo-001",
@@ -1003,7 +1114,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7mevnw-6092",
-      "timestamp": "2026-10-14T04:39:31.532Z"
+      "timestamp": "2026-10-14T04:39:31.532Z",
+      "prevHash": "9ab99f56c990335824f7a2f796b9d066",
+      "entryHash": "fef948fdb9de274654fe8884f89959f8"
     },
     {
       "actorId": "doc-demo-001",
@@ -1016,7 +1129,9 @@
         "isAiPowered": false
       },
       "id": "aud-mv7lyz5e-yfmw",
-      "timestamp": "2026-10-14T04:27:09.554Z"
+      "timestamp": "2026-10-14T04:27:09.554Z",
+      "prevHash": "599c2770538f6a46066fc3007ad7c3c7",
+      "entryHash": "9ab99f56c990335824f7a2f796b9d066"
     },
     {
       "actorId": "doc-demo-001",
@@ -1029,7 +1144,9 @@
         "isAiPowered": false
       },
       "id": "aud-mv7lywt1-ujpv",
-      "timestamp": "2026-10-14T04:27:06.517Z"
+      "timestamp": "2026-10-14T04:27:06.517Z",
+      "prevHash": "438c415e0115b3167cb0146a3a18b5d1",
+      "entryHash": "599c2770538f6a46066fc3007ad7c3c7"
     },
     {
       "actorId": "doc-demo-001",
@@ -1042,7 +1159,9 @@
         "isAiPowered": false
       },
       "id": "aud-mv7lypks-py4o",
-      "timestamp": "2026-10-14T04:26:57.148Z"
+      "timestamp": "2026-10-14T04:26:57.148Z",
+      "prevHash": "7d3388ad955fec822a2f12ea9e9b1118",
+      "entryHash": "438c415e0115b3167cb0146a3a18b5d1"
     },
     {
       "actorId": "doc-demo-001",
@@ -1051,7 +1170,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv7lyf1r-3id1",
-      "timestamp": "2026-10-14T04:26:43.503Z"
+      "timestamp": "2026-10-14T04:26:43.503Z",
+      "prevHash": "08472ce77580da9df07a096bbc6d917e",
+      "entryHash": "7d3388ad955fec822a2f12ea9e9b1118"
     },
     {
       "actorId": "doc-demo-001",
@@ -1060,7 +1181,9 @@
       "resourceType": "appointment",
       "resourceId": "apt-mv0g5ws5-erf4",
       "id": "aud-mv0h23cc-6n81",
-      "timestamp": "2026-10-09T04:35:13.644Z"
+      "timestamp": "2026-10-09T04:35:13.644Z",
+      "prevHash": "f79186ed3739ba04929650fd018f2130",
+      "entryHash": "08472ce77580da9df07a096bbc6d917e"
     },
     {
       "actorId": "doc-demo-001",
@@ -1074,7 +1197,9 @@
         "type": "follow_up"
       },
       "id": "aud-mv0g5ws5-e4yw",
-      "timestamp": "2026-10-09T04:10:12.149Z"
+      "timestamp": "2026-10-09T04:10:12.149Z",
+      "prevHash": "a6cbac672869fbb524d776f1d5b955e0",
+      "entryHash": "f79186ed3739ba04929650fd018f2130"
     },
     {
       "actorId": "doc-demo-001",
@@ -1083,7 +1208,9 @@
       "resourceType": "appointment",
       "resourceId": "apt-muy1aitm-5619",
       "id": "aud-mv0g4al8-5zn5",
-      "timestamp": "2026-10-09T04:08:56.732Z"
+      "timestamp": "2026-10-09T04:08:56.732Z",
+      "prevHash": "4e3f0441cd839d8ce7aac6c682020cd6",
+      "entryHash": "a6cbac672869fbb524d776f1d5b955e0"
     },
     {
       "actorId": "doc-demo-001",
@@ -1092,7 +1219,9 @@
       "resourceType": "appointment",
       "resourceId": "apt-muy19wkk-gqaf",
       "id": "aud-mv0g48k4-qmbi",
-      "timestamp": "2026-10-09T04:08:54.100Z"
+      "timestamp": "2026-10-09T04:08:54.100Z",
+      "prevHash": "6b70aaadd6ea6cec7e6ac42e4171beeb",
+      "entryHash": "4e3f0441cd839d8ce7aac6c682020cd6"
     },
     {
       "actorId": "doc-demo-001",
@@ -1101,7 +1230,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv0g3sb6-ko4t",
-      "timestamp": "2026-10-09T04:08:33.042Z"
+      "timestamp": "2026-10-09T04:08:33.042Z",
+      "prevHash": "fe0e86c3ca29c30e6919a2d26fc54d4d",
+      "entryHash": "6b70aaadd6ea6cec7e6ac42e4171beeb"
     },
     {
       "actorId": "doc-demo-001",
@@ -1110,7 +1241,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv0fgf7z-zfkq",
-      "timestamp": "2026-10-09T03:50:22.991Z"
+      "timestamp": "2026-10-09T03:50:22.991Z",
+      "prevHash": "46b9457ceaf9ab8edf6e6e27a36a7a78",
+      "entryHash": "fe0e86c3ca29c30e6919a2d26fc54d4d"
     },
     {
       "actorId": "doc-demo-001",
@@ -1124,7 +1257,9 @@
         "mobile": "1212121212"
       },
       "id": "aud-mv0er2l3-2xsd",
-      "timestamp": "2026-10-09T03:30:40.215Z"
+      "timestamp": "2026-10-09T03:30:40.215Z",
+      "prevHash": "ac2b1b1090d11367aa29d5e2d3426165",
+      "entryHash": "46b9457ceaf9ab8edf6e6e27a36a7a78"
     },
     {
       "actorId": "doc-demo-001",
@@ -1139,7 +1274,9 @@
         "fee": 500
       },
       "id": "aud-mv0egieo-a830",
-      "timestamp": "2026-10-09T03:22:27.504Z"
+      "timestamp": "2026-10-09T03:22:27.504Z",
+      "prevHash": "a548626b05aff4c5b0784348d9424a22",
+      "entryHash": "ac2b1b1090d11367aa29d5e2d3426165"
     },
     {
       "actorId": "doc-demo-001",
@@ -1152,7 +1289,9 @@
         "patientCode": "P-24618"
       },
       "id": "aud-mv0eggv0-mop6",
-      "timestamp": "2026-10-09T03:22:25.500Z"
+      "timestamp": "2026-10-09T03:22:25.500Z",
+      "prevHash": "7d6642f28a3944894444a9a7b046e126",
+      "entryHash": "a548626b05aff4c5b0784348d9424a22"
     },
     {
       "actorId": "doc-demo-001",
@@ -1167,7 +1306,9 @@
         "fee": 500
       },
       "id": "aud-mv0egf0j-x4vu",
-      "timestamp": "2026-10-09T03:22:23.107Z"
+      "timestamp": "2026-10-09T03:22:23.107Z",
+      "prevHash": "69a0fd561a9b4b09e8d829d062290c57",
+      "entryHash": "7d6642f28a3944894444a9a7b046e126"
     },
     {
       "actorId": "doc-demo-001",
@@ -1180,7 +1321,9 @@
         "patientCode": "P-24618"
       },
       "id": "aud-mv0egdyf-5k49",
-      "timestamp": "2026-10-09T03:22:21.735Z"
+      "timestamp": "2026-10-09T03:22:21.735Z",
+      "prevHash": "4133439fd580e64e5f24492cef0dbfa1",
+      "entryHash": "69a0fd561a9b4b09e8d829d062290c57"
     },
     {
       "actorId": "doc-demo-001",
@@ -1193,7 +1336,9 @@
         "patientCode": "P-24618"
       },
       "id": "aud-mv0efn8f-6ao6",
-      "timestamp": "2026-10-09T03:21:47.103Z"
+      "timestamp": "2026-10-09T03:21:47.103Z",
+      "prevHash": "381feab7deeb9a89f864dfd533deefd3",
+      "entryHash": "4133439fd580e64e5f24492cef0dbfa1"
     },
     {
       "actorId": "doc-demo-001",
@@ -1202,7 +1347,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mv0ef3jx-534m",
-      "timestamp": "2026-10-09T03:21:21.597Z"
+      "timestamp": "2026-10-09T03:21:21.597Z",
+      "prevHash": "638a28fb3da3e3b8d151b8e028b2fae3",
+      "entryHash": "381feab7deeb9a89f864dfd533deefd3"
     },
     {
       "actorId": "doc-demo-001",
@@ -1217,7 +1364,9 @@
         "fee": 500
       },
       "id": "aud-muy1aitm-dzdb",
-      "timestamp": "2026-10-07T11:38:20.746Z"
+      "timestamp": "2026-10-07T11:38:20.746Z",
+      "prevHash": "d6365d90860d0088a8d8504a56ad4e7f",
+      "entryHash": "638a28fb3da3e3b8d151b8e028b2fae3"
     },
     {
       "actorId": "doc-demo-001",
@@ -1230,7 +1379,9 @@
         "patientCode": "P-24618"
       },
       "id": "aud-muy1aitf-9xmg",
-      "timestamp": "2026-10-07T11:38:20.739Z"
+      "timestamp": "2026-10-07T11:38:20.739Z",
+      "prevHash": "cd34c5a1ebc0f16976cfb04f487281fb",
+      "entryHash": "d6365d90860d0088a8d8504a56ad4e7f"
     },
     {
       "actorId": "doc-demo-001",
@@ -1239,7 +1390,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-muy1aisw-5mgc",
-      "timestamp": "2026-10-07T11:38:20.720Z"
+      "timestamp": "2026-10-07T11:38:20.720Z",
+      "prevHash": "edf7031ad8fc5c16c5ad63a9034a24c7",
+      "entryHash": "cd34c5a1ebc0f16976cfb04f487281fb"
     },
     {
       "actorId": "doc-demo-001",
@@ -1253,7 +1406,9 @@
         "type": "follow_up"
       },
       "id": "aud-muy19wkl-azdo",
-      "timestamp": "2026-10-07T11:37:51.909Z"
+      "timestamp": "2026-10-07T11:37:51.909Z",
+      "prevHash": "cd97199f8a6d1d51e88d1c8b68d34289",
+      "entryHash": "edf7031ad8fc5c16c5ad63a9034a24c7"
     },
     {
       "actorId": "doc-demo-001",
@@ -1262,7 +1417,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-muy19wjm-t7r3",
-      "timestamp": "2026-10-07T11:37:51.874Z"
+      "timestamp": "2026-10-07T11:37:51.874Z",
+      "prevHash": "0b50fb5e62077e6dc943c835abde94a1",
+      "entryHash": "cd97199f8a6d1d51e88d1c8b68d34289"
     },
     {
       "actorId": "doc-demo-001",
@@ -1271,7 +1428,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-muxzj1kk-suih",
-      "timestamp": "2026-10-07T10:48:59.060Z"
+      "timestamp": "2026-10-07T10:48:59.060Z",
+      "prevHash": "5ad73f6048ef7ce04522a47d1f639713",
+      "entryHash": "0b50fb5e62077e6dc943c835abde94a1"
     },
     {
       "actorId": "doc-demo-001",
@@ -1280,7 +1439,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-muwxcuf8-ns5g",
-      "timestamp": "2026-10-06T17:00:24.452Z"
+      "timestamp": "2026-10-06T17:00:24.452Z",
+      "prevHash": "4bfdaa64db02316454fd513716287e51",
+      "entryHash": "5ad73f6048ef7ce04522a47d1f639713"
     },
     {
       "actorId": "doc-demo-001",
@@ -1289,7 +1450,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-muww74x6-k8c3",
-      "timestamp": "2026-10-06T16:27:58.506Z"
+      "timestamp": "2026-10-06T16:27:58.506Z",
+      "prevHash": "688fc177478a196ea6195a0058bebb4a",
+      "entryHash": "4bfdaa64db02316454fd513716287e51"
     },
     {
       "actorId": "doc-demo-001",
@@ -1298,7 +1461,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-muwun24u-t4ts",
-      "timestamp": "2026-10-06T15:44:22.158Z"
+      "timestamp": "2026-10-06T15:44:22.158Z",
+      "prevHash": "b10e7ca2ccc2c1c5fcb2f92498440726",
+      "entryHash": "688fc177478a196ea6195a0058bebb4a"
     },
     {
       "actorId": "doc-demo-001",
@@ -1313,7 +1478,9 @@
         "fee": 500
       },
       "id": "aud-mumnffnl-cyvh",
-      "timestamp": "2026-09-29T12:24:47.361Z"
+      "timestamp": "2026-09-29T12:24:47.361Z",
+      "prevHash": "2dec0159fb4dc484e5da9e74083131e4",
+      "entryHash": "b10e7ca2ccc2c1c5fcb2f92498440726"
     },
     {
       "actorId": "doc-demo-001",
@@ -1326,7 +1493,9 @@
         "patientCode": "P-24618"
       },
       "id": "aud-mumnfac9-0wyt",
-      "timestamp": "2026-09-29T12:24:40.473Z"
+      "timestamp": "2026-09-29T12:24:40.473Z",
+      "prevHash": "96b1d7513470319304d9c08d99371240",
+      "entryHash": "2dec0159fb4dc484e5da9e74083131e4"
     },
     {
       "actorId": "doc-demo-001",
@@ -1340,7 +1509,9 @@
         "mobile": "8844181414"
       },
       "id": "aud-mumnf2c7-ud3h",
-      "timestamp": "2026-09-29T12:24:30.103Z"
+      "timestamp": "2026-09-29T12:24:30.103Z",
+      "prevHash": "c9fbcf13b6347c035b48458a6139341a",
+      "entryHash": "96b1d7513470319304d9c08d99371240"
     },
     {
       "actorId": "doc-demo-001",
@@ -1349,7 +1520,9 @@
       "resourceType": "auth",
       "resourceId": "doc-demo-001",
       "id": "aud-mumnepqf-7sq1",
-      "timestamp": "2026-09-29T12:24:13.767Z"
+      "timestamp": "2026-09-29T12:24:13.767Z",
+      "prevHash": "4043eb4ba92add63a5a3ffef6739926e",
+      "entryHash": "c9fbcf13b6347c035b48458a6139341a"
     },
     {
       "actorId": "system",
@@ -1361,13 +1534,15 @@
         "info": "Default doctor initialized"
       },
       "id": "aud-mumnb49c-xnf4",
-      "timestamp": "2026-09-29T12:21:25.968Z"
+      "timestamp": "2026-09-29T12:21:25.968Z",
+      "prevHash": "GENESIS_000000000000000000000000",
+      "entryHash": "4043eb4ba92add63a5a3ffef6739926e"
     }
   ],
   "meta": {
     "lastPatientNumber": 24619,
     "version": 1,
-    "updatedAt": "2026-11-08T17:56:47.598Z"
+    "updatedAt": "2026-11-11T03:43:26.079Z"
   },
   "appointments": [
     {
@@ -2951,11 +3126,11 @@
       "category": "patients",
       "channel": "WhatsApp",
       "priority": "urgent",
-      "stage": "needs_review",
-      "preview": "Chest feels tight since morning with red rash",
-      "timestamp": "2 min ago",
-      "unread": true,
-      "statusLabel": "Red flag · Immediate review",
+      "stage": "resolved",
+      "preview": "You: Dear Rohit, please go to the nearest Emergency Room immediately, as chest tightness with a",
+      "timestamp": "Just now",
+      "unread": false,
+      "statusLabel": "Resolved · Opened in WhatsApp",
       "phone": "+91 98765 43210",
       "aiSummary": "Patient reports acute rash extension with chest tightness. Immediate clinical triage advised.",
       "messages": [
@@ -2964,6 +3139,17 @@
           "sender": "patient",
           "text": "Doctor, my chest feels tight and the rash is spreading since morning. Is this normal?",
           "time": "9:30 AM"
+        },
+        {
+          "id": "wa-mwbkqliv-llk0",
+          "sender": "doctor",
+          "text": "Dear Rohit, please go to the nearest Emergency Room immediately, as chest tightness with a spreading rash requires urgent medical assessment. Do not wait; seek emergency care now as this could be a serious allergic reaction.\n\nRohit, kirpa karke turant nazdeeki emergency room (emergency department) jao, kyunki chhati vich jhakad aur rash da vadna ek gambhir allergic reaction ho sakda hai. Is nu ignore na karo te turant medical madad lao.\n\n💬 Reply or share skin photos securely with Dr. Dr. Demo:\nhttps://ais-dev-5lraspp4e22ui3mkc45ytl-609028959806.asia-southeast1.run.app?replyToken=rply_eyJ0IjoidC0xIiwicCI6InQtMSIsInBuIjoiUm9oaXQgU2hhcm1hIiwicGgiOiI5MTk4NzY1NDMyMTAiLCJkIjoiZG9jLWRlbW8tMDAxIiwiZG4iOiJEci4gRGVtbyIsImNuIjoiQ2xpbmlxIERlcm1hdG9sb2d5IENlbnRlciIsImNwIjoiKzkxIDcwNDQxNzMxNDAiLCJtIjoiRGVhciBSb2hpdCwgcGxlYXNlIGdvIHRvIHRoZSBuZWFyZXN0IEVtZXJnZW5jeSBSb29tIGltbWVkaWF0ZWx5LCBhcyBjaGVzdCB0aWdodG5lc3Mgd2l0aCBhIHNwcmVhZGluZyIsImV4cCI6MTc5NTU3ODIwNjA3MH0.19WhDigVLh8LnypsshRkQie38tK5BghM",
+          "time": "03:43 AM",
+          "status": "Sent via WhatsApp (+91 7044173140 → +91 98765 43210)",
+          "receiptId": "wa-mwbkqliv-llk0",
+          "whatsappUrl": "https://wa.me/919876543210?text=Dear%20Rohit%2C%20please%20go%20to%20the%20nearest%20Emergency%20Room%20immediately%2C%20as%20chest%20tightness%20with%20a%20spreading%20rash%20requires%20urgent%20medical%20assessment.%20Do%20not%20wait%3B%20seek%20emergency%20care%20now%20as%20this%20could%20be%20a%20serious%20allergic%20reaction.%0A%0ARohit%2C%20kirpa%20karke%20turant%20nazdeeki%20emergency%20room%20(emergency%20department)%20jao%2C%20kyunki%20chhati%20vich%20jhakad%20aur%20rash%20da%20vadna%20ek%20gambhir%20allergic%20reaction%20ho%20sakda%20hai.%20Is%20nu%20ignore%20na%20karo%20te%20turant%20medical%20madad%20lao.%0A%0A%F0%9F%92%AC%20Reply%20or%20share%20skin%20photos%20securely%20with%20Dr.%20Dr.%20Demo%3A%0Ahttps%3A%2F%2Fais-dev-5lraspp4e22ui3mkc45ytl-609028959806.asia-southeast1.run.app%3FreplyToken%3Drply_eyJ0IjoidC0xIiwicCI6InQtMSIsInBuIjoiUm9oaXQgU2hhcm1hIiwicGgiOiI5MTk4NzY1NDMyMTAiLCJkIjoiZG9jLWRlbW8tMDAxIiwiZG4iOiJEci4gRGVtbyIsImNuIjoiQ2xpbmlxIERlcm1hdG9sb2d5IENlbnRlciIsImNwIjoiKzkxIDcwNDQxNzMxNDAiLCJtIjoiRGVhciBSb2hpdCwgcGxlYXNlIGdvIHRvIHRoZSBuZWFyZXN0IEVtZXJnZW5jeSBSb29tIGltbWVkaWF0ZWx5LCBhcyBjaGVzdCB0aWdodG5lc3Mgd2l0aCBhIHNwcmVhZGluZyIsImV4cCI6MTc5NTU3ODIwNjA3MH0.19WhDigVLh8LnypsshRkQie38tK5BghM",
+          "recipientPhone": "+91 98765 43210",
+          "createdAt": "2026-11-11T03:43:26.071Z"
         }
       ],
       "draftReply": "Rohit, please stop any newly started medication immediately and visit the nearest emergency room or call our clinic hotline right away for an urgent evaluation of your chest tightness and rash.",
@@ -2987,7 +3173,7 @@
           "text": "Rohit, I am calling you now. If you have any difficulty breathing, lip/tongue swelling, or dizziness, please take your emergency antihistamine and go to the nearest ER immediately."
         }
       ],
-      "updatedAt": "2026-11-08T16:18:39.200Z"
+      "updatedAt": "2026-11-11T03:43:26.078Z"
     },
     {
       "id": "t-2",
@@ -3221,6 +3407,24 @@
         }
       ],
       "updatedAt": "2026-11-08T15:20:39.200Z"
+    }
+  ],
+  "dispatchedWhatsAppMessages": [
+    {
+      "id": "wa-mwbkqliv-llk0",
+      "patientId": "t-1",
+      "patientName": "Rohit Sharma",
+      "recipientMobile": "919876543210",
+      "clinicPhone": "+91 7044173140",
+      "reportType": "chat_message",
+      "messageText": "Dear Rohit, please go to the nearest Emergency Room immediately, as chest tightness with a spreading rash requires urgent medical assessment. Do not wait; seek emergency care now as this could be a serious allergic reaction.\n\nRohit, kirpa karke turant nazdeeki emergency room (emergency department) jao, kyunki chhati vich jhakad aur rash da vadna ek gambhir allergic reaction ho sakda hai. Is nu ignore na karo te turant medical madad lao.\n\n💬 Reply or share skin photos securely with Dr. Dr. Demo:\nhttps://ais-dev-5lraspp4e22ui3mkc45ytl-609028959806.asia-southeast1.run.app?replyToken=rply_eyJ0IjoidC0xIiwicCI6InQtMSIsInBuIjoiUm9oaXQgU2hhcm1hIiwicGgiOiI5MTk4NzY1NDMyMTAiLCJkIjoiZG9jLWRlbW8tMDAxIiwiZG4iOiJEci4gRGVtbyIsImNuIjoiQ2xpbmlxIERlcm1hdG9sb2d5IENlbnRlciIsImNwIjoiKzkxIDcwNDQxNzMxNDAiLCJtIjoiRGVhciBSb2hpdCwgcGxlYXNlIGdvIHRvIHRoZSBuZWFyZXN0IEVtZXJnZW5jeSBSb29tIGltbWVkaWF0ZWx5LCBhcyBjaGVzdCB0aWdodG5lc3Mgd2l0aCBhIHNwcmVhZGluZyIsImV4cCI6MTc5NTU3ODIwNjA3MH0.19WhDigVLh8LnypsshRkQie38tK5BghM",
+      "note": "[From Clinic +91 7044173140] Dear Rohit, please go to the nearest Emergency Room immediately, as chest tightness with a spreading",
+      "deliveryMode": "whatsapp_gateway",
+      "status": "delivered",
+      "whatsappUrl": "https://wa.me/919876543210?text=Dear%20Rohit%2C%20please%20go%20to%20the%20nearest%20Emergency%20Room%20immediately%2C%20as%20chest%20tightness%20with%20a%20spreading%20rash%20requires%20urgent%20medical%20assessment.%20Do%20not%20wait%3B%20seek%20emergency%20care%20now%20as%20this%20could%20be%20a%20serious%20allergic%20reaction.%0A%0ARohit%2C%20kirpa%20karke%20turant%20nazdeeki%20emergency%20room%20(emergency%20department)%20jao%2C%20kyunki%20chhati%20vich%20jhakad%20aur%20rash%20da%20vadna%20ek%20gambhir%20allergic%20reaction%20ho%20sakda%20hai.%20Is%20nu%20ignore%20na%20karo%20te%20turant%20medical%20madad%20lao.%0A%0A%F0%9F%92%AC%20Reply%20or%20share%20skin%20photos%20securely%20with%20Dr.%20Dr.%20Demo%3A%0Ahttps%3A%2F%2Fais-dev-5lraspp4e22ui3mkc45ytl-609028959806.asia-southeast1.run.app%3FreplyToken%3Drply_eyJ0IjoidC0xIiwicCI6InQtMSIsInBuIjoiUm9oaXQgU2hhcm1hIiwicGgiOiI5MTk4NzY1NDMyMTAiLCJkIjoiZG9jLWRlbW8tMDAxIiwiZG4iOiJEci4gRGVtbyIsImNuIjoiQ2xpbmlxIERlcm1hdG9sb2d5IENlbnRlciIsImNwIjoiKzkxIDcwNDQxNzMxNDAiLCJtIjoiRGVhciBSb2hpdCwgcGxlYXNlIGdvIHRvIHRoZSBuZWFyZXN0IEVtZXJnZW5jeSBSb29tIGltbWVkaWF0ZWx5LCBhcyBjaGVzdCB0aWdodG5lc3Mgd2l0aCBhIHNwcmVhZGluZyIsImV4cCI6MTc5NTU3ODIwNjA3MH0.19WhDigVLh8LnypsshRkQie38tK5BghM",
+      "sentAt": "2026-11-11T03:43:26.071Z",
+      "doctorId": "doc-demo-001",
+      "doctorName": "Dr. Demo"
     }
   ]
 }

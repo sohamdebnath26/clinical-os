@@ -26,7 +26,12 @@ import {
   Database,
   AlertTriangle,
   Search,
-  ShieldCheck
+  ShieldCheck,
+  HardDrive,
+  RefreshCw,
+  Laptop,
+  CloudOff,
+  Check
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
@@ -219,6 +224,53 @@ export const SettingsView: React.FC = () => {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
+
+  const [localVaultInfo, setLocalVaultInfo] = useState<{
+    patientCount: number;
+    consultationCount: number;
+    savedAt: string;
+  } | null>(null);
+  const [isSavingLocalVault, setIsSavingLocalVault] = useState(false);
+  const [isRestoringLocalVault, setIsRestoringLocalVault] = useState(false);
+
+  useEffect(() => {
+    const info = api.clinic.getLocalVaultInfo();
+    if (info) setLocalVaultInfo(info);
+  }, []);
+
+  const handleSaveLocalVault = async () => {
+    setIsSavingLocalVault(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await api.clinic.saveToLocalVault();
+      setLocalVaultInfo(res);
+      setSuccessMsg(
+        `Offline browser vault updated: ${res.patientCount} patients & ${res.consultationCount} consultations safely stored locally on this machine.`
+      );
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to save offline vault');
+    } finally {
+      setIsSavingLocalVault(false);
+    }
+  };
+
+  const handleRestoreLocalVault = async () => {
+    setIsRestoringLocalVault(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await api.clinic.restoreFromLocalVault();
+      setSuccessMsg(
+        `Restored clinic data from offline browser vault (${res.count || 0} patient records). Reloading workspace...`
+      );
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to restore from local vault');
+      setIsRestoringLocalVault(false);
+    }
+  };
 
   const handleDownloadBackup = async () => {
     setIsBackingUp(true);
@@ -784,7 +836,7 @@ export const SettingsView: React.FC = () => {
 
       {/* Free Off-Site Clinic Backup & Data Persistence Card */}
       {!isReceptionist && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
@@ -792,12 +844,88 @@ export const SettingsView: React.FC = () => {
                 Data Persistence &amp; Off-Site Clinic Backup (100% Free)
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Protect your clinic records without paying for cloud storage. Download an encrypted snapshot of all patient files, visits, and timelines to your local drive or USB backup.
+                Protect your clinic records without paying for cloud storage or persistent disks. Store local browser snapshots and download full database files anytime.
               </p>
             </div>
             <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 shrink-0">
-              Zero Cloud Fees
+              Zero Card / 100% Free
             </span>
+          </div>
+
+          {/* Render Free Tier / Declined Card Resolution Notice */}
+          <div className="p-4 rounded-xl bg-amber-50/80 border border-amber-200/80 text-xs text-amber-950 space-y-2">
+            <div className="flex items-center gap-2 font-bold text-amber-900">
+              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+              <span>Fixing Render Storage / Declined Card Error</span>
+            </div>
+            <p className="text-[11.5px] text-amber-900 leading-relaxed">
+              Render requires an active credit card only if a <strong>Persistent Disk</strong> is attached to the service. Because free web services on Render do not support paid disks, your card was declined.
+            </p>
+            <div className="bg-white/80 p-3 rounded-lg border border-amber-200 text-[11px] space-y-1.5 font-medium">
+              <div className="font-bold text-amber-950">How to deploy 100% Free on Render:</div>
+              <ol className="list-decimal pl-4 space-y-1 text-slate-700">
+                <li>Open your <strong>Render Dashboard</strong> &rarr; Select your <strong>clinical-os</strong> web service.</li>
+                <li>In the left sidebar, click <strong>Disks</strong> &rarr; Click <strong>Delete Disk</strong> (or remove disk mounts).</li>
+                <li>Go to <strong>Settings</strong> &rarr; Confirm the plan is set to <strong>Free ($0/month)</strong>.</li>
+                <li>Trigger a deploy or push changes. The build will deploy cleanly without asking for a credit card.</li>
+              </ol>
+            </div>
+          </div>
+
+          {/* Offline Browser Vault Card */}
+          <div className="p-4 rounded-xl bg-teal-50/60 border border-teal-200/80 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-700 text-white flex items-center justify-center shrink-0">
+                  <Laptop className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    Offline Browser Storage Vault
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-100 text-teal-800">
+                      Active
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 mt-0.5">
+                    {localVaultInfo ? (
+                      <span>
+                        Cached locally: <strong>{localVaultInfo.patientCount} patients</strong>,{' '}
+                        <strong>{localVaultInfo.consultationCount} consultations</strong> (Last saved:{' '}
+                        {new Date(localVaultInfo.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                      </span>
+                    ) : (
+                      <span>No offline snapshot saved yet on this machine. Click below to mirror clinic data.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleSaveLocalVault}
+                  disabled={isSavingLocalVault}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSavingLocalVault ? 'animate-spin' : ''}`} />
+                  <span>{isSavingLocalVault ? 'Saving Snapshot...' : 'Save Local Vault'}</span>
+                </button>
+                {localVaultInfo && (
+                  <button
+                    type="button"
+                    onClick={handleRestoreLocalVault}
+                    disabled={isRestoringLocalVault}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Check className="w-3.5 h-3.5 text-teal-700" />
+                    <span>{isRestoringLocalVault ? 'Restoring...' : 'Restore from Vault'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="text-[11px] text-teal-900/80 leading-relaxed">
+              When running on Render&apos;s free tier, containers restart after 15 minutes of inactivity. With your browser vault active, your patient records remain safely preserved on this device and can be restored in 1 second.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
@@ -806,10 +934,10 @@ export const SettingsView: React.FC = () => {
               <div>
                 <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                   <Download className="w-4 h-4 text-teal-700" />
-                  Export Clinic Database
+                  Export Clinic Database (.json)
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Downloads a complete JSON snapshot containing all patients, consultations, appointments, and medical histories.
+                  Downloads a complete JSON file containing all patients, consultations, appointments, and medical histories to your laptop or USB drive.
                 </p>
               </div>
               <button
@@ -828,7 +956,7 @@ export const SettingsView: React.FC = () => {
               <div>
                 <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                   <Upload className="w-4 h-4 text-amber-700" />
-                  Restore Clinic Database
+                  Restore Clinic Database (.json)
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">
                   Restore from a previously saved JSON backup file. A timestamped safety backup of your existing data is preserved automatically.
