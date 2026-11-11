@@ -5074,12 +5074,17 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
     doctor.id
   );
 
+  const whatsappDirectWebUrl = `https://web.whatsapp.com/send?phone=${normalizedRecipient}&text=${encodeURIComponent(finalBodyText)}`;
+  const whatsappNativeUri = `whatsapp://send?phone=${normalizedRecipient}&text=${encodeURIComponent(finalBodyText)}`;
+
   res.json({
     success: true,
     dispatch: dispatchRecord,
     thread,
     threads: db.getStoredInboxThreads(defaultInboxThreads, doctor.id),
     whatsappUrl,
+    whatsappDirectWebUrl,
+    whatsappNativeUri,
     portalUrl,
     portalToken,
     message: `Message dispatched in background to +${normalizedRecipient}`,

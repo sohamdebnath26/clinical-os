@@ -12,6 +12,9 @@ import {
   cleanPhoneNumber,
   getWhatsAppWebUrl,
   launchWhatsAppSynchronously,
+  WhatsAppPreferredChannel,
+  getPreferredWhatsAppChannel,
+  setPreferredWhatsAppChannel,
   formatWhatsAppClinicalReport,
   formatWhatsAppPrescription,
   formatWhatsAppConsultationSummary,
@@ -112,17 +115,13 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   );
   const [autoDownloadPdfOnSend, setAutoDownloadPdfOnSend] = useState<boolean>(true);
 
-  // Formatting options — default preferWeb to true so clicking "Send on WhatsApp" works immediately across all browsers
   const [includeClinicHeader, setIncludeClinicHeader] = useState(true);
   const [includeDoctorContact, setIncludeDoctorContact] = useState(true);
-  const [preferWeb, setPreferWeb] = useState(() => {
-    try {
-      const saved = localStorage.getItem('prefer_whatsapp_web');
-      return saved === null ? true : saved === 'true';
-    } catch {
-      return true;
-    }
-  });
+
+  // Preferred WhatsApp dispatch channel: 'native' (Desktop/Mobile app - 0 tabs), 'web' (Single reused tab), or 'background'
+  const [dispatchChannel, setDispatchChannel] = useState<WhatsAppPreferredChannel>(() =>
+    getPreferredWhatsAppChannel()
+  );
 
   // Preview display toggle: formatted chat vs send as PDF
   const [previewMode, setPreviewMode] = useState<'rendered' | 'pdf'>('pdf');
@@ -143,12 +142,9 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
 
   // Synchronize preference to localStorage
   const handleTogglePreferWeb = (val: boolean) => {
-    setPreferWeb(val);
-    try {
-      localStorage.setItem('prefer_whatsapp_web', String(val));
-    } catch {
-      // non-critical
-    }
+    const newChannel: WhatsAppPreferredChannel = val ? 'web' : 'native';
+    setDispatchChannel(newChannel);
+    setPreferredWhatsAppChannel(newChannel);
   };
 
   // Reset launch prompt when modal opens/closes and sync patient's 10-digit mobile
@@ -324,7 +320,10 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
    * Dispatches WhatsApp report (and optional Medical Report PDF) in the background via Clinic Gateway & logs it directly into the
    * native Clinical OS Inbox thread so the doctor never leaves the Clinical OS application.
    */
-  const handleSendWhatsApp = async (openUnfocusedTab = false, forcePdfMode?: boolean) => {
+  const handleSendWhatsApp = async (
+    targetChannel?: WhatsAppPreferredChannel,
+    forcePdfMode?: boolean
+  ) => {
     setErrorMessage(null);
 
     const includePdf = forcePdfMode !== undefined ? forcePdfMode : sendAsPdf;
@@ -343,17 +342,22 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
       return;
     }
 
-    const targetWhatsAppUrl = getWhatsAppWebUrl(cleanedRecipient, messageText);
+    const effectiveChannel = targetChannel || dispatchChannel;
 
     // If sending as PDF and autoDownloadPdfOnSend is checked (or forced PDF action), trigger local PDF download
     if (includePdf && generatedPdfReport && (autoDownloadPdfOnSend || forcePdfMode)) {
       generatedPdfReport.triggerDownload();
     }
 
-    // Only open an unfocused background tab if explicitly requested; default is 100% background API dispatch
-    if (openUnfocusedTab) {
-      launchWhatsAppSynchronously(cleanedRecipient, messageText, 'unfocused');
-    }
+    // Launch WhatsApp via selected channel:
+    // - 'native': calls whatsapp:// protocol, opening WhatsApp Desktop with 0 browser tabs!
+    // - 'web': reuses dedicated single 'whatsapp_web_window' tab without creating extra tabs!
+    // - 'background': logs directly into Clinical OS Inbox without opening any window!
+    const targetWhatsAppUrl = launchWhatsAppSynchronously(
+      cleanedRecipient,
+      messageText,
+      effectiveChannel
+    );
 
     setIsLogging(true);
 
@@ -595,7 +599,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleSendWhatsApp(false, true)}
+                    onClick={() => handleSendWhatsApp(dispatchChannel, true)}
                     disabled={isLogging || !cleanedRecipient}
                     className="px-3 py-1.5 rounded-lg bg-[#128C7E] hover:bg-[#075E54] text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs disabled:opacity-50"
                     title="Generate and send Medical Report as PDF on WhatsApp"
@@ -625,6 +629,81 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
             </div>
           )}
 
+          {/* Preferred Dispatch Pipeline Selector */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                <WhatsAppIcon className="w-3.5 h-3.5 fill-[#128C7E]" />
+                <span>Dispatch Pipeline</span>
+              </span>
+              <span className="text-[10.5px] text-slate-500">
+                {dispatchChannel === 'native'
+                  ? 'Zero browser tabs opened'
+                  : dispatchChannel === 'web'
+                  ? 'Reuses a single persistent tab'
+                  : 'Silent background dispatch'}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDispatchChannel('native');
+                  setPreferredWhatsAppChannel('native');
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  dispatchChannel === 'native'
+                    ? 'bg-emerald-50/90 border-emerald-400 text-emerald-950 ring-1 ring-emerald-400'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-xs">📱 WhatsApp App</span>
+                  {dispatchChannel === 'native' && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                </div>
+                <span className="text-[10px] text-slate-500 mt-1">Native Desktop / Mobile app. Zero tab clutter!</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDispatchChannel('web');
+                  setPreferredWhatsAppChannel('web');
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  dispatchChannel === 'web'
+                    ? 'bg-teal-50/90 border-teal-400 text-teal-950 ring-1 ring-teal-400'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-xs">🌐 WhatsApp Web</span>
+                  {dispatchChannel === 'web' && <Check className="w-3.5 h-3.5 text-teal-600" />}
+                </div>
+                <span className="text-[10px] text-slate-500 mt-1">Direct web.whatsapp.com. Reuses single tab.</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDispatchChannel('background');
+                  setPreferredWhatsAppChannel('background');
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  dispatchChannel === 'background'
+                    ? 'bg-slate-100 border-slate-400 text-slate-900 ring-1 ring-slate-400'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-xs">⚡ Background Only</span>
+                  {dispatchChannel === 'background' && <Check className="w-3.5 h-3.5 text-slate-700" />}
+                </div>
+                <span className="text-[10px] text-slate-500 mt-1">Saves &amp; routes without opening external app</span>
+              </button>
+            </div>
+          </div>
+
           {/* Prompt banner: Directly opens WhatsApp Desktop or Prompts WhatsApp Web */}
           {showAppLaunchPrompt && (
             <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 space-y-2.5 animate-in slide-in-from-top-2">
@@ -634,29 +713,27 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                 </div>
                 <div className="space-y-0.5 flex-1 min-w-0">
                   <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <span>Launching WhatsApp Desktop Application...</span>
+                    <span>Launching WhatsApp Application...</span>
                   </h4>
                   <p className="text-[11px] text-slate-600 leading-normal">
-                    The native WhatsApp app URI was triggered. If installed on this device, it will launch automatically with the patient&apos;s report loaded.
+                    The WhatsApp app URI was triggered. If installed on this device, it will launch automatically with the patient&apos;s report loaded.
                   </p>
                 </div>
               </div>
 
               <div className="bg-white/80 p-3 rounded-lg border border-emerald-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="text-[11px] text-slate-700">
-                  <span className="font-semibold block">WhatsApp didn&apos;t open or not installed on this PC?</span>
-                  <span className="text-slate-500">Launch in browser without installing any desktop software:</span>
+                  <span className="font-semibold block">Need to open in browser instead?</span>
+                  <span className="text-slate-500">Launch directly in WhatsApp Web tab:</span>
                 </div>
-                <a
-                  href={directWhatsAppHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => handleSendWhatsApp(true)}
-                  className="px-3.5 py-1.5 rounded-lg bg-[#128C7E] hover:bg-[#075E54] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs shrink-0"
+                <button
+                  type="button"
+                  onClick={() => handleSendWhatsApp('web')}
+                  className="px-3.5 py-1.5 rounded-lg bg-[#128C7E] hover:bg-[#075E54] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs shrink-0 cursor-pointer"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>Open WhatsApp Web</span>
-                </a>
+                </button>
               </div>
             </div>
           )}
@@ -699,11 +776,11 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input
                 type="checkbox"
-                checked={preferWeb}
+                checked={dispatchChannel === 'web'}
                 onChange={e => handleTogglePreferWeb(e.target.checked)}
                 className="rounded text-[#128C7E] focus:ring-[#128C7E]"
               />
-              <span className="font-medium text-slate-700">Always use WhatsApp Web by default</span>
+              <span className="font-medium text-slate-700">Prefer WhatsApp Web instead of Desktop App</span>
             </label>
           </div>
 
@@ -790,7 +867,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleSendWhatsApp(false, true)}
+                        onClick={() => handleSendWhatsApp(dispatchChannel, true)}
                         disabled={isLogging || !cleanedRecipient}
                         className="px-2.5 py-1 rounded-lg bg-[#128C7E] hover:bg-[#075E54] text-white text-[11px] font-bold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
                       >
@@ -841,30 +918,38 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
             {/* Direct WhatsApp Web Button */}
             <button
               type="button"
-              onClick={() => handleSendWhatsApp(true)}
+              onClick={() => handleSendWhatsApp('web')}
               disabled={isLogging || !cleanedRecipient}
-              className="flex-1 sm:flex-none px-3.5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50"
-              title="Open via WhatsApp Web directly in a browser tab"
+              className="flex-1 sm:flex-none px-3.5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              title="Open directly in WhatsApp Web (Reuses a single persistent tab)"
             >
               <ExternalLink className="w-4 h-4" />
               <span>WhatsApp Web</span>
             </button>
 
-            {/* Primary Action Button: Launches WhatsApp & logs in Clinical OS Inbox */}
+            {/* Primary Action Button */}
             <button
               type="button"
-              onClick={() => handleSendWhatsApp(true)}
+              onClick={() => handleSendWhatsApp(dispatchChannel)}
               disabled={isLogging || !cleanedRecipient}
               className="flex-1 sm:flex-none px-5 py-2.5 bg-[#0d3f3b] hover:bg-[#135650] text-white text-xs font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.99] cursor-pointer"
-              title="Open WhatsApp with this report & log in Clinical OS Inbox"
+              title={
+                dispatchChannel === 'native'
+                  ? 'Send via WhatsApp App (0 tabs opened)'
+                  : dispatchChannel === 'web'
+                  ? 'Send via WhatsApp Web (Single tab)'
+                  : 'Send in Background'
+              }
             >
               <WhatsAppIcon className="w-4 h-4 fill-white" />
               <span>
                 {isLogging
                   ? 'Sending...'
-                  : sendAsPdf
-                  ? 'Send Medical Report as PDF'
-                  : 'Send on WhatsApp'}
+                  : dispatchChannel === 'native'
+                  ? (sendAsPdf ? 'Send PDF via WhatsApp App' : 'Send via WhatsApp App')
+                  : dispatchChannel === 'web'
+                  ? (sendAsPdf ? 'Send PDF via WhatsApp Web' : 'Send via WhatsApp Web')
+                  : (sendAsPdf ? 'Send PDF in Background' : 'Send in Background')}
               </span>
               <Send className="w-3.5 h-3.5" />
             </button>

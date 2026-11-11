@@ -49,16 +49,29 @@ export function cleanPhoneNumber(rawPhone: string, defaultCountryCode: string = 
  * Direct native application URI scheme (for WhatsApp Desktop on Windows/Mac, or mobile app)
  */
 export function getWhatsAppNativeUri(cleanPhone: string, messageText: string): string {
+  const normalized = cleanPhoneNumber(cleanPhone);
   const encoded = encodeURIComponent(messageText);
-  return `whatsapp://send?phone=${cleanPhone}&text=${encoded}`;
+  return `whatsapp://send?phone=${normalized}&text=${encoded}`;
 }
 
 /**
- * Universal WhatsApp Web / App URL (opens reliably across Desktop, Web, and Mobile without dropping message text)
+ * Direct WhatsApp Web URL (bypasses the wa.me intermediate landing page)
  */
-export function getWhatsAppWebUrl(cleanPhone: string, messageText: string): string {
+export function getWhatsAppDirectWebUrl(cleanPhone: string, messageText: string): string {
   const normalized = cleanPhoneNumber(cleanPhone);
   const encoded = encodeURIComponent(messageText);
+  return `https://web.whatsapp.com/send?phone=${normalized}&text=${encoded}`;
+}
+
+/**
+ * Universal WhatsApp Web / App URL (opens reliably without dropping message text)
+ */
+export function getWhatsAppWebUrl(cleanPhone: string, messageText: string, direct = true): string {
+  const normalized = cleanPhoneNumber(cleanPhone);
+  const encoded = encodeURIComponent(messageText);
+  if (direct) {
+    return `https://web.whatsapp.com/send?phone=${normalized}&text=${encoded}`;
+  }
   return `https://wa.me/${normalized}?text=${encoded}`;
 }
 
@@ -71,46 +84,113 @@ export function getWhatsAppUniversalUrl(cleanPhone: string, messageText: string)
   return `https://api.whatsapp.com/send?phone=${normalized}&text=${encoded}`;
 }
 
+export type WhatsAppDispatchMode = 'native' | 'web' | 'background' | 'unfocused';
+export type WhatsAppPreferredChannel = 'native' | 'web' | 'background';
+
+const WHATSAPP_CHANNEL_PREF_KEY = 'clinical_os_whatsapp_channel_pref_v2';
+
+export function getPreferredWhatsAppChannel(): WhatsAppPreferredChannel {
+  if (typeof window === 'undefined') return 'native';
+  try {
+    const saved = localStorage.getItem(WHATSAPP_CHANNEL_PREF_KEY);
+    if (saved === 'native' || saved === 'web' || saved === 'background') {
+      return saved as WhatsAppPreferredChannel;
+    }
+  } catch {}
+  return 'native'; // Default to Native WhatsApp App (Desktop / Mobile) for zero browser tab clutter!
+}
+
+export function setPreferredWhatsAppChannel(channel: WhatsAppPreferredChannel): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(WHATSAPP_CHANNEL_PREF_KEY, channel);
+  } catch {}
+}
+
+let sharedWhatsAppWebWindow: Window | null = null;
+
 /**
- * Dispatches or prepares a WhatsApp URL without stealing foreground focus from Clinical OS.
- * - 'background' (default): Returns the target URL for background API dispatch without opening any browser tab.
- * - 'unfocused': Opens an unfocused background tab and immediately restores focus to Clinical OS.
+ * Dispatches WhatsApp message cleanly:
+ * - 'native' (default): Invokes WhatsApp Desktop / Mobile app directly (via protocol handler). ZERO BROWSER TABS OPENED.
+ * - 'web': Targets a single persistent window ('whatsapp_web_window') with direct web.whatsapp.com. Reuses the tab so no duplicate tabs are opened.
+ * - 'background': Backend/API logging only, does not open or touch any external window.
  */
 export function launchWhatsAppSynchronously(
   cleanPhone: string,
   messageText: string,
-  mode: 'background' | 'unfocused' | 'web' | 'native' = 'web'
+  mode: WhatsAppDispatchMode = 'native'
 ): string {
-  const targetUrl =
-    mode === 'native'
-      ? getWhatsAppNativeUri(cleanPhone, messageText)
-      : getWhatsAppWebUrl(cleanPhone, messageText);
+  const normalized = cleanPhoneNumber(cleanPhone);
+  const nativeUri = getWhatsAppNativeUri(normalized, messageText);
+  const directWebUrl = getWhatsAppDirectWebUrl(normalized, messageText);
 
   if (mode === 'background') {
-    return targetUrl;
+    return directWebUrl;
   }
 
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  // Safety net: copy text to clipboard so doctor can paste if WhatsApp Web was already loaded on a different chat
+  if (typeof navigator !== 'undefined' && navigator.clipboard && messageText) {
+    try {
+      navigator.clipboard.writeText(messageText).catch(() => {});
+    } catch {}
+  }
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return mode === 'native' ? nativeUri : directWebUrl;
+  }
+
+  if (mode === 'native') {
+    // 📱 Native WhatsApp desktop/mobile app protocol dispatch:
+    // Does NOT open any browser tab! Invokes WhatsApp Desktop on Mac/PC or mobile app directly.
+    try {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.width = '0px';
+      iframe.style.height = '0px';
+      iframe.style.border = 'none';
+      iframe.style.opacity = '0';
+      iframe.src = nativeUri;
+      document.body.appendChild(iframe);
+      setTimeout(() => {
+        try {
+          if (iframe.parentNode) {
+            document.body.removeChild(iframe);
+          }
+        } catch {}
+      }, 2000);
+    } catch {
+      try {
+        window.location.assign(nativeUri);
+      } catch {}
+    }
+    return nativeUri;
+  }
+
+  // 🌐 WhatsApp Web dispatch:
+  // Reuses a SINGLE persistent named window ('whatsapp_web_window') instead of opening endless new tabs!
+  try {
+    if (sharedWhatsAppWebWindow && !sharedWhatsAppWebWindow.closed) {
+      sharedWhatsAppWebWindow.location.href = directWebUrl;
+      try {
+        sharedWhatsAppWebWindow.focus();
+      } catch {}
+    } else {
+      sharedWhatsAppWebWindow = window.open(directWebUrl, 'whatsapp_web_window');
+    }
+  } catch {
     try {
       const link = document.createElement('a');
-      link.href = targetUrl;
-      link.target = '_blank';
+      link.href = directWebUrl;
+      link.target = 'whatsapp_web_window';
       link.rel = 'noopener noreferrer';
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch {
-      // Fallback if DOM click fails
-      try {
-        window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      } catch {
-        // Ignore if sandboxed
-      }
-    }
+    } catch {}
   }
 
-  return targetUrl;
+  return directWebUrl;
 }
 
 /**
