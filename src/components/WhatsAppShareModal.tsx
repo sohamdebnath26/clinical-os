@@ -674,17 +674,34 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
                 <WhatsAppIcon className="w-3.5 h-3.5 fill-[#128C7E]" />
-                <span>Dispatch Pipeline</span>
+                <span>Dispatch Channel</span>
               </span>
               <span className="text-[10.5px] text-slate-500">
-                {dispatchChannel === 'native'
-                  ? 'Zero browser tabs opened'
-                  : dispatchChannel === 'web'
+                {dispatchChannel === 'web'
                   ? 'Reuses a single persistent tab'
-                  : 'Silent background dispatch'}
+                  : 'Opens Desktop / Mobile app'}
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDispatchChannel('web');
+                  setPreferredWhatsAppChannel('web');
+                }}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  dispatchChannel === 'web'
+                    ? 'bg-teal-50/90 border-teal-400 text-teal-950 ring-1 ring-teal-400'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-xs">🌐 WhatsApp Web (Default)</span>
+                  {dispatchChannel === 'web' && <Check className="w-3.5 h-3.5 text-teal-600" />}
+                </div>
+                <span className="text-[10px] text-slate-500 mt-1">Direct web.whatsapp.com. Reuses single tab.</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => {
@@ -702,44 +719,6 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
                   {dispatchChannel === 'native' && <Check className="w-3.5 h-3.5 text-emerald-600" />}
                 </div>
                 <span className="text-[10px] text-slate-500 mt-1">Native Desktop / Mobile app. Zero tab clutter!</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setDispatchChannel('web');
-                  setPreferredWhatsAppChannel('web');
-                }}
-                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  dispatchChannel === 'web'
-                    ? 'bg-teal-50/90 border-teal-400 text-teal-950 ring-1 ring-teal-400'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-xs">🌐 WhatsApp Web</span>
-                  {dispatchChannel === 'web' && <Check className="w-3.5 h-3.5 text-teal-600" />}
-                </div>
-                <span className="text-[10px] text-slate-500 mt-1">Direct web.whatsapp.com. Reuses single tab.</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setDispatchChannel('background');
-                  setPreferredWhatsAppChannel('background');
-                }}
-                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  dispatchChannel === 'background'
-                    ? 'bg-slate-100 border-slate-400 text-slate-900 ring-1 ring-slate-400'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-xs">⚡ Background Only</span>
-                  {dispatchChannel === 'background' && <Check className="w-3.5 h-3.5 text-slate-700" />}
-                </div>
-                <span className="text-[10px] text-slate-500 mt-1">Saves &amp; routes without opening external app</span>
               </button>
             </div>
           </div>

@@ -84,20 +84,20 @@ export function getWhatsAppUniversalUrl(cleanPhone: string, messageText: string)
   return `https://api.whatsapp.com/send?phone=${normalized}&text=${encoded}`;
 }
 
-export type WhatsAppDispatchMode = 'native' | 'web' | 'background' | 'unfocused';
-export type WhatsAppPreferredChannel = 'native' | 'web' | 'background';
+export type WhatsAppDispatchMode = 'web' | 'native' | 'background' | 'unfocused';
+export type WhatsAppPreferredChannel = 'web' | 'native' | 'background';
 
 const WHATSAPP_CHANNEL_PREF_KEY = 'clinical_os_whatsapp_channel_pref_v2';
 
 export function getPreferredWhatsAppChannel(): WhatsAppPreferredChannel {
-  if (typeof window === 'undefined') return 'native';
+  if (typeof window === 'undefined') return 'web';
   try {
     const saved = localStorage.getItem(WHATSAPP_CHANNEL_PREF_KEY);
-    if (saved === 'native' || saved === 'web' || saved === 'background') {
+    if (saved === 'web' || saved === 'native') {
       return saved as WhatsAppPreferredChannel;
     }
   } catch {}
-  return 'native'; // Default to Native WhatsApp App (Desktop / Mobile) for zero browser tab clutter!
+  return 'web'; // Default to WhatsApp Web
 }
 
 export function setPreferredWhatsAppChannel(channel: WhatsAppPreferredChannel): void {
