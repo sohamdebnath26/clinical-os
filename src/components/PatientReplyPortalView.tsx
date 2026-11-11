@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { api } from '../lib/api';
+import { api, subscribeToMobileSessionRealtimeEvents } from '../lib/api';
+import { cleanPhoneNumber, launchWhatsAppSynchronously } from '../lib/whatsappUtils';
 import {
   ShieldCheck,
   Send,
@@ -13,7 +14,8 @@ import {
   FileText,
   X,
   Sparkles,
-  ArrowDown
+  Download,
+  MessageSquare
 } from 'lucide-react';
 
 interface PatientReplyPortalViewProps {
@@ -40,14 +42,23 @@ interface PortalMessage {
   imageUrl?: string;
   hasAttachment?: boolean;
   attachmentFilename?: string;
+  pdfAttachment?: {
+    filename: string;
+    reportId: string;
+    sizeLabel: string;
+    generatedAt: string;
+    summaryPoints?: string[];
+    pdfDataUrl?: string;
+  };
   createdAt?: string;
 }
 
 const QUICK_CHIPS = [
   'Got it, thank you doctor!',
+  'CONFIRM appointment',
+  'RESCHEDULE appointment',
   'Rash is improving nicely',
   'Prescription medicines started',
-  'Confirm appointment slot',
   'Feeling better today'
 ];
 
@@ -90,7 +101,20 @@ export const PatientReplyPortalView: React.FC<PatientReplyPortalViewProps> = ({ 
 
   useEffect(() => {
     loadSession();
-    // Poll every 12 seconds so if doctor replies, it appears automatically
+    // Subscribe to real-time SSE for instant doctor replies and PDF attachments
+    const unsubscribeSse = subscribeToMobileSessionRealtimeEvents(token, evt => {
+      if (evt.type === 'portal:message_sent' || evt.type === 'portal:message_received') {
+        api.portal
+          .getSession(token)
+          .then(res => {
+            setSession(res.session);
+            setMessages(res.messages || []);
+          })
+          .catch(() => {});
+      }
+    });
+
+    // Poll every 8 seconds as fallback so if doctor replies, it appears automatically
     const interval = setInterval(() => {
       api.portal
         .getSession(token)
@@ -99,8 +123,11 @@ export const PatientReplyPortalView: React.FC<PatientReplyPortalViewProps> = ({ 
           setMessages(res.messages || []);
         })
         .catch(() => {});
-    }, 12000);
-    return () => clearInterval(interval);
+    }, 8000);
+    return () => {
+      unsubscribeSse();
+      clearInterval(interval);
+    };
   }, [token]);
 
   useEffect(() => {
@@ -110,9 +137,10 @@ export const PatientReplyPortalView: React.FC<PatientReplyPortalViewProps> = ({ 
   const handleImageSelected = (file: File) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file (JPG, PNG)');
+      setError('Please select a valid image file (JPG, PNG, or WEBP).');
       return;
     }
+    setError(null);
     const reader = new FileReader();
     reader.onload = e => {
       const result = e.target?.result as string;
@@ -122,6 +150,43 @@ export const PatientReplyPortalView: React.FC<PatientReplyPortalViewProps> = ({ 
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleDownloadPdfAttachment = (m: PortalMessage) => {
+    const pdfDataUrl = m.pdfAttachment?.pdfDataUrl;
+    const filename =
+      m.pdfAttachment?.filename || m.attachmentFilename || 'Medical_Report.pdf';
+    if (pdfDataUrl && pdfDataUrl.startsWith('data:application/pdf')) {
+      const link = document.createElement('a');
+      link.href = pdfDataUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setSendSuccessNotice(`Downloaded ${filename}`);
+      setTimeout(() => setSendSuccessNotice(null), 3500);
+    } else {
+      // Fallback text download if no raw PDF data URL was stored
+      const blob = new Blob([m.text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename.replace(/\.pdf$/i, '.txt');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const handleOpenWhatsAppToClinic = () => {
+    const clinicPhoneClean = cleanPhoneNumber(session?.clinicPhone || '919876500001');
+    const draft =
+      replyText.trim() ||
+      `Hello Dr. ${session?.doctorName?.replace(/^Dr\.?\s*/i, '') || 'Doctor'}, this is ${
+        session?.patientName || 'your patient'
+      } replying regarding my dermatology consultation.`;
+    launchWhatsAppSynchronously(clinicPhoneClean, draft, 'native');
   };
 
   const handleSendReply = async () => {
@@ -247,15 +312,28 @@ export const PatientReplyPortalView: React.FC<PatientReplyPortalViewProps> = ({ 
               </div>
             </div>
 
-            {session?.clinicPhone && (
-              <a
-                href={`tel:${session.clinicPhone.replace(/\s+/g, '')}`}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
-                title="Call Clinic Hotline"
-              >
-                <Phone className="w-4 h-4 text-teal-200" />
-              </a>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {session?.clinicPhone && (
+                <button
+                  type="button"
+                  onClick={handleOpenWhatsAppToClinic}
+                  className="px-2.5 py-1.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/30 text-emerald-200 text-[10.5px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Open WhatsApp directly to Clinic Line"
+                >
+                  <MessageSquare className="w-3 h-3" />
+                  <span>WhatsApp</span>
+                </button>
+              )}
+              {session?.clinicPhone && (
+                <a
+                  href={`tel:${session.clinicPhone.replace(/\s+/g, '')}`}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
+                  title="Call Clinic Hotline"
+                >
+                  <Phone className="w-4 h-4 text-teal-200" />
+                </a>
+              )}
+            </div>
           </div>
 
           {/* Patient Context & Encryption Banner */}
@@ -266,7 +344,7 @@ export const PatientReplyPortalView: React.FC<PatientReplyPortalViewProps> = ({ 
             </div>
             <div className="flex items-center gap-1 text-emerald-300 shrink-0 font-medium">
               <ShieldCheck className="w-3 h-3 text-emerald-400" />
-              <span>Direct Clinic Link</span>
+              <span>Live Two-Way Clinic Link</span>
             </div>
           </div>
         </header>
@@ -284,7 +362,7 @@ export const PatientReplyPortalView: React.FC<PatientReplyPortalViewProps> = ({ 
           {/* Security Notice Bubble */}
           <div className="flex justify-center my-1">
             <div className="bg-slate-200/80 border border-slate-300/80 rounded-xl px-3 py-1.5 text-[10.5px] text-slate-600 max-w-xs text-center leading-relaxed">
-              🔒 Messages and photos sent here reach your doctor's official Clinical OS Inbox with instant clinical triage.
+              🔒 Messages and photos sent here reach your doctor&apos;s official Clinical OS Inbox in real time.
             </div>
           </div>
 
@@ -313,16 +391,30 @@ export const PatientReplyPortalView: React.FC<PatientReplyPortalViewProps> = ({ 
                   </div>
                 )}
 
-                {/* Attached Medical Report PDF notice */}
-                {m.hasAttachment && (
-                  <div className="mb-2 p-2 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-teal-700 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-[11px] truncate">
-                        {m.attachmentFilename || 'Medical Report'}
+                {/* Attached Medical Report PDF notice + Download button */}
+                {(m.hasAttachment || m.pdfAttachment) && (
+                  <div className="mb-2 p-2.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-4 h-4 text-teal-700 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-semibold text-[11px] truncate">
+                          {m.pdfAttachment?.filename || m.attachmentFilename || 'Medical Report.pdf'}
+                        </div>
+                        <div className="text-[9.5px] text-teal-600">
+                          {m.pdfAttachment?.sizeLabel
+                            ? `${m.pdfAttachment.sizeLabel} · Official Clinic PDF`
+                            : 'Attached by Clinic'}
+                        </div>
                       </div>
-                      <div className="text-[9.5px] text-teal-600">Attached by Clinic</div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPdfAttachment(m)}
+                      className="px-2.5 py-1 rounded-lg bg-[#0b3330] hover:bg-teal-800 text-white text-[10px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>PDF</span>
+                    </button>
                   </div>
                 )}
 

@@ -139,6 +139,7 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   const [isLogging, setIsLogging] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [portalUrl, setPortalUrl] = useState<string | null>(null);
 
   // Synchronize preference to localStorage
   const handleTogglePreferWeb = (val: boolean) => {
@@ -147,29 +148,48 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
     setPreferredWhatsAppChannel(newChannel);
   };
 
-  // Reset launch prompt when modal opens/closes and sync patient's 10-digit mobile
+  //Compute clean normalized phone number
+  const fullRawPhone = `${countryCode}${phoneNumber}`;
+  const cleanedRecipient = cleanPhoneNumber(fullRawPhone, countryCode);
+
+  // Reset launch prompt when modal opens/closes, sync patient's 10-digit mobile, and pre-fetch 1-Tap Patient Reply Portal URL
   useEffect(() => {
     if (!isOpen) {
       setShowAppLaunchPrompt(false);
       setDispatchedReceipt(null);
       setStatusMessage(null);
       setErrorMessage(null);
+      setPortalUrl(null);
     } else {
       const digits = patient?.mobile ? patient.mobile.replace(/\D/g, '') : '';
-      if (digits.length >= 10) {
-        setPhoneNumber(digits.slice(-10));
-      } else if (!phoneNumber || phoneNumber.length < 10) {
-        setPhoneNumber(digits || '9876543210');
-      }
+      const resolvedDigits =
+        digits.length >= 10
+          ? digits.slice(-10)
+          : !phoneNumber || phoneNumber.length < 10
+          ? digits || '9876543210'
+          : phoneNumber;
+      setPhoneNumber(resolvedDigits);
       if (data?.defaultSendAsPdf !== undefined) {
         setSendAsPdf(data.defaultSendAsPdf);
       }
+
+      const recipientPhone = cleanPhoneNumber(`${countryCode}${resolvedDigits}`, countryCode);
+      const threadId = patient?.id ? `p-thread-${patient.id}` : `wa-thread-${resolvedDigits}`;
+      api.portal
+        .generateToken({
+          threadId,
+          patientId: patient?.id,
+          patientName: patient?.fullName || 'Patient',
+          patientPhone: `+${recipientPhone}`
+        })
+        .then(res => {
+          if (res?.portalUrl) {
+            setPortalUrl(res.portalUrl);
+          }
+        })
+        .catch(() => {});
     }
   }, [isOpen, patient, data?.defaultSendAsPdf]);
-
-  // Compute clean normalized phone number
-  const fullRawPhone = `${countryCode}${phoneNumber}`;
-  const cleanedRecipient = cleanPhoneNumber(fullRawPhone, countryCode);
 
   const getReportTitle = () => {
     switch (reportType) {
@@ -273,8 +293,9 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
         break;
     }
 
+    let combinedText = baseText;
     if (sendAsPdf && generatedPdfReport) {
-      return [
+      combinedText = [
         baseText,
         ``,
         `📄 *ATTACHED MEDICAL REPORT (PDF):*`,
@@ -283,7 +304,12 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
       ].join('\n');
     }
 
-    return baseText;
+    if (portalUrl && !combinedText.includes('replyToken=')) {
+      const cleanDocName = (doctor?.name || 'Sarah Chen').replace(/^Dr\.?\s*/i, '');
+      combinedText = `${combinedText}\n\n💬 *Reply or share skin photos securely with Dr. ${cleanDocName}:*\n${portalUrl}`;
+    }
+
+    return combinedText;
   }, [
     reportType,
     data,
@@ -293,7 +319,8 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
     includeDoctorContact,
     customNote,
     sendAsPdf,
-    generatedPdfReport
+    generatedPdfReport,
+    portalUrl
   ]);
 
   if (!isOpen) return null;
@@ -475,17 +502,30 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span className="font-semibold">{statusMessage}</span>
             </div>
-            {dispatchedReceipt && (
-              <a
-                href={dispatchedReceipt.whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#128C7E] hover:bg-[#075E54] text-white text-[11px] font-bold shadow-2xs transition"
-              >
-                <ExternalLink className="w-3 h-3" />
-                <span>Open in WhatsApp Tab</span>
-              </a>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {portalUrl && (
+                <a
+                  href={portalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-[11px] font-bold shadow-2xs transition"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Open Patient Reply View</span>
+                </a>
+              )}
+              {dispatchedReceipt && (
+                <a
+                  href={dispatchedReceipt.whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#128C7E] hover:bg-[#075E54] text-white text-[11px] font-bold shadow-2xs transition"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Open in WhatsApp Tab</span>
+                </a>
+              )}
+            </div>
           </div>
         )}
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Patient, Gender, Consultation } from '../types';
 import { PREDEFINED_SYMPTOMS } from '../data/clinicalCatalogues';
 import { api, subscribeToMobileSessionRealtimeEvents } from '../lib/api';
+import { launchWhatsAppSynchronously, getPreferredWhatsAppChannel } from '../lib/whatsappUtils';
 import {
   X,
   Search,
@@ -339,8 +340,7 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
     if (mobileSessionToken) {
       const existingUrl = `${window.location.origin}/?walkInToken=${encodeURIComponent(mobileSessionToken)}`;
       const message = `Hello${fullName.trim() ? ` ${fullName.trim()}` : ''}, please complete your walk-in patient check-in details (Name, Age, Gender, Weight & Symptoms) on your mobile using this secure link:\n\n${existingUrl}`;
-      const whatsappUrl = `https://wa.me/${recipient}?text=${encodeURIComponent(message)}`;
-      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+      launchWhatsAppSynchronously(recipient, message, getPreferredWhatsAppChannel());
       api.whatsapp
         .send({
           patientName: fullName.trim() || 'Walk-in Patient',
@@ -358,6 +358,7 @@ export const WalkInModal: React.FC<WalkInModalProps> = ({
     }
 
     const message = `Hello${fullName.trim() ? ` ${fullName.trim()}` : ''}, please complete your walk-in patient check-in details (Name, Age, Gender, Weight & Symptoms) on your mobile using this secure link:\n\n${url}`;
+    launchWhatsAppSynchronously(recipient, message, getPreferredWhatsAppChannel());
 
     try {
       await api.whatsapp.send({

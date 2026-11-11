@@ -598,8 +598,9 @@ app.get('/api/realtime/mobile-session/:token', (req, res) => {
   const token = String(req.params.token || '').trim();
   const mobSession = token.startsWith('mob_') ? getOrRestoreMobileUploadSession(token) : undefined;
   const walkSession = token.startsWith('wlk_') ? getOrRestoreWalkInSession(token) : undefined;
+  const portalSession = token.startsWith('rply_') ? getOrRestorePatientPortalSession(token) : undefined;
 
-  if (!mobSession && !walkSession) {
+  if (!mobSession && !walkSession && !portalSession) {
     return res.status(404).json({ error: 'Invalid or expired mobile session token' });
   }
 
@@ -3008,6 +3009,24 @@ app.post('/api/images/mobile-session/:token/upload', (req, res) => {
       session.doctorId
     );
 
+    // Also route the uploaded patient clinical photo into the Patient WhatsApp Inbox thread
+    try {
+      const pat = db.findPatientById(session.patientId, session.doctorId);
+      routeIncomingPatientMessageToInbox({
+        patientId: session.patientId,
+        patientName: session.patientName,
+        senderPhone: pat?.mobile || '9876543210',
+        messageText: caption
+          ? `📷 Uploaded clinical photo: ${caption}`
+          : `📷 Uploaded clinical skin photo via mobile link (${session.patientCode})`,
+        channel: 'WhatsApp',
+        doctorId: session.doctorId,
+        imageUrl: clinicalImage.url || clinicalImage.dataUrl
+      });
+    } catch {
+      // non-blocking inbox sync
+    }
+
     res.status(201).json({
       image: clinicalImage,
       uploadedCount: session.uploadedImages.length
@@ -3377,6 +3396,23 @@ app.post('/api/walkin/mobile-session/:token/submit', (req, res) => {
     },
     session.doctorId
   );
+
+  // Also route the patient's mobile walk-in submission into the Clinic WhatsApp Inbox
+  try {
+    const symptomSummary =
+      session.symptoms && session.symptoms.length > 0
+        ? session.symptoms.join(', ')
+        : 'General dermatology check-in';
+    routeIncomingPatientMessageToInbox({
+      patientName: session.fullName || 'Walk-In Patient',
+      senderPhone: `${session.countryCode || '+91'}${session.mobile || '9876543210'}`,
+      messageText: `✅ Completed Mobile Walk-In Check-In: ${session.fullName || 'Patient'} (${session.age || '—'}y, ${session.sex || 'Not specified'}) · Symptoms: ${symptomSummary}${session.notes ? ` · Notes: ${session.notes}` : ''}`,
+      channel: 'WhatsApp',
+      doctorId: session.doctorId
+    });
+  } catch {
+    // non-blocking inbox notification
+  }
 
   res.json({
     session: serializedSession
@@ -4318,11 +4354,12 @@ function findOrCreateInboxThread(params: {
       (last10.length === 10 && t.phone.replace(/\D/g, '').endsWith(last10))
   );
 
-  if (!thread) {
-    const matchedPatient =
-      (params.patientId ? db.findPatientById(params.patientId, params.doctorId) : undefined) ||
-      (last10.length === 10 ? db.findPatientByMobile(last10, params.doctorId) : undefined);
+  const matchedPatient =
+    (params.patientId ? db.findPatientById(params.patientId, params.doctorId) : undefined) ||
+    (last10.length === 10 ? db.findPatientByMobile(last10, params.doctorId) : undefined) ||
+    (last10.length === 10 ? db.findPatientByMobile(last10) : undefined);
 
+  if (!thread) {
     const resolvedName =
       matchedPatient?.fullName || params.patientName || `Patient (${last10 || 'New'})`;
     const displayPhone = formatDisplayPhone(last10 || params.phoneDigits);
@@ -4363,9 +4400,48 @@ function findOrCreateInboxThread(params: {
 
     allThreads.unshift(thread);
     db.saveStoredInboxThreads(allThreads);
+  } else {
+    // Enrich existing thread with matched patientId if not yet linked
+    if (!thread.patientId && (matchedPatient?.id || params.patientId)) {
+      thread.patientId = matchedPatient?.id || params.patientId;
+      db.saveStoredInboxThreads(allThreads);
+    }
   }
 
   return thread;
+}
+
+function broadcastPortalThreadEvent(
+  threadId: string,
+  patientPhone: string,
+  eventType: string,
+  payload: Record<string, unknown>
+) {
+  const targetLast10 = (patientPhone || '').replace(/\D/g, '').slice(-10);
+  for (const [clientId, client] of realtimeMobileClients.entries()) {
+    if (!client.token.startsWith('rply_')) continue;
+    const sess = getOrRestorePatientPortalSession(client.token);
+    if (!sess) continue;
+    const sessLast10 = (sess.patientPhone || '').replace(/\D/g, '').slice(-10);
+    if (
+      sess.threadId === threadId ||
+      (targetLast10.length === 10 && sessLast10 === targetLast10)
+    ) {
+      try {
+        client.res.write(
+          `data: ${JSON.stringify({
+            type: eventType,
+            token: client.token,
+            threadId,
+            timestamp: new Date().toISOString(),
+            ...payload
+          })}\n\n`
+        );
+      } catch {
+        realtimeMobileClients.delete(clientId);
+      }
+    }
+  }
 }
 
 function routeIncomingPatientMessageToInbox(params: {
@@ -4476,7 +4552,7 @@ function routeIncomingPatientMessageToInbox(params: {
     }
   }
 
-  // Real-time SSE push to clinic inbox
+  // Real-time SSE push to clinic inbox & any open patient reply portal tab
   broadcastClinicEvent(
     'inbox:message_received',
     {
@@ -4484,8 +4560,11 @@ function routeIncomingPatientMessageToInbox(params: {
       thread,
       message: incomingMsg
     },
-    params.doctorId || thread.doctorId
+    params.doctorId || thread.doctorId || matchedPatient?.createdById
   );
+  broadcastPortalThreadEvent(thread.id, thread.phone, 'portal:message_received', {
+    message: incomingMsg
+  });
 
   return { thread, message: incomingMsg };
 }
@@ -4544,23 +4623,51 @@ app.get('/api/whatsapp/threads', authMiddleware, requireDoctorRole, (req: Authen
 
 // Receive an incoming patient reply directly into the native Clinical OS Inbox UI
 app.post('/api/whatsapp/incoming', authMiddleware, requireDoctorRole, (req: AuthenticatedRequest, res) => {
-  const { threadId, patientId, patientName, senderPhone, messageText, channel } = req.body || {};
-  if (!messageText || !String(messageText).trim()) {
-    return res.status(400).json({ error: 'messageText is required' });
+  const { threadId, patientId, patientName, senderPhone, messageText, channel, imageDataUrl, imageCaption } = req.body || {};
+  const trimmedText = typeof messageText === 'string' ? messageText.trim() : '';
+  if (!trimmedText && !imageDataUrl) {
+    return res.status(400).json({ error: 'messageText or imageDataUrl is required' });
   }
 
   const doctorThreads = db.getStoredInboxThreads(defaultInboxThreads, req.doctor?.id);
   const targetThread = threadId ? doctorThreads.find(t => t.id === threadId) : undefined;
   const resolvedPhone = senderPhone || targetThread?.phone || '+91 98765 43210';
+  const resolvedPatientId =
+    patientId ||
+    targetThread?.patientId ||
+    db.findPatientByMobile(resolvedPhone, req.doctor?.id)?.id;
+
+  let storedImageUrl: string | undefined;
+  if (imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image/')) {
+    if (resolvedPatientId) {
+      try {
+        const stored = storePatientClinicalImage({
+          patientId: resolvedPatientId,
+          rawDataUrl: imageDataUrl,
+          filename: `whatsapp-inbound-${Date.now()}.jpg`,
+          caption: imageCaption || 'Patient WhatsApp clinical photo',
+          imageRole: 'followup',
+          tags: ['whatsapp-inbound'],
+          actor: { id: resolvedPatientId, name: patientName || targetThread?.name || 'Patient' }
+        });
+        storedImageUrl = stored.url || stored.dataUrl || imageDataUrl;
+      } catch {
+        storedImageUrl = imageDataUrl;
+      }
+    } else {
+      storedImageUrl = imageDataUrl;
+    }
+  }
 
   const result = routeIncomingPatientMessageToInbox({
     threadId,
-    patientId: patientId || targetThread?.patientId,
+    patientId: resolvedPatientId,
     patientName: patientName || targetThread?.name,
     senderPhone: resolvedPhone,
-    messageText: String(messageText),
+    messageText: trimmedText || (storedImageUrl ? '📷 [Attached clinical photo]' : ''),
     channel: channel === 'SMS' ? 'SMS' : 'WhatsApp',
-    doctorId: req.doctor?.id
+    doctorId: req.doctor?.id,
+    imageUrl: storedImageUrl
   });
 
   res.json({
@@ -4595,9 +4702,9 @@ app.get('/api/portal/session/:token', (req: Request, res: Response) => {
     valid: true,
     session: {
       token: session.token,
-      threadId: session.threadId,
-      patientName: session.patientName,
-      patientPhone: session.patientPhone,
+      threadId: thread?.id || session.threadId,
+      patientName: thread?.name || session.patientName,
+      patientPhone: thread?.phone || session.patientPhone,
       doctorName: session.doctorName,
       clinicName: session.clinicName,
       clinicPhone: session.clinicPhone,
@@ -4612,6 +4719,7 @@ app.get('/api/portal/session/:token', (req: Request, res: Response) => {
       imageUrl: m.imageUrl,
       hasAttachment: !!m.pdfAttachment,
       attachmentFilename: m.pdfAttachment?.filename,
+      pdfAttachment: m.pdfAttachment,
       createdAt: m.createdAt
     }))
   });
@@ -4633,17 +4741,26 @@ app.post('/api/portal/session/:token/reply', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Please enter a message or attach a clinical photo' });
   }
 
+  // Resolve patientId from session or by matching 10-digit mobile in the EHR
+  const cleanDigits = (session.patientPhone || '').replace(/\D/g, '').slice(-10);
+  const matchedPatient =
+    (session.patientId ? db.findPatientById(session.patientId, session.doctorId) : undefined) ||
+    (cleanDigits.length === 10 ? db.findPatientByMobile(cleanDigits, session.doctorId) : undefined) ||
+    (cleanDigits.length === 10 ? db.findPatientByMobile(cleanDigits) : undefined);
+  const resolvedPatientId = matchedPatient?.id || session.patientId;
+
   let storedImageUrl: string | undefined = undefined;
   if (imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image/')) {
     try {
-      if (session.patientId) {
+      if (resolvedPatientId && matchedPatient) {
         const stored = storePatientClinicalImage({
-          patientId: session.patientId,
+          patientId: resolvedPatientId,
           rawDataUrl: imageDataUrl,
           filename: `patient-portal-${Date.now()}.jpg`,
           caption: imageCaption || 'Uploaded by patient via Secure 1-Tap Portal',
           imageRole: 'followup',
-          actor: { id: session.patientId, name: session.patientName }
+          tags: ['whatsapp-portal', 'patient-upload'],
+          actor: { id: resolvedPatientId, name: matchedPatient.fullName || session.patientName }
         });
         storedImageUrl = stored.url || stored.dataUrl || imageDataUrl;
       } else {
@@ -4655,16 +4772,22 @@ app.post('/api/portal/session/:token/reply', (req: Request, res: Response) => {
     }
   }
 
-  const finalMsgText = trimmedText || (storedImageUrl ? '📷 [Attached clinical photo]' : '');
+  const finalMsgText =
+    trimmedText ||
+    (storedImageUrl
+      ? imageCaption
+        ? `📷 ${imageCaption}`
+        : '📷 [Attached clinical photo]'
+      : '');
 
   const result = routeIncomingPatientMessageToInbox({
     threadId: session.threadId,
-    patientId: session.patientId,
-    patientName: session.patientName,
+    patientId: resolvedPatientId,
+    patientName: matchedPatient?.fullName || session.patientName,
     senderPhone: session.patientPhone,
     messageText: finalMsgText,
     channel: 'WhatsApp',
-    doctorId: session.doctorId,
+    doctorId: session.doctorId || matchedPatient?.createdById,
     imageUrl: storedImageUrl
   });
 
@@ -4917,6 +5040,7 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
   const whatsappUrl = `https://wa.me/${normalizedRecipient}?text=${encodeURIComponent(finalBodyText)}`;
 
   let deliveryMode: 'cloud_api' | 'whatsapp_gateway' = 'whatsapp_gateway';
+  let externalReceiptId: string | undefined;
 
   // If Meta WhatsApp Cloud API credentials are configured in environment, dispatch directly via Graph API in background
   const waToken = process.env.WHATSAPP_API_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN;
@@ -4936,12 +5060,18 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
             recipient_type: 'individual',
             to: normalizedRecipient,
             type: 'text',
-            text: { preview_url: true, body: bodyText }
+            text: { preview_url: true, body: finalBodyText }
           })
         }
       );
       if (graphRes.ok) {
         deliveryMode = 'cloud_api';
+        const graphJson = (await graphRes.json().catch(() => null)) as {
+          messages?: Array<{ id?: string }>;
+        } | null;
+        if (graphJson?.messages?.[0]?.id) {
+          externalReceiptId = graphJson.messages[0].id;
+        }
       }
     } catch (err) {
       console.warn('Meta WhatsApp Cloud API dispatch fallback to gateway:', err);
@@ -4966,7 +5096,7 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
       : undefined;
 
   const dispatchRecord: DispatchedWhatsAppMessage = {
-    id: `wa-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+    id: externalReceiptId || `wa-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
     patientId: patient?.id || patientId,
     patientName: patient?.fullName || patientName || 'Patient',
     recipientMobile: normalizedRecipient,
@@ -4999,7 +5129,7 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
     : `You: ${bodyText.slice(0, 90)}`;
   thread.timestamp = 'Just now';
   thread.updatedAt = new Date().toISOString();
-  thread.messages.push({
+  const outgoingMsgRecord: InboxMessageRecord = {
     id: dispatchRecord.id,
     sender: 'doctor',
     text: finalBodyText,
@@ -5014,8 +5144,23 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
     recipientPhone: thread.phone,
     pdfAttachment: sanitizedPdfAttachment,
     createdAt: dispatchRecord.sentAt
-  });
+  };
+  thread.messages.push(outgoingMsgRecord);
   db.saveStoredInboxThreads(db.getAllRawInboxThreads(defaultInboxThreads));
+
+  // Push real-time update to any open Patient Reply Portal session for this thread/phone
+  broadcastPortalThreadEvent(thread.id, normalizedRecipient, 'portal:message_sent', {
+    message: {
+      id: outgoingMsgRecord.id,
+      sender: 'doctor',
+      text: outgoingMsgRecord.text,
+      time: outgoingMsgRecord.time,
+      hasAttachment: !!sanitizedPdfAttachment,
+      attachmentFilename: sanitizedPdfAttachment?.filename,
+      pdfAttachment: sanitizedPdfAttachment,
+      createdAt: outgoingMsgRecord.createdAt
+    }
+  });
 
   // Optionally schedule an automatic simulated patient reply routed back into Clinical OS Inbox after 3 seconds
   if (autoSimulateReply) {
@@ -5092,10 +5237,21 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
   });
 };
 
-app.post('/api/whatsapp/send', authMiddleware, requireDoctorRole, handleWhatsAppSend);
-app.post('/api/inbox/send-message', authMiddleware, requireDoctorRole, handleWhatsAppSend);
+// Allow receptionists to dispatch walk-in registration & appointment reminder links via WhatsApp, while keeping clinical reports restricted to Doctors
+function requireDoctorOrFrontDeskLinkRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (req.doctor?.role === 'receptionist') {
+    const rt = String(req.body?.reportType || '');
+    if (rt !== 'walkin_registration_link' && rt !== 'appointment_reminder') {
+      return res.status(403).json({ error: 'This clinical action is restricted to Doctors.' });
+    }
+  }
+  next();
+}
 
-// Automated & On-Demand Appointment Reminder Dispatch (WhatsApp Cloud API / Gateway + Inbox Log)
+app.post('/api/whatsapp/send', authMiddleware, requireDoctorOrFrontDeskLinkRole, handleWhatsAppSend);
+app.post('/api/inbox/send-message', authMiddleware, requireDoctorOrFrontDeskLinkRole, handleWhatsAppSend);
+
+// Automated & On-Demand Appointment Reminder Dispatch (WhatsApp Cloud API / Gateway + Inbox Log + 1-Tap Reply Link)
 app.post('/api/appointments/send-reminders', authMiddleware, async (req: AuthenticatedRequest, res) => {
   const doctor = req.doctor!;
   const { date, appointmentIds } = req.body || {};
@@ -5116,6 +5272,7 @@ app.post('/api/appointments/send-reminders', authMiddleware, async (req: Authent
 
   const clinicName = doctor.clinicName || 'Cliniq Clinical OS';
   const clinicPhone = doctor.phone || '+91 98765 00001';
+  const origin = req.get('origin') || `${req.protocol}://${req.get('host')}`;
   const dispatchedReminders: Array<{
     appointmentId: string;
     patientName: string;
@@ -5123,13 +5280,14 @@ app.post('/api/appointments/send-reminders', authMiddleware, async (req: Authent
     date: string;
     time: string;
     deliveryMode: string;
+    whatsappUrl?: string;
+    portalUrl?: string;
   }> = [];
 
   for (const appt of targetAppts) {
     const rawDigits = String(appt.patientMobile || '').replace(/\D/g, '');
     if (rawDigits.length < 10) continue;
     const normalizedRecipient = rawDigits.length === 10 ? `91${rawDigits}` : rawDigits.replace(/^0+/, '');
-    const reminderText = `Hello ${appt.patientName}, this is a reminder from ${clinicName} (${doctor.name}) for your appointment on ${appt.date} at ${appt.time}. Reply CONFIRM to confirm or RESCHEDULE if you need a different slot.`;
 
     const thread = findOrCreateInboxThread({
       patientId: appt.patientId,
@@ -5138,8 +5296,26 @@ app.post('/api/appointments/send-reminders', authMiddleware, async (req: Authent
       doctorId: doctor.id
     });
 
+    const baseReminderText = `Hello ${appt.patientName}, this is a reminder from ${clinicName} (${doctor.name}) for your appointment on ${appt.date} at ${appt.time}. Reply CONFIRM to confirm or RESCHEDULE if you need a different slot.`;
+    const portalToken = generatePatientPortalToken({
+      threadId: thread.id,
+      patientId: appt.patientId,
+      patientName: appt.patientName,
+      patientPhone: normalizedRecipient,
+      doctorId: doctor.id,
+      doctorName: doctor.name,
+      clinicName,
+      clinicPhone,
+      latestDoctorMessage: baseReminderText
+    });
+    const portalUrl = `${origin}?replyToken=${encodeURIComponent(portalToken)}`;
+    const reminderText = `${baseReminderText}\n\n💬 Confirm or reply in 1 tap:\n${portalUrl}`;
+    const whatsappUrl = `https://wa.me/${normalizedRecipient}?text=${encodeURIComponent(reminderText)}`;
+
     const msgId = `wa-rem-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const sentIso = new Date().toISOString();
+
     thread.messages.push({
       id: msgId,
       sender: 'doctor',
@@ -5147,13 +5323,40 @@ app.post('/api/appointments/send-reminders', authMiddleware, async (req: Authent
       time: nowTime,
       status: `Automated Appointment Reminder Sent (${appt.date} · ${appt.time})`,
       receiptId: msgId,
+      whatsappUrl,
       recipientPhone: thread.phone,
-      createdAt: new Date().toISOString()
+      createdAt: sentIso
     });
     thread.preview = `Reminder sent for ${appt.date} at ${appt.time}`;
     thread.timestamp = 'Just now';
     thread.statusLabel = 'Reminder dispatched · Awaiting CONFIRM';
-    thread.updatedAt = new Date().toISOString();
+    thread.updatedAt = sentIso;
+
+    db.addStoredWhatsAppMessage({
+      id: msgId,
+      patientId: appt.patientId,
+      patientName: appt.patientName,
+      recipientMobile: normalizedRecipient,
+      clinicPhone,
+      reportType: 'appointment_reminder',
+      messageText: reminderText,
+      deliveryMode: process.env.WHATSAPP_API_TOKEN ? 'cloud_api' : 'whatsapp_gateway',
+      status: 'delivered',
+      whatsappUrl,
+      sentAt: sentIso,
+      doctorId: doctor.id,
+      doctorName: doctor.name
+    });
+
+    broadcastPortalThreadEvent(thread.id, normalizedRecipient, 'portal:message_sent', {
+      message: {
+        id: msgId,
+        sender: 'doctor',
+        text: reminderText,
+        time: nowTime,
+        createdAt: sentIso
+      }
+    });
 
     dispatchedReminders.push({
       appointmentId: appt.id,
@@ -5161,7 +5364,9 @@ app.post('/api/appointments/send-reminders', authMiddleware, async (req: Authent
       mobile: thread.phone,
       date: appt.date,
       time: appt.time || '10:00 AM',
-      deliveryMode: process.env.WHATSAPP_API_TOKEN ? 'cloud_api' : 'whatsapp_gateway'
+      deliveryMode: process.env.WHATSAPP_API_TOKEN ? 'cloud_api' : 'whatsapp_gateway',
+      whatsappUrl,
+      portalUrl
     });
   }
 

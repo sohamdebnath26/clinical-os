@@ -1111,6 +1111,14 @@ export const api = {
           imageUrl?: string;
           hasAttachment?: boolean;
           attachmentFilename?: string;
+          pdfAttachment?: {
+            filename: string;
+            reportId: string;
+            sizeLabel: string;
+            generatedAt: string;
+            summaryPoints?: string[];
+            pdfDataUrl?: string;
+          };
           createdAt?: string;
         }[];
       }>;
@@ -1404,6 +1412,8 @@ export const api = {
       patientName?: string;
       senderPhone?: string;
       messageText: string;
+      imageDataUrl?: string;
+      imageCaption?: string;
       channel?: 'WhatsApp' | 'SMS';
     }) =>
       fetchWithAuth<{

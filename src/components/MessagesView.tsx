@@ -153,9 +153,13 @@ export const MessagesView: React.FC = () => {
   const [autoSimulatePatientReply, setAutoSimulatePatientReply] = useState(false);
   const [showIncomingReplyModal, setShowIncomingReplyModal] = useState(false);
   const [incomingTestText, setIncomingTestText] = useState('');
+  const [incomingTestImage, setIncomingTestImage] = useState<string | null>(null);
+  const [incomingTestImageCaption, setIncomingTestImageCaption] = useState('');
   const [isSimulatingIncoming, setIsSimulatingIncoming] = useState(false);
   const [copiedPortalLink, setCopiedPortalLink] = useState(false);
   const [isGeneratingPortalLink, setIsGeneratingPortalLink] = useState(false);
+  const [activePortalUrl, setActivePortalUrl] = useState<string | null>(null);
+  const [previewImageModalUrl, setPreviewImageModalUrl] = useState<string | null>(null);
   const [whatsappChannel, setWhatsappChannel] = useState<WhatsAppPreferredChannel>(() =>
     getPreferredWhatsAppChannel()
   );
@@ -599,7 +603,23 @@ export const MessagesView: React.FC = () => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
-  }, [selectedThreadId]);
+    if (activeThread) {
+      api.portal
+        .generateToken({
+          threadId: activeThread.id,
+          patientId: activeThread.patientId,
+          patientName: activeThread.name,
+          patientPhone: activeThread.phone,
+          latestDoctorMessage: activeThread.preview
+        })
+        .then(res => {
+          if (res?.portalUrl) {
+            setActivePortalUrl(res.portalUrl);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [selectedThreadId, activeThread?.id, activeThread?.phone]);
 
   const handleSavePatientPhone = () => {
     const rawDigits = patientPhoneDraft.replace(/\D/g, '');
@@ -800,11 +820,21 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         ? 'background'
         : whatsappChannel;
 
+    const cleanDocName = (doctor?.name || 'Sarah Chen').replace(/^Dr\.?\s*/i, '');
+    const outboundWhatsAppText =
+      activePortalUrl && !messageText.includes('replyToken=')
+        ? `${messageText}\n\n💬 Reply or share skin photos securely with Dr. ${cleanDocName}:\n${activePortalUrl}`
+        : messageText;
+
     // Launch WhatsApp via selected channel:
     // - 'native': calls whatsapp:// protocol, opening WhatsApp Desktop with 0 browser tabs!
     // - 'web': reuses dedicated single 'whatsapp_web_window' tab without creating extra tabs!
     // - 'background': logs directly into Clinical OS Inbox without opening any window!
-    const whatsappUrl = launchWhatsAppSynchronously(cleanPhone, messageText, effectiveMode);
+    const whatsappUrl = launchWhatsAppSynchronously(
+      cleanPhone,
+      outboundWhatsAppText,
+      effectiveMode
+    );
 
     let receiptId = `wa-${Date.now().toString(36)}`;
     try {
@@ -877,7 +907,9 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
   const handleReceiveIncomingPatientReply = async (incomingText?: string) => {
     const textToRoute =
       (incomingText ?? incomingTestText).trim() ||
-      `Hello Dr. ${doctor?.name || 'Sarah Chen'}, thank you for the update. My skin is feeling calmer now—should I continue the same ointment tonight?`;
+      (incomingTestImage
+        ? incomingTestImageCaption.trim() || '📷 Attached clinical skin photo for doctor review'
+        : `Hello Dr. ${doctor?.name || 'Sarah Chen'}, thank you for the update. My skin is feeling calmer now—should I continue the same ointment tonight?`);
 
     if (!activeThread || isSimulatingIncoming) return;
     setIsSimulatingIncoming(true);
@@ -889,6 +921,8 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         patientName: activeThread.name,
         senderPhone: activeThread.phone,
         messageText: textToRoute,
+        imageDataUrl: incomingText ? undefined : incomingTestImage || undefined,
+        imageCaption: incomingText ? undefined : incomingTestImageCaption.trim() || undefined,
         channel: activeThread.channel === 'SMS' ? 'SMS' : 'WhatsApp'
       });
 
@@ -902,6 +936,8 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
       }
       setSelectedSuggestionIndex(0);
       setIncomingTestText('');
+      setIncomingTestImage(null);
+      setIncomingTestImageCaption('');
       setShowIncomingReplyModal(false);
       setTimeout(() => {
         if (messagesContainerRef.current) {
@@ -1003,6 +1039,7 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
         latestDoctorMessage: activeThread.preview
       });
       if (res?.portalUrl) {
+        setActivePortalUrl(res.portalUrl);
         await navigator.clipboard.writeText(res.portalUrl);
         setCopiedPortalLink(true);
         showToast(`Secure patient reply link copied! Share it with ${activeThread.name} on WhatsApp or SMS.`);
@@ -1186,9 +1223,14 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
       }
 
       const cleanPhone = cleanPhoneNumber(activeThread.phone) || '919876543210';
+      const cleanDocName = (doctor?.name || 'Sarah Chen').replace(/^Dr\.?\s*/i, '');
+      const companionWithPortal =
+        activePortalUrl && !generated.whatsappCompanionText.includes('replyToken=')
+          ? `${generated.whatsappCompanionText}\n\n💬 *Reply or share skin photos securely with Dr. ${cleanDocName}:*\n${activePortalUrl}`
+          : generated.whatsappCompanionText;
       const whatsappUrl = launchWhatsAppSynchronously(
         cleanPhone,
-        generated.whatsappCompanionText,
+        companionWithPortal,
         whatsappChannel
       );
       const pdfAttachmentPayload = {
@@ -1686,10 +1728,23 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                 ) : (
                   <>
                     <ExternalLink className="w-3.5 h-3.5 text-teal-700" />
-                    <span>Patient Reply Link</span>
+                    <span>Copy Reply Link</span>
                   </>
                 )}
               </button>
+
+              {activePortalUrl && (
+                <a
+                  href={activePortalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-teal-50 border border-teal-200 text-teal-800 flex items-center gap-1 transition-colors whitespace-nowrap"
+                  title="Open the live Patient Reply Portal in a new tab to test patient->clinic replies & photo uploads"
+                >
+                  <span>Patient Portal</span>
+                  <ExternalLink className="w-3 h-3 text-teal-700" />
+                </a>
+              )}
 
               <button
                 type="button"
@@ -1796,11 +1851,11 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                           src={m.imageUrl}
                           alt="Patient uploaded photo"
                           className="w-full max-h-60 object-cover cursor-pointer hover:opacity-95 transition-opacity"
-                          onClick={() => window.open(m.imageUrl, '_blank')}
+                          onClick={() => setPreviewImageModalUrl(m.imageUrl!)}
                         />
                         <div className="px-2 py-1 bg-slate-900/60 text-white text-[9.5px] flex items-center justify-between">
-                          <span className="font-medium">Patient Clinical Photo</span>
-                          <span className="text-teal-200">Tap to open full size</span>
+                          <span className="font-medium">Patient Clinical Photo (Saved to EHR)</span>
+                          <span className="text-teal-200">Tap to enlarge</span>
                         </div>
                       </div>
                     )}
@@ -2334,6 +2389,60 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
                 />
               </div>
 
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">
+                    Attach Patient Skin Photo (Optional):
+                  </span>
+                  {incomingTestImage && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIncomingTestImage(null);
+                        setIncomingTestImageCaption('');
+                      }}
+                      className="text-[11px] text-rose-600 hover:underline cursor-pointer"
+                    >
+                      Remove Photo
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = ev => {
+                      setIncomingTestImage(ev.target?.result as string);
+                      if (!incomingTestImageCaption) {
+                        setIncomingTestImageCaption('Follow-up skin photo shared via WhatsApp');
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = '';
+                  }}
+                  className="w-full text-[11px] text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-teal-50 file:text-teal-800 hover:file:bg-teal-100"
+                />
+                {incomingTestImage && (
+                  <div className="flex items-center gap-2.5 pt-1">
+                    <img
+                      src={incomingTestImage}
+                      alt="Preview"
+                      className="w-12 h-12 rounded-lg object-cover border border-slate-300 shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={incomingTestImageCaption}
+                      onChange={e => setIncomingTestImageCaption(e.target.value)}
+                      placeholder="Photo caption..."
+                      className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                 <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
                   <input
@@ -2493,6 +2602,29 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
             showToast(`WhatsApp report sent to ${selectedPatientForReport.fullName}`);
           }}
         />
+      )}
+
+      {/* Full-Screen Patient Photo Modal */}
+      {previewImageModalUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
+          onClick={() => setPreviewImageModalUrl(null)}
+        >
+          <div className="relative max-w-2xl max-h-[85vh] flex items-center justify-center">
+            <img
+              src={previewImageModalUrl}
+              alt="Patient clinical photo"
+              className="max-w-full max-h-[82vh] rounded-xl object-contain shadow-2xl"
+            />
+            <button
+              type="button"
+              onClick={() => setPreviewImageModalUrl(null)}
+              className="absolute -top-10 right-0 text-white bg-white/20 hover:bg-white/30 rounded-full p-2 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

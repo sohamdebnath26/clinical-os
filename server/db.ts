@@ -1431,11 +1431,13 @@ class DatabaseService {
   }
 
   public findPatientByMobile(mobile: string, doctorId?: string): Patient | undefined {
-    const clean = mobile.replace(/\D/g, '');
+    const clean = mobile.replace(/\D/g, '').slice(-10);
     if (!clean) return undefined;
-    return this.data.patients.find(
-      p => p.mobile.replace(/\D/g, '') === clean && this.canDoctorAccessPatient(p, doctorId)
-    );
+    return this.data.patients.find(p => {
+      const patClean = (p.mobile || '').replace(/\D/g, '').slice(-10);
+      if (patClean !== clean) return false;
+      return doctorId ? this.canDoctorAccessPatient(p, doctorId) : true;
+    });
   }
 
   public deletePatient(patientId: string, actor: { id: string; name: string }): boolean {
@@ -3290,13 +3292,17 @@ class DatabaseService {
 
     return allThreads.filter(t => {
       if (t.doctorId) {
-        return t.doctorId === effectiveDoctorId || t.doctorId === doctorId;
+        return (
+          t.doctorId === effectiveDoctorId ||
+          t.doctorId === doctorId ||
+          (isDemo && this.isDemoAccount(t.doctorId))
+        );
       }
       if (t.patientId) {
         return accessiblePatientIds.has(t.patientId);
       }
-      // Seeded demo threads are visible to demo accounts
-      return isDemo;
+      // Seeded shared clinic inbox threads without a specific owner are visible to all clinic doctors
+      return true;
     });
   }
 
