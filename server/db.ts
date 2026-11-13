@@ -23,6 +23,7 @@ import {
   DoctorFormularyItem
 } from '../src/types/index.js';
 import { UPLOADED_ANTIMICROBIAL_MEDICATIONS } from '../src/data/clinicalCatalogues.js';
+import { mediaStorage } from './mediaStorage.js';
 
 interface DatabaseSchema {
   doctors: Doctor[];
@@ -431,7 +432,10 @@ class DatabaseService {
       error: this.cloudError,
       totalDoctors: this.data.doctors.length,
       totalPatients: this.data.patients.length,
-      totalConsultations: this.data.consultations.length
+      totalConsultations: this.data.consultations.length,
+      supabaseStorageConfigured: mediaStorage.isSupabaseStorageConfigured(),
+      mediaBucket: mediaStorage.getBucketName(),
+      cloudOffloadActive: mediaStorage.isCloudOffloadEnabled()
     };
   }
 
@@ -443,6 +447,7 @@ class DatabaseService {
     const dbUrl = (customUrl ?? this.getSavedCloudUrl()).trim();
     if (!dbUrl) {
       this.cloudConnected = false;
+      await mediaStorage.init(null);
       return {
         connected: false,
         message: 'No cloud database URL configured. Running in local storage mode.'
@@ -504,6 +509,22 @@ class DatabaseService {
       this.cloudLastSyncedAt = new Date().toISOString();
       this.cloudError = null;
 
+      await mediaStorage.init(pool);
+      const offloadedCount = await this.offloadInlineMediaToCloud();
+      if (offloadedCount > 0) {
+        const compacted = JSON.stringify(this.data, null, 2);
+        await pool.query(
+          `INSERT INTO clinical_os_cloud_vault (id, payload, updated_at)
+           VALUES ('primary', $1::jsonb, NOW())
+           ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
+          [compacted]
+        );
+        const tempPath = `${DB_PATH}.tmp`;
+        fs.writeFileSync(tempPath, compacted, 'utf-8');
+        fs.renameSync(tempPath, DB_PATH);
+        console.log(`[MediaStorage] Offloaded ${offloadedCount} inline media items out of JSONB vault.`);
+      }
+
       if (customUrl && customUrl.trim()) {
         try {
           const cfgPath = path.join(DATA_DIR, 'cloud_db_config.json');
@@ -535,6 +556,144 @@ class DatabaseService {
         message: `Cloud connection failed: ${msg}`
       };
     }
+  }
+
+  private parseDataUrlToBuffer(dataUrl: string): { buffer: Buffer; mimeType: string } | null {
+    if (!dataUrl || !dataUrl.startsWith('data:')) return null;
+    const base64Match = dataUrl.match(/^data:([^;,]+)(?:;charset=[^;,]+)?;base64,([\s\S]+)$/);
+    if (base64Match) {
+      return {
+        mimeType: base64Match[1],
+        buffer: Buffer.from(base64Match[2].replace(/\s/g, ''), 'base64')
+      };
+    }
+    if (dataUrl.startsWith('data:image/svg+xml')) {
+      const commaIdx = dataUrl.indexOf(',');
+      const svgContent = commaIdx >= 0 ? decodeURIComponent(dataUrl.slice(commaIdx + 1)) : dataUrl;
+      return {
+        mimeType: 'image/svg+xml',
+        buffer: Buffer.from(svgContent, 'utf8')
+      };
+    }
+    return null;
+  }
+
+  public async offloadInlineMediaToCloud(): Promise<number> {
+    if (!mediaStorage.isCloudOffloadEnabled()) return 0;
+    let migrated = 0;
+
+    // 1. Offload clinical images (replace > 2KB base64 dataUrl with /api/media/:id)
+    const imageUrlById = new Map<string, string>();
+    for (const img of this.data.clinicalImages || []) {
+      const rawSource =
+        img.dataUrl && img.dataUrl.startsWith('data:')
+          ? img.dataUrl
+          : img.url && img.url.startsWith('data:')
+          ? img.url
+          : '';
+      if (rawSource && rawSource.length > 2048) {
+        const parsed = this.parseDataUrlToBuffer(rawSource);
+        if (parsed) {
+          const mediaUrl = `/api/media/${img.id}`;
+          await mediaStorage.saveMedia({
+            id: img.id,
+            patientId: img.patientId,
+            mimeType: parsed.mimeType,
+            buffer: parsed.buffer
+          });
+          img.url = mediaUrl;
+          delete img.dataUrl;
+          img.sizeBytes = parsed.buffer.length;
+          imageUrlById.set(img.id, mediaUrl);
+          migrated++;
+        }
+      } else if (img.url && img.url.startsWith('/api/media/')) {
+        imageUrlById.set(img.id, img.url);
+      }
+    }
+
+    // Keep consultation nested images in sync without duplicate base64
+    for (const consult of this.data.consultations || []) {
+      if (Array.isArray(consult.images)) {
+        for (const cImg of consult.images) {
+          const mapped = imageUrlById.get(cImg.id);
+          if (mapped) {
+            cImg.url = mapped;
+            delete cImg.dataUrl;
+          }
+        }
+      }
+    }
+
+    // 2. Offload WhatsApp PDF attachments & inbound images inside inboxThreads
+    for (const thread of this.data.inboxThreads || []) {
+      if (!Array.isArray(thread.messages)) continue;
+      for (const msg of thread.messages) {
+        if (
+          msg.pdfAttachment?.pdfDataUrl &&
+          typeof msg.pdfAttachment.pdfDataUrl === 'string' &&
+          msg.pdfAttachment.pdfDataUrl.startsWith('data:') &&
+          msg.pdfAttachment.pdfDataUrl.length > 2048
+        ) {
+          const parsed = this.parseDataUrlToBuffer(msg.pdfAttachment.pdfDataUrl);
+          if (parsed) {
+            const pdfId = mediaStorage.sanitizeId(`pdf-${msg.pdfAttachment.reportId || msg.id || Date.now()}`);
+            await mediaStorage.saveMedia({
+              id: pdfId,
+              patientId: thread.patientId,
+              mimeType: parsed.mimeType,
+              buffer: parsed.buffer
+            });
+            msg.pdfAttachment.pdfDataUrl = `/api/media/${pdfId}`;
+            migrated++;
+          }
+        }
+        if (
+          msg.imageUrl &&
+          typeof msg.imageUrl === 'string' &&
+          msg.imageUrl.startsWith('data:') &&
+          msg.imageUrl.length > 2048
+        ) {
+          const parsed = this.parseDataUrlToBuffer(msg.imageUrl);
+          if (parsed) {
+            const imgMediaId = mediaStorage.sanitizeId(`wamedia-${msg.id || Date.now()}`);
+            await mediaStorage.saveMedia({
+              id: imgMediaId,
+              patientId: thread.patientId,
+              mimeType: parsed.mimeType,
+              buffer: parsed.buffer
+            });
+            msg.imageUrl = `/api/media/${imgMediaId}`;
+            migrated++;
+          }
+        }
+      }
+    }
+
+    // 3. Offload dispatchedWhatsAppMessages PDF payloads
+    for (const disp of this.data.dispatchedWhatsAppMessages || []) {
+      if (
+        disp.pdfAttachment?.pdfDataUrl &&
+        typeof disp.pdfAttachment.pdfDataUrl === 'string' &&
+        disp.pdfAttachment.pdfDataUrl.startsWith('data:') &&
+        disp.pdfAttachment.pdfDataUrl.length > 2048
+      ) {
+        const parsed = this.parseDataUrlToBuffer(disp.pdfAttachment.pdfDataUrl);
+        if (parsed) {
+          const pdfId = mediaStorage.sanitizeId(`pdf-${disp.pdfAttachment.reportId || disp.id || Date.now()}`);
+          await mediaStorage.saveMedia({
+            id: pdfId,
+            patientId: disp.patientId,
+            mimeType: parsed.mimeType,
+            buffer: parsed.buffer
+          });
+          disp.pdfAttachment.pdfDataUrl = `/api/media/${pdfId}`;
+          migrated++;
+        }
+      }
+    }
+
+    return migrated;
   }
 
   private mergeCloudState(remote: DatabaseSchema) {
@@ -2041,7 +2200,12 @@ class DatabaseService {
       .filter(i => i.patientId === patientId)
       .map(img => ({
         ...img,
-        url: img.dataUrl && (!img.url || img.url.startsWith('/uploads/')) ? img.dataUrl : img.url
+        url:
+          img.url && img.url.startsWith('/api/media/')
+            ? img.url
+            : img.dataUrl && (!img.url || img.url.startsWith('/uploads/'))
+            ? img.dataUrl
+            : img.url
       }))
       .sort(
         (a, b) =>
@@ -2055,7 +2219,12 @@ class DatabaseService {
     if (!img) return undefined;
     return {
       ...img,
-      url: img.dataUrl && (!img.url || img.url.startsWith('/uploads/')) ? img.dataUrl : img.url
+      url:
+        img.url && img.url.startsWith('/api/media/')
+          ? img.url
+          : img.dataUrl && (!img.url || img.url.startsWith('/uploads/'))
+          ? img.dataUrl
+          : img.url
     };
   }
 
@@ -2098,6 +2267,7 @@ class DatabaseService {
           consult.images = consult.images.filter(img => img.id !== id);
         }
       }
+      void mediaStorage.deleteMedia(id);
       this.persist();
       return true;
     }

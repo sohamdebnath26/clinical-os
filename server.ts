@@ -7,6 +7,7 @@ import fs from 'fs';
 import zlib from 'zlib';
 import crypto from 'crypto';
 import { db } from './server/db.js';
+import { mediaStorage } from './server/mediaStorage.js';
 import { summarizeConsultationWithAI, askAIAssistant, analyzeClinicalImage, compareClinicalImages, assessABCDEAnalysis, comparePatientVisits, parseClinicalNoteWithAI, askImageReportAssistant, extractBufferVisualMetrics, parseLabOrBiopsyReportWithAI } from './server/ai.js';
 import { evaluatePrescriptionSafety } from './src/data/clinicalCatalogues.js';
 import dotenv from 'dotenv';
@@ -467,6 +468,86 @@ app.use(
   },
   express.static(UPLOADS_DIR)
 );
+
+// Protected cloud/database media serving (/api/media/:id) backed by Supabase Storage / Postgres / Disk
+app.get('/api/media/:id', async (req: Request, res: Response) => {
+  const mediaId = mediaStorage.sanitizeId(req.params.id);
+  if (!mediaId) {
+    return res.status(400).json({ error: 'Invalid media id' });
+  }
+
+  const entry = await mediaStorage.getMedia(mediaId);
+  const imgRecord = db.getClinicalImageById(mediaId);
+  const ownerPatientId = entry?.patientId || imgRecord?.patientId;
+
+  // 1. Check authenticated doctor/staff session (cookie, Bearer, or ?token=)
+  const resolvedAuth = resolveAuthenticatedDoctorFromRequest(req);
+  let authorized = false;
+
+  if (resolvedAuth) {
+    if (ownerPatientId) {
+      const canAccess = db.findPatientById(ownerPatientId, resolvedAuth.doctor.id);
+      if (!canAccess) {
+        return res.status(403).json({ error: 'Forbidden: Media belongs to another clinic tenant' });
+      }
+    }
+    authorized = true;
+  }
+
+  // 2. Check active mobile QR upload session token
+  if (!authorized) {
+    const mobileToken =
+      (typeof req.query.mobToken === 'string' ? req.query.mobToken.trim() : '') ||
+      (typeof req.query.token === 'string' && req.query.token.startsWith('mob_')
+        ? req.query.token.trim()
+        : '');
+    if (mobileToken) {
+      const mobSession = getOrRestoreMobileUploadSession(mobileToken);
+      if (mobSession && (!ownerPatientId || ownerPatientId === mobSession.patientId)) {
+        authorized = true;
+      }
+    }
+  }
+
+  // 3. Check active 1-Tap Patient Reply Portal token
+  if (!authorized) {
+    const replyToken =
+      (typeof req.query.replyToken === 'string' ? req.query.replyToken.trim() : '') ||
+      (typeof req.query.token === 'string' && req.query.token.startsWith('rply_')
+        ? req.query.token.trim()
+        : '');
+    if (replyToken) {
+      const portalSession = getOrRestorePatientPortalSession(replyToken);
+      if (portalSession && (!ownerPatientId || !portalSession.patientId || ownerPatientId === portalSession.patientId)) {
+        authorized = true;
+      }
+    }
+  }
+
+  if (!authorized) {
+    return res.status(401).json({ error: 'Unauthorized: Authentication required to access clinical media' });
+  }
+
+  if (entry) {
+    res.setHeader('Content-Type', entry.mimeType || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.send(entry.buffer);
+  }
+
+  // Legacy fallback: check if clinical image record still has inline dataUrl
+  if (imgRecord?.dataUrl && imgRecord.dataUrl.startsWith('data:')) {
+    const match = imgRecord.dataUrl.match(/^data:([^;,]+)(?:;charset=[^;,]+)?;base64,([\s\S]+)$/);
+    if (match) {
+      res.setHeader('Content-Type', match[1]);
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.send(Buffer.from(match[2], 'base64'));
+    }
+  }
+
+  return res.status(404).json({ error: 'Media asset not found' });
+});
 
 // ==========================================
 // REAL-TIME SERVER-SENT EVENTS (SSE) HUB
@@ -1472,12 +1553,23 @@ function storePatientClinicalImage(params: {
       })()
     : new Date().toISOString();
 
+  const useCloudMediaOffload = mediaStorage.isCloudOffloadEnabled();
+  const storedUrl = useCloudMediaOffload ? `/api/media/${imageId}` : dataUrlToStore;
+
+  mediaStorage.cacheAndPersist({
+    id: imageId,
+    patientId,
+    mimeType,
+    buffer,
+    objectKey: `patients/${patientId}/${savedFilename}`
+  });
+
   const clinicalImage = db.addClinicalImage({
     id: imageId,
     patientId,
     consultationId,
-    url: dataUrlToStore,
-    dataUrl: dataUrlToStore,
+    url: storedUrl,
+    ...(useCloudMediaOffload ? {} : { dataUrl: dataUrlToStore }),
     filename: filename || savedFilename,
     mimeType,
     sizeBytes: buffer.length,
@@ -3659,8 +3751,9 @@ app.post('/api/ai/analyze-image', authMiddleware, requireDoctorRole, async (req:
   }
 
   try {
+    const resolvedImageBase64 = await mediaStorage.resolveAsDataUrl(imageBase64);
     const analysis = await analyzeClinicalImage({
-      imageBase64,
+      imageBase64: resolvedImageBase64,
       mimeType,
       patient,
       history,
@@ -3706,8 +3799,8 @@ app.post('/api/ai/compare-progression', authMiddleware, requireDoctorRole, async
     return res.status(400).json({ error: 'Both past image (imageA) and current image (imageB) are required for progression analysis' });
   }
 
-  // Helper to resolve stored past/current image from DB or /uploads/ path so comparison always extracts real data
-  const resolveComparisonImageInput = (input: {
+  // Helper to resolve stored past/current image from Supabase Storage, DB, or /uploads/ path
+  const resolveComparisonImageInput = async (input: {
     id?: string;
     base64?: string;
     mimeType?: string;
@@ -3722,15 +3815,11 @@ app.post('/api/ai/compare-progression', authMiddleware, requireDoctorRole, async
     let resolvedBase64 = input.base64 || stored?.dataUrl || stored?.url || '';
     let resolvedMime = input.mimeType || stored?.mimeType || 'image/jpeg';
 
-    // If resolvedBase64 is a local /uploads/... path, read from disk or fallback to stored dataUrl
-    if (resolvedBase64.startsWith('/uploads/')) {
-      const diskPath = path.join(UPLOADS_DIR, path.basename(resolvedBase64));
-      if (fs.existsSync(diskPath)) {
-        const buf = fs.readFileSync(diskPath);
-        resolvedBase64 = `data:${resolvedMime};base64,${buf.toString('base64')}`;
-      } else if (stored?.dataUrl) {
-        resolvedBase64 = stored.dataUrl;
-      }
+    if (resolvedBase64.startsWith('/api/media/') || resolvedBase64.startsWith('/uploads/')) {
+      resolvedBase64 = await mediaStorage.resolveAsDataUrl(resolvedBase64);
+    }
+    if (!resolvedBase64.startsWith('data:') && stored?.dataUrl) {
+      resolvedBase64 = stored.dataUrl;
     }
 
     return {
@@ -3745,8 +3834,8 @@ app.post('/api/ai/compare-progression', authMiddleware, requireDoctorRole, async
     };
   };
 
-  const resolvedA = resolveComparisonImageInput(imageA);
-  const resolvedB = resolveComparisonImageInput(imageB);
+  const resolvedA = await resolveComparisonImageInput(imageA);
+  const resolvedB = await resolveComparisonImageInput(imageB);
 
   if (!resolvedA.base64 || !resolvedB.base64) {
     return res.status(400).json({ error: 'Both past medical image and current medical image data are required for comparison' });
@@ -3805,8 +3894,9 @@ app.post('/api/ai/assess-abcde', authMiddleware, requireDoctorRole, async (req: 
   }
 
   try {
+    const resolvedImageBase64 = await mediaStorage.resolveAsDataUrl(imageBase64);
     const abcde = await assessABCDEAnalysis({
-      imageBase64,
+      imageBase64: resolvedImageBase64,
       mimeType,
       patient,
       clinicalNotes,
@@ -4711,17 +4801,29 @@ app.get('/api/portal/session/:token', (req: Request, res: Response) => {
       latestDoctorMessage: session.latestDoctorMessage,
       expiresAt: session.expiresAt
     },
-    messages: (thread?.messages || []).map(m => ({
-      id: m.id || `msg-${Math.random().toString(36).slice(2, 7)}`,
-      sender: m.sender,
-      text: m.text,
-      time: m.time,
-      imageUrl: m.imageUrl,
-      hasAttachment: !!m.pdfAttachment,
-      attachmentFilename: m.pdfAttachment?.filename,
-      pdfAttachment: m.pdfAttachment,
-      createdAt: m.createdAt
-    }))
+    messages: (thread?.messages || []).map(m => {
+      const appendReplyToken = (rawUrl?: string) => {
+        if (!rawUrl || !rawUrl.startsWith('/api/media/')) return rawUrl;
+        const sep = rawUrl.includes('?') ? '&' : '?';
+        return `${rawUrl}${sep}replyToken=${encodeURIComponent(token)}`;
+      };
+      return {
+        id: m.id || `msg-${Math.random().toString(36).slice(2, 7)}`,
+        sender: m.sender,
+        text: m.text,
+        time: m.time,
+        imageUrl: appendReplyToken(m.imageUrl),
+        hasAttachment: !!m.pdfAttachment,
+        attachmentFilename: m.pdfAttachment?.filename,
+        pdfAttachment: m.pdfAttachment
+          ? {
+              ...m.pdfAttachment,
+              pdfDataUrl: appendReplyToken(m.pdfAttachment.pdfDataUrl)
+            }
+          : undefined,
+        createdAt: m.createdAt
+      };
+    })
   });
 });
 
@@ -5078,6 +5180,27 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
     }
   }
 
+  let storedPdfRef: string | undefined =
+    typeof pdfAttachment?.pdfDataUrl === 'string' && pdfAttachment.pdfDataUrl.startsWith('data:application/pdf')
+      ? pdfAttachment.pdfDataUrl
+      : undefined;
+
+  if (storedPdfRef && mediaStorage.isCloudOffloadEnabled()) {
+    const b64Idx = storedPdfRef.indexOf(';base64,');
+    if (b64Idx !== -1) {
+      const pdfBuffer = Buffer.from(storedPdfRef.slice(b64Idx + 8), 'base64');
+      const pdfId = mediaStorage.sanitizeId(`pdf-${pdfAttachment.reportId || Date.now()}`);
+      mediaStorage.cacheAndPersist({
+        id: pdfId,
+        patientId: patient?.id || patientId,
+        mimeType: 'application/pdf',
+        buffer: pdfBuffer,
+        objectKey: `pdfs/${patient?.id || 'shared'}/${pdfId}.pdf`
+      });
+      storedPdfRef = `/api/media/${pdfId}`;
+    }
+  }
+
   const sanitizedPdfAttachment: InboxPdfAttachment | undefined =
     pdfAttachment && typeof pdfAttachment === 'object' && pdfAttachment.filename
       ? {
@@ -5088,10 +5211,7 @@ const handleWhatsAppSend = async (req: AuthenticatedRequest, res: Response) => {
           summaryPoints: Array.isArray(pdfAttachment.summaryPoints)
             ? pdfAttachment.summaryPoints.slice(0, 4).map(String)
             : undefined,
-          pdfDataUrl:
-            typeof pdfAttachment.pdfDataUrl === 'string' && pdfAttachment.pdfDataUrl.startsWith('data:application/pdf')
-              ? pdfAttachment.pdfDataUrl
-              : undefined
+          pdfDataUrl: storedPdfRef
         }
       : undefined;
 
@@ -5511,9 +5631,13 @@ app.post('/api/clinic/restore', authMiddleware, (req: AuthenticatedRequest, res)
   }
 });
 
-// Cloud Database Status & Connection (Supabase / Neon / PostgreSQL 100% Free Cloud Persistence)
-app.get('/api/clinic/cloud-status', authMiddleware, (_req: AuthenticatedRequest, res) => {
-  res.json(db.getCloudStatus());
+// Cloud Database Status & Connection (Supabase / Neon / PostgreSQL + Object Storage)
+app.get('/api/clinic/cloud-status', authMiddleware, async (_req: AuthenticatedRequest, res) => {
+  const mediaStats = await mediaStorage.getStats();
+  res.json({
+    ...db.getCloudStatus(),
+    mediaStats
+  });
 });
 
 app.post('/api/clinic/cloud-connect', authMiddleware, async (req: AuthenticatedRequest, res) => {

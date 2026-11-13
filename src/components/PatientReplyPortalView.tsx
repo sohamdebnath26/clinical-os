@@ -156,7 +156,10 @@ export const PatientReplyPortalView: React.FC<PatientReplyPortalViewProps> = ({ 
     const pdfDataUrl = m.pdfAttachment?.pdfDataUrl;
     const filename =
       m.pdfAttachment?.filename || m.attachmentFilename || 'Medical_Report.pdf';
-    if (pdfDataUrl && pdfDataUrl.startsWith('data:application/pdf')) {
+    if (
+      pdfDataUrl &&
+      (pdfDataUrl.startsWith('data:application/pdf') || pdfDataUrl.startsWith('/api/media/'))
+    ) {
       const link = document.createElement('a');
       link.href = pdfDataUrl;
       link.download = filename;

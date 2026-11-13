@@ -1319,7 +1319,10 @@ Rewrite this into a polite, clear, ready-to-send 2-sentence WhatsApp message to 
     att: NonNullable<Thread['messages'][number]['pdfAttachment']>,
     messageText: string
   ) => {
-    if (att.pdfDataUrl && att.pdfDataUrl.startsWith('data:application/pdf')) {
+    if (
+      att.pdfDataUrl &&
+      (att.pdfDataUrl.startsWith('data:application/pdf') || att.pdfDataUrl.startsWith('/api/media/'))
+    ) {
       const link = document.createElement('a');
       link.href = att.pdfDataUrl;
       link.download = att.filename || 'AI_Clinical_Analysis_Report.pdf';
